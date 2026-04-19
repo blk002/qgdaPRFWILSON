@@ -1,0 +1,297 @@
+import React, { useState } from 'react';
+import { useStore } from '../store/useStore';
+import { Target, Plus, TrendingUp, Edit2, Trash2, BarChart2, Trophy, Activity, Info, Target as TargetIcon } from 'lucide-react';
+
+export default function Simulados() {
+  const {
+    simulados,
+    setSimulados,
+    addXP,
+    unlockMedal,
+    updateMissionProgress
+  } = useStore();
+  
+  const [showModal, setShowModal] = useState(false);
+  const [editingSimulado, setEditingSimulado] = useState(null);
+
+  const totalSimulados = simulados.length;
+  const mediaLiquida = totalSimulados > 0 ? Math.round(simulados.reduce((acc, sim) => acc + sim.liquida, 0) / totalSimulados) : 0;
+  const recorde = totalSimulados > 0 ? Math.max(...simulados.map(s => s.liquida)) : 0;
+  
+  let weakPoint = "Aguardando Simulados";
+  if (totalSimulados > 0) {
+    const avgB1 = simulados.reduce((acc, sim) => acc + (sim.b1Liquida || 0), 0) / totalSimulados / 55;
+    const avgB2 = simulados.reduce((acc, sim) => acc + (sim.b2Liquida || 0), 0) / totalSimulados / 30;
+    const avgB3 = simulados.reduce((acc, sim) => acc + (sim.b3Liquida || 0), 0) / totalSimulados / 35;
+    
+    if (avgB1 > avgB2 && avgB3 > avgB2) weakPoint = "Bloco II (Trânsito)";
+    else if (avgB1 > avgB3 && avgB2 > avgB3) weakPoint = "Bloco III (Direito)";
+    else weakPoint = "Bloco I (Básicas)";
+  }
+
+  const notaCortePRF = 75; 
+  const maxScore = 120; 
+  const chartHeight = 420;
+  const chartWidth = 800;
+
+  const getChartData = () => {
+    if (totalSimulados === 0) return { line: "", area: "", points: [] };
+    if (totalSimulados === 1) {
+       const y = chartHeight - (simulados[0].liquida / maxScore) * chartHeight;
+       return {
+          line: `0,${y} ${chartWidth},${y}`,
+          area: `0,${chartHeight} 0,${y} ${chartWidth},${y} ${chartWidth},${chartHeight}`,
+          points: [{ x: chartWidth/2, y, val: simulados[0].liquida }]
+       };
+    }
+    const ptsObj = simulados.map((sim, index) => {
+      const x = (index / (totalSimulados - 1)) * chartWidth;
+      const y = chartHeight - (sim.liquida / maxScore) * chartHeight;
+      return { x, y, val: sim.liquida };
+    });
+    
+    const lineStr = ptsObj.map(p => `${p.x},${p.y}`).join(" ");
+    const areaStr = `0,${chartHeight} ${lineStr} ${chartWidth},${chartHeight}`;
+    return { line: lineStr, area: areaStr, points: ptsObj };
+  };
+
+  const chartData = getChartData();
+  const targetY = chartHeight - (notaCortePRF / maxScore) * chartHeight;
+
+  return (
+    <div className="fade-in max-w-[1400px] mx-auto pb-10">
+      <div className="flex flex-col lg:flex-row gap-6">
+        <div className="flex-1 min-w-0">
+          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 dark:bg-slate-900 dark:border-slate-800">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="bg-purple-100 p-2 sm:p-3 rounded-full shrink-0"><Target className="text-purple-600 w-6 h-6 sm:w-8 sm:h-8" /></div>
+              <div>
+                <h2 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">Evolução Estratégica em Simulados</h2>
+                <p className="text-slate-500 text-xs sm:text-sm dark:text-slate-400">Sistema Cebraspe (Certa anula Errada).</p>
+              </div>
+            </div>
+            <button onClick={() => { setEditingSimulado(null); setShowModal(true); }} className="w-full sm:w-auto justify-center bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-md transition-colors">
+              <Plus className="w-4 h-4" /> Registrar Nota
+            </button>
+          </div>
+
+          {totalSimulados > 0 && (
+            <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 overflow-hidden dark:bg-slate-900 dark:border-slate-800">
+               <div className="flex justify-between items-end mb-6">
+                  <h3 className="font-bold text-slate-700 flex items-center gap-2 dark:text-slate-200"><TrendingUp className="w-5 h-5 text-purple-500"/> Curva de Evolução (Nota Líquida)</h3>
+               </div>
+               
+               <div className="relative w-full h-[420px] mt-4">
+                  <div className="absolute w-full border-t-2 border-dashed border-red-400 z-0 flex items-end justify-end" style={{ top: `${targetY}px` }}>
+                     <span className="text-[10px] sm:text-xs font-black text-red-500 bg-white px-2 -mt-2.5 sm:-mt-3 absolute left-0 sm:left-auto sm:right-0 dark:bg-slate-900">Zona de Corte (~{notaCortePRF} pts)</span>
+                  </div>
+                  
+                  <svg viewBox={"0 0 " + chartWidth + " " + chartHeight} preserveAspectRatio="none" className="w-full h-full overflow-visible z-10 relative">
+                     <defs>
+                        <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+                           <stop offset="0%" stopColor="#9333ea" stopOpacity="0.25"/>
+                           <stop offset="100%" stopColor="#9333ea" stopOpacity="0"/>
+                        </linearGradient>
+                     </defs>
+                     
+                     <polyline points={chartData.area} fill="url(#chartFill)" />
+                     <polyline points={chartData.line} fill="none" stroke="#9333ea" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
+                     
+                     {chartData.points.map((p, index) => (
+                        <g key={index}>
+                          <circle cx={p.x} cy={p.y} r="5" fill="#fff" stroke="#9333ea" strokeWidth="3" className="hover:r-[7px] transition-all cursor-pointer"/>
+                          <text x={p.x} y={p.y - 12} textAnchor="middle" fill="#475569" fontSize="14" fontWeight="900" className="drop-shadow-sm">{p.val}</text>
+                        </g>
+                     ))}
+                  </svg>
+               </div>
+               <div className="flex justify-between text-[10px] text-slate-400 font-bold mt-2 border-t border-slate-100 pt-2 px-1 dark:border-slate-800">
+                  <span>Mais antigo</span>
+                  <span>Mais recente</span>
+               </div>
+            </div>
+          )}
+
+          {simulados.length === 0 ? (
+            <div className="text-center p-10 bg-white border-2 border-dashed border-slate-200 rounded-xl text-slate-500 text-sm dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800">
+              Nenhum simulado registrado. Insira seus resultados por bloco para ativar o motor de diagnóstico de eliminação.
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto mb-8 dark:bg-slate-900 dark:border-slate-800">
+              <table className="w-full text-left text-xs sm:text-sm min-w-[700px]">
+                <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800">
+                  <tr>
+                    <th className="p-3 sm:p-4 font-bold">Data</th>
+                    <th className="p-3 sm:p-4 font-bold text-center" title="Básicas - 55 Questões (Mínimo: 15)">B1 (55)</th>
+                    <th className="p-3 sm:p-4 font-bold text-center" title="Trânsito - 30 Questões (Mínimo: 10)">B2 (30)</th>
+                    <th className="p-3 sm:p-4 font-bold text-center" title="Direito - 35 Questões (Mínimo: 10)">B3 (35)</th>
+                    <th className="p-3 sm:p-4 font-black text-center text-purple-700">Líquida</th>
+                    <th className="p-3 sm:p-4 font-bold text-center">Status</th>
+                    <th className="p-3 sm:p-4 font-bold text-center">Ações</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-100">
+                  {simulados.map(sim => {
+                    const reprovouCorte = (15 > sim.b1Liquida) || (10 > sim.b2Liquida) || (10 > sim.b3Liquida) || (50 > sim.liquida);
+                    
+                    return (
+                    <tr key={sim.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors dark:bg-slate-950">
+                      <td className="p-3 sm:p-4 font-semibold text-slate-700 dark:text-slate-200">{sim.data}</td>
+                      <td className={`p-3 sm:p-4 text-center font-bold ${(15 > sim.b1Liquida) ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}`}>{sim.b1Liquida !== undefined ? sim.b1Liquida : '-'}</td>
+                      <td className={`p-3 sm:p-4 text-center font-bold ${(10 > sim.b2Liquida) ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}`}>{sim.b2Liquida !== undefined ? sim.b2Liquida : '-'}</td>
+                      <td className={`p-3 sm:p-4 text-center font-bold ${(10 > sim.b3Liquida) ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}`}>{sim.b3Liquida !== undefined ? sim.b3Liquida : '-'}</td>
+                      <td className="p-3 sm:p-4 text-center font-black text-base sm:text-lg text-slate-800 dark:text-slate-100">{sim.liquida}</td>
+                      <td className="p-3 sm:p-4 text-center">
+                        {reprovouCorte ? 
+                          <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-[10px] font-black uppercase">Reprovado</span> : 
+                          <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-black uppercase">Aprovado</span>
+                        }
+                      </td>
+                      <td className="p-3 sm:p-4 text-center">
+                        <div className="flex justify-center gap-2">
+                           <button onClick={() => { setEditingSimulado(sim); setShowModal(true); }} className="p-2 text-slate-400 hover:text-blue-500 hover:bg-white rounded transition-all dark:hover:bg-slate-800 shadow-sm border border-transparent hover:border-blue-100" title="Editar"><Edit2 className="w-4 h-4" /></button>
+                           <button onClick={() => { if (window.confirm('Excluir este simulado?')) setSimulados(prev => prev.filter(s => s.id !== sim.id)); }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded transition-all dark:hover:bg-slate-800 shadow-sm border border-transparent hover:border-red-100" title="Excluir"><Trash2 className="w-4 h-4" /></button>
+                        </div>
+                      </td>
+                    </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar de Estatísticas */}
+        <div className="w-full lg:w-80 shrink-0 flex flex-col gap-4">
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm dark:bg-slate-900 dark:border-slate-800 transition-all hover:border-purple-200">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="bg-purple-100 p-3 rounded-lg"><BarChart2 className="w-6 h-6 text-purple-600" /></div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Média Líquida</p>
+                <p className="text-2xl font-black text-slate-800 dark:text-slate-100 leading-none">{mediaLiquida} <span className="text-xs text-slate-400">pts</span></p>
+              </div>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-1.5 dark:bg-slate-800">
+              <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${(mediaLiquida/120)*100}%` }}></div>
+            </div>
+          </div>
+
+          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm dark:bg-slate-900 dark:border-slate-800 transition-all hover:border-emerald-200">
+            <div className="flex items-center gap-4 mb-4">
+              <div className="bg-emerald-100 p-3 rounded-lg"><Trophy className="w-6 h-6 text-emerald-600" /></div>
+              <div>
+                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Recorde Pessoal</p>
+                <p className="text-2xl font-black text-emerald-600 leading-none">{recorde} <span className="text-xs text-slate-400">pts</span></p>
+              </div>
+            </div>
+            <div className="w-full bg-slate-100 rounded-full h-1.5 dark:bg-slate-800">
+              <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${(recorde/120)*100}%` }}></div>
+            </div>
+          </div>
+
+          <div className="bg-red-50 p-6 rounded-xl border border-red-200 shadow-sm dark:bg-slate-900 dark:border-red-900/30 transition-all hover:bg-red-100/50">
+            <div className="flex items-center gap-4">
+              <div className="bg-red-100 p-3 rounded-lg"><Activity className="w-6 h-6 text-red-600" /></div>
+              <div>
+                <p className="text-[10px] font-black text-red-500 uppercase tracking-widest leading-none mb-1">Ponto Crítico</p>
+                <p className="text-lg font-black text-red-700 dark:text-red-400 leading-tight">{weakPoint}</p>
+              </div>
+            </div>
+          </div>
+
+          <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xl mt-2">
+             <h4 className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-3 flex items-center gap-2">
+               <Info className="w-3 h-3"/> Diagnóstico Cebraspe
+             </h4>
+             <p className="text-xs text-slate-400 leading-relaxed">
+               O seu bloco mais fraco atualmente é o **{weakPoint}**. Foque em exercícios de fixação para subir sua média líquida geral.
+             </p>
+          </div>
+        </div>
+      </div>
+
+      {showModal && (
+        <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[60] p-4 fade-in backdrop-blur-sm">
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const dataVal = e.target.data.value;
+            
+            const b1C = parseInt(e.target.b1C.value) || 0;
+            const b1E = parseInt(e.target.b1E.value) || 0;
+            const b2C = parseInt(e.target.b2C.value) || 0;
+            const b2E = parseInt(e.target.b2E.value) || 0;
+            const b3C = parseInt(e.target.b3C.value) || 0;
+            const b3E = parseInt(e.target.b3E.value) || 0;
+
+            const b1Liquida = b1C - b1E;
+            const b2Liquida = b2C - b2E;
+            const b3Liquida = b3C - b3E;
+            const liquida = b1Liquida + b2Liquida + b3Liquida;
+
+            if (editingSimulado) {
+              setSimulados(prev => prev.map(s => s.id === editingSimulado.id ? { ...s, data: dataVal, b1C, b1E, b2C, b2E, b3C, b3E, b1Liquida, b2Liquida, b3Liquida, liquida } : s));
+            } else {
+              setSimulados(prev => [...prev, { id: Date.now(), data: dataVal, b1C, b1E, b2C, b2E, b3C, b3E, b1Liquida, b2Liquida, b3Liquida, liquida }]);
+              addXP(500, "Simulado de Prova registrado");
+              updateMissionProgress('simulado', 1);
+              if (liquida >= 96) unlockMedal('elite'); 
+            }
+            setShowModal(false);
+            setEditingSimulado(null);
+          }} className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh] dark:bg-slate-900">
+            <div className="p-5 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-lg font-black flex items-center gap-2"><TargetIcon className="w-5 h-5 text-purple-600"/> {editingSimulado ? 'Corrigir Simulado' : 'Registro de Combate'}</h3>
+              <p className="text-xs font-bold text-slate-500 mt-1 dark:text-slate-400">Insira seus erros e acertos segmentados. O sistema fará a auditoria de eliminação.</p>
+            </div>
+            
+            <div className="p-5 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1 dark:text-slate-400">Data de Execução</label>
+                <input name="data" type="text" required defaultValue={editingSimulado ? editingSimulado.data : new Date().toLocaleDateString('pt-BR')} className="w-full border-2 border-slate-200 p-2.5 rounded-lg font-bold text-slate-800 outline-none focus:border-purple-400 dark:text-slate-100 dark:border-slate-800 dark:bg-slate-800 dark:text-white dark:border-slate-700"/>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm dark:bg-slate-950 dark:border-slate-800">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-black text-slate-700 uppercase dark:text-slate-200">Bloco I - Básicas</span>
+                  <span className="text-[10px] font-bold text-slate-400">Total: 55 | Min: 15</span>
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase dark:text-slate-400">Certas</label><input name="b1C" type="number" min="0" max="55" required defaultValue={editingSimulado?.b1C ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-emerald-600 text-center outline-none focus:border-emerald-400 dark:border-slate-800 dark:bg-slate-800 dark:text-white dark:border-slate-700"/></div>
+                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase dark:text-slate-400">Erradas</label><input name="b1E" type="number" min="0" max="55" required defaultValue={editingSimulado?.b1E ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-red-500 text-center outline-none focus:border-red-400 dark:border-slate-800 dark:bg-slate-800 dark:text-white dark:border-slate-700"/></div>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm dark:bg-slate-950 dark:border-slate-800">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-black text-slate-700 uppercase dark:text-slate-200">Bloco II - Trânsito</span>
+                  <span className="text-[10px] font-bold text-slate-400">Total: 30 | Min: 10</span>
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase dark:text-slate-400">Certas</label><input name="b2C" type="number" min="0" max="30" required defaultValue={editingSimulado?.b2C ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-emerald-600 text-center outline-none focus:border-emerald-400 dark:border-slate-800 dark:bg-slate-800 dark:text-white dark:border-slate-700"/></div>
+                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase dark:text-slate-400">Erradas</label><input name="b2E" type="number" min="0" max="30" required defaultValue={editingSimulado?.b2E ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-red-500 text-center outline-none focus:border-red-400 dark:border-slate-800 dark:bg-slate-800 dark:text-white dark:border-slate-700"/></div>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm dark:bg-slate-950 dark:border-slate-800">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-black text-slate-700 uppercase dark:text-slate-200">Bloco III - Direito</span>
+                  <span className="text-[10px] font-bold text-slate-400">Total: 35 | Min: 10</span>
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase dark:text-slate-400">Certas</label><input name="b3C" type="number" min="0" max="35" required defaultValue={editingSimulado?.b3C ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-emerald-600 text-center outline-none focus:border-emerald-400 dark:border-slate-800 dark:bg-slate-800 dark:text-white dark:border-slate-700"/></div>
+                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase dark:text-slate-400">Erradas</label><input name="b3E" type="number" min="0" max="35" required defaultValue={editingSimulado?.b3E ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-red-500 text-center outline-none focus:border-red-400 dark:border-slate-800 dark:bg-slate-800 dark:text-white dark:border-slate-700"/></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-4 flex gap-3 border-t border-slate-200 dark:bg-slate-950 dark:border-slate-800">
+              <button type="button" onClick={() => { setShowModal(false); setEditingSimulado(null); }} className="flex-1 py-3 font-bold text-slate-600 bg-white border border-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors dark:bg-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">Abortar</button>
+              <button type="submit" className="flex-1 py-3 font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 shadow-md transition-colors">Executar Auditoria</button>
+            </div>
+          </form>
+        </div>
+      )}
+    </div>
+  );
+}

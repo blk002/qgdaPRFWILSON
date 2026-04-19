@@ -1,0 +1,2482 @@
+import React, { useState, useEffect } from 'react';
+import { 
+  BookOpen, CheckCircle, Coins, Calendar as CalendarIcon, Trophy, 
+  PlayCircle, ChevronLeft, ChevronRight, Settings, Plus, Trash2, 
+  Edit2, X, Save, Shuffle, Repeat, Dumbbell, Target, Store, Activity, Award,
+  PieChart, TrendingUp, ChevronDown, ChevronUp, Layers, BarChart2, AlertTriangle, Clock, Target as TargetIcon,
+  Eye, EyeOff, BrainCircuit, CalendarDays, Flame, Info
+} from 'lucide-react';
+
+// --- DADOS INICIAIS COMPLETOS (V2 RESTAURADA) ---
+const initialSubjects = {
+  'lin_por': { id: 'lin_por', name: 'LIN. POR', color: 'bg-yellow-200 text-yellow-900', block: 'B1', topics: [
+    { id: 't1', name: 'Compreensão de Textos', total: 5, completed: 2 },
+    { id: 't2', name: 'Tipologia Textual', total: 3, completed: 0 }
+  ]},
+  'dir_adm': { id: 'dir_adm', name: 'DIR. ADM', color: 'bg-orange-200 text-orange-900', block: 'B3', topics: [
+    { id: 't1', name: 'Estado, Governo e Adm. Pública', total: 4, completed: 4 },
+    { id: 't2', name: 'Atos Administrativos', total: 8, completed: 3 }
+  ]},
+  'informatica': { id: 'informatica', name: 'INFORMÁTICA', color: 'bg-emerald-700 text-white', block: 'B1', topics: [
+    { id: 't1', name: 'Sistemas Operacionais', total: 6, completed: 1 },
+    { id: 't2', name: 'Redes de Computadores', total: 10, completed: 0 }
+  ]},
+  'fisica': { id: 'fisica', name: 'FÍSICA', color: 'bg-green-200 text-green-900', block: 'B1', topics: [
+    { id: 't1', name: 'Cinemática', total: 7, completed: 0 }
+  ]},
+  'ctb': { id: 'ctb', name: 'CTB', color: 'bg-red-200 text-red-900', block: 'B2', topics: [
+    { id: 't1', name: 'Sistema Nac. de Trânsito', total: 5, completed: 5 },
+    { id: 't2', name: 'Normas Gerais', total: 12, completed: 4 }
+  ]},
+  'rlm': { id: 'rlm', name: 'RLM', color: 'bg-purple-700 text-white', block: 'B1', topics: [
+    { id: 't1', name: 'Lógica Proposicional', total: 6, completed: 2 }
+  ]},
+  'leg_esp': { id: 'leg_esp', name: 'LEG. ESPECIAL', color: 'bg-blue-700 text-white', block: 'B3', topics: [
+    { id: 't1', name: 'Lei de Drogas', total: 4, completed: 1 }
+  ]},
+  'res_contran': { id: 'res_contran', name: 'RES. CONTRAN', color: 'bg-red-700 text-white', block: 'B2', topics: [
+    { id: 't1', name: 'Resoluções Básicas', total: 8, completed: 0 }
+  ]}
+};
+
+const initialCycle = [
+  ['lin_por', 'dir_adm', 'informatica', 'fisica'],
+  ['ctb', 'rlm', 'leg_esp'],
+  ['lin_por', 'dir_adm', 'res_contran', 'informatica'],
+  ['ctb', 'rlm', 'leg_esp'],
+  ['lin_por', 'dir_adm', 'informatica', 'fisica'],
+  ['ctb', 'rlm', 'res_contran', 'leg_esp']
+];
+
+const availableColors = [
+  { id: 'yellow', class: 'bg-yellow-200 text-yellow-900', label: 'Amarelo' },
+  { id: 'orange', class: 'bg-orange-200 text-orange-900', label: 'Laranja' },
+  { id: 'emerald', class: 'bg-emerald-700 text-white', label: 'Verde Escuro' },
+  { id: 'green', class: 'bg-green-200 text-green-900', label: 'Verde Claro' },
+  { id: 'red', class: 'bg-red-200 text-red-900', label: 'Vermelho Claro' },
+  { id: 'red-dark', class: 'bg-red-700 text-white', label: 'Vermelho Escuro' },
+  { id: 'purple', class: 'bg-purple-700 text-white', label: 'Roxo' },
+  { id: 'blue', class: 'bg-blue-700 text-white', label: 'Azul Escuro' },
+  { id: 'blue-light', class: 'bg-blue-200 text-blue-900', label: 'Azul Claro' },
+  { id: 'slate', class: 'bg-slate-700 text-white', label: 'Cinza Escuro' }
+];
+
+const calcBarra = (val, isM) => {
+  if (isM) {
+    if (val < 3) return 0; if (val === 3) return 2; if (val === 4) return 2.5;
+    if (val === 5) return 3; if (val === 6) return 3.5; if (val === 7) return 4;
+    if (val === 8) return 4.5; return 5;
+  } else {
+    if (val < 10) return 0; if (val < 13) return 2; if (val < 16) return 2.5;
+    if (val < 19) return 3; if (val < 22) return 3.5; if (val < 25) return 4;
+    if (val < 28) return 4.5; return 5;
+  }
+};
+
+const calcAbdominal = (val, isM) => {
+  if (isM) {
+    if (val < 35) return 0; if (val <= 38) return 2; if (val <= 42) return 2.5;
+    if (val <= 46) return 3; if (val <= 50) return 3.5; if (val <= 54) return 4;
+    if (val <= 58) return 4.5; return 5;
+  } else {
+    if (val < 28) return 0; if (val <= 30) return 2; if (val <= 33) return 2.5;
+    if (val <= 36) return 3; if (val <= 39) return 3.5; if (val <= 42) return 4;
+    if (val <= 45) return 4.5; return 5;
+  }
+};
+
+const calcImpulsao = (val, isM) => {
+  if (isM) {
+    if (val <= 2.00) return 0; if (val <= 2.05) return 2; if (val <= 2.10) return 2.5;
+    if (val <= 2.15) return 3; if (val <= 2.20) return 3.5; if (val <= 2.25) return 4;
+    if (val <= 2.30) return 4.5; return 5;
+  } else {
+    if (val <= 1.60) return 0; if (val <= 1.65) return 2; if (val <= 1.70) return 2.5;
+    if (val <= 1.75) return 3; if (val <= 1.80) return 3.5; if (val <= 1.85) return 4;
+    if (val <= 1.90) return 4.5; return 5;
+  }
+};
+
+const calcCorrida = (val, isM) => {
+  if (isM) {
+    if (val <= 2300) return 0; if (val <= 2400) return 2; if (val <= 2500) return 2.5;
+    if (val <= 2600) return 3; if (val <= 2700) return 3.5; if (val <= 2800) return 4;
+    if (val <= 2900) return 4.5; return 5;
+  } else {
+    if (val <= 2000) return 0; if (val <= 2100) return 2; if (val <= 2200) return 2.5;
+    if (val <= 2300) return 3; if (val <= 2400) return 3.5; if (val <= 2500) return 4;
+    if (val <= 2600) return 4.5; return 5;
+  }
+};
+
+const calcShuttle = (val, isM) => {
+  if (isM) {
+    if (val >= 14) return 0; if (val >= 13.5) return 2; if (val >= 13) return 2.5;
+    if (val >= 12.5) return 3; if (val >= 12) return 3.5; if (val >= 11.5) return 4;
+    if (val >= 11) return 4.5; return 5;
+  } else {
+    if (val >= 16) return 0; if (val >= 15.5) return 2; if (val >= 15) return 2.5;
+    if (val >= 14.5) return 3; if (val >= 14) return 3.5; if (val >= 13.5) return 4;
+    if (val >= 13) return 4.5; return 5;
+  }
+};
+
+export default function App() {
+  const [activeTab, setActiveTab] = useState('config'); 
+  
+  const [subjects, setSubjects] = useState(initialSubjects);
+  const [cycle, setCycle] = useState(initialCycle);
+  const [coins, setCoins] = useState(250);
+  const [currentDayIndex, setCurrentDayIndex] = useState(0);
+  const [completedToday, setCompletedToday] = useState([]);
+  const [calendarDate, setCalendarDate] = useState(new Date());
+  const [targetExamDate, setTargetExamDate] = useState('2026-08-15');
+  
+  const [reviews, setReviews] = useState([
+    { id: 'r1', subjectId: 'dir_adm', topicName: 'Estado, Governo e Adm. Pública', nextDateStr: new Date().toISOString().split('T')[0], interval: 1, ease: 2.5, lastPerformance: 0.65 },
+    { id: 'r2', subjectId: 'lin_por', topicName: 'Compreensão de Textos', nextDateStr: new Date().toISOString().split('T')[0], interval: 3, ease: 2.6, lastPerformance: 0.88 },
+    { id: 'r3', subjectId: 'fisica', topicName: 'Cinemática', nextDateStr: new Date(Date.now() + 86400000).toISOString().split('T')[0], interval: 5, ease: 2.0, lastPerformance: 0.50 },
+    { id: 'r4', subjectId: 'ctb', topicName: 'Sistema Nac. de Trânsito', nextDateStr: new Date(Date.now() + 172800000).toISOString().split('T')[0], interval: 7, ease: 2.4, lastPerformance: 0.75 },
+    { id: 'r5', subjectId: 'rlm', topicName: 'Lógica Proposicional', nextDateStr: new Date(Date.now() + 345600000).toISOString().split('T')[0], interval: 10, ease: 2.7, lastPerformance: 0.90 }
+  ]);
+  const [reviewStats, setReviewStats] = useState({ totalDone: 42, correct: 31, streak: 3 });
+  const [reviewModal, setReviewModal] = useState(null);
+  const [showBacklog, setShowBacklog] = useState(false); 
+  
+  const [selectedReplacement, setSelectedReplacement] = useState('');
+  const [classToConfirm, setClassToConfirm] = useState(null);
+  const [replaceModal, setReplaceModal] = useState(null);
+  
+  // Modais de Segurança e Alertas Globais
+  const [globalModal, setGlobalModal] = useState(null); 
+  
+  const [editingSubjectId, setEditingSubjectId] = useState(null);
+  const [showBulkAdd, setShowBulkAdd] = useState(false);
+  const [bulkAddText, setBulkAddText] = useState('');
+  
+  const [simulados, setSimulados] = useState([
+    { id: 1, data: '02/02/2026', b1C: 28, b1E: 8, b2C: 15, b2E: 3, b3C: 18, b3E: 4, b1Liquida: 20, b2Liquida: 12, b3Liquida: 14, liquida: 46 },
+    { id: 2, data: '16/02/2026', b1C: 31, b1E: 6, b2C: 18, b2E: 3, b3C: 19, b3E: 4, b1Liquida: 25, b2Liquida: 15, b3Liquida: 15, liquida: 55 },
+    { id: 3, data: '02/03/2026', b1C: 34, b1E: 6, b2C: 19, b2E: 3, b3C: 20, b3E: 4, b1Liquida: 28, b2Liquida: 16, b3Liquida: 16, liquida: 60 },
+    { id: 4, data: '16/03/2026', b1C: 37, b1E: 5, b2C: 21, b2E: 3, b3C: 21, b3E: 4, b1Liquida: 32, b2Liquida: 18, b3Liquida: 17, liquida: 67 }
+  ]);
+  const [showSimuladoModal, setShowSimuladoModal] = useState(false);
+  const [editingSimulado, setEditingSimulado] = useState(null);
+  const [expandedSubject, setExpandedSubject] = useState(null);
+
+  const [tafHistory, setTafHistory] = useState([
+    { id: 1, data: '10/02/2026', genero: 'masculino', barra: 3, abdominal: 35, impulsao: 2.05, corrida: 2400, shuttle: 13.5, ptsBarra: 2, ptsAbdominal: 2, ptsImpulsao: 2, ptsCorrida: 2, ptsShuttle: 2, totalPts: 10 },
+    { id: 2, data: '10/03/2026', genero: 'masculino', barra: 5, abdominal: 42, impulsao: 2.15, corrida: 2550, shuttle: 12.8, ptsBarra: 3, ptsAbdominal: 2.5, ptsImpulsao: 3, ptsCorrida: 2.5, ptsShuttle: 3, totalPts: 14 },
+    { id: 3, data: '10/04/2026', genero: 'masculino', barra: 7, abdominal: 48, impulsao: 2.25, corrida: 2750, shuttle: 11.8, ptsBarra: 4, ptsAbdominal: 3.5, ptsImpulsao: 4, ptsCorrida: 3.5, ptsShuttle: 4, totalPts: 19 }
+  ]);
+  const [showTafModal, setShowTafModal] = useState(false);
+  const [editingTaf, setEditingTaf] = useState(null);
+
+  const [rewards, setRewards] = useState([
+    { id: 1, title: 'Episódio de Série', cost: 50, icon: '📺' },
+    { id: 2, title: 'Lanche sem culpa', cost: 150, icon: '🍔' },
+    { id: 3, title: 'Domingo Livre', cost: 300, icon: '🎮' }
+  ]);
+
+  // NOVO: Estado para controlar o mês do Calendário de Retenção (FSRS)
+  const [reviewCalendarDate, setReviewCalendarDate] = useState(new Date());
+
+  // --- TRAVA DE PERSISTÊNCIA TÁTICA (LOCALSTORAGE) ---
+  // Salva os dados críticos no navegador para não perder a calibração do FSRS durante os testes
+  useEffect(() => {
+    try {
+      const savedData = localStorage.getItem('prf_qg_data');
+      if (savedData) {
+        const parsed = JSON.parse(savedData);
+        if (parsed.subjects && typeof parsed.subjects === 'object') setSubjects(parsed.subjects);
+        if (Array.isArray(parsed.cycle)) setCycle(parsed.cycle);
+        if (parsed.coins !== undefined) setCoins(parsed.coins);
+        if (Array.isArray(parsed.reviews)) setReviews(parsed.reviews);
+        if (parsed.reviewStats && typeof parsed.reviewStats === 'object') setReviewStats(parsed.reviewStats);
+        if (Array.isArray(parsed.simulados)) setSimulados(parsed.simulados);
+        if (Array.isArray(parsed.tafHistory)) setTafHistory(parsed.tafHistory);
+      }
+    } catch (error) {
+      console.error("QG da PRF: Falha ao carregar dados táticos do armazenamento.", error);
+    }
+  }, []);
+
+  useEffect(() => {
+    const dataToSave = { subjects, cycle, coins, reviews, reviewStats, simulados, tafHistory };
+    localStorage.setItem('prf_qg_data', JSON.stringify(dataToSave));
+  }, [subjects, cycle, coins, reviews, reviewStats, simulados, tafHistory]);
+  // ---------------------------------------------------
+
+  const getLocalDateStr = (date = new Date()) => {
+    const offset = date.getTimezoneOffset();
+    const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+    return localDate.toISOString().split('T')[0];
+  };
+
+  const todayStr = getLocalDateStr();
+
+  const getSubjectEstimates = () => {
+    const estimates = [];
+    const remainingClasses = {};
+
+    Object.values(subjects).forEach(subject => {
+      let remaining = 0;
+      subject.topics.forEach(t => remaining += (t.total - t.completed));
+      remainingClasses[subject.id] = remaining;
+
+      if (remaining === 0) {
+        estimates.push({ ...subject, remaining: 0, dateStr: 'Concluído', dateObj: new Date(0) });
+      }
+    });
+
+    const endDaysOffset = {};
+    const simulatedRemaining = { ...remainingClasses };
+    
+    let dayOffset = 0;
+    let allDone = false;
+    const maxSimulationDays = 1500; 
+
+    const subjectsInCycle = new Set(cycle.flat());
+
+    if (cycle.length > 0) {
+      while (!allDone && dayOffset < maxSimulationDays) {
+        const cycleIndex = (currentDayIndex + dayOffset) % cycle.length;
+        const daySubjects = cycle[cycleIndex] || [];
+        
+        daySubjects.forEach((subId, slotIdx) => {
+          if (dayOffset === 0 && completedToday.includes(slotIdx)) return; 
+          
+          if (simulatedRemaining[subId] > 0) {
+            simulatedRemaining[subId] -= 1;
+            if (simulatedRemaining[subId] === 0 && endDaysOffset[subId] === undefined) {
+              endDaysOffset[subId] = dayOffset;
+            }
+          }
+        });
+
+        allDone = Object.keys(simulatedRemaining).every(subId => 
+            simulatedRemaining[subId] === 0 || !subjectsInCycle.has(subId)
+        );
+        if (!allDone) dayOffset++;
+      }
+    }
+
+    const today = new Date();
+    const todayDateObj = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    Object.values(subjects).forEach(sub => {
+      if (remainingClasses[sub.id] > 0) {
+        const daysToFinish = endDaysOffset[sub.id] !== undefined ? endDaysOffset[sub.id] : 999;
+        const completionDate = new Date(todayDateObj);
+        completionDate.setDate(completionDate.getDate() + daysToFinish);
+
+        const mesesNomesShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+        const dia = String(completionDate.getDate()).padStart(2, '0');
+        const ano = completionDate.getFullYear();
+
+        if(!estimates.some(e => e.id === sub.id)) {
+           estimates.push({
+             ...sub,
+             remaining: remainingClasses[sub.id],
+             dateStr: `${dia}/${mesesNomesShort[completionDate.getMonth()]}/${ano}`,
+             dateObj: completionDate
+           });
+        }
+      }
+    });
+
+    return estimates.sort((a, b) => {
+      if (a.remaining === 0) return -1;
+      if (b.remaining === 0) return 1;
+      return a.dateObj - b.dateObj;
+    });
+  };
+
+  const subjectEstimates = getSubjectEstimates();
+
+  const getEstimatedCompletionDate = () => {
+    const unfinished = subjectEstimates.filter(e => e.remaining > 0);
+    if (unfinished.length === 0) return { short: "Concluído", full: "Edital Concluído", isLate: false };
+
+    const lastSubject = unfinished[unfinished.length - 1];
+    const completionDate = lastSubject.dateObj;
+    const examDateObj = new Date(`${targetExamDate}T00:00:00`);
+    
+    const isLate = completionDate > examDateObj;
+    const daysDiff = Math.round((completionDate - examDateObj) / (1000 * 60 * 60 * 24));
+
+    const mesesNomesFull = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const mesesNomesShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+    
+    return {
+      short: `${String(completionDate.getDate()).padStart(2, '0')}/${mesesNomesShort[completionDate.getMonth()]}/${completionDate.getFullYear()}`,
+      full: `${String(completionDate.getDate()).padStart(2, '0')} de ${mesesNomesFull[completionDate.getMonth()]} de ${completionDate.getFullYear()}`,
+      isLate: isLate,
+      daysDiff: daysDiff,
+      examDateFormatted: `${String(examDateObj.getDate()).padStart(2, '0')}/${mesesNomesShort[examDateObj.getMonth()]}/${examDateObj.getFullYear()}`
+    };
+  };
+
+  const estimatedDate = getEstimatedCompletionDate();
+
+  const getActiveTopic = (subjectId) => {
+    const subject = subjects[subjectId];
+    if (!subject) return null;
+    return subject.topics.find(t => t.completed < t.total) || null;
+  };
+
+  const getSubjectProgress = (subjectId) => {
+    const subject = subjects[subjectId];
+    if (!subject) return 0;
+    let total = 0; let completed = 0;
+    subject.topics.forEach(t => { total += t.total; completed += t.completed; });
+    return total === 0 ? 0 : Math.round((completed / total) * 100);
+  };
+
+  const getRelativeDateInfo = (cycleIndex) => {
+    const today = new Date();
+    let offset = cycleIndex - currentDayIndex;
+    if (offset < 0) offset += cycle.length; 
+
+    const targetDate = new Date(today);
+    targetDate.setDate(today.getDate() + offset);
+
+    const diasSemana = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+    const diaNum = targetDate.getDate().toString().padStart(2, '0');
+    const mesNum = (targetDate.getMonth() + 1).toString().padStart(2, '0');
+
+    if (offset === 0) return { title: 'HOJE', dateStr: `${diaNum}/${mesNum}`, isToday: true };
+    if (offset === 1) return { title: 'AMANHÃ', dateStr: `${diaNum}/${mesNum}`, isToday: false };
+    return { title: diasSemana[targetDate.getDay()], dateStr: `${diaNum}/${mesNum}`, isToday: false };
+  };
+
+  const watchClass = (subjectId, slotIndex, amountWatched = 1) => {
+    const activeTopic = getActiveTopic(subjectId);
+    if (!activeTopic) return;
+
+    setSubjects(prev => {
+      const newSubjects = { ...prev };
+      const subject = { ...newSubjects[subjectId] };
+      const topics = [...subject.topics];
+      const topicIndex = topics.findIndex(t => t.id === activeTopic.id);
+      
+      if (topicIndex !== -1) {
+        const currentCompleted = topics[topicIndex].completed;
+        const total = topics[topicIndex].total;
+        
+        // Trava matemática para não ultrapassar o limite do assunto
+        const newCompleted = Math.min(total, currentCompleted + amountWatched);
+        
+        topics[topicIndex] = { ...topics[topicIndex], completed: newCompleted };
+        
+        // Só aciona o gatilho FSRS se o avanço atual fechar o assunto definitivamente
+        if (newCompleted === total && currentCompleted < total) {
+          const tomorrow = new Date(); 
+          tomorrow.setDate(tomorrow.getDate() + 1);
+          setReviews(rPrev => [...rPrev, {
+            id: 'rev_' + Date.now(),
+            subjectId: subjectId,
+            topicName: topics[topicIndex].name,
+            nextDateStr: getLocalDateStr(tomorrow), 
+            interval: 1,
+            ease: 2.5,
+            lastPerformance: undefined 
+          }]);
+        }
+      }
+      subject.topics = topics;
+      newSubjects[subjectId] = subject;
+      return newSubjects;
+    });
+
+    // Recompensa adaptativa baseada no volume de esforço reportado
+    setCoins(prev => prev + (10 * amountWatched));
+    setCompletedToday(prev => {
+      if (!prev.includes(slotIndex)) return [...prev, slotIndex];
+      return prev;
+    });
+  };
+
+  const advanceDay = () => {
+    if (cycle.length === 0) return;
+    
+    const nextIndex = (currentDayIndex + 1) % cycle.length;
+    setCurrentDayIndex(nextIndex);
+    setCompletedToday([]);
+
+    setTimeout(() => {
+      const container = document.getElementById('cycle-scroll-container');
+      const nextCard = document.getElementById(`cycle-day-${nextIndex}`);
+      if (container && nextCard) {
+        container.style.scrollSnapType = 'none';
+        container.scrollTo({
+          left: nextCard.offsetLeft - container.offsetLeft - 16,
+          behavior: 'smooth'
+        });
+        setTimeout(() => {
+            container.style.scrollSnapType = '';
+        }, 500);
+      }
+    }, 150);
+  };
+
+  const handleReplaceSubject = (newSubjectId) => {
+    if (!replaceModal || !newSubjectId) return;
+    setCycle(prev => {
+      return prev.map(daySlots => 
+        daySlots.map(subId => 
+          subId === replaceModal.oldSubjectId ? newSubjectId : subId
+        )
+      );
+    });
+    setReplaceModal(null);
+  };
+
+  const allDueToday = reviews
+    .filter(r => r.nextDateStr <= todayStr)
+    .sort((a, b) => a.ease - b.ease);
+    
+  const pendingReviews = allDueToday.slice(0, 4);
+  const backlogReviews = allDueToday.slice(4);
+  const backlogCount = backlogReviews.length;
+  const isProcrastinating = backlogCount > 5;
+
+  // NOVO: Agrupamento Tático de Matérias Pendentes para o Raio-X
+  const subjectsDueCounts = {};
+  allDueToday.forEach(rev => {
+    subjectsDueCounts[rev.subjectId] = (subjectsDueCounts[rev.subjectId] || 0) + 1;
+  });
+  const activeReviewSubjects = Object.entries(subjectsDueCounts)
+    .map(([id, count]) => ({ subject: subjects[id], count }))
+    .filter(item => item.subject)
+    .sort((a, b) => b.count - a.count); // Ordena pelas matérias com maior volume de cartões
+
+  const tomorrow = new Date(); tomorrow.setDate(tomorrow.getDate() + 1);
+  const tomorrowStr = getLocalDateStr(tomorrow); 
+  const next7Days = new Date(); next7Days.setDate(next7Days.getDate() + 7);
+  const next7DaysStr = getLocalDateStr(next7Days); 
+
+  const dueTomorrow = reviews.filter(r => r.nextDateStr === tomorrowStr).length;
+  const dueNext7Days = reviews.filter(r => r.nextDateStr > todayStr && r.nextDateStr <= next7DaysStr).length;
+
+  const handleReviewSubmit = (e) => {
+    e.preventDefault();
+    const total = parseInt(e.target.total.value);
+    const correct = parseInt(e.target.correct.value);
+    if (isNaN(total) || isNaN(correct) || total === 0) return;
+
+    const p = correct / total;
+    let newInterval = reviewModal.interval;
+    let newEase = reviewModal.ease || 2.5;
+
+    // NOVO MOTOR FSRS (Inspirado no SM-2)
+    // Mapeia o percentual (0 a 1) para uma nota de 0 a 5
+    const grade = Math.max(0, Math.round(p * 5));
+
+    // Ajuste dinâmico da facilidade com base no esforço
+    newEase = newEase + (0.1 - (5 - grade) * (0.08 + (5 - grade) * 0.02));
+    newEase = Math.max(1.3, Math.min(newEase, 3.0)); // Limita a facilidade entre 1.3 e 3.0
+
+    if (p < 0.70) {
+      // Falha Crítica: Esqueceu o conteúdo. O intervalo despenca para 1 dia.
+      newInterval = 1;
+      setReviewStats(prev => ({ ...prev, streak: 0 })); // Quebra a sequência
+    } else {
+      // Sucesso
+      if (reviewModal.interval === 1) {
+        newInterval = 3; // Primeira graduação bem sucedida
+      } else {
+        // Multiplica o intervalo pela facilidade adaptada
+        const bonus = p === 1 ? 1.1 : 1.0; // Bônus tático por gabaritar
+        newInterval = Math.ceil(newInterval * newEase * bonus);
+      }
+      setReviewStats(prev => ({ ...prev, streak: prev.streak + 1 }));
+    }
+
+    const nextDate = new Date();
+    nextDate.setDate(nextDate.getDate() + newInterval);
+
+    setReviews(prev => prev.map(r => 
+      r.id === reviewModal.id 
+        ? { ...r, nextDateStr: getLocalDateStr(nextDate), interval: newInterval, ease: newEase, lastPerformance: p } 
+        : r
+    ));
+    
+    setReviewStats(prev => ({
+      ...prev,
+      totalDone: prev.totalDone + total,
+      correct: prev.correct + correct
+    }));
+    
+    // Moedas adaptativas: acertos marginais dão menos recompensa
+    const coinReward = p >= 0.85 ? 15 : (p >= 0.70 ? 5 : 0);
+    if (coinReward > 0) setCoins(prev => prev + coinReward);
+    
+    setReviewModal(null);
+  };
+
+  const getThermometer = (perf) => {
+    if (perf === undefined) return { color: 'bg-slate-100 border-slate-200 text-slate-600', icon: '⚪', label: 'Novo Assunto' };
+    if (perf < 0.7) return { color: 'bg-red-100 border-red-200 text-red-700', icon: '🔴', label: 'Alerta (<70%)' };
+    if (perf < 0.85) return { color: 'bg-yellow-100 border-yellow-200 text-yellow-700', icon: '🟡', label: 'Bom (70-84%)' };
+    return { color: 'bg-emerald-100 border-emerald-200 text-emerald-700', icon: '🟢', label: 'Dominado (85%+)' };
+  };
+
+  const handleBulkAddConfirm = (subjectId) => {
+    if (!bulkAddText.trim()) {
+      setShowBulkAdd(false);
+      return;
+    }
+    const lines = bulkAddText.split('\n');
+    const newTopics = [];
+    
+    lines.forEach(line => {
+      const trimmed = line.trim();
+      if (!trimmed) return;
+      let name = trimmed;
+      let total = 1;
+      const match = trimmed.match(/^(.*?)\s+[-:]\s+(\d+)$/);
+      if (match) {
+        name = match[1].trim() || 'Assunto Sem Nome';
+        total = parseInt(match[2], 10) || 1;
+      }
+      newTopics.push({ id: 't_' + Date.now() + Math.random().toString(36).substr(2, 9), name: name, total: total, completed: 0 });
+    });
+
+    setSubjects(prev => {
+      const subject = { ...prev[subjectId] };
+      subject.topics = [...subject.topics, ...newTopics];
+      return { ...prev, [subjectId]: subject };
+    });
+
+    setBulkAddText('');
+    setShowBulkAdd(false);
+  };
+
+  const executeTacticalReset = () => {
+    setSubjects(prev => {
+      const resetSubjects = {};
+      Object.keys(prev).forEach(key => {
+        resetSubjects[key] = {
+          ...prev[key],
+          topics: prev[key].topics.map(t => ({ ...t, completed: 0 }))
+        };
+      });
+      return resetSubjects;
+    });
+    setCycle([]);
+    setCompletedToday([]);
+    setReviews([]);
+    setReviewStats({ totalDone: 0, correct: 0, streak: 0 });
+    setSimulados([]);
+    setTafHistory([]);
+    setCoins(0);
+    setCurrentDayIndex(0);
+  };
+
+  // --- RENDERIZADORES DAS ABAS ---
+
+  const renderRevisoes = () => {
+    const perfReviews = reviews.filter(r => r.lastPerformance !== undefined);
+    const avgMemoryHealth = perfReviews.length > 0 
+      ? Math.round((perfReviews.reduce((acc, r) => acc + r.lastPerformance, 0) / perfReviews.length) * 100) 
+      : 0;
+
+    // LÓGICA DO NOVO CALENDÁRIO DE RETENÇÃO
+    const rYear = reviewCalendarDate.getFullYear();
+    const rMonth = reviewCalendarDate.getMonth();
+    const rDaysInMonth = new Date(rYear, rMonth + 1, 0).getDate();
+    const rFirstDayIndex = new Date(rYear, rMonth, 1).getDay();
+    const mesesNomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    
+    const rBlanks = Array(rFirstDayIndex).fill(null);
+    const rDays = Array.from({ length: rDaysInMonth }, (_, i) => i + 1);
+
+    return (
+      <div className="fade-in max-w-6xl mx-auto pb-10">
+        
+        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center">
+          <div className="flex items-center gap-4">
+            <div className="bg-red-100 p-3 rounded-full shrink-0"><BrainCircuit className="text-red-600 w-6 h-6 sm:w-8 sm:h-8" /></div>
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold text-slate-800">C.C.R. (Centro de Comando de Retenção)</h2>
+              <p className="text-slate-500 text-xs sm:text-sm">Auditoria do Algoritmo FSRS de Espaçamento.</p>
+            </div>
+          </div>
+          
+          <div className="flex flex-wrap gap-3 w-full lg:w-auto">
+            <div className="flex-1 min-w-[100px] lg:w-32 bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Acerto Global</p>
+              <p className="text-xl sm:text-2xl font-black text-slate-800">
+                {reviewStats.totalDone > 0 ? Math.round((reviewStats.correct / reviewStats.totalDone) * 100) : 0}%
+              </p>
+            </div>
+            <div className="flex-1 min-w-[100px] lg:w-32 bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1" title="Média de todas as revisões feitas">Saúde da Memória</p>
+              <p className={`text-xl sm:text-2xl font-black ${avgMemoryHealth >= 80 ? 'text-emerald-500' : avgMemoryHealth >= 70 ? 'text-yellow-500' : 'text-red-500'}`}>
+                {avgMemoryHealth}%
+              </p>
+            </div>
+            <div className="flex-1 min-w-[100px] lg:w-32 bg-slate-50 border border-slate-200 rounded-lg p-3 text-center">
+              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Sequência</p>
+              <p className="text-xl sm:text-2xl font-black text-orange-500 flex items-center justify-center gap-1">
+                🔥 {reviewStats.streak}
+              </p>
+            </div>
+          </div>
+        </div>
+
+        {isProcrastinating && (
+          <div className="bg-red-600 text-white p-4 rounded-xl shadow-md mb-6 flex items-center justify-between border-2 border-red-800 animate-pulse">
+            <div className="flex items-center gap-3">
+              <AlertTriangle className="w-8 h-8 text-yellow-300" />
+              <div>
+                <h3 className="font-black uppercase tracking-wider text-sm">Multa de Procrastinação Ativada</h3>
+                <p className="text-xs text-red-100 mt-0.5">Você acumulou {backlogCount} revisões ignoradas. Suas moedas estão sendo drenadas até que limpe a fila.</p>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {pendingReviews.length > 0 ? (
+          <>
+            <div className="flex justify-between items-end mb-3">
+              <h3 className="text-lg font-bold text-slate-700 flex items-center gap-2">
+                <TargetIcon className="w-5 h-5 text-red-500"/> Fila Estratégica de Hoje
+              </h3>
+              <span className="text-xs font-bold bg-red-100 text-red-700 px-3 py-1 rounded-full border border-red-200">
+                Restam {allDueToday.length} Cartões
+              </span>
+            </div>
+
+            {/* RAIO-X TÁTICO: Resumo de etiquetas com as matérias que precisam ser revisadas hoje */}
+            {activeReviewSubjects.length > 0 && (
+              <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-3 mb-4 snap-x items-center">
+                <div className="flex items-center justify-center px-1 shrink-0" title="Disciplinas na Fila">
+                  <Layers className="w-4 h-4 text-slate-400" />
+                </div>
+                {activeReviewSubjects.map(({ subject, count }) => (
+                  <div key={subject.id} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border shadow-sm shrink-0 snap-start transition-transform hover:scale-105 ${subject.color}`}>
+                    <span className="text-[10px] font-black uppercase tracking-wider">{subject.name}</span>
+                    <span className="bg-white/40 px-1.5 py-0.5 rounded text-[10px] font-black backdrop-blur-sm border border-white/20">{count}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
+              {pendingReviews.map(rev => {
+                const sub = subjects[rev.subjectId];
+                const thermo = getThermometer(rev.lastPerformance);
+                
+                return (
+                  <div key={rev.id} className="bg-white p-4 rounded-xl border-2 border-slate-200 shadow-sm flex flex-col justify-between hover:border-red-300 transition-colors">
+                    <div>
+                      <div className="flex justify-between items-start mb-3">
+                        <span className={`text-[9px] sm:text-[10px] font-black px-2 py-1 rounded uppercase ${sub?.color || 'bg-slate-100 text-slate-600'}`}>
+                          {sub?.name}
+                        </span>
+                        <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 ${thermo.color}`} title="Termômetro de Memória">
+                          {thermo.icon} {Math.round(rev.lastPerformance * 100 || 0)}%
+                        </div>
+                      </div>
+                      <p className="text-sm font-bold text-slate-800 leading-tight mb-2">{rev.topicName}</p>
+                      
+                      <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold bg-slate-50 p-1.5 rounded border border-slate-100">
+                        <span className="flex items-center gap-1"><Clock className="w-3 h-3"/> Espaçamento:</span>
+                        <span className="text-blue-600">{rev.interval} dia(s)</span>
+                      </div>
+                    </div>
+                    <button onClick={() => setReviewModal(rev)} className="mt-4 w-full py-2.5 bg-red-50 hover:bg-red-500 text-red-600 hover:text-white border border-red-200 rounded-lg text-xs font-bold transition-all shadow-sm">
+                      Fazer Questões
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+
+            {backlogCount > 0 && (
+              <div className="mb-8 border border-orange-200 rounded-xl overflow-hidden shadow-sm">
+                <div 
+                  className={`p-3 sm:p-4 flex justify-between items-center cursor-pointer transition-colors ${showBacklog ? 'bg-orange-100' : 'bg-orange-50 hover:bg-orange-100'}`}
+                  onClick={() => setShowBacklog(!showBacklog)}
+                >
+                  <div className="flex items-center gap-2 text-orange-700">
+                    <AlertTriangle className="w-4 h-4" />
+                    <span className="text-xs sm:text-sm font-bold">
+                      Você possui {backlogCount} assunto(s) atrasado(s) em espera.
+                    </span>
+                  </div>
+                  {showBacklog ? <EyeOff className="w-4 h-4 text-orange-600"/> : <Eye className="w-4 h-4 text-orange-600"/>}
+                </div>
+                
+                {showBacklog && (
+                  <div className="bg-white p-4 border-t border-orange-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                    {backlogReviews.map(rev => {
+                      const sub = subjects[rev.subjectId];
+                      return (
+                        <div key={rev.id} className="p-3 border border-slate-200 rounded-lg flex justify-between items-center bg-slate-50">
+                          <div>
+                            <span className="text-[9px] font-black text-slate-500 block uppercase mb-0.5">{sub?.name}</span>
+                            <span className="text-xs font-bold text-slate-800 line-clamp-1">{rev.topicName}</span>
+                          </div>
+                          <button onClick={() => setReviewModal(rev)} className="text-[10px] font-bold bg-orange-100 text-orange-700 hover:bg-orange-500 hover:text-white px-2 py-1.5 rounded transition-colors">
+                            Revisar
+                          </button>
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="text-center p-12 bg-white border-2 border-dashed border-slate-200 rounded-xl text-slate-500 flex flex-col items-center mb-8 shadow-sm">
+            <CheckCircle className="w-12 h-12 text-emerald-400 mb-3" />
+            <h3 className="text-lg font-bold text-slate-700">Missões Concluídas!</h3>
+            <p className="text-sm mt-1">O seu cérebro está aquecido. Vá para o seu Ciclo avançar o edital.</p>
+          </div>
+        )}
+
+        <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-800 overflow-hidden mt-6">
+          <div className="p-4 sm:p-5 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
+            <h3 className="text-sm sm:text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
+              <CalendarDays className="w-5 h-5 text-blue-400"/> Mapeamento FSRS (Heatmap)
+            </h3>
+            <div className="flex items-center gap-2 sm:gap-4">
+              <span className="text-white font-bold text-sm bg-slate-800 px-3 py-1 rounded-full border border-slate-700">{mesesNomes[rMonth]} {rYear}</span>
+              <div className="flex gap-1">
+                <button onClick={() => setReviewCalendarDate(new Date(rYear, rMonth - 1, 1))} className="p-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-white transition-colors"><ChevronLeft className="w-4 h-4" /></button>
+                <button onClick={() => setReviewCalendarDate(new Date(rYear, rMonth + 1, 1))} className="p-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-white transition-colors"><ChevronRight className="w-4 h-4" /></button>
+              </div>
+            </div>
+          </div>
+          
+          <div className="p-3 sm:p-5">
+            <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
+              {diasSemana.map(dia => <div key={dia} className="text-center font-black text-slate-500 uppercase tracking-widest text-[9px] sm:text-xs">{dia}</div>)}
+            </div>
+            <div className="grid grid-cols-7 gap-1 sm:gap-2">
+              {rBlanks.map((_, i) => <div key={`blank-${i}`} className="min-h-[4rem] sm:min-h-[6rem] bg-slate-800/30 rounded-lg"></div>)}
+              {rDays.map(day => {
+                const d = new Date(rYear, rMonth, day);
+                const dateStr = getLocalDateStr(d);
+                const dayRevs = reviews.filter(r => r.nextDateStr === dateStr);
+                const isTodayStr = dateStr === todayStr;
+                const isPast = dateStr < todayStr;
+                
+                // Determina o "calor" do dia para o fundo da célula
+                let heatClass = "bg-slate-800 border-slate-700";
+                if (isTodayStr) heatClass = "bg-blue-900/40 border-blue-500 ring-1 ring-blue-500/50 shadow-[inset_0_0_15px_rgba(59,130,246,0.2)]";
+                else if (isPast) heatClass = "bg-slate-800/30 border-slate-800 opacity-60";
+                else if (dayRevs.length > 8) heatClass = "bg-red-900/20 border-red-800 shadow-[inset_0_0_10px_rgba(220,38,38,0.15)]";
+                else if (dayRevs.length > 4) heatClass = "bg-orange-900/20 border-orange-800/60";
+
+                return (
+                  <div key={day} className={`min-h-[4.5rem] sm:min-h-[6rem] p-1.5 sm:p-2 rounded-lg flex flex-col border transition-all ${heatClass}`}>
+                    <div className="flex justify-between items-start mb-1 gap-1">
+                      <span className={`font-black text-[10px] sm:text-xs ${isTodayStr ? 'text-blue-400' : isPast ? 'text-slate-500' : 'text-slate-300'}`}>{day}</span>
+                      {dayRevs.length > 0 && (
+                        <span className={`text-[8px] sm:text-[9px] font-black px-1.5 py-0.5 rounded shadow-sm ${isPast ? 'bg-slate-700 text-slate-400' : dayRevs.length > 8 ? 'bg-red-600 text-white animate-pulse' : 'bg-blue-600 text-white'}`}>
+                          {dayRevs.length}
+                        </span>
+                      )}
+                    </div>
+                    
+                    <div className="flex-1 flex flex-col gap-0.5 mt-auto overflow-hidden">
+                      {/* Agrupa as revisões por disciplina para exibir de forma limpa */}
+                      {(() => {
+                        if (dayRevs.length === 0) return null;
+                        const subjectCounts = {};
+                        dayRevs.forEach(r => {
+                          subjectCounts[r.subjectId] = (subjectCounts[r.subjectId] || 0) + 1;
+                        });
+                        
+                        const items = Object.entries(subjectCounts).map(([subId, count]) => {
+                          const sub = subjects[subId];
+                          return sub ? { name: sub.name, color: sub.color.split(' ')[0], count } : null;
+                        }).filter(Boolean);
+
+                        return (
+                          <>
+                            {items.slice(0, 3).map((item, idx) => (
+                              <div key={idx} className="flex items-center gap-1 opacity-90">
+                                <div className={`w-1.5 h-1.5 sm:w-2 sm:h-2 rounded-full shrink-0 ${item.color || 'bg-slate-400'}`}></div>
+                                <span className="text-[7px] sm:text-[8px] text-slate-300 truncate font-bold uppercase" title={`${item.name} (${item.count})`}>
+                                  {item.name} <span className="text-slate-500">({item.count})</span>
+                                </span>
+                              </div>
+                            ))}
+                            {items.length > 3 && (
+                              <span className="text-[7px] font-bold text-slate-500 ml-3">+{items.length - 3}</span>
+                            )}
+                          </>
+                        );
+                      })()}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+
+      </div>
+    );
+  };
+
+  const renderCiclo = () => (
+    <div className="fade-in pb-10 max-w-6xl mx-auto">
+      
+      <div className="mb-8">
+        <div className="flex items-center gap-3 mb-4">
+          <TargetIcon className="text-blue-600 w-7 h-7" />
+          <h2 className="text-2xl font-black text-slate-800 tracking-tight">Conversor de Edital (Teoria ➔ Questões)</h2>
+        </div>
+
+        {pendingReviews.length > 0 && (
+          <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 sm:p-5 mb-6 shadow-sm relative overflow-hidden">
+            <div className="absolute top-0 right-0 w-16 h-16 bg-red-200 rounded-bl-full opacity-50 pointer-events-none"></div>
+            
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 relative z-10">
+              <div>
+                <h3 className="font-black text-red-800 flex items-center gap-2 text-lg">
+                  <AlertTriangle className="w-5 h-5"/> Prioridade Zero: Blindar Memória
+                </h3>
+                <p className="text-xs text-red-600 mt-1 font-bold max-w-2xl">
+                  A regra de ouro do alto rendimento: limpe a sua fila de revisões FSRS antes de absorver qualquer conteúdo novo. A sua aprovação não está no que estuda hoje, está no que não esquece amanhã.
+                </p>
+              </div>
+              <div className="bg-red-600 text-white text-xs font-black px-4 py-2 rounded-lg whitespace-nowrap shadow-sm self-start sm:self-auto flex flex-col items-center leading-none">
+                <span className="text-[10px] opacity-80 mb-0.5">CARTÕES FSRS</span>
+                <span className="text-xl">{pendingReviews.length}</span>
+              </div>
+            </div>
+            
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 relative z-10">
+              {pendingReviews.map(rev => {
+                const sub = subjects[rev.subjectId];
+                const thermo = getThermometer(rev.lastPerformance);
+                
+                return (
+                  <div key={rev.id} className="bg-white p-3 rounded-lg border border-red-100 shadow-sm flex flex-col justify-between hover:border-red-300 transition-colors">
+                    <div>
+                      <div className="flex justify-between items-start mb-2">
+                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase truncate max-w-[60%] ${sub?.color || 'bg-slate-100 text-slate-600'}`}>
+                          {sub?.name}
+                        </span>
+                        <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 ${thermo.color}`} title={thermo.label}>
+                          {thermo.icon} {Math.round(rev.lastPerformance * 100 || 0)}%
+                        </div>
+                      </div>
+                      <p className="text-xs font-bold text-slate-800 leading-tight mb-2 line-clamp-2" title={rev.topicName}>{rev.topicName}</p>
+                    </div>
+                    <button onClick={() => { setActiveTab('revisoes'); setReviewModal(rev); }} className="mt-2 w-full py-1.5 bg-red-100 hover:bg-red-500 text-red-700 hover:text-white border border-red-200 rounded text-[11px] font-black transition-all flex items-center justify-center gap-1">
+                      <Activity className="w-3 h-3"/> Executar Revisão
+                    </button>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {completedToday.length === (cycle[currentDayIndex]?.length || 0) && completedToday.length > 0 && (
+        <div className="bg-emerald-500 p-5 md:p-6 rounded-xl shadow-md mb-8 flex flex-col md:flex-row items-center justify-between gap-5 text-white fade-in border border-emerald-600">
+          <div className="text-center md:text-left flex items-center gap-4">
+            <div className="bg-white/20 p-3 rounded-full"><Trophy className="text-yellow-300 w-8 h-8" /></div>
+            <div>
+              <h2 className="text-xl md:text-2xl font-black">Meta Diária Batida!</h2>
+              <p className="text-emerald-100 text-sm font-medium">Missão cumprida com excelência. Avance a fila tática quando estiver pronto para o próximo dia.</p>
+            </div>
+          </div>
+          <button 
+            onClick={advanceDay} 
+            className="bg-white text-emerald-700 px-6 py-3 rounded-lg font-black shadow-sm hover:bg-emerald-50 transition-colors w-full md:w-auto uppercase tracking-wider text-sm flex items-center justify-center gap-2"
+          >
+            Avançar Ciclo <ChevronRight className="w-4 h-4"/>
+          </button>
+        </div>
+      )}
+
+      <div className="bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-800 mb-8 overflow-hidden">
+        <div className="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
+          <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
+            <Flame className="w-4 h-4 text-orange-500" /> Progresso de Conversão (Teoria ➔ FSRS)
+          </h3>
+          <div className="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-3 py-1 rounded-full text-[10px] font-black uppercase flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
+            Queima Diária: {completedToday.length} / {cycle[currentDayIndex]?.length || 0} Slots
+          </div>
+        </div>
+        
+        <div className="flex gap-4 overflow-x-auto custom-scrollbar pb-4 pt-2 snap-x">
+          {Object.values(subjects).map(sub => {
+            const progress = getSubjectProgress(sub.id);
+            const radius = 34;
+            const circumference = 2 * Math.PI * radius;
+            const strokeDashoffset = circumference - (progress / 100) * circumference;
+            const isDone = progress === 100;
+
+            return (
+              <div key={sub.id} className={`min-w-[110px] sm:min-w-[120px] shrink-0 snap-start rounded-xl p-3 flex flex-col items-center justify-center gap-3 relative overflow-hidden transition-all shadow-sm border ${isDone ? 'bg-emerald-900/20 border-emerald-800/50' : 'bg-slate-800 border-slate-700 hover:border-slate-600'}`}>
+                
+                {isDone && <div className="absolute inset-0 bg-gradient-to-t from-emerald-500/10 to-transparent pointer-events-none"></div>}
+
+                <div className="relative flex items-center justify-center group z-10">
+                  <svg className="transform -rotate-90 w-14 h-14 sm:w-16 sm:h-16 drop-shadow-md" viewBox="0 0 100 100">
+                    <defs>
+                      <linearGradient id={`grad-cycle-${sub.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                        <stop offset="0%" stopColor={isDone ? '#10b981' : '#c084fc'} />
+                        <stop offset="100%" stopColor={isDone ? '#059669' : '#3b82f6'} />
+                      </linearGradient>
+                    </defs>
+                    {/* Trilho de Fundo Escuro */}
+                    <circle cx="50" cy="50" r={radius} stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-700" />
+                    {/* Progresso Dinâmico */}
+                    <circle 
+                      cx="50" cy="50" r={radius} 
+                      stroke={`url(#grad-cycle-${sub.id})`} 
+                      strokeWidth="8" fill="transparent" 
+                      strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} 
+                      strokeLinecap="round" 
+                      className="transition-all duration-1000 ease-out" 
+                    />
+                  </svg>
+                  <div className="absolute inset-0 flex flex-col items-center justify-center">
+                    <span className={`text-[11px] sm:text-xs font-black ${isDone ? 'text-emerald-400' : 'text-white'}`}>{progress}%</span>
+                  </div>
+                </div>
+
+                <div className="w-full text-center z-10">
+                  <span className="text-[9px] font-bold text-slate-300 uppercase truncate block px-1" title={sub.name}>{sub.name}</span>
+                </div>
+                
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
+      <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
+        <Layers className="w-4 h-4" /> Fila de Conteúdo Novo / Avanço
+      </h3>
+
+      <div id="cycle-scroll-container" className="overflow-x-auto pt-5 pb-6 custom-scrollbar snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="flex gap-4 sm:gap-6 min-w-max items-stretch">
+          {cycle.length > 0 && cycle.map((daySubjects, dayIndex) => {
+            const dateInfo = getRelativeDateInfo(dayIndex);
+            const isToday = dateInfo.isToday;
+            
+            return (
+              <div id={`cycle-day-${dayIndex}`} key={dayIndex} className={`w-[85vw] sm:w-[320px] shrink-0 snap-start flex flex-col rounded-2xl border-2 transition-all mt-2 ${
+                  isToday ? 'border-blue-500 bg-slate-50 shadow-lg ring-4 ring-blue-50 relative' : 'border-slate-200 bg-white opacity-70 hover:opacity-100 scale-[0.98] hover:scale-100'
+              }`}>
+                {isToday && (
+                   <div className="absolute -top-3.5 sm:-top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white text-xs sm:text-sm font-black uppercase tracking-wider px-4 py-1.5 rounded-full shadow-sm z-10 border-2 border-white whitespace-nowrap">
+                     Ordem do Dia
+                   </div>
+                )}
+
+                <div className={`p-4 text-center border-b-2 flex flex-col gap-0.5 rounded-t-xl ${isToday ? 'border-blue-200 bg-blue-100/40 pt-6' : 'border-slate-100 bg-slate-50/50'}`}>
+                  <span className={`text-xs font-black uppercase tracking-widest ${isToday ? 'text-blue-600' : 'text-slate-400'}`}>
+                    {dateInfo.title} • {dateInfo.dateStr}
+                  </span>
+                  <span className={`font-black text-3xl tracking-tighter ${isToday ? 'text-slate-800' : 'text-slate-600'}`}>
+                    DIA {dayIndex + 1}
+                  </span>
+                </div>
+
+                <div className="p-3 sm:p-4 flex flex-col gap-3 sm:gap-4 flex-1">
+                  {daySubjects.map((subjectId, slotIndex) => {
+                    const subject = subjects[subjectId];
+                    if (!subject) return null;
+                    const activeTopic = getActiveTopic(subjectId);
+                    const isSlotCompleted = isToday && completedToday.includes(slotIndex);
+                    
+                    return (
+                      <div key={slotIndex} className={`bg-white border rounded-xl overflow-hidden flex flex-col shadow-sm transition-all ${isSlotCompleted ? 'border-emerald-200 opacity-80' : isToday ? 'border-slate-300 hover:border-blue-400 hover:shadow-md' : 'border-slate-200'}`}>
+                        
+                        <div className={`px-3 py-2 flex justify-between items-center border-b border-black/5 ${subject.color}`}>
+                          <span className="font-black text-xs uppercase tracking-wider">{subject.name}</span>
+                          <span className="text-[9px] font-black bg-white/30 px-1.5 py-0.5 rounded backdrop-blur-sm">{subject.block || 'B?'}</span>
+                        </div>
+
+                        <div className="p-3 sm:p-4 flex flex-col gap-3 flex-1 justify-center">
+                          {isSlotCompleted ? (
+                            <div className="text-center py-4 fade-in flex flex-col items-center">
+                              <CheckCircle className="w-8 h-8 text-emerald-500 mb-2" />
+                              <span className="text-xs font-black text-emerald-700 uppercase tracking-wider">Teoria Queimada!</span>
+                            </div>
+                          ) : activeTopic ? (
+                            <>
+                              <div>
+                                <span className="text-[9px] font-black text-slate-400 uppercase tracking-wider block mb-0.5 flex items-center gap-1"><Flame className="w-3 h-3 text-orange-500"/> Assunto na Fornalha</span>
+                                <p className="text-sm font-bold text-slate-800 leading-snug">{activeTopic.name}</p>
+                              </div>
+                              
+                              <div className="bg-slate-50 p-2 rounded-lg border border-slate-100">
+                                <div className="flex items-center justify-between mb-1.5">
+                                  <span className="text-[10px] text-slate-500 font-bold uppercase">Teoria Restante</span>
+                                  <span className="text-[10px] font-black text-blue-600">{activeTopic.completed}/{activeTopic.total} Aulas</span>
+                                </div>
+                                <div className="w-full bg-slate-200 rounded-full h-1.5">
+                                  <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${(activeTopic.completed / activeTopic.total) * 100}%` }}></div>
+                                </div>
+                              </div>
+
+                              {isToday && (
+                                (() => {
+                                  // --- TRAVA DE ILUSÃO DE PROGRESSO ---
+                                  // Verifica se há alguma revisão desta disciplina com menos de 70% de acerto
+                                  const hasRetentionDebt = reviews.some(r => r.subjectId === subjectId && r.lastPerformance !== undefined && r.lastPerformance < 0.70);
+                                  
+                                  if (hasRetentionDebt) {
+                                    return (
+                                      <div className="mt-2 text-center bg-red-50 border border-red-200 rounded-lg p-2.5">
+                                        <AlertTriangle className="w-5 h-5 text-red-500 mx-auto mb-1" />
+                                        <span className="text-[10px] font-black text-red-700 block uppercase">Avanço Bloqueado</span>
+                                        <p className="text-[9px] text-red-600 mt-1 font-medium leading-tight">Você possui falhas críticas no FSRS desta matéria. Restaure a retenção antes de ver conteúdo novo.</p>
+                                      </div>
+                                    );
+                                  }
+
+                                  return (
+                                    <button onClick={() => setClassToConfirm({ subjectId, slotIndex, topicName: activeTopic.name, maxClasses: activeTopic.total - activeTopic.completed })} className="mt-2 flex items-center justify-center gap-1.5 w-full py-2.5 bg-slate-900 hover:bg-orange-600 text-white rounded-lg text-xs font-black transition-all shadow-sm group">
+                                      <PlayCircle className="w-4 h-4 group-hover:scale-110 transition-transform" /> Queimar Teoria (+1 FSRS)
+                                    </button>
+                                  );
+                                })()
+                              )}
+                            </>
+                          ) : (
+                            <div className="text-center py-3 flex flex-col items-center">
+                              <div className="bg-emerald-100 p-2 rounded-full mb-2"><BrainCircuit className="w-5 h-5 text-emerald-600" /></div>
+                              <span className="text-[10px] font-black text-emerald-700 uppercase tracking-wider mb-3">100% no FSRS (Só Questões)</span>
+                              
+                              <button onClick={() => setReplaceModal({ dayIndex, slotIndex, oldSubjectId: subjectId })} className="w-full py-2 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white rounded-lg text-[11px] font-black transition-all flex items-center justify-center gap-1.5 border border-blue-100 hover:border-blue-600">
+                                <Shuffle className="w-3.5 h-3.5" /> Reestruturar Vaga
+                              </button>
+                              
+                              {isToday && <button onClick={() => setCompletedToday(prev => [...prev, slotIndex])} className="mt-2 text-[10px] font-bold text-slate-400 hover:text-slate-600 underline underline-offset-2">Pular esta vaga hoje</button>}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      </div>
+    </div>
+  );
+
+  const renderCalendar = () => {
+    const year = calendarDate.getFullYear();
+    const month = calendarDate.getMonth();
+    const daysInMonth = new Date(year, month + 1, 0).getDate();
+    const firstDayIndex = new Date(year, month, 1).getDay();
+    const mesesNomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+    const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+    
+    const blanks = Array(firstDayIndex).fill(null);
+    const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
+    
+    const today = new Date();
+    const todayDateObj = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
+    const futureSchedule = {};
+    const remainingClasses = {};
+    Object.values(subjects).forEach(sub => {
+        let rem = 0;
+        sub.topics.forEach(t => rem += (t.total - t.completed));
+        remainingClasses[sub.id] = rem;
+    });
+
+    for (let i = 0; i < 365; i++) {
+        if (cycle.length === 0) break;
+        const cycleIndex = (currentDayIndex + i) % cycle.length;
+        const daySubjects = cycle[cycleIndex] || [];
+        const scheduledThisDay = [];
+
+        daySubjects.forEach((subId, slotIdx) => {
+            if (i === 0 && completedToday.includes(slotIdx)) return;
+            if (remainingClasses[subId] > 0) {
+                remainingClasses[subId] -= 1;
+                const isLast = remainingClasses[subId] === 0;
+                scheduledThisDay.push({ id: subId, isLast });
+            }
+        });
+        futureSchedule[i] = scheduledThisDay;
+    }
+
+    return (
+      <div className="flex flex-col lg:flex-row items-start gap-4 md:gap-6 max-w-6xl mx-auto pb-10 fade-in">
+        <div className="flex-1 w-full bg-white rounded-xl shadow-sm border border-slate-200 p-4 md:p-6 overflow-hidden">
+          
+          <div className={`text-white p-4 md:p-5 rounded-xl shadow-md mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-colors ${estimatedDate.isLate ? 'bg-red-600 animate-pulse border border-red-800' : 'bg-gradient-to-r from-blue-600 to-blue-800'}`}>
+            <div className="flex items-center gap-3">
+              <div className="bg-white/20 p-2 rounded-full shrink-0">
+                {estimatedDate.isLate ? <AlertTriangle className="text-yellow-300 w-6 h-6 md:w-8 md:h-8" /> : <Trophy className="text-yellow-300 w-6 h-6 md:w-8 md:h-8" />}
+              </div>
+              <div>
+                <p className="text-blue-100 text-[10px] md:text-xs font-bold uppercase tracking-wider mb-0.5">Previsão de Fechamento</p>
+                <h3 className="text-xl md:text-2xl font-black text-white">{typeof estimatedDate === 'string' ? estimatedDate : estimatedDate.full}</h3>
+              </div>
+            </div>
+            
+            <div className="flex flex-col items-end">
+              <div className="bg-black/20 px-3 py-1.5 rounded-lg text-xs md:text-sm text-white font-bold flex items-center gap-1.5">
+                <Clock className="w-4 h-4"/> Prova: {estimatedDate.examDateFormatted}
+              </div>
+              {estimatedDate.isLate && (
+                <span className="text-xs font-black text-yellow-300 mt-2 uppercase text-right">
+                  Risco de Reprovação: Atrasado {estimatedDate.daysDiff} dias. Aumente seu ritmo!
+                </span>
+              )}
+            </div>
+          </div>
+
+          <div className="flex justify-between items-center mb-4 sm:mb-6">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2">
+              <CalendarIcon className="text-blue-600 w-5 h-5 sm:w-6 sm:h-6" /> {mesesNomes[month]} {year}
+            </h2>
+            <div className="flex gap-1 sm:gap-2">
+              <button onClick={() => setCalendarDate(new Date(year, month - 1, 1))} className="p-1.5 sm:p-2 bg-slate-50 hover:bg-slate-100 rounded-full border border-slate-200"><ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+              <button onClick={() => setCalendarDate(new Date(year, month + 1, 1))} className="p-1.5 sm:p-2 bg-slate-50 hover:bg-slate-100 rounded-full border border-slate-200"><ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+            </div>
+          </div>
+          
+          <div className="overflow-x-auto custom-scrollbar pb-2 -mx-2 px-2 sm:mx-0 sm:px-0">
+            <div className="min-w-[500px] sm:min-w-0">
+              <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
+                {diasSemana.map(dia => <div key={dia} className="text-center font-bold text-slate-400 text-xs sm:text-sm">{dia}</div>)}
+              </div>
+              <div className="grid grid-cols-7 gap-1 sm:gap-2">
+                {blanks.map((_, i) => <div key={`blank-${i}`} className="min-h-[5rem] md:min-h-[7rem] bg-slate-50/50 rounded-md sm:rounded-lg"></div>)}
+                {days.map(day => {
+                  const cellDateObj = new Date(year, month, day);
+                  const diffDays = Math.round((cellDateObj - todayDateObj) / (1000 * 60 * 60 * 24));
+                  const isTodayReal = diffDays === 0;
+                  const isPast = diffDays < 0;
+
+                  let bgClass = isPast ? "bg-slate-50 text-slate-400" : isTodayReal ? "bg-blue-50 border-2 border-blue-500 shadow-sm text-blue-700" : "bg-white border border-slate-200 hover:bg-slate-50 text-slate-700";
+                  
+                  let projectedSubjects = [];
+                  if (diffDays >= 0 && futureSchedule[diffDays]) projectedSubjects = futureSchedule[diffDays];
+
+                  return (
+                    <div key={day} className={`min-h-[5rem] md:min-h-[7rem] p-1 sm:p-1.5 rounded-md flex flex-col ${bgClass}`}>
+                      <div className="flex justify-between items-start mb-1 gap-0.5">
+                        <span className="font-bold text-xs sm:text-sm px-1">{day}</span>
+                        {isTodayReal && <span className="text-[7px] sm:text-[8px] font-bold bg-blue-500 text-white px-1 sm:px-1.5 py-0.5 rounded-sm">HOJE</span>}
+                      </div>
+                      
+                      {diffDays >= 0 && projectedSubjects.length > 0 && (
+                         <div className="flex flex-col gap-0.5 sm:gap-1 pb-1 mt-auto">
+                           {projectedSubjects.map((item, idx) => {
+                             const sub = subjects[item.id];
+                             if(!sub) return null;
+                             return (
+                               <div key={idx} className={`flex items-center justify-between text-[7px] sm:text-[9px] font-bold px-1 sm:px-1.5 py-0.5 rounded-sm leading-none ${sub.color}`}>
+                                 <span className="truncate flex-1">{sub.name}</span>
+                                 {item.isLast && (
+                                   <svg className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 shrink-0 ml-0.5" viewBox="0 0 24 24" fill="none">
+                                     <path d="M12 2L22 20H2L12 2Z" fill="white" stroke="#E81C23" strokeWidth="3" strokeLinejoin="round"/>
+                                     <path d="M12 8V14" stroke="#1A1A1A" strokeWidth="2.5" strokeLinecap="round"/>
+                                     <circle cx="12" cy="17.5" r="1.5" fill="#1A1A1A"/>
+                                   </svg>
+                                 )}
+                               </div>
+                             );
+                           })}
+                         </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="w-full lg:w-80 bg-white rounded-xl shadow-sm border border-slate-200 p-4 md:p-6 flex flex-col shrink-0 mb-8 lg:mb-0">
+          <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3">
+            <BookOpen className="text-blue-600 w-5 h-5" /> Fim das Disciplinas
+          </h3>
+          <div className="flex flex-col gap-3 pr-2">
+            {subjectEstimates.map(sub => (
+              <div key={sub.id} className="border border-slate-100 rounded-lg p-3 flex flex-col gap-1.5 hover:border-slate-200 transition-colors bg-slate-50/50">
+                <div className="flex justify-between items-center">
+                  <span className={`text-[10px] font-bold px-2 py-1 rounded-md tracking-wider ${sub.color}`}>{sub.name}</span>
+                  {sub.remaining === 0 ? (
+                    <span className="flex items-center gap-1 text-xs font-bold text-emerald-600"><CheckCircle className="w-3 h-3" /> Concluído</span>
+                  ) : (
+                    <span className="text-sm font-bold text-slate-700">{sub.dateStr}</span>
+                  )}
+                </div>
+                {sub.remaining > 0 && (
+                  <div className="flex justify-between items-center mt-1">
+                    <span className="text-xs text-slate-400">Restam {sub.remaining} aulas</span>
+                    <div className="w-16 bg-slate-200 rounded-full h-1.5 overflow-hidden">
+                       <div className="bg-blue-400 h-1.5 rounded-full" style={{ width: `${Math.min(100, Math.max(0, 100 - (sub.remaining * 2)))}%` }}></div>
+                    </div>
+                  </div>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderTAF = () => {
+    const totalSimuladosTaf = tafHistory.length;
+    const mediaPts = totalSimuladosTaf > 0 ? (tafHistory.reduce((acc, sim) => acc + sim.totalPts, 0) / totalSimuladosTaf).toFixed(1) : 0;
+    const recordePts = totalSimuladosTaf > 0 ? Math.max(...tafHistory.map(s => s.totalPts)) : 0;
+    
+    let weakTest = "N/A";
+    if (totalSimuladosTaf > 0) {
+      const avgBarra = tafHistory.reduce((acc, sim) => acc + sim.ptsBarra, 0);
+      const avgAbdominal = tafHistory.reduce((acc, sim) => acc + sim.ptsAbdominal, 0);
+      const avgImpulsao = tafHistory.reduce((acc, sim) => acc + sim.ptsImpulsao, 0);
+      const avgCorrida = tafHistory.reduce((acc, sim) => acc + sim.ptsCorrida, 0);
+      const avgShuttle = tafHistory.reduce((acc, sim) => acc + sim.ptsShuttle, 0);
+
+      const avgs = [
+        { name: "Barra Fixa", val: avgBarra },
+        { name: "Abdominal", val: avgAbdominal },
+        { name: "Impulsão", val: avgImpulsao },
+        { name: "Corrida", val: avgCorrida },
+        { name: "Shuttle", val: avgShuttle }
+      ];
+      avgs.sort((a, b) => a.val - b.val);
+      weakTest = avgs[0].name;
+    }
+
+    const chartHeight = 180;
+    const chartWidth = 800;
+    const maxPts = 25;
+    const notaCorte = 12;
+
+    const getChartData = () => {
+      if (totalSimuladosTaf === 0) return { line: "", area: "", points: [] };
+      if (totalSimuladosTaf === 1) {
+         const y = chartHeight - (tafHistory[0].totalPts / maxPts) * chartHeight;
+         return {
+            line: `0,${y} ${chartWidth},${y}`,
+            area: `0,${chartHeight} 0,${y} ${chartWidth},${y} ${chartWidth},${chartHeight}`,
+            points: [{ x: chartWidth/2, y, val: tafHistory[0].totalPts }]
+         };
+      }
+      const ptsObj = tafHistory.map((sim, index) => {
+        const x = (index / (totalSimuladosTaf - 1)) * chartWidth;
+        const y = chartHeight - (sim.totalPts / maxPts) * chartHeight;
+        return { x, y, val: sim.totalPts };
+      });
+      
+      const lineStr = ptsObj.map(p => `${p.x},${p.y}`).join(" ");
+      const areaStr = `0,${chartHeight} ${lineStr} ${chartWidth},${chartHeight}`;
+      return { line: lineStr, area: areaStr, points: ptsObj };
+    };
+
+    const chartData = getChartData();
+    const targetY = chartHeight - (notaCorte / maxPts) * chartHeight;
+
+    return (
+      <div className="fade-in max-w-4xl mx-auto pb-10">
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+          <div className="flex items-center gap-4">
+            <div className="bg-orange-100 p-3 rounded-full shrink-0"><Dumbbell className="text-orange-600 w-6 h-6 sm:w-8 sm:h-8" /></div>
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold text-slate-800">Evolução Analítica do TAF</h2>
+              <p className="text-slate-500 text-xs sm:text-sm">Tabelas oficiais PRF (Máximo: 25 pts | Mínimo: 12 pts).</p>
+            </div>
+          </div>
+          <button onClick={() => { setEditingTaf(null); setShowTafModal(true); }} className="w-full sm:w-auto justify-center bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-md transition-colors">
+            <Plus className="w-4 h-4" /> Registrar Simulado Físico
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
+            <BarChart2 className="w-6 h-6 text-orange-500 mb-2" />
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Média de Pontos</span>
+            <span className="text-3xl font-black text-slate-800">{mediaPts} <span className="text-sm text-slate-400 font-bold">/25</span></span>
+          </div>
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
+            <Trophy className="w-6 h-6 text-emerald-500 mb-2" />
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Recorde Atual</span>
+            <span className="text-3xl font-black text-emerald-600">{recordePts} <span className="text-sm text-slate-400 font-bold">/25</span></span>
+          </div>
+          <div className="bg-red-50 p-5 rounded-xl border border-red-200 shadow-sm flex flex-col items-center justify-center text-center">
+            <Activity className="w-6 h-6 text-red-500 mb-2" />
+            <span className="text-[10px] font-black text-red-500 uppercase tracking-wider">Gargalo Físico (Pior Média)</span>
+            <span className="text-lg font-black text-red-700 mt-1">{weakTest}</span>
+          </div>
+        </div>
+
+        {totalSimuladosTaf > 0 && (
+          <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 overflow-hidden">
+             <div className="flex justify-between items-end mb-6">
+                <h3 className="font-bold text-slate-700 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-orange-500"/> Curva de Desempenho (Pontuação TAF)</h3>
+             </div>
+             
+             <div className="relative w-full h-[180px] mt-4">
+                <div className="absolute w-full border-t-2 border-dashed border-red-400 z-0 flex items-end justify-end" style={{ top: `${targetY}px` }}>
+                   <span className="text-[10px] sm:text-xs font-black text-red-500 bg-white px-2 -mt-2.5 sm:-mt-3 absolute left-0 sm:left-auto sm:right-0">Corte Mínimo Global (12 pts)</span>
+                </div>
+                
+                <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" className="w-full h-full overflow-visible z-10 relative">
+                   <defs>
+                      <linearGradient id="chartFillTaf" x1="0" y1="0" x2="0" y2="1">
+                         <stop offset="0%" stopColor="#ea580c" stopOpacity="0.25"/>
+                         <stop offset="100%" stopColor="#ea580c" stopOpacity="0"/>
+                      </linearGradient>
+                   </defs>
+                   
+                   <polyline points={chartData.area} fill="url(#chartFillTaf)" />
+                   <polyline points={chartData.line} fill="none" stroke="#ea580c" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
+                   
+                   {chartData.points.map((p, index) => (
+                      <g key={index}>
+                        <circle cx={p.x} cy={p.y} r="5" fill="#fff" stroke="#ea580c" strokeWidth="3" className="hover:r-[7px] transition-all cursor-pointer"/>
+                        <text x={p.x} y={p.y - 12} textAnchor="middle" fill="#475569" fontSize="14" fontWeight="900" className="drop-shadow-sm">{p.val}</text>
+                      </g>
+                   ))}
+                </svg>
+             </div>
+             <div className="flex justify-between text-[10px] text-slate-400 font-bold mt-2 border-t border-slate-100 pt-2 px-1">
+                <span>Mais antigo</span>
+                <span>Mais recente</span>
+             </div>
+          </div>
+        )}
+
+        {tafHistory.length === 0 ? (
+          <div className="text-center p-10 bg-white border-2 border-dashed border-slate-200 rounded-xl text-slate-500 text-sm">
+            Nenhum TAF registrado. Execute seu primeiro simulado físico para analisar seus pontos e traçar o gráfico.
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto mb-8">
+            <table className="w-full text-left text-xs sm:text-sm min-w-[800px]">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
+                <tr>
+                  <th className="p-3 sm:p-4 font-bold">Data</th>
+                  <th className="p-3 sm:p-4 font-bold text-center">Barra</th>
+                  <th className="p-3 sm:p-4 font-bold text-center">Abdominal</th>
+                  <th className="p-3 sm:p-4 font-bold text-center">Impulsão</th>
+                  <th className="p-3 sm:p-4 font-bold text-center">Corrida</th>
+                  <th className="p-3 sm:p-4 font-bold text-center">Shuttle</th>
+                  <th className="p-3 sm:p-4 font-black text-center text-orange-600">Total</th>
+                  <th className="p-3 sm:p-4 font-bold text-center">Status</th>
+                  <th className="p-3 sm:p-4 font-bold text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {tafHistory.map(sim => {
+                  const reprovouCorte = (sim.ptsBarra === 0 || sim.ptsAbdominal === 0 || sim.ptsImpulsao === 0 || sim.ptsCorrida === 0 || sim.ptsShuttle === 0 || sim.totalPts < notaCorte);
+                  return (
+                  <tr key={sim.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="p-3 sm:p-4 font-semibold text-slate-700">{sim.data}</td>
+                    <td className={`p-3 sm:p-4 text-center font-bold ${sim.ptsBarra === 0 ? 'text-red-500' : 'text-slate-600'}`}>{sim.ptsBarra}p <span className="text-[9px] font-normal block text-slate-400">({sim.barra})</span></td>
+                    <td className={`p-3 sm:p-4 text-center font-bold ${sim.ptsAbdominal === 0 ? 'text-red-500' : 'text-slate-600'}`}>{sim.ptsAbdominal}p <span className="text-[9px] font-normal block text-slate-400">({sim.abdominal})</span></td>
+                    <td className={`p-3 sm:p-4 text-center font-bold ${sim.ptsImpulsao === 0 ? 'text-red-500' : 'text-slate-600'}`}>{sim.ptsImpulsao}p <span className="text-[9px] font-normal block text-slate-400">({sim.impulsao}m)</span></td>
+                    <td className={`p-3 sm:p-4 text-center font-bold ${sim.ptsCorrida === 0 ? 'text-red-500' : 'text-slate-600'}`}>{sim.ptsCorrida}p <span className="text-[9px] font-normal block text-slate-400">({sim.corrida}m)</span></td>
+                    <td className={`p-3 sm:p-4 text-center font-bold ${sim.ptsShuttle === 0 ? 'text-red-500' : 'text-slate-600'}`}>{sim.ptsShuttle}p <span className="text-[9px] font-normal block text-slate-400">({sim.shuttle}s)</span></td>
+                    <td className="p-3 sm:p-4 text-center font-black text-base sm:text-lg text-slate-800">{sim.totalPts}</td>
+                    <td className="p-3 sm:p-4 text-center">
+                      {reprovouCorte ? 
+                        <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-[10px] font-black uppercase">Reprovado</span> : 
+                        <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-black uppercase">Aprovado</span>
+                      }
+                    </td>
+                    <td className="p-3 sm:p-4 text-center flex justify-center gap-2">
+                      <button onClick={() => { setEditingTaf(sim); setShowTafModal(true); }} className="p-1.5 bg-white border border-slate-200 text-slate-400 hover:text-orange-600 rounded-md transition-colors shadow-sm" title="Editar">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => {
+                          setGlobalModal({
+                            title: "Excluir Registro de TAF",
+                            message: "Tem a certeza que deseja excluir este teste físico permanentemente?",
+                            onConfirm: () => setTafHistory(prev => prev.filter(s => s.id !== sim.id))
+                          });
+                        }} 
+                        className="p-1.5 bg-white border border-slate-200 text-slate-400 hover:text-red-600 rounded-md transition-colors shadow-sm" title="Excluir"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                )})}
+              </tbody>
+            </table>
+          </div>
+        )}
+
+        <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2 border-b border-slate-200 pb-2"><CalendarIcon className="w-5 h-5 text-slate-400"/> Rotina de Treinos de Base</h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
+          {[
+            { day: 'Seg', type: 'Tiros/HIIT', icon: '🏃‍♂️' },
+            { day: 'Ter', type: 'Força Superior', icon: '💪' },
+            { day: 'Qua', type: 'Rodagem', icon: '🏃‍♂️' },
+            { day: 'Qui', type: 'Força Inferior', icon: '🦵' },
+            { day: 'Sex', type: 'Tempo Run', icon: '⏱️' },
+            { day: 'Sáb', type: 'Livre/Futebol', icon: '⚽' },
+            { day: 'Dom', type: 'Descanso', icon: '🛌' }
+          ].map((item, idx) => (
+            <div key={idx} className="p-3 rounded-xl border border-slate-200 bg-white shadow-sm flex items-center gap-3">
+              <span className="text-2xl">{item.icon}</span>
+              <div>
+                <span className="text-[10px] font-black text-slate-400 uppercase">{item.day}</span>
+                <h3 className="font-bold text-slate-700 text-sm">{item.type}</h3>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+    );
+  };
+
+  const renderSimulados = () => {
+    const totalSimulados = simulados.length;
+    const mediaLiquida = totalSimulados > 0 ? Math.round(simulados.reduce((acc, sim) => acc + sim.liquida, 0) / totalSimulados) : 0;
+    const recorde = totalSimulados > 0 ? Math.max(...simulados.map(s => s.liquida)) : 0;
+    
+    let weakPoint = "N/A";
+    if (totalSimulados > 0) {
+      const avgB1 = simulados.reduce((acc, sim) => acc + (sim.b1Liquida || 0), 0) / totalSimulados / 55;
+      const avgB2 = simulados.reduce((acc, sim) => acc + (sim.b2Liquida || 0), 0) / totalSimulados / 30;
+      const avgB3 = simulados.reduce((acc, sim) => acc + (sim.b3Liquida || 0), 0) / totalSimulados / 35;
+      
+      if (avgB2 < avgB1 && avgB2 < avgB3) weakPoint = "Bloco II (Trânsito)";
+      else if (avgB3 < avgB1 && avgB3 < avgB2) weakPoint = "Bloco III (Direito)";
+      else weakPoint = "Bloco I (Básicas)";
+    }
+
+    const notaCortePRF = 75; 
+    const maxScore = 120; 
+    const chartHeight = 180;
+    const chartWidth = 800;
+
+    const getChartData = () => {
+      if (totalSimulados === 0) return { line: "", area: "", points: [] };
+      if (totalSimulados === 1) {
+         const y = chartHeight - (simulados[0].liquida / maxScore) * chartHeight;
+         return {
+            line: `0,${y} ${chartWidth},${y}`,
+            area: `0,${chartHeight} 0,${y} ${chartWidth},${y} ${chartWidth},${chartHeight}`,
+            points: [{ x: chartWidth/2, y, val: simulados[0].liquida }]
+         };
+      }
+      const ptsObj = simulados.map((sim, index) => {
+        const x = (index / (totalSimulados - 1)) * chartWidth;
+        const y = chartHeight - (sim.liquida / maxScore) * chartHeight;
+        return { x, y, val: sim.liquida };
+      });
+      
+      const lineStr = ptsObj.map(p => `${p.x},${p.y}`).join(" ");
+      const areaStr = `0,${chartHeight} ${lineStr} ${chartWidth},${chartHeight}`;
+      return { line: lineStr, area: areaStr, points: ptsObj };
+    };
+
+    const chartData = getChartData();
+    const targetY = chartHeight - (notaCortePRF / maxScore) * chartHeight;
+
+    return (
+      <div className="fade-in max-w-4xl mx-auto pb-10">
+        
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+          <div className="flex items-center gap-3 sm:gap-4">
+            <div className="bg-purple-100 p-2 sm:p-3 rounded-full shrink-0"><Target className="text-purple-600 w-6 h-6 sm:w-8 sm:h-8" /></div>
+            <div>
+              <h2 className="text-lg sm:text-xl font-bold text-slate-800">Evolução Estratégica em Simulados</h2>
+              <p className="text-slate-500 text-xs sm:text-sm">Sistema Cebraspe (Certa anula Errada).</p>
+            </div>
+          </div>
+          <button onClick={() => { setEditingSimulado(null); setShowSimuladoModal(true); }} className="w-full sm:w-auto justify-center bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-md transition-colors">
+            <Plus className="w-4 h-4" /> Registrar Nota
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 mb-6">
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
+            <BarChart2 className="w-6 h-6 text-purple-500 mb-2" />
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Média Atual</span>
+            <span className="text-3xl font-black text-slate-800">{mediaLiquida} <span className="text-sm text-slate-400 font-bold">pts</span></span>
+          </div>
+          <div className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center justify-center text-center">
+            <Trophy className="w-6 h-6 text-emerald-500 mb-2" />
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">Recorde Pessoal</span>
+            <span className="text-3xl font-black text-emerald-600">{recorde} <span className="text-sm text-slate-400 font-bold">pts</span></span>
+          </div>
+          <div className="bg-red-50 p-5 rounded-xl border border-red-200 shadow-sm flex flex-col items-center justify-center text-center">
+            <Activity className="w-6 h-6 text-red-500 mb-2" />
+            <span className="text-[10px] font-black text-red-500 uppercase tracking-wider">Ponto Crítico</span>
+            <span className="text-lg font-black text-red-700 mt-1" title="Bloco com o pior aproveitamento percentual">{weakPoint}</span>
+          </div>
+        </div>
+
+        {totalSimulados > 0 && (
+          <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 overflow-hidden">
+             <div className="flex justify-between items-end mb-6">
+                <h3 className="font-bold text-slate-700 flex items-center gap-2"><TrendingUp className="w-5 h-5 text-purple-500"/> Curva de Evolução (Nota Líquida)</h3>
+             </div>
+             
+             <div className="relative w-full h-[180px] mt-4">
+                <div className="absolute w-full border-t-2 border-dashed border-red-400 z-0 flex items-end justify-end" style={{ top: `${targetY}px` }}>
+                   <span className="text-[10px] sm:text-xs font-black text-red-500 bg-white px-2 -mt-2.5 sm:-mt-3 absolute left-0 sm:left-auto sm:right-0">Zona de Corte (~{notaCortePRF} pts)</span>
+                </div>
+                
+                <svg viewBox={`0 0 ${chartWidth} ${chartHeight}`} preserveAspectRatio="none" className="w-full h-full overflow-visible z-10 relative">
+                   <defs>
+                      <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
+                         <stop offset="0%" stopColor="#9333ea" stopOpacity="0.25"/>
+                         <stop offset="100%" stopColor="#9333ea" stopOpacity="0"/>
+                      </linearGradient>
+                   </defs>
+                   
+                   <polyline points={chartData.area} fill="url(#chartFill)" />
+                   <polyline points={chartData.line} fill="none" stroke="#9333ea" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
+                   
+                   {chartData.points.map((p, index) => (
+                      <g key={index}>
+                        <circle cx={p.x} cy={p.y} r="5" fill="#fff" stroke="#9333ea" strokeWidth="3" className="hover:r-[7px] transition-all cursor-pointer"/>
+                        <text x={p.x} y={p.y - 12} textAnchor="middle" fill="#475569" fontSize="14" fontWeight="900" className="drop-shadow-sm">{p.val}</text>
+                      </g>
+                   ))}
+                </svg>
+             </div>
+             <div className="flex justify-between text-[10px] text-slate-400 font-bold mt-2 border-t border-slate-100 pt-2 px-1">
+                <span>Mais antigo</span>
+                <span>Mais recente</span>
+             </div>
+          </div>
+        )}
+
+        {simulados.length === 0 ? (
+          <div className="text-center p-10 bg-white border-2 border-dashed border-slate-200 rounded-xl text-slate-500 text-sm">
+            Nenhum simulado registrado. Insira seus resultados por bloco para ativar o motor de diagnóstico de eliminação.
+          </div>
+        ) : (
+          <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto">
+            <table className="w-full text-left text-xs sm:text-sm min-w-[600px]">
+              <thead className="bg-slate-50 text-slate-600 border-b border-slate-200">
+                <tr>
+                  <th className="p-3 sm:p-4 font-bold">Data</th>
+                  <th className="p-3 sm:p-4 font-bold text-center" title="Básicas - 55 Questões (Mínimo: 15)">B1 (55)</th>
+                  <th className="p-3 sm:p-4 font-bold text-center" title="Trânsito - 30 Questões (Mínimo: 10)">B2 (30)</th>
+                  <th className="p-3 sm:p-4 font-bold text-center" title="Direito - 35 Questões (Mínimo: 10)">B3 (35)</th>
+                  <th className="p-3 sm:p-4 font-black text-center text-purple-700">Líquida</th>
+                  <th className="p-3 sm:p-4 font-bold text-center">Status</th>
+                  <th className="p-3 sm:p-4 font-bold text-center">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-100">
+                {simulados.map(sim => {
+                  const reprovouCorte = (sim.b1Liquida < 15) || (sim.b2Liquida < 10) || (sim.b3Liquida < 10) || (sim.liquida < 50);
+                  
+                  return (
+                  <tr key={sim.id} className="hover:bg-slate-50 transition-colors">
+                    <td className="p-3 sm:p-4 font-semibold text-slate-700">{sim.data}</td>
+                    <td className={`p-3 sm:p-4 text-center font-bold ${(sim.b1Liquida < 15) ? 'text-red-500' : 'text-slate-600'}`}>{sim.b1Liquida !== undefined ? sim.b1Liquida : '-'}</td>
+                    <td className={`p-3 sm:p-4 text-center font-bold ${(sim.b2Liquida < 10) ? 'text-red-500' : 'text-slate-600'}`}>{sim.b2Liquida !== undefined ? sim.b2Liquida : '-'}</td>
+                    <td className={`p-3 sm:p-4 text-center font-bold ${(sim.b3Liquida < 10) ? 'text-red-500' : 'text-slate-600'}`}>{sim.b3Liquida !== undefined ? sim.b3Liquida : '-'}</td>
+                    <td className="p-3 sm:p-4 text-center font-black text-base sm:text-lg text-slate-800">{sim.liquida}</td>
+                    <td className="p-3 sm:p-4 text-center">
+                      {reprovouCorte ? 
+                        <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-[10px] font-black uppercase">Reprovado</span> : 
+                        <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-black uppercase">Aprovado</span>
+                      }
+                    </td>
+                    <td className="p-3 sm:p-4 text-center flex justify-center gap-2">
+                      <button onClick={() => { setEditingSimulado(sim); setShowSimuladoModal(true); }} className="p-1.5 bg-white border border-slate-200 text-slate-400 hover:text-blue-600 rounded-md transition-colors shadow-sm" title="Editar">
+                        <Edit2 className="w-4 h-4" />
+                      </button>
+                      <button onClick={() => {
+                          setGlobalModal({
+                            title: "Excluir Simulado",
+                            message: "Tem a certeza que deseja excluir este simulado permanentemente?",
+                            onConfirm: () => setSimulados(prev => prev.filter(s => s.id !== sim.id))
+                          });
+                        }} 
+                        className="p-1.5 bg-white border border-slate-200 text-slate-400 hover:text-red-600 rounded-md transition-colors shadow-sm" title="Excluir"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </td>
+                  </tr>
+                )})}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const renderEstatisticas = () => {
+    let totalEdital = 0;
+    let completedEdital = 0;
+    let subjectsFinished = 0;
+
+    const stats = Object.values(subjects).map(sub => {
+      let subTotal = 0;
+      let subCompleted = 0;
+      sub.topics.forEach(t => {
+        subTotal += t.total;
+        subCompleted += t.completed;
+      });
+      totalEdital += subTotal;
+      completedEdital += subCompleted;
+      if (subTotal > 0 && subCompleted === subTotal) subjectsFinished++;
+      
+      return { ...sub, total: subTotal, completed: subCompleted, progress: subTotal === 0 ? 0 : Math.round((subCompleted / subTotal) * 100) };
+    }).sort((a, b) => b.progress - a.progress); 
+
+    const overallProgress = totalEdital === 0 ? 0 : Math.round((completedEdital / totalEdital) * 100);
+    const subjectsPercent = stats.length === 0 ? 0 : Math.round((subjectsFinished / stats.length) * 100);
+
+    // Motor de Renderização de Gráfico de Anel (SVG Nativo de Alta Performance)
+    const renderCircularChart = (progress, label, valueText, subText, colorStart, colorEnd) => {
+      const radius = 46;
+      const circumference = 2 * Math.PI * radius;
+      const strokeDashoffset = circumference - (progress / 100) * circumference;
+
+      return (
+        <div className="flex flex-col items-center justify-center p-2">
+          <div className="relative flex flex-col items-center justify-center group hover:scale-105 transition-transform duration-300">
+            <svg className="transform -rotate-90 w-32 h-32 sm:w-40 sm:h-40 drop-shadow-md" viewBox="0 0 120 120">
+              <defs>
+                <linearGradient id={`grad-${label.replace(/\s+/g, '')}`} x1="0%" y1="0%" x2="100%" y2="100%">
+                  <stop offset="0%" stopColor={colorStart} />
+                  <stop offset="100%" stopColor={colorEnd} />
+                </linearGradient>
+              </defs>
+              {/* Trilho de Fundo */}
+              <circle cx="60" cy="60" r={radius} stroke="currentColor" strokeWidth="12" fill="transparent" className="text-slate-200" />
+              {/* Progresso Dinâmico */}
+              <circle 
+                cx="60" cy="60" r={radius} 
+                stroke={`url(#grad-${label.replace(/\s+/g, '')})`} 
+                strokeWidth="12" fill="transparent" 
+                strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} 
+                strokeLinecap="round" 
+                className="transition-all duration-1000 ease-out" 
+              />
+            </svg>
+            <div className="absolute inset-0 flex flex-col items-center justify-center">
+              <span className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-widest mb-0.5">{label}</span>
+              <span className="text-3xl sm:text-4xl font-black text-slate-800 leading-none tracking-tighter">{valueText}</span>
+            </div>
+          </div>
+          {subText && <span className="text-[10px] font-bold text-slate-500 mt-4 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm">{subText}</span>}
+        </div>
+      );
+    };
+
+    return (
+      <div className="fade-in max-w-6xl mx-auto pb-10">
+        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 flex items-center gap-4">
+           <div className="bg-blue-100 p-3 rounded-full shrink-0"><PieChart className="text-blue-600 w-6 h-6 sm:w-8 sm:h-8" /></div>
+           <div>
+             <h2 className="text-lg sm:text-xl font-bold text-slate-800">Dashboard de Desempenho</h2>
+             <p className="text-slate-500 text-xs sm:text-sm">Acompanhe seu avanço detalhado por disciplina e assunto.</p>
+           </div>
+        </div>
+
+        {/* Novo Painel Principal com Gráficos Circulares */}
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-6 flex flex-col sm:flex-row items-center justify-around gap-6 p-6 sm:p-8">
+          {renderCircularChart(overallProgress, 'Avanço', `${overallProgress}%`, 'Edital Global', '#d946ef', '#2563eb')}
+          {renderCircularChart(overallProgress, 'Aulas', `${completedEdital}`, `de ${totalEdital} Teóricas`, '#10b981', '#0ea5e9')}
+          {renderCircularChart(subjectsPercent, 'Matérias', `${subjectsFinished}`, `de ${stats.length} Fechadas`, '#f59e0b', '#ef4444')}
+        </div>
+
+        <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-hidden">
+           <div className="p-4 sm:p-6 border-b border-slate-200">
+             <h3 className="font-bold text-slate-800 flex items-center gap-2"><Layers className="w-5 h-5 text-slate-500"/> Detalhamento do Edital</h3>
+           </div>
+           <div className="divide-y divide-slate-100">
+              {stats.map(sub => (
+                 <div key={sub.id} className="p-4 sm:p-6 hover:bg-slate-50 transition-colors">
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer" onClick={() => setExpandedSubject(expandedSubject === sub.id ? null : sub.id)}>
+                        <div className="flex-1 w-full">
+                           <div className="flex justify-between items-end mb-2">
+                              <span className={`text-[10px] sm:text-xs font-bold px-2 py-1 rounded-md tracking-wider ${sub.color}`}>{sub.name}</span>
+                              <span className="font-black text-slate-700">{sub.progress}%</span>
+                           </div>
+                           <div className="w-full bg-slate-200 rounded-full h-2.5">
+                             <div className="bg-blue-500 h-2.5 rounded-full transition-all duration-500" style={{ width: `${sub.progress}%` }}></div>
+                           </div>
+                           <div className="flex justify-between items-center mt-2">
+                              <span className="text-xs text-slate-500 font-medium">{sub.completed} de {sub.total} aulas concluídas</span>
+                              <span className="text-xs text-blue-600 font-bold flex items-center gap-1 bg-blue-50 px-2 py-1 rounded hover:bg-blue-100 transition-colors">
+                                {expandedSubject === sub.id ? <><ChevronUp className="w-3 h-3"/> Ocultar Assuntos</> : <><ChevronDown className="w-3 h-3"/> Ver Assuntos</>}
+                              </span>
+                           </div>
+                        </div>
+                    </div>
+
+                    {expandedSubject === sub.id && (
+                       <div className="mt-5 pt-5 border-t border-slate-200 pl-2 sm:pl-4 flex flex-col gap-4 fade-in">
+                          {sub.topics.map((topic, tIdx) => {
+                             const topicProgress = topic.total === 0 ? 0 : Math.round((topic.completed / topic.total) * 100);
+                             return (
+                               <div key={topic.id} className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-4">
+                                  <div className="sm:w-5/12 text-sm font-bold text-slate-700 flex items-center gap-2">
+                                    <span className="text-[10px] text-slate-400 bg-slate-100 px-1.5 py-0.5 rounded font-black">{tIdx + 1}</span>
+                                    {topic.name}
+                                  </div>
+                                  <div className="flex-1 flex items-center gap-3">
+                                     <div className="flex-1 bg-slate-100 rounded-full h-2">
+                                       <div className="bg-emerald-400 h-2 rounded-full transition-all" style={{ width: `${topicProgress}%` }}></div>
+                                     </div>
+                                     <span className="text-xs font-bold text-slate-500 w-16 text-right">{topic.completed}/{topic.total} ({topicProgress}%)</span>
+                                  </div>
+                               </div>
+                             )
+                          })}
+                          {sub.topics.length === 0 && <span className="text-xs text-slate-400 italic font-medium">Nenhum assunto cadastrado nesta disciplina.</span>}
+                       </div>
+                    )}
+                 </div>
+              ))}
+           </div>
+        </div>
+      </div>
+    );
+  };
+
+  const renderLoja = () => (
+    <div className="fade-in max-w-4xl mx-auto pb-10">
+      <div className="bg-slate-900 text-white p-6 rounded-xl shadow-lg border border-slate-800 mb-8 text-center">
+        <h2 className="text-xl sm:text-2xl font-black text-yellow-400 mb-1 flex justify-center items-center gap-2">
+          <Store className="w-5 h-5 sm:w-6 sm:h-6" /> Loja do Aprovado
+        </h2>
+        <p className="text-slate-400 text-xs sm:text-sm mb-4">Gaste as moedas conquistadas.</p>
+        <div className="inline-flex items-center gap-2 sm:gap-3 bg-slate-800 px-4 sm:px-6 py-2 sm:py-3 rounded-full border border-slate-700">
+          <Coins className="text-yellow-400 w-6 h-6 sm:w-8 sm:h-8" />
+          <span className="text-2xl sm:text-3xl font-black">{coins}</span>
+        </div>
+      </div>
+
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-4">
+        {rewards.map(rew => (
+          <div key={rew.id} className="bg-white p-5 rounded-xl border border-slate-200 shadow-sm flex flex-col items-center text-center">
+            <div className="text-3xl sm:text-4xl mb-3">{rew.icon}</div>
+            <h3 className="font-bold text-slate-800 mb-1 text-sm sm:text-base">{rew.title}</h3>
+            <span className="text-xs sm:text-sm font-black text-yellow-500 bg-yellow-50 px-3 py-1 rounded-full mb-4">
+              {rew.cost} pts
+            </span>
+            <button 
+              onClick={() => {
+                if (coins >= rew.cost) {
+                  setCoins(prev => prev - rew.cost);
+                  setGlobalModal({
+                    title: "Resgate Efetuado!",
+                    message: `Você resgatou com sucesso a recompensa: "${rew.title}". Aproveite a sua pausa estratégica!`,
+                    isAlert: true
+                  });
+                } else {
+                  setGlobalModal({
+                    title: "Moedas Insuficientes",
+                    message: "Você não possui moedas suficientes para resgatar esta recompensa. Avance no ciclo e faça as revisões FSRS para acumular mais.",
+                    isAlert: true
+                  });
+                }
+              }}
+              className={`w-full py-2.5 rounded-lg font-bold text-xs sm:text-sm transition-colors ${
+                coins >= rew.cost ? 'bg-slate-900 text-white hover:bg-slate-800' : 'bg-slate-100 text-slate-400'
+              }`}
+            >
+              Resgatar
+            </button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+
+  const renderConfig = () => {
+    const flatCycle = cycle.flat();
+    const totalSlots = flatCycle.length;
+    
+    let b1Count = 0; let b2Count = 0; let b3Count = 0;
+    
+    flatCycle.forEach(subId => {
+      const sub = subjects[subId];
+      if (sub) {
+        if (sub.block === 'B1') b1Count++;
+        else if (sub.block === 'B2') b2Count++;
+        else if (sub.block === 'B3') b3Count++;
+      }
+    });
+
+    const b1Percent = totalSlots > 0 ? Math.round((b1Count / totalSlots) * 100) : 0;
+    const b2Percent = totalSlots > 0 ? Math.round((b2Count / totalSlots) * 100) : 0;
+    const b3Percent = totalSlots > 0 ? Math.round((b3Count / totalSlots) * 100) : 0;
+
+    const isB2TooLow = b2Percent > 0 && b2Percent < 15;
+    const isB2TooHigh = b2Percent > 40; 
+    const isB1TooLow = b1Percent > 0 && b1Percent < 35; 
+
+    return (
+      <div className="fade-in max-w-6xl mx-auto pb-10">
+        
+        <div className="bg-slate-900 p-5 sm:p-6 rounded-xl shadow-lg border border-slate-800 mb-6 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-bl-full pointer-events-none"></div>
+          <h3 className="text-lg font-black text-white flex items-center gap-2 mb-2">
+            <TargetIcon className="text-blue-400 w-5 h-5"/> Auditoria do Ciclo (Curva ABC)
+          </h3>
+          <p className="text-sm text-slate-400 mb-5">
+            O seu cronograma possui <strong className="text-white">{totalSlots} vagas (slots)</strong>. Veja como o seu esforço está distribuído em relação ao peso real do edital da PRF.
+          </p>
+
+          <div className="flex flex-col sm:flex-row gap-4 mb-4">
+            <div className="flex-1 bg-slate-800 border border-slate-700 p-4 rounded-lg">
+               <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-black text-slate-300 uppercase">Bloco I (Básicas)</span>
+                  <span className="text-xs font-bold text-slate-500">Alvo: ~46%</span>
+               </div>
+               <div className="flex items-end gap-2 mb-2">
+                 <span className={`text-2xl font-black ${isB1TooLow ? 'text-red-400' : 'text-emerald-400'}`}>{b1Percent}%</span>
+                 <span className="text-xs text-slate-400 mb-1">({b1Count} vagas)</span>
+               </div>
+               <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                 <div className={`h-1.5 rounded-full ${isB1TooLow ? 'bg-red-500' : 'bg-emerald-500'}`} style={{ width: `${b1Percent}%` }}></div>
+               </div>
+            </div>
+
+            <div className="flex-1 bg-slate-800 border border-slate-700 p-4 rounded-lg">
+               <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-black text-slate-300 uppercase">Bloco II (Trânsito)</span>
+                  <span className="text-xs font-bold text-slate-500">Alvo: ~25%</span>
+               </div>
+               <div className="flex items-end gap-2 mb-2">
+                 <span className={`text-2xl font-black ${(isB2TooLow || isB2TooHigh) ? 'text-red-400' : 'text-blue-400'}`}>{b2Percent}%</span>
+                 <span className="text-xs text-slate-400 mb-1">({b2Count} vagas)</span>
+               </div>
+               <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                 <div className={`h-1.5 rounded-full ${(isB2TooLow || isB2TooHigh) ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${b2Percent}%` }}></div>
+               </div>
+            </div>
+
+            <div className="flex-1 bg-slate-800 border border-slate-700 p-4 rounded-lg">
+               <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-black text-slate-300 uppercase">Bloco III (Direito)</span>
+                  <span className="text-xs font-bold text-slate-500">Alvo: ~29%</span>
+               </div>
+               <div className="flex items-end gap-2 mb-2">
+                 <span className="text-2xl font-black text-purple-400">{b3Percent}%</span>
+                 <span className="text-xs text-slate-400 mb-1">({b3Count} vagas)</span>
+               </div>
+               <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
+                 <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${b3Percent}%` }}></div>
+               </div>
+            </div>
+          </div>
+
+          {(isB1TooLow || isB2TooLow || isB2TooHigh) && (
+            <div className="bg-red-900/40 border border-red-800 p-3 rounded-lg flex items-start gap-3 mt-4">
+              <AlertTriangle className="text-red-400 w-5 h-5 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-xs font-bold text-red-300 uppercase mb-1">Risco Tático Detetado</p>
+                <p className="text-xs text-red-200/80">
+                  {isB2TooHigh && "O seu cronograma está excessivamente focado no Trânsito. Embora importante, o Bloco I pode eliminá-lo se não dedicar o volume necessário de horas."}
+                  {isB2TooLow && "Pouca alocação no Trânsito. Sendo a disciplina mais pesada do concurso, você precisa de aumentar a cadência no Bloco II."}
+                  {isB1TooLow && !isB2TooHigh && "O volume do Bloco I (Básicas) está perigosamente baixo. Lembre-se que o mínimo para não reprovar é 15 pontos num universo de 55 questões."}
+                </p>
+              </div>
+            </div>
+          )}
+        </div>
+
+        <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 border-l-4 border-l-blue-500">
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-2">
+            <Clock className="text-blue-600 w-5 h-5"/> Data Alvo da Prova
+          </h3>
+          <p className="text-sm text-slate-500 mb-4">O sistema usará esta data para cruzar com o seu ritmo de estudos e alertar se você corre risco de não fechar o edital a tempo.</p>
+          <div className="flex items-center gap-4">
+             <input 
+                type="date" 
+                value={targetExamDate} 
+                onChange={(e) => setTargetExamDate(e.target.value)}
+                className="border-2 border-slate-200 p-2.5 rounded-lg font-bold text-slate-700 outline-none focus:border-blue-400"
+             />
+          </div>
+        </div>
+
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 flex justify-between items-center">
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2"><Settings className="text-slate-600 w-5 h-5"/> Minhas Disciplinas</h3>
+          <button onClick={() => {
+              const newId = 'sub_' + Date.now();
+              setSubjects(prev => ({ ...prev, [newId]: { id: newId, name: 'NOVA MATÉRIA', color: 'bg-slate-200 text-slate-900', block: 'B1', topics: [] } }));
+              setEditingSubjectId(newId);
+            }} 
+            className="bg-blue-100 text-blue-700 px-3 py-2 rounded-lg font-bold flex items-center gap-1 text-xs sm:text-sm">
+            <Plus className="w-4 h-4" /> Nova
+          </button>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Object.values(subjects).map(sub => (
+            <div key={sub.id} className="border border-slate-200 rounded-lg p-4 flex flex-col gap-3 bg-slate-50 hover:border-blue-400 transition-colors">
+              <div className="flex justify-between items-start">
+                <span className={`text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider ${sub.color}`}>{sub.name} <span className="opacity-60 ml-1">({sub.block})</span></span>
+                <div className="flex gap-1">
+                  <button onClick={() => setEditingSubjectId(sub.id)} className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-blue-600 rounded"><Edit2 className="w-4 h-4" /></button>
+                  <button onClick={() => {
+                    setGlobalModal({
+                      title: "Excluir Disciplina",
+                      message: `Você tem certeza que deseja excluir a matéria "${sub.name}" permanentemente do seu planejamento?`,
+                      onConfirm: () => {
+                        setSubjects(prev => { const c = {...prev}; delete c[sub.id]; return c; });
+                        setCycle(prev => prev.map(day => day.filter(sId => sId !== sub.id)));
+                        setReviews(prev => prev.filter(r => r.subjectId !== sub.id)); 
+                      }
+                    });
+                  }} className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-red-600 rounded"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              </div>
+              <div className="text-xs text-slate-500 font-medium">{sub.topics.length} assuntos cadastrados</div>
+            </div>
+          ))}
+        </div>
+
+        <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mt-8 mb-6">
+          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2">
+              <CalendarIcon className="text-blue-600 w-5 h-5" /> Meu Cronograma
+            </h3>
+            <button onClick={() => setCycle([...cycle, []])} className="w-full sm:w-auto justify-center bg-blue-100 hover:bg-blue-200 text-blue-700 px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-sm transition-colors">
+              <Plus className="w-4 h-4" /> Adicionar Dia
+            </button>
+          </div>
+
+          <div className="flex gap-4 overflow-x-auto pb-4 custom-scrollbar snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0">
+            {cycle.map((daySubjects, dayIndex) => (
+              <div key={dayIndex} className="w-[85vw] sm:w-72 shrink-0 snap-start bg-slate-50 border border-slate-300 rounded-xl flex flex-col overflow-hidden shadow-sm">
+                <div className="bg-slate-200/70 p-3 flex justify-between items-center border-b border-slate-300">
+                  <span className="font-bold text-slate-700">DIA {dayIndex + 1}</span>
+                  <button 
+                    onClick={() => {
+                      setCycle(prev => prev.filter((_, i) => i !== dayIndex));
+                      if (currentDayIndex >= cycle.length - 1) setCurrentDayIndex(0);
+                    }} 
+                    className="p-1 text-slate-400 hover:text-red-500 hover:bg-white rounded transition-colors" title="Remover Dia"
+                  >
+                    <Trash2 className="w-4 h-4" />
+                  </button>
+                </div>
+                
+                <div className="p-3 flex flex-col gap-2 min-h-[150px]">
+              {daySubjects.map((subId, slotIndex) => {
+                const subject = subjects[subId];
+                return (
+                  <div key={slotIndex} className="flex items-center gap-2">
+                    <select 
+                      value={subId}
+                      onChange={(e) => {
+                        setCycle(prev => {
+                          const newCycle = [...prev];
+                          const newDay = [...newCycle[dayIndex]];
+                          if (e.target.value === '') {
+                            newCycle[dayIndex] = newDay.filter((_, i) => i !== slotIndex);
+                          } else {
+                            newDay[slotIndex] = e.target.value;
+                            newCycle[dayIndex] = newDay;
+                          }
+                          return newCycle;
+                        });
+                      }}
+                      className={`flex-1 text-sm font-bold p-2.5 rounded-lg border border-slate-300 outline-none focus:ring-2 focus:ring-blue-400 shadow-sm transition-colors cursor-pointer ${subject ? subject.color : 'bg-white'}`}
+                    >
+                      <option value="" className="bg-white text-slate-900">- Remover Aula -</option>
+                      {Object.values(subjects).map(s => (
+                        <option key={s.id} value={s.id} className="bg-white text-slate-900">{s.name}</option>
+                      ))}
+                    </select>
+                  </div>
+                );
+              })}
+              
+              <button 
+                onClick={() => {
+                  setCycle(prev => {
+                    const newCycle = [...prev];
+                    const firstSub = Object.keys(subjects)[0];
+                    if (firstSub) {
+                      newCycle[dayIndex] = [...newCycle[dayIndex], firstSub];
+                    }
+                    return newCycle;
+                  });
+                }}
+                className="mt-2 w-full py-2.5 border-2 border-dashed border-slate-300 bg-white text-slate-500 font-bold text-xs rounded-lg hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 transition-all flex items-center justify-center gap-1"
+              >
+                <Plus className="w-3 h-3" /> Adicionar Bloco
+              </button>
+            </div>
+          </div>
+        ))}
+        {cycle.length === 0 && (
+              <div className="w-full text-center py-10 text-slate-400 border-2 border-dashed border-slate-200 rounded-xl">
+                Cronograma vazio. Adicione um dia para começar.
+              </div>
+            )}
+          </div>
+        </div>
+
+        {editingSubjectId && subjects[editingSubjectId] && (
+          <div className="fixed inset-0 bg-slate-900/60 flex items-end sm:items-center justify-center z-50 p-0 sm:p-4 fade-in">
+            <div className="bg-white rounded-t-2xl sm:rounded-2xl w-full max-w-2xl flex flex-col max-h-[85vh] sm:max-h-[90vh]">
+              <div className="p-4 border-b flex justify-between bg-slate-50"><h3 className="font-bold">Editar Disciplina</h3><button onClick={() => { setEditingSubjectId(null); setShowBulkAdd(false); setBulkAddText(''); }}><X/></button></div>
+              <div className="p-4 overflow-y-auto custom-scrollbar flex-1">
+                
+                <div className="flex flex-col sm:flex-row gap-4 mb-4">
+                  <div className="flex-1">
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Nome</label>
+                    <input type="text" value={subjects[editingSubjectId].name} onChange={e => setSubjects(prev => ({...prev, [editingSubjectId]: {...prev[editingSubjectId], name: e.target.value.toUpperCase()}}))} className="w-full border-2 p-2 rounded font-bold outline-none focus:border-blue-500"/>
+                  </div>
+                  <div className="w-full sm:w-32">
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Bloco Cebraspe</label>
+                    <select value={subjects[editingSubjectId].block || 'B1'} onChange={e => setSubjects(prev => ({...prev, [editingSubjectId]: {...prev[editingSubjectId], block: e.target.value}}))} className={`w-full border-2 p-2 rounded font-bold outline-none bg-white text-slate-700`}>
+                      <option value="B1">Bloco I (Básicas)</option>
+                      <option value="B2">Bloco II (Trânsito)</option>
+                      <option value="B3">Bloco III (Direito)</option>
+                    </select>
+                  </div>
+                  <div className="w-full sm:w-48">
+                    <label className="text-xs font-bold text-slate-500 block mb-1">Cor</label>
+                    <select value={subjects[editingSubjectId].color} onChange={e => setSubjects(prev => ({...prev, [editingSubjectId]: {...prev[editingSubjectId], color: e.target.value}}))} className={`w-full border-2 p-2 rounded font-bold outline-none ${subjects[editingSubjectId].color}`}>
+                      {availableColors.map(c => <option key={c.id} value={c.class} className={c.class}>{c.label}</option>)}
+                    </select>
+                  </div>
+                </div>
+                
+                <div className="flex justify-between items-center mb-2 border-t pt-4">
+                  <label className="font-bold text-sm">Assuntos</label>
+                  <div className="flex gap-2">
+                    <button onClick={() => setShowBulkAdd(!showBulkAdd)} className={`text-xs px-2 py-1.5 rounded font-bold ${showBulkAdd ? 'bg-slate-200 text-slate-700' : 'bg-slate-100 text-slate-600 hover:bg-slate-200'}`}>Em Lote</button>
+                    <button onClick={() => setSubjects(prev => {
+                      const sub = {...prev[editingSubjectId]};
+                      sub.topics = [...sub.topics, { id: 't_' + Date.now(), name: 'Novo Assunto', total: 1, completed: 0 }];
+                      return {...prev, [editingSubjectId]: sub};
+                    })} className="text-xs bg-blue-100 text-blue-700 px-2 py-1.5 rounded font-bold">+ Adicionar</button>
+                  </div>
+                </div>
+
+                {showBulkAdd && (
+                  <div className="mb-4 bg-blue-50 p-3 rounded-lg border border-blue-100 fade-in">
+                    <p className="text-xs text-blue-600 mb-2 font-medium">Cole a lista (um assunto por linha). Ex: "Atos Administrativos - 5"</p>
+                    <textarea value={bulkAddText} onChange={(e) => setBulkAddText(e.target.value)} className="w-full h-24 p-2 border rounded outline-none text-sm mb-2" />
+                    <div className="flex justify-end gap-2">
+                      <button onClick={() => { setShowBulkAdd(false); setBulkAddText(''); }} className="text-xs px-3 py-1.5 bg-slate-200 rounded font-bold">Cancelar</button>
+                      <button onClick={() => handleBulkAddConfirm(editingSubjectId)} className="text-xs px-3 py-1.5 bg-blue-600 text-white rounded font-bold">Importar</button>
+                    </div>
+                  </div>
+                )}
+                
+                {subjects[editingSubjectId].topics.map((topic) => (
+                  <div key={topic.id} className="flex gap-2 mb-2 items-center bg-slate-50 p-2 rounded border">
+                    <input type="text" value={topic.name} onChange={(e) => setSubjects(prev => {
+                      const sub = {...prev[editingSubjectId]};
+                      sub.topics = sub.topics.map(t => t.id === topic.id ? {...t, name: e.target.value} : t);
+                      return {...prev, [editingSubjectId]: sub};
+                    })} className="flex-1 border p-1.5 text-sm rounded outline-none focus:border-blue-400"/>
+                    <input type="number" min="1" value={topic.total} onChange={(e) => setSubjects(prev => {
+                      const sub = {...prev[editingSubjectId]};
+                      sub.topics = sub.topics.map(t => t.id === topic.id ? {...t, total: parseInt(e.target.value)||1} : t);
+                      return {...prev, [editingSubjectId]: sub};
+                    })} className="w-14 sm:w-16 border p-1.5 text-sm rounded text-center outline-none focus:border-blue-400"/>
+                    <button onClick={() => {
+                        setGlobalModal({
+                          title: "Excluir Assunto",
+                          message: `Tem a certeza que deseja excluir o assunto "${topic.name}"?`,
+                          onConfirm: () => {
+                            setSubjects(prev => {
+                              const sub = {...prev[editingSubjectId]};
+                              sub.topics = sub.topics.filter(t => t.id !== topic.id);
+                              return {...prev, [editingSubjectId]: sub};
+                            });
+                          }
+                        });
+                      }} className="p-1.5 text-red-400 hover:text-red-600"><Trash2 className="w-4 h-4"/></button>
+                  </div>
+                ))}
+              </div>
+              <div className="p-4 border-t bg-slate-50"><button onClick={() => { setEditingSubjectId(null); setShowBulkAdd(false); setBulkAddText(''); }} className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-bold">Salvar Alterações</button></div>
+            </div>
+          </div>
+        )}
+
+        <div className="bg-red-50 p-5 sm:p-6 rounded-xl shadow-sm border border-red-200 mt-8 mb-6 relative overflow-hidden">
+          <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-bl-full pointer-events-none"></div>
+          <h3 className="text-lg font-black text-red-800 flex items-center gap-2 mb-2">
+            <AlertTriangle className="text-red-600 w-5 h-5"/> Zona de Perigo (Reset Tático)
+          </h3>
+          <p className="text-sm text-red-700 mb-4 max-w-3xl">
+            Use este botão para apagar todos os dados de teste (Simulados, TAF, Revisões, Moedas e Ciclo) e zerar o progresso das disciplinas. Apenas a estrutura das matérias e assuntos será preservada. Esta ação é irreversível.
+          </p>
+          <button onClick={() => {
+              setGlobalModal({
+                title: "Protocolo de Limpeza",
+                message: "ATENÇÃO: Isto apagará permanentemente simulados, TAF, revisões FSRS, moedas e limpará o seu ciclo. O progresso das aulas nas matérias voltará a ZERO. Confirma a limpeza total dos dados?",
+                onConfirm: executeTacticalReset
+              });
+            }} 
+            className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-bold transition-colors shadow-sm">
+            Expurgar Dados Falsos
+          </button>
+        </div>
+      </div>
+    );
+  };
+
+  return (
+    <div className="min-h-screen bg-slate-50 font-sans">
+      <header className="bg-slate-900 text-white shadow-md sticky top-0 z-50">
+        <div className="max-w-6xl mx-auto px-4 py-3 sm:py-4 flex justify-between items-center">
+          <div className="flex items-center gap-2">
+            <Award className="text-blue-400 w-5 h-5 sm:w-6 sm:h-6" />
+            <h1 className="text-lg sm:text-xl font-bold tracking-wider">QG DA PRF</h1>
+          </div>
+          <div className="flex items-center gap-2 bg-slate-800 px-3 sm:px-4 py-1 sm:py-1.5 rounded-full border border-slate-700">
+            <Coins className="text-yellow-400 w-4 h-4 sm:w-5 sm:h-5" />
+            <span className="font-bold text-yellow-400 text-sm sm:text-base">{coins}</span>
+          </div>
+        </div>
+
+        <div className="max-w-6xl mx-auto px-4 flex gap-4 sm:gap-6 border-t border-slate-800 pt-2 overflow-x-auto no-scrollbar scroll-smooth">
+          {[
+            { id: 'revisoes', icon: Repeat, label: 'Revisões' },
+            { id: 'ciclo', icon: BookOpen, label: 'Meu Ciclo' },
+            { id: 'calendario', icon: CalendarIcon, label: 'Calendário' },
+            { id: 'taf', icon: Dumbbell, label: 'Treino TAF' },
+            { id: 'simulados', icon: Target, label: 'Simulados' },
+            { id: 'estatisticas', icon: PieChart, label: 'Dashboard' },
+            { id: 'loja', icon: Store, label: 'Loja' },
+            { id: 'config', icon: Settings, label: 'Ajustes' }
+          ].map(tab => (
+            <button 
+              key={tab.id} onClick={() => setActiveTab(tab.id)}
+              className={`flex items-center gap-1.5 whitespace-nowrap pb-3 px-1 sm:px-2 font-semibold text-xs sm:text-sm transition-colors relative ${activeTab === tab.id ? 'text-blue-400' : 'text-slate-400 hover:text-slate-200'}`}
+            >
+              <tab.icon className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> {tab.label}
+              {activeTab === tab.id && <div className="absolute bottom-0 left-0 w-full h-1 bg-blue-500 rounded-t-md"></div>}
+            </button>
+          ))}
+        </div>
+      </header>
+
+      <main className="max-w-6xl mx-auto mt-4 sm:mt-8 px-4">
+        {activeTab === 'revisoes' && renderRevisoes()}
+        {activeTab === 'ciclo' && renderCiclo()}
+        {activeTab === 'calendario' && renderCalendar()}
+        {activeTab === 'taf' && renderTAF()}
+        {activeTab === 'simulados' && renderSimulados()}
+        {activeTab === 'estatisticas' && renderEstatisticas()}
+        {activeTab === 'loja' && renderLoja()}
+        {activeTab === 'config' && renderConfig()}
+      </main>
+
+      {/* --- SISTEMA DE MODAIS TÁTICOS GLOBAIS --- */}
+
+      {/* Modal de Alertas/Confirmações Seguras */}
+      {globalModal && (
+        <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[80] p-4 fade-in backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl flex flex-col border-2 border-slate-200">
+            <div className="p-6 text-center">
+              <div className={`w-16 h-16 rounded-full flex items-center justify-center mx-auto mb-4 ${globalModal.isAlert ? 'bg-blue-100 text-blue-600' : 'bg-red-100 text-red-600'}`}>
+                {globalModal.isAlert ? <Info className="w-8 h-8" /> : <AlertTriangle className="w-8 h-8" />}
+              </div>
+              <h3 className="text-xl font-black text-slate-800 mb-2">{globalModal.title}</h3>
+              <p className="text-sm text-slate-600 leading-snug">
+                {globalModal.message}
+              </p>
+            </div>
+            <div className="bg-slate-50 p-4 flex gap-3 border-t border-slate-200">
+              {!globalModal.isAlert && (
+                <button onClick={() => setGlobalModal(null)} className="flex-1 py-3 font-bold text-slate-600 bg-white border border-slate-300 rounded-xl hover:bg-slate-100 transition-colors">Cancelar</button>
+              )}
+              <button onClick={() => { 
+                if(globalModal.onConfirm) globalModal.onConfirm(); 
+                setGlobalModal(null); 
+              }} className={`flex-1 py-3 font-bold text-white rounded-xl shadow-md transition-colors ${globalModal.isAlert ? 'bg-blue-600 hover:bg-blue-700' : 'bg-red-600 hover:bg-red-700'}`}>
+                {globalModal.isAlert ? "Ciente" : "Confirmar"}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {classToConfirm && (
+        <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[60] p-4 fade-in backdrop-blur-sm">
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            let amount = parseInt(e.target.amount.value) || 1;
+            amount = Math.min(amount, classToConfirm.maxClasses); // Blindagem matemática
+            watchClass(classToConfirm.subjectId, classToConfirm.slotIndex, amount);
+            setClassToConfirm(null);
+          }} className="bg-white rounded-2xl w-full max-w-sm text-center overflow-hidden">
+            <div className="p-6">
+              <div className="w-12 h-12 bg-emerald-100 text-emerald-600 rounded-full flex items-center justify-center mx-auto mb-4"><PlayCircle/></div>
+              <h3 className="text-lg font-black mb-1">Registro de Avanço</h3>
+              <p className="text-slate-500 text-xs mb-4">Você está avançando no assunto <strong>{classToConfirm.topicName}</strong> da matéria <strong>{subjects[classToConfirm.subjectId]?.name}</strong>.</p>
+              
+              <div className="text-left bg-slate-50 p-4 rounded-lg border border-slate-200 mb-2">
+                <label className="text-[10px] font-black text-slate-500 uppercase block mb-2">Aulas concluídas nesta sessão:</label>
+                <div className="flex items-center gap-3">
+                  <input name="amount" type="number" min="1" max={classToConfirm.maxClasses} defaultValue="1" className="w-full border-2 border-slate-300 p-3 rounded-lg font-black text-slate-800 outline-none focus:border-emerald-500 text-center text-xl transition-colors" />
+                </div>
+                <p className="text-[10px] text-slate-400 mt-2 font-bold text-center">Faltam {classToConfirm.maxClasses} aulas para finalizar a teoria e gerar o cartão FSRS.</p>
+              </div>
+            </div>
+            <div className="bg-slate-50 p-4 flex gap-2 border-t border-slate-100">
+              <button type="button" onClick={() => setClassToConfirm(null)} className="flex-1 py-3 font-bold text-slate-600 border bg-white rounded-xl hover:bg-slate-100 transition-colors">Ainda Não</button>
+              <button type="submit" className="flex-1 py-3 font-bold text-white bg-emerald-500 rounded-xl hover:bg-emerald-600 shadow-md transition-colors">Confirmar Execução</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {replaceModal && (
+        <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[60] p-4 fade-in backdrop-blur-sm">
+          <div className="bg-white rounded-2xl w-full max-w-sm overflow-hidden">
+            <div className="p-6">
+              <h3 className="text-lg font-black mb-2 flex items-center gap-2"><Shuffle className="w-5 h-5 text-blue-600"/> Substituir Vaga Tática</h3>
+              <select 
+                 value={selectedReplacement}
+                 onChange={(e) => setSelectedReplacement(e.target.value)}
+                 className="w-full border-2 p-3 rounded-lg font-bold text-sm outline-none focus:border-blue-500"
+              >
+                <option value="">- Escolha a Matéria -</option>
+                {Object.values(subjects).filter(s => s.id !== replaceModal.oldSubjectId).map(s => (
+                  <option key={s.id} value={s.id}>{s.name}</option>
+                ))}
+              </select>
+            </div>
+            <div className="bg-slate-50 p-4 flex gap-2">
+              <button onClick={() => { setReplaceModal(null); setSelectedReplacement(''); }} className="flex-1 py-2.5 font-bold bg-white border rounded-xl text-sm hover:bg-slate-100 text-slate-600">Cancelar</button>
+              <button onClick={() => { handleReplaceSubject(selectedReplacement); setSelectedReplacement(''); }} className="flex-1 py-2.5 font-bold text-white bg-blue-600 rounded-xl text-sm hover:bg-blue-700 shadow-md">Confirmar Troca</button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {reviewModal && (
+        <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[60] p-4 fade-in backdrop-blur-sm">
+          <form onSubmit={handleReviewSubmit} className="bg-white rounded-2xl w-full max-w-sm overflow-hidden shadow-2xl">
+            <div className="p-6">
+              <h3 className="text-lg font-black mb-1 flex items-center gap-2"><Activity className="w-5 h-5 text-red-500"/> Auditoria de Revisão FSRS</h3>
+              <p className="text-slate-700 font-bold text-sm mb-3">{reviewModal.topicName}</p>
+              
+              {reviewModal.lastPerformance !== undefined && (
+                <div className={`p-3 rounded-lg mb-4 text-xs font-bold border ${getThermometer(reviewModal.lastPerformance).color}`}>
+                  Última revisão: Acertou {Math.round(reviewModal.lastPerformance * 100)}%. Vamos melhorar essa marca!
+                </div>
+              )}
+              
+              <div className="flex gap-4">
+                <div className="flex-1">
+                  <label className="text-xs font-bold text-slate-500">Qtd. Feitas</label>
+                  <input name="total" type="number" min="1" required className="w-full mt-1 border-2 border-slate-200 p-3 rounded-lg text-center font-bold outline-none focus:border-red-400"/>
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs font-bold text-slate-500">Acertos</label>
+                  <input name="correct" type="number" min="0" required className="w-full mt-1 border-2 border-slate-200 p-3 rounded-lg text-center font-bold text-emerald-600 outline-none focus:border-emerald-400"/>
+                </div>
+              </div>
+            </div>
+            <div className="bg-slate-50 p-4 flex gap-3 border-t border-slate-200">
+              <button type="button" onClick={() => setReviewModal(null)} className="flex-1 py-2.5 font-bold text-slate-600 bg-white border border-slate-300 rounded-xl hover:bg-slate-100 transition-colors">Cancelar</button>
+              <button type="submit" className="flex-1 py-2.5 font-bold text-white bg-red-500 rounded-xl hover:bg-red-600 shadow-md transition-colors">Salvar Desempenho</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showSimuladoModal && (
+        <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[60] p-4 fade-in backdrop-blur-sm">
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const dataVal = e.target.data.value;
+            
+            const b1C = parseInt(e.target.b1C.value) || 0;
+            const b1E = parseInt(e.target.b1E.value) || 0;
+            const b2C = parseInt(e.target.b2C.value) || 0;
+            const b2E = parseInt(e.target.b2E.value) || 0;
+            const b3C = parseInt(e.target.b3C.value) || 0;
+            const b3E = parseInt(e.target.b3E.value) || 0;
+
+            const b1Liquida = b1C - b1E;
+            const b2Liquida = b2C - b2E;
+            const b3Liquida = b3C - b3E;
+            const liquida = b1Liquida + b2Liquida + b3Liquida;
+
+            if (editingSimulado) {
+              setSimulados(prev => prev.map(s => s.id === editingSimulado.id ? { ...s, data: dataVal, b1C, b1E, b2C, b2E, b3C, b3E, b1Liquida, b2Liquida, b3Liquida, liquida } : s));
+            } else {
+              setSimulados(prev => [...prev, { id: Date.now(), data: dataVal, b1C, b1E, b2C, b2E, b3C, b3E, b1Liquida, b2Liquida, b3Liquida, liquida }]);
+            }
+            setShowSimuladoModal(false);
+            setEditingSimulado(null);
+          }} className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-slate-100">
+              <h3 className="text-lg font-black flex items-center gap-2"><TargetIcon className="w-5 h-5 text-purple-600"/> {editingSimulado ? 'Corrigir Simulado' : 'Registro de Combate'}</h3>
+              <p className="text-xs font-bold text-slate-500 mt-1">Insira seus erros e acertos segmentados. O sistema fará a auditoria de eliminação.</p>
+            </div>
+            
+            <div className="p-5 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+              <div>
+                <label className="text-xs font-bold text-slate-500 block mb-1">Data de Execução</label>
+                <input name="data" type="text" required defaultValue={editingSimulado ? editingSimulado.data : new Date().toLocaleDateString('pt-BR')} className="w-full border-2 border-slate-200 p-2.5 rounded-lg font-bold text-slate-800 outline-none focus:border-purple-400"/>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-black text-slate-700 uppercase">Bloco I - Básicas</span>
+                  <span className="text-[10px] font-bold text-slate-400">Total: 55 | Min: 15</span>
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase">Certas</label><input name="b1C" type="number" min="0" max="55" required defaultValue={editingSimulado?.b1C ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-emerald-600 text-center outline-none focus:border-emerald-400"/></div>
+                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase">Erradas</label><input name="b1E" type="number" min="0" max="55" required defaultValue={editingSimulado?.b1E ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-red-500 text-center outline-none focus:border-red-400"/></div>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-black text-slate-700 uppercase">Bloco II - Trânsito</span>
+                  <span className="text-[10px] font-bold text-slate-400">Total: 30 | Min: 10</span>
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase">Certas</label><input name="b2C" type="number" min="0" max="30" required defaultValue={editingSimulado?.b2C ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-emerald-600 text-center outline-none focus:border-emerald-400"/></div>
+                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase">Erradas</label><input name="b2E" type="number" min="0" max="30" required defaultValue={editingSimulado?.b2E ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-red-500 text-center outline-none focus:border-red-400"/></div>
+                </div>
+              </div>
+
+              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm">
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-xs font-black text-slate-700 uppercase">Bloco III - Direito</span>
+                  <span className="text-[10px] font-bold text-slate-400">Total: 35 | Min: 10</span>
+                </div>
+                <div className="flex gap-3">
+                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase">Certas</label><input name="b3C" type="number" min="0" max="35" required defaultValue={editingSimulado?.b3C ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-emerald-600 text-center outline-none focus:border-emerald-400"/></div>
+                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase">Erradas</label><input name="b3E" type="number" min="0" max="35" required defaultValue={editingSimulado?.b3E ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-red-500 text-center outline-none focus:border-red-400"/></div>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-4 flex gap-3 border-t border-slate-200">
+              <button type="button" onClick={() => { setShowSimuladoModal(false); setEditingSimulado(null); }} className="flex-1 py-3 font-bold text-slate-600 bg-white border border-slate-300 rounded-xl hover:bg-slate-100 transition-colors">Abortar</button>
+              <button type="submit" className="flex-1 py-3 font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 shadow-md transition-colors">Executar Auditoria</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      {showTafModal && (
+        <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[60] p-4 fade-in backdrop-blur-sm">
+          <form onSubmit={(e) => {
+            e.preventDefault();
+            const dataVal = e.target.data.value;
+            const genero = e.target.genero.value;
+            const isM = genero === 'masculino';
+            
+            const barra = parseFloat(e.target.barra.value) || 0;
+            const abdominal = parseFloat(e.target.abdominal.value) || 0;
+            const impulsao = parseFloat(e.target.impulsao.value) || 0;
+            const corrida = parseFloat(e.target.corrida.value) || 0;
+            const shuttle = parseFloat(e.target.shuttle.value) || 0;
+
+            const ptsBarra = calcBarra(barra, isM);
+            const ptsAbdominal = calcAbdominal(abdominal, isM);
+            const ptsImpulsao = calcImpulsao(impulsao, isM);
+            const ptsCorrida = calcCorrida(corrida, isM);
+            const ptsShuttle = calcShuttle(shuttle, isM);
+            
+            const totalPts = ptsBarra + ptsAbdominal + ptsImpulsao + ptsCorrida + ptsShuttle;
+
+            const payload = {
+              data: dataVal, genero, barra, abdominal, impulsao, corrida, shuttle,
+              ptsBarra, ptsAbdominal, ptsImpulsao, ptsCorrida, ptsShuttle, totalPts
+            };
+
+            if (editingTaf) {
+              setTafHistory(prev => prev.map(s => s.id === editingTaf.id ? { ...s, ...payload } : s));
+            } else {
+              setTafHistory(prev => [...prev, { id: Date.now(), ...payload }]);
+            }
+            setShowTafModal(false);
+            setEditingTaf(null);
+          }} className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh]">
+            <div className="p-5 border-b border-slate-100">
+              <h3 className="text-lg font-black flex items-center gap-2"><Dumbbell className="w-5 h-5 text-orange-600"/> {editingTaf ? 'Editar TAF' : 'Registrar TAF'}</h3>
+              <p className="text-xs font-bold text-slate-500 mt-1">Insira as marcas reais. O sistema fará a conversão oficial de pontos.</p>
+            </div>
+            
+            <div className="p-5 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+              <div className="flex gap-3">
+                <div className="flex-1">
+                  <label className="text-xs font-bold text-slate-500 block mb-1">Data</label>
+                  <input name="data" type="text" required defaultValue={editingTaf ? editingTaf.data : new Date().toLocaleDateString('pt-BR')} className="w-full border-2 border-slate-200 p-2.5 rounded-lg font-bold text-slate-800 outline-none focus:border-orange-400"/>
+                </div>
+                <div className="flex-1">
+                  <label className="text-xs font-bold text-slate-500 block mb-1">Gênero</label>
+                  <select name="genero" defaultValue={editingTaf ? editingTaf.genero : 'masculino'} className="w-full border-2 border-slate-200 p-2.5 rounded-lg font-bold text-slate-800 outline-none focus:border-orange-400">
+                    <option value="masculino">Masculino</option>
+                    <option value="feminino">Feminino</option>
+                  </select>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1" title="Masculino: Repetições | Feminino: Segundos de Isometria">Barra (Reps/Segs)</label>
+                  <input name="barra" type="number" step="0.1" min="0" required defaultValue={editingTaf?.barra ?? ''} className="w-full border-2 border-slate-200 p-2 rounded-lg font-bold text-slate-700 outline-none focus:border-orange-400 text-center"/>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Abdominal (Reps)</label>
+                  <input name="abdominal" type="number" min="0" required defaultValue={editingTaf?.abdominal ?? ''} className="w-full border-2 border-slate-200 p-2 rounded-lg font-bold text-slate-700 outline-none focus:border-orange-400 text-center"/>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Impulsão (Metros)</label>
+                  <input name="impulsao" type="number" step="0.01" min="0" required defaultValue={editingTaf?.impulsao ?? ''} className="w-full border-2 border-slate-200 p-2 rounded-lg font-bold text-slate-700 outline-none focus:border-orange-400 text-center"/>
+                </div>
+                <div>
+                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Corrida (Metros)</label>
+                  <input name="corrida" type="number" min="0" required defaultValue={editingTaf?.corrida ?? ''} className="w-full border-2 border-slate-200 p-2 rounded-lg font-bold text-slate-700 outline-none focus:border-orange-400 text-center"/>
+                </div>
+                <div className="col-span-2">
+                  <label className="text-[10px] font-bold text-slate-400 uppercase block mb-1">Shuttle Run (Segundos)</label>
+                  <input name="shuttle" type="number" step="0.01" min="0" required defaultValue={editingTaf?.shuttle ?? ''} className="w-full border-2 border-slate-200 p-2 rounded-lg font-bold text-slate-700 outline-none focus:border-orange-400 text-center"/>
+                </div>
+              </div>
+            </div>
+
+            <div className="bg-slate-50 p-4 flex gap-3 border-t border-slate-200">
+              <button type="button" onClick={() => { setShowTafModal(false); setEditingTaf(null); }} className="flex-1 py-3 font-bold text-slate-600 bg-white border border-slate-300 rounded-xl hover:bg-slate-100 transition-colors">Abortar</button>
+              <button type="submit" className="flex-1 py-3 font-bold text-white bg-orange-600 rounded-xl hover:bg-orange-700 shadow-md transition-colors">Avaliar Pontuação</button>
+            </div>
+          </form>
+        </div>
+      )}
+
+      <style dangerouslySetInnerHTML={{__html: `
+        .no-scrollbar::-webkit-scrollbar { display: none; }
+        .no-scrollbar { -ms-overflow-style: none; scrollbar-width: none; }
+        .custom-scrollbar::-webkit-scrollbar { height: 6px; width: 6px; }
+        .custom-scrollbar::-webkit-scrollbar-track { background: transparent; }
+        .custom-scrollbar::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .fade-in { animation: fadeIn 0.2s ease-in-out; }
+        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
+      `}} />
+    </div>
+  );
+}
