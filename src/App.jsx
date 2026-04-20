@@ -5,6 +5,7 @@ import Login from './components/Login';
 import { useStore } from './store/useStore';
 import Dashboard from './pages/Dashboard';
 import ClassCompletionModal from './components/ClassCompletionModal';
+import PatentShield from './components/PatentShield';
 
 // Code-splitting: páginas carregadas sob demanda
 const TreinoTAF = React.lazy(() => import('./pages/TreinoTAF'));
@@ -506,9 +507,9 @@ export default function App() {
               <motion.div 
                 animate={{ y: [0, -10, 0] }}
                 transition={{ duration: 2, repeat: Infinity }}
-                className="text-8xl mb-6 relative z-10 drop-shadow-2xl flex justify-center"
+                className="mb-6 relative z-10 flex justify-center"
               >
-                {promotionModal.icon}
+                <PatentShield patenteId={promotionModal.id} size={120} glow />
               </motion.div>
               
               <h2 className="text-sm font-black text-blue-400 uppercase tracking-[0.3em] mb-2">Promoção de Carreira</h2>
