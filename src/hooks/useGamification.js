@@ -1,10 +1,10 @@
 export const PATENTES = [
-  { id: 'recruta', name: 'Recruta', minXp: 0, color: 'text-slate-400', icon: '🔰' },
-  { id: 'agente_3', name: 'Agente (3ª Classe)', minXp: 1000, color: 'text-emerald-500', icon: '👮‍♂️' },
-  { id: 'agente_2', name: 'Agente (2ª Classe)', minXp: 5000, color: 'text-blue-500', icon: '🎖️' },
-  { id: 'agente_1', name: 'Agente (1ª Classe)', minXp: 15000, color: 'text-purple-500', icon: '🛡️' },
-  { id: 'especial', name: 'Agente Especial', minXp: 40000, color: 'text-orange-500', icon: '🔥' },
-  { id: 'inspetor', name: 'Inspetor (Lenda)', minXp: 100000, color: 'text-red-600', icon: '👑' },
+  { id: 'recruta', name: 'Recruta', minXp: 0, color: 'text-slate-400', icon: 'assets/gamification/Recruta.png' },
+  { id: 'agente_3', name: 'Agente (3ª Classe)', minXp: 1000, color: 'text-emerald-500', icon: 'assets/gamification/Agente de 3ª Classe.png' },
+  { id: 'agente_2', name: 'Agente (2ª Classe)', minXp: 5000, color: 'text-blue-500', icon: 'assets/gamification/Agente de 2ª Classe.png' },
+  { id: 'agente_1', name: 'Agente (1ª Classe)', minXp: 15000, color: 'text-purple-500', icon: 'assets/gamification/Agente de 1ª Classe.png' },
+  { id: 'especial', name: 'Agente Especial', minXp: 40000, color: 'text-orange-500', icon: 'assets/gamification/classe especial.png' },
+  { id: 'inspetor', name: 'Inspetor (Lenda)', minXp: 100000, color: 'text-red-600', icon: 'assets/gamification/inspetor lenda.png' },
 ];
 
 export const MEDALHAS = [

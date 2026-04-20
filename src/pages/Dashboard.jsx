@@ -13,7 +13,6 @@ import {
   Target
 } from 'lucide-react';
 import { motion } from 'framer-motion';
-import PatentShield from '../components/PatentShield';
 
 export default function Dashboard() {
   const { 
@@ -51,10 +50,10 @@ export default function Dashboard() {
             <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)] relative z-10 bg-slate-800">
                <img src={userStats.avatar || 'assets/gamification/avatar_male.png'} alt="Avatar" className="w-full h-full object-cover" />
             </div>
-            {/* Distintivo de patente no canto do avatar */}
-            <div className="absolute -bottom-3 -right-3 z-20">
-              <PatentShield patenteId={patenteAtual.id} size={52} glow />
+            <div className="absolute -bottom-2 -right-2 bg-blue-600 text-white p-2.5 rounded-2xl shadow-lg border-2 border-white dark:border-slate-900 z-20">
+              <ShieldCheck className="w-6 h-6" />
             </div>
+            <div className="absolute inset-0 bg-blue-500/10 rounded-full animate-ping opacity-20 -z-10"></div>
           </div>
 
           {/* Info do Agente */}
@@ -134,20 +133,15 @@ export default function Dashboard() {
                  
                  return (
                    <div key={p.id} className="relative z-10 flex flex-col items-center group">
-                      <motion.div
-                        whileHover={{ scale: 1.2 }}
-                        className={`transition-all duration-500 ${!isCompleted && !isActive ? 'opacity-30 grayscale' : ''} ${isActive ? 'scale-125' : ''}`}
-                      >
-                        <PatentShield 
-                          patenteId={p.id} 
-                          size={isActive ? 62 : 48} 
-                          glow={isActive || isNext} 
-                        />
-                      </motion.div>
+                      <div className={`w-12 h-12 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-xl ${isActive ? 'bg-gradient-to-br from-blue-600 to-indigo-700 border-2 border-white/50 scale-125 shadow-blue-500/50 z-20' : isCompleted ? 'bg-slate-800/80 border-2 border-blue-500/30' : 'bg-slate-100 dark:bg-slate-900 border-2 border-transparent opacity-30 grayscale'}`}>
+                        {p.icon.includes('/') ? (
+                          <img src={p.icon} alt={p.name} className={`w-full h-full object-contain p-1 ${isActive ? 'drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]' : ''}`} />
+                        ) : (
+                          <span className="text-xl sm:text-3xl">{p.icon}</span>
+                        )}
+                      </div>
                       <div className="absolute top-full mt-2 text-center w-max">
-                        <p className={`text-[8px] sm:text-[10px] font-black uppercase tracking-tight ${isActive ? patenteAtual.color : isCompleted ? 'text-blue-500 dark:text-blue-400' : 'text-slate-500'}`}>
-                          {p.id === 'recruta' ? 'Recruta' : p.id === 'agente_3' ? '3ª' : p.id === 'agente_2' ? '2ª' : p.id === 'agente_1' ? '1ª' : p.id === 'especial' ? 'Especial' : 'Inspetor'}
-                        </p>
+                        <p className={`text-[8px] sm:text-[10px] font-black uppercase tracking-tight ${isCompleted ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>{p.id.replace('agente_', '')}</p>
                       </div>
                    </div>
                  );
