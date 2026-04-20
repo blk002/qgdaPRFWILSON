@@ -1,6 +1,5 @@
 import React, { useState } from 'react';
 import { supabase } from '../lib/supabaseClient';
-import { useStore } from '../store/useStore';
 import { Shield, Mail, Lock, Loader2, AlertCircle, LogIn, UserPlus } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -9,7 +8,6 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
   const [isSignUp, setIsSignUp] = useState(false);
-  const { setSession } = useStore();
 
   const handleAuth = async (e) => {
     e.preventDefault();

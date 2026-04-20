@@ -1,25 +1,27 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import { supabase } from './lib/supabaseClient';
 import Login from './components/Login';
 import { useStore } from './store/useStore';
-import TreinoTAF from './pages/TreinoTAF';
-import Simulados from './pages/Simulados';
-import Estatisticas from './pages/Estatisticas';
-import Loja from './pages/Loja';
 import Dashboard from './pages/Dashboard';
-import Revisoes from './pages/Revisoes';
-import Ciclo from './pages/Ciclo';
-import Calendario from './pages/Calendario';
-import Config from './pages/Config';
 import ClassCompletionModal from './components/ClassCompletionModal';
+
+// Code-splitting: páginas carregadas sob demanda
+const TreinoTAF = React.lazy(() => import('./pages/TreinoTAF'));
+const Simulados = React.lazy(() => import('./pages/Simulados'));
+const Estatisticas = React.lazy(() => import('./pages/Estatisticas'));
+const Loja = React.lazy(() => import('./pages/Loja'));
+const Revisoes = React.lazy(() => import('./pages/Revisoes'));
+const Ciclo = React.lazy(() => import('./pages/Ciclo'));
+const Calendario = React.lazy(() => import('./pages/Calendario'));
+const Config = React.lazy(() => import('./pages/Config'));
 import { Routes, Route, Link, NavLink, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
 import { 
-  X, Repeat, Dumbbell, Store, Award,
-  BarChart2, Play, Sun, Moon, Coins, BrainCircuit, AlertTriangle, Target as TargetIcon, Clock, Eye, EyeOff, 
-  ChevronLeft, ChevronRight, CalendarDays, Layers, CheckCircle, 
-  TrendingUp, TrendingDown, Calendar as CalendarIcon, Settings, Info, Check, LogOut
+  Repeat, Dumbbell, Store, Award,
+  BarChart2, Sun, Moon, Coins, BrainCircuit, AlertTriangle, Target as TargetIcon,
+  Calendar as CalendarIcon, Settings, Info, Check, LogOut, Shield
 } from 'lucide-react';
 
 const availableColors = [
@@ -47,49 +49,75 @@ export default function App() {
     classConfirmModal, setClassConfirmModal,
     replaceSubjectModal, setReplaceSubjectModal,
     handleReviewSubmit, watchClass, handleReplaceSubject,
-    subjects,
-    session, setSession, user, loadFromCloud, saveToCloud, signOut
+    subjects, isSyncing,
+    session, setSession, loadFromCloud, signOut
   } = useStore();
 
-  // --- AUTH LISTENER ---
+  const [reviewInputs, setReviewInputs] = useState({ total: 10, correct: 0 });
+  const location = useLocation();
+
+  // Memoizar predição FSRS para evitar recalcular 4x por render
+  const fsrsPrediction = useMemo(() => {
+    if (!reviewModal || reviewInputs.total <= 0) return null;
+    const perf = reviewInputs.correct / reviewInputs.total;
+    let rating = 3;
+    if (perf >= 1.0) rating = 4;
+    else if (perf >= 0.80) rating = 3;
+    else if (perf >= 0.60) rating = 2;
+    else rating = 1;
+    const { updateFsrsCard } = useStore.getState();
+    return updateFsrsCard(reviewModal, rating);
+  }, [reviewModal, reviewInputs.correct, reviewInputs.total]);
+
+  // Sincronizar o tema escuro com o elemento raiz para suportar Portais
   useEffect(() => {
-    supabase.auth.getSession().then(({ data: { session } }) => {
-      setSession(session);
-    });
-
-    const { data: { subscription } } = supabase.auth.onAuthStateChange((_event, session) => {
-      setSession(session);
-    });
-
-    return () => subscription.unsubscribe();
-  }, [setSession]);
-
-  // --- DATA LOADING ---
-  useEffect(() => {
-    if (user) {
-      loadFromCloud();
+    if (isDarkMode) {
+      document.documentElement.classList.add('dark');
+    } else {
+      document.documentElement.classList.remove('dark');
     }
-  }, [user]);
+  }, [isDarkMode]);
 
-  // --- AUTO-SAVE (DEBOUNCED) ---
+  // --- AUTH & INITIALIZATION ---
+  // PONTO ÚNICO DE INICIALIZAÇÃO: onAuthStateChange dispara INITIAL_SESSION automaticamente
+  // Isso elimina a race condition causada pela dupla chamada de loadFromCloud
   useEffect(() => {
-    if (!user) return;
-    
-    const timer = setTimeout(() => {
-      saveToCloud();
-    }, 5000); // Salva após 5 segundos de inatividade no estado
+    let mounted = true;
 
-    return () => clearTimeout(timer);
-  }, [subjects, cycle, coins, userStats, reviews, user]);
+    const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
+      if (!mounted) return;
+      console.log(`🔐 [Auth] Evento detectado: ${event}`);
+
+      if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+        setSession(session);
+        if (session?.user) {
+          // Bloqueio de segurança: se já estivermos carregando, não dispare de novo
+          if (!useStore.getState().isLoadingFromCloud) {
+             // Pequeno delay para evitar Lock contention do Supabase na largada
+             setTimeout(async () => {
+                await loadFromCloud();
+             }, 400);
+          } else {
+             console.log('⏳ [Auth] Carregamento já em curso, ignorando disparo duplo.');
+          }
+        } else {
+          useStore.setState({ isSyncing: false, isLoadingFromCloud: false });
+        }
+      } else if (event === 'SIGNED_OUT') {
+        setSession(null);
+        useStore.setState({ isSyncing: false, isLoadingFromCloud: false });
+      }
+    });
+
+    return () => {
+      mounted = false;
+      subscription.unsubscribe();
+    };
+  }, [setSession, loadFromCloud]);
 
   if (!session) {
     return <Login />;
   }
-  
-
-  const [reviewInputs, setReviewInputs] = useState({ total: 10, correct: 0 });
-  
-  const location = useLocation();
 
   const todayStr = getLocalDateStr();
   const allDueToday = reviews.filter(r => r.nextDateStr <= todayStr);
@@ -125,15 +153,15 @@ export default function App() {
           
           <div className="flex items-center gap-2 sm:gap-4">
             {/* Patente Badge */}
-            <div className={`hidden lg:flex flex-col items-end gap-0.5 bg-slate-800/50 px-3 py-1 rounded-lg border border-slate-700 shadow-sm ${getCurrentPatente().color}`}>
-               <div className="flex items-center gap-1.5">
-                  <span className="text-lg leading-none">{getCurrentPatente().icon}</span>
-                  <span className="text-[10px] font-black uppercase tracking-tighter">{getCurrentPatente().name}</span>
+            <div className={`hidden lg:flex flex-col items-center gap-1 bg-slate-800/50 px-3 py-2 rounded-xl border border-slate-700 shadow-sm ${getCurrentPatente().color}`}>
+               <div className="flex items-center gap-2">
+                  <span className="text-xl leading-none">{getCurrentPatente().icon}</span>
+                  <span className="text-[10px] font-black uppercase tracking-widest">{getCurrentPatente().name}</span>
                </div>
-               <div className="w-24 bg-slate-700 rounded-full h-1 overflow-hidden mt-0.5">
+               <div className="w-24 bg-slate-700/50 rounded-full h-1.5 overflow-hidden">
                   <div 
-                    className="bg-current h-full transition-all duration-1000" 
-                    style={{ width: `${(userStats.xp % 1000) / 10}%` }}
+                    className="bg-current h-full transition-all duration-1000 shadow-[0_0_8px_rgba(255,255,255,0.3)]" 
+                    style={{ width: `${Math.min(100, (userStats.xp % 1000) / 10)}%` }}
                   ></div>
                </div>
             </div>
@@ -185,33 +213,60 @@ export default function App() {
       </header>
 
       <main className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-10">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={location.pathname}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            variants={pageVariants}
-            transition={{ duration: 0.2 }}
-          >
-            <Routes location={location}>
-              <Route path="/" element={<Dashboard />} />
-              <Route path="/revisoes" element={<Revisoes />} />
-              <Route path="/ciclo" element={<Ciclo />} />
-              <Route path="/calendario" element={<Calendario />} />
-              <Route path="/taf" element={<TreinoTAF />} />
-              <Route path="/simulados" element={<Simulados />} />
-              <Route path="/estatisticas" element={<Estatisticas />} />
-              <Route path="/loja" element={<Loja />} />
-              <Route path="/config" element={<Config availableColors={availableColors} />} />
-            </Routes>
-          </motion.div>
-        </AnimatePresence>
+        {isSyncing ? (
+          <div className="flex flex-col items-center justify-center p-20 text-center opacity-80 animate-pulse">
+            <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center mb-4 shadow-inner">
+               <Shield className="w-8 h-8 text-blue-500" />
+            </div>
+            <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest">Sincronizando Nuvem...</h2>
+            <p className="text-sm font-bold text-slate-500 dark:text-slate-400 mt-2">Puxando seus dados seguros em tempo real.</p>
+            <button 
+              onClick={() => useStore.setState({ isSyncing: false })} 
+              className="mt-8 text-[11px] font-black tracking-widest uppercase text-slate-400 hover:text-blue-500 transition-colors underline decoration-slate-300 dark:decoration-slate-700"
+            >
+              Acesso de Emergência (Pular Sincronização)
+            </button>
+          </div>
+        ) : (
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              variants={pageVariants}
+              transition={{ duration: 0.2 }}
+            >
+              <Suspense fallback={
+                <div className="flex items-center justify-center py-20">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Carregando módulo...</span>
+                  </div>
+                </div>
+              }>
+                <Routes location={location}>
+                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/revisoes" element={<Revisoes />} />
+                  <Route path="/ciclo" element={<Ciclo />} />
+                  <Route path="/calendario" element={<Calendario />} />
+                  <Route path="/taf" element={<TreinoTAF />} />
+                  <Route path="/simulados" element={<Simulados />} />
+                  <Route path="/estatisticas" element={<Estatisticas />} />
+                  <Route path="/loja" element={<Loja />} />
+                  <Route path="/config" element={<Config availableColors={availableColors} />} />
+                </Routes>
+              </Suspense>
+            </motion.div>
+          </AnimatePresence>
+        )}
       </main>
 
-      {/* Modais do Sistema */}
-      {reviewModal && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[110] p-4 fade-in">
+      {/* Modais do Sistema - Renderizados via Portal para garantir z-index absoluto */}
+      
+      {/* 1. Modal de Avaliação de Revisão */}
+      {reviewModal && createPortal(
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[110] p-4 fade-in font-sans">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800">
             <h3 className="text-xl font-black mb-1 text-slate-800 dark:text-slate-100 flex items-center gap-2">
               <BrainCircuit className="text-red-500 w-6 h-6" /> Avaliar Retenção
@@ -263,52 +318,19 @@ export default function App() {
                     <div className="text-center">
                       <p className="text-[8px] font-black text-slate-400 uppercase">Dificuldade</p>
                       <p className="text-xs font-black text-slate-700 dark:text-slate-300">
-                        {(() => {
-                           const perf = reviewInputs.correct / reviewInputs.total;
-                           let rating = 3;
-                           if (perf >= 1.0) rating = 4;
-                           else if (perf >= 0.80) rating = 3;
-                           else if (perf >= 0.60) rating = 2;
-                           else rating = 1;
-                           
-                           const { updateFsrsCard } = useStore.getState();
-                           const prediction = updateFsrsCard(reviewModal, rating);
-                           return prediction.difficulty.toFixed(1);
-                        })()}
+                        {fsrsPrediction ? fsrsPrediction.difficulty.toFixed(1) : '—'}
                       </p>
                     </div>
                     <div className="text-center">
                       <p className="text-[8px] font-black text-slate-400 uppercase">Estabilidade</p>
                       <p className="text-xs font-black text-slate-700 dark:text-slate-300">
-                        {(() => {
-                           const perf = reviewInputs.correct / reviewInputs.total;
-                           let rating = 3;
-                           if (perf >= 1.0) rating = 4;
-                           else if (perf >= 0.80) rating = 3;
-                           else if (perf >= 0.60) rating = 2;
-                           else rating = 1;
-                           
-                           const { updateFsrsCard } = useStore.getState();
-                           const prediction = updateFsrsCard(reviewModal, rating);
-                           return prediction.stability.toFixed(1) + 'd';
-                        })()}
+                        {fsrsPrediction ? fsrsPrediction.stability.toFixed(1) + 'd' : '—'}
                       </p>
                     </div>
                     <div className="text-center">
                       <p className="text-[8px] font-black text-slate-400 uppercase">Intervalo</p>
                       <p className="text-xs font-black text-blue-600">
-                        {(() => {
-                           const perf = reviewInputs.correct / reviewInputs.total;
-                           let rating = 3;
-                           if (perf >= 1.0) rating = 4;
-                           else if (perf >= 0.80) rating = 3;
-                           else if (perf >= 0.60) rating = 2;
-                           else rating = 1;
-                           
-                           const { updateFsrsCard } = useStore.getState();
-                           const prediction = updateFsrsCard(reviewModal, rating);
-                           return prediction.nextInterval + 'd';
-                        })()}
+                        {fsrsPrediction ? fsrsPrediction.nextInterval + 'd' : '—'}
                       </p>
                     </div>
                   </div>
@@ -318,20 +340,11 @@ export default function App() {
                     <CalendarIcon className="w-3 h-3" />
                     <span>Próxima revisão estimada em: </span>
                     <span className="text-slate-800 dark:text-slate-200">
-                      {(() => {
-                        const { getTodayDate, updateFsrsCard } = useStore.getState(); 
-                        const perf = reviewInputs.correct / reviewInputs.total;
-                        let rating = 3;
-                        if (perf >= 1.0) rating = 4;
-                        else if (perf >= 0.80) rating = 3;
-                        else if (perf >= 0.60) rating = 2;
-                        else rating = 1;
-
-                        const prediction = updateFsrsCard(reviewModal, rating);
-                        const target = getTodayDate();
-                        target.setDate(target.getDate() + prediction.nextInterval);
+                      {fsrsPrediction ? (() => {
+                        const target = useStore.getState().getTodayDate();
+                        target.setDate(target.getDate() + fsrsPrediction.nextInterval);
                         return target.toLocaleDateString();
-                      })()}
+                      })() : '—'}
                     </span>
                   </div>
                 </div>
@@ -358,9 +371,11 @@ export default function App() {
               </button>
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
+      {/* 2. Modal de Confirmação de Aula (Componente Externo) */}
       <ClassCompletionModal 
         key={classConfirmModal?.subjectId || 'none'}
         isOpen={Boolean(classConfirmModal)}
@@ -373,9 +388,9 @@ export default function App() {
         }}
       />
 
-      {/* Modal de Substituição de Matéria */}
-      {replaceSubjectModal && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[110] p-4 fade-in">
+      {/* 3. Modal de Substituição de Matéria no Ciclo */}
+      {replaceSubjectModal && createPortal(
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[110] p-4 fade-in font-sans">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800">
             <h3 className="text-xl font-black mb-4 text-slate-800 dark:text-slate-100 flex items-center gap-2">
               <Repeat className="text-blue-500 w-6 h-6" /> Ajuste de Cronograma
@@ -397,18 +412,25 @@ export default function App() {
             </div>
             <button onClick={() => setReplaceSubjectModal(null)} className="w-full mt-6 py-2 text-slate-400 font-bold hover:text-slate-600 transition-colors uppercase text-[10px]">Manter Atual</button>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
 
-      {/* Global Alerts Modal */}
-      {globalModal && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[100] p-4 fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center border border-slate-200 dark:border-slate-800">
-            <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${globalModal.onConfirm ? 'bg-red-100 text-red-600' : globalModal.isAlert ? 'bg-blue-100 text-blue-600' : 'bg-emerald-100 text-emerald-600'}`}>
+      {/* 4. Modal Global de Alertas e Confirmações (Reset, Erros, etc.) */}
+      {globalModal && createPortal(
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[120] p-4 fade-in font-sans">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center border border-slate-200 dark:border-slate-800 relative">
+            <div className={`w-16 h-16 rounded-full mx-auto mb-4 flex items-center justify-center ${
+              globalModal.onConfirm 
+                ? 'bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 shadow-[0_0_20px_rgba(220,38,38,0.2)]' 
+                : globalModal.isAlert 
+                  ? 'bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400' 
+                  : 'bg-emerald-100 dark:bg-emerald-900/30 text-emerald-600 dark:text-emerald-400'
+            }`}>
               {globalModal.onConfirm ? <AlertTriangle className="w-8 h-8" /> : globalModal.isAlert ? <Info className="w-8 h-8" /> : <Check className="w-8 h-8" />}
             </div>
             <h3 className="text-xl font-black mb-2 text-slate-800 dark:text-slate-100">{globalModal.title}</h3>
-            <p className="text-slate-500 dark:text-slate-400 mb-6 font-bold">{globalModal.message}</p>
+            <p className="text-slate-500 dark:text-slate-400 mb-6 font-bold text-sm">{globalModal.message}</p>
             
             <div className="flex flex-col gap-3">
               {globalModal.onConfirm ? (
@@ -432,14 +454,15 @@ export default function App() {
               ) : (
                 <button 
                   onClick={() => setGlobalModal(null)}
-                  className="w-full py-3 bg-slate-900 dark:bg-blue-600 text-white font-black rounded-xl hover:opacity-90 transition-all"
+                  className="w-full py-3 bg-slate-900 dark:bg-blue-600 text-white font-black rounded-xl hover:opacity-90 transition-all shadow-lg shadow-blue-500/10"
                 >
                   Ciente, Operacional!
                 </button>
               )}
             </div>
           </div>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

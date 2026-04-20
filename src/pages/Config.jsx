@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save } from 'lucide-react';
 
 import { useState } from 'react';
+import { createPortal } from 'react-dom';
 
 export default function Config({
   availableColors
@@ -200,13 +201,17 @@ export default function Config({
                 <div className="flex items-center gap-1">
                   <button 
                     onClick={() => {
-                      if (window.confirm(`Limpar todos os blocos do DIA ${dayIndex + 1}?`)) {
-                        setCycle(prev => {
-                          const newCycle = [...prev];
-                          newCycle[dayIndex] = [];
-                          return newCycle;
-                        });
-                      }
+                      setGlobalModal({
+                        title: `Limpar DIA ${dayIndex + 1}?`,
+                        message: "Isso removerá todas as matérias escaladas para este dia. O dia voltará a ser 'Livre'.",
+                        onConfirm: () => {
+                          setCycle(prev => {
+                            const newCycle = [...prev];
+                            newCycle[dayIndex] = [];
+                            return newCycle;
+                          });
+                        }
+                      });
                     }}
                     className="p-1 text-slate-400 hover:text-orange-500 hover:bg-white dark:hover:bg-slate-800 rounded transition-colors dark:bg-slate-900" title="Limpar Dia (Livre)"
                   >
@@ -283,7 +288,7 @@ export default function Config({
               </button>
             </div>
           </div>
-        ))}
+          ))}
         {cycle.length === 0 && (
           <div className="col-span-full text-center py-10 text-slate-400 border-2 border-dashed border-slate-200 rounded-xl dark:border-slate-800">
             Cronograma vazio. Adicione um dia para começar.
@@ -303,17 +308,24 @@ export default function Config({
         <div className="flex flex-col sm:flex-row gap-3">
           <button 
             onClick={() => {
-              const data = localStorage.getItem('prf-qg-storage');
-              if (!data) {
-                toast.error("Nenhum dado encontrado para backup.");
-                return;
-              }
-              const blob = new Blob([data], { type: 'application/json' });
+              const state = useStore.getState();
+              const persistedKeys = [
+                'subjects', 'cycle', 'currentDayIndex', 'completedToday', 'targetExamDate', 
+                'coins', 'userStats', 'streakData', 'weeklySprint', 'reviews', 
+                'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus', 
+                'isDarkMode', 'activeTab', 'calendarDate', 'reviewCalendarDate', 
+                'seasonalData', 'weeklyMissions'
+              ];
+              const dataToExport = {};
+              persistedKeys.forEach(key => { if (state[key] !== undefined) dataToExport[key] = state[key]; });
+              
+              const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
               a.download = `qg-prf-backup-${new Date().toISOString().split('T')[0]}.json`;
               a.click();
+              URL.revokeObjectURL(url);
               toast.success("Backup exportado com sucesso!");
             }}
             className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold transition-colors shadow-sm flex items-center justify-center gap-2"
@@ -331,13 +343,18 @@ export default function Config({
                 const file = e.target.files[0];
                 if (!file) return;
                 const reader = new FileReader();
-                reader.onload = (event) => {
+                reader.onload = async (event) => {
                   try {
                     const content = event.target.result;
-                    JSON.parse(content); // Validate JSON
-                    localStorage.setItem('prf-qg-storage', content);
-                    toast.success("Backup restaurado! A página será recarregada.");
-                    setTimeout(() => window.location.reload(), 1500);
+                    const parsed = JSON.parse(content);
+                    
+                    // Hidratar dates
+                    if (parsed.calendarDate) parsed.calendarDate = new Date(parsed.calendarDate);
+                    if (parsed.reviewCalendarDate) parsed.reviewCalendarDate = new Date(parsed.reviewCalendarDate);
+                    
+                    useStore.setState(parsed);
+                    await useStore.getState().saveToCloud();
+                    toast.success("Backup restaurado com sucesso!");
                   } catch {
                     toast.error("Arquivo de backup inválido.");
                   }
@@ -387,150 +404,173 @@ export default function Config({
             Zerar Sistema Completo
           </button>
       </div>
-      {/* Modal de Edição de Disciplina */}
-      {editingSubjectId && draftSubject && (
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[100] p-4 fade-in">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full p-6 border border-slate-200 dark:border-slate-800 animate-scale-in overflow-y-auto max-h-[90vh]">
-            <div className="flex justify-between items-center mb-6">
-              <h3 className="text-xl font-black text-slate-800 dark:text-slate-100 flex items-center gap-2 uppercase tracking-tighter">
-                <Edit2 className="w-5 h-5 text-blue-600" /> Detalhes da Disciplina
-              </h3>
+      {/* Modal de Edição de Disciplina (Estilo Compacto Centralizado) */}
+      {editingSubjectId && draftSubject && createPortal((
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[120] p-4 fade-in">
+          <div className="bg-[#0f172a] rounded-2xl shadow-2xl max-w-lg w-full p-8 border border-slate-800 relative overflow-hidden flex flex-col">
+            
+            {/* Barra de Progresso Topo */}
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-teal-400 to-blue-500 opacity-80"></div>
+
+            {/* Cabeçalho */}
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-[22px] font-black text-white uppercase tracking-tight leading-none mb-1">
+                  Configurar Disciplina
+                </h3>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
+                  ID: {draftSubject.id}
+                </p>
+              </div>
               <button 
-                onClick={() => { setEditingSubjectId(null); setDraftSubject(null); }}
-                className="p-2 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full transition-colors"
+                onClick={() => {
+                  if (draftSubject.name && draftSubject.name.trim() !== "") {
+                    setSubjects(prev => ({ ...prev, [draftSubject.id]: draftSubject }));
+                  }
+                  setEditingSubjectId(null);
+                  setDraftSubject(null);
+                }}
+                className="text-slate-400 hover:text-white transition-colors"
               >
-                <X className="w-6 h-6 text-slate-400" />
+                <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-6">
-              {/* Nome e Bloco */}
-              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 ml-1">Nome Operacional</label>
-                  <input 
-                    type="text" 
-                    value={draftSubject.name}
-                    onChange={(e) => setDraftSubject(prev => ({ ...prev, name: e.target.value.toUpperCase() }))}
-                    className="w-full p-3 bg-slate-50 dark:bg-slate-950 border-2 border-slate-100 dark:border-slate-800 rounded-xl font-black text-slate-800 dark:text-slate-100 focus:border-blue-500 outline-none transition-all"
-                  />
-                </div>
-                <div>
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5 ml-1">Alocação de Bloco</label>
-                  <select 
-                    value={draftSubject.block}
-                    onChange={(e) => setDraftSubject(prev => ({ ...prev, block: e.target.value }))}
-                    className="w-full p-3 bg-slate-50 dark:bg-slate-950 border-2 border-slate-100 dark:border-slate-800 rounded-xl font-black text-slate-800 dark:text-slate-100 focus:border-blue-500 outline-none transition-all cursor-pointer"
-                  >
-                    <option value="B1">Bloco I (Básicas)</option>
-                    <option value="B2">Bloco II (Trânsito)</option>
-                    <option value="B3">Bloco III (Direito)</option>
-                  </select>
-                </div>
-              </div>
-
-              {/* Seletor de Cores Táticas */}
+            {/* Dados Básicos */}
+            <div className="grid grid-cols-2 gap-4 mb-5">
               <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase mb-3 ml-1">Identidade Visual (Cor)</label>
-                <div className="grid grid-cols-4 sm:grid-cols-8 gap-2">
-                  {availableColors.map(c => (
-                    <button
-                      key={c.id}
-                      onClick={() => setDraftSubject(prev => ({ ...prev, color: c.color }))}
-                      className={`h-10 rounded-lg border-4 transition-all ${draftSubject.color === c.color ? 'border-blue-500 scale-110 shadow-lg shadow-blue-500/20' : 'border-transparent'}`}
-                    >
-                      <div className={`w-full h-full rounded-sm ${c.color.split(' ')[0]}`}></div>
-                    </button>
-                  ))}
-                </div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Nome Operacional</label>
+                <input 
+                  type="text" 
+                  value={draftSubject.name}
+                  onChange={(e) => setDraftSubject(prev => ({ ...prev, name: e.target.value.toUpperCase() }))}
+                  className="w-full bg-[#020617] border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600"
+                  placeholder="EX: PORTUGUÊS..."
+                />
               </div>
-
-              {/* Gestão de Tópicos */}
               <div>
-                <div className="flex justify-between items-center mb-4">
-                  <label className="text-[10px] font-black text-slate-400 uppercase ml-1">Conteúdo Programático (Assuntos)</label>
-                  <button 
-                    onClick={() => setDraftSubject(prev => {
-                      const newTopics = [...(prev.topics || [])];
-                      newTopics.push({ id: 't' + Date.now(), name: 'NOVO ASSUNTO', total: 5, completed: 0 });
-                      return { ...prev, topics: newTopics };
-                    })}
-                    className="flex items-center gap-1 text-[10px] font-black text-blue-600 hover:text-blue-700 bg-blue-50 dark:bg-blue-900/30 px-2 py-1 rounded tracking-widest uppercase transition-all"
-                  >
-                    <Plus className="w-3 h-3"/> Add Assunto
-                  </button>
-                </div>
-                
-                <div className="space-y-2 max-h-[300px] overflow-y-auto pr-2 custom-scrollbar">
-                  {(draftSubject.topics || []).map((topic, idx) => (
-                    <div key={topic.id} className="group flex flex-col sm:flex-row gap-2 items-start sm:items-center p-3 bg-slate-50 dark:bg-slate-950/50 border border-slate-100 dark:border-slate-800 rounded-xl hover:border-slate-300 dark:hover:border-slate-700 transition-all">
-                      <div className="flex-1 w-full">
-                        <input 
-                          type="text" 
-                          value={topic.name}
-                          onChange={(e) => setDraftSubject(prev => {
-                            const newTopics = [...prev.topics];
-                            newTopics[idx] = { ...newTopics[idx], name: e.target.value };
-                            return { ...prev, topics: newTopics };
-                          })}
-                          className="w-full bg-transparent border-none p-0 font-bold text-xs text-slate-700 dark:text-slate-300 outline-none focus:text-blue-600 transition-colors"
-                          placeholder="Nome do Assunto..."
-                        />
-                      </div>
-                      <div className="flex items-center gap-3 w-full sm:w-auto mt-2 sm:mt-0 pt-2 sm:pt-0 border-t sm:border-t-0 border-slate-200 dark:border-slate-800">
-                        <div className="flex items-center gap-1 group/input">
-                          <span className="text-[9px] font-black text-slate-400 uppercase">Aulas:</span>
-                          <input 
-                            type="number" 
-                            value={topic.total}
-                            onChange={(e) => setDraftSubject(prev => {
-                              const newTopics = [...prev.topics];
-                              newTopics[idx] = { ...newTopics[idx], total: parseInt(e.target.value) || 0 };
-                              return { ...prev, topics: newTopics };
-                            })}
-                            className="w-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded text-center text-xs font-black p-1"
-                          />
-                        </div>
-                        <button 
-                          onClick={() => setDraftSubject(prev => {
-                            const newTopics = prev.topics.filter((_, i) => i !== idx);
-                            return { ...prev, topics: newTopics };
-                          })}
-                          className="p-1.5 text-slate-300 hover:text-red-500 transition-colors"
-                        >
-                          <Trash2 className="w-4 h-4"/>
-                        </button>
-                      </div>
-                    </div>
-                  ))}
-                  {(draftSubject.topics || []).length === 0 && (
-                    <div className="text-center py-6 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-2xl">
-                      <p className="text-xs font-bold text-slate-400 italic">Nenhum assunto cadastrado para esta matéria.</p>
-                    </div>
-                  )}
-                </div>
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Alocação de Bloco</label>
+                <select 
+                  value={draftSubject.block}
+                  onChange={(e) => setDraftSubject(prev => ({ ...prev, block: e.target.value }))}
+                  className="w-full bg-[#020617] border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all appearance-none cursor-pointer"
+                >
+                  <option value="B1">Bloco I (Básicas)</option>
+                  <option value="B2">Bloco II (Trânsito)</option>
+                  <option value="B3">Bloco III (Direito)</option>
+                </select>
               </div>
             </div>
 
-            <div className="mt-8 pt-6 border-t border-slate-100 dark:border-slate-800">
+            {/* Cores */}
+            <div className="mb-6">
+              <label className="block text-[10px] font-black text-slate-400 uppercase mb-3">Identidade Visual (Cor)</label>
+              <div className="flex gap-2.5 flex-wrap">
+                {availableColors.map(c => {
+                  const isSelected = draftSubject.color === c.color;
+                  return (
+                    <button
+                      key={c.id}
+                      onClick={() => setDraftSubject(prev => ({ ...prev, color: c.color }))}
+                      className={`w-8 h-8 rounded-lg transition-all ${isSelected ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-[#0f172a] shadow-[0_0_15px_rgba(59,130,246,0.5)] scale-110' : 'hover:scale-110'}`}
+                    >
+                      <div className={`w-full h-full rounded-lg ${c.color.split(' ')[0]}`}></div>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            {/* Assuntos */}
+            <div className="mb-8">
+              <div className="flex justify-between items-end mb-3 border-b border-slate-800 pb-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase">Conteúdo Programático (Assuntos)</label>
+                <button 
+                  onClick={() => setDraftSubject(prev => {
+                    const newTopics = [...(prev.topics || [])];
+                    newTopics.push({ id: 't' + Date.now(), name: 'NOVO ASSUNTO', total: 5, completed: 0 });
+                    return { ...prev, topics: newTopics };
+                  })}
+                  className="flex items-center gap-1 text-[9px] font-black text-blue-500 bg-blue-900/30 px-2 py-1 rounded tracking-widest uppercase hover:text-white hover:bg-blue-600 transition-colors"
+                >
+                  <Plus className="w-3 h-3"/> Add Assunto
+                </button>
+              </div>
+              
+              <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                {(draftSubject.topics || []).map((topic, idx) => (
+                  <div key={topic.id} className="flex gap-3 items-center">
+                     <input 
+                        type="text" 
+                        value={topic.name}
+                        onChange={(e) => setDraftSubject(prev => {
+                          const newTopics = [...prev.topics];
+                          newTopics[idx] = { ...newTopics[idx], name: e.target.value };
+                          return { ...prev, topics: newTopics };
+                        })}
+                        className="flex-1 bg-transparent border-b border-slate-800 pb-1 font-bold text-xs text-white outline-none focus:border-blue-500 transition-colors"
+                        placeholder="Nome do Assunto..."
+                      />
+                      <input 
+                        type="number" 
+                        value={topic.total}
+                        onChange={(e) => setDraftSubject(prev => {
+                          const newTopics = [...prev.topics];
+                          newTopics[idx] = { ...newTopics[idx], total: parseInt(e.target.value) || 0 };
+                          return { ...prev, topics: newTopics };
+                        })}
+                        className="w-12 bg-[#020617] border border-slate-800 rounded px-1 py-1 text-center text-xs font-black text-white"
+                      />
+                      <button 
+                        onClick={() => setDraftSubject(prev => ({
+                          ...prev,
+                          topics: prev.topics.filter((_, i) => i !== idx)
+                        }))}
+                        className="p-1 text-slate-500 hover:text-red-500 transition-colors"
+                      >
+                        <Trash2 className="w-4 h-4"/>
+                      </button>
+                  </div>
+                ))}
+                {(draftSubject.topics || []).length === 0 && (
+                  <div className="text-center py-6 border border-dashed border-slate-800 rounded-xl bg-slate-900/50">
+                    <p className="text-[11px] font-bold text-slate-500 italic">Nenhum assunto cadastrado. Clique em "Add Assunto" acima.</p>
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Ações */}
+            <div className="flex flex-col gap-3 mt-auto">
               <button 
                 onClick={() => {
-                  if (!draftSubject.name || draftSubject.name.trim() === "" || draftSubject.name === "NOVA MATÉRIA") {
-                    toast.error("Por favor, defina um nome real para a disciplina.");
+                  if (!draftSubject.name || draftSubject.name.trim() === "") {
+                    toast.error("Por favor, defina um nome para a disciplina.");
                     return;
                   }
                   setSubjects(prev => ({ ...prev, [draftSubject.id]: draftSubject }));
                   setEditingSubjectId(null);
                   setDraftSubject(null);
+                  toast.success("Disciplina salva com sucesso!");
                 }}
-                className="w-full py-4 bg-slate-900 dark:bg-blue-600 text-white font-black rounded-2xl shadow-xl hover:opacity-90 transition-all active:scale-95 flex items-center justify-center gap-2 uppercase tracking-widest"
+                className="w-full py-4 bg-[#1d4ed8] hover:bg-blue-600 outline-none focus:ring-4 focus:ring-blue-500/50 text-white font-black rounded-xl shadow-[0_0_20px_rgba(29,78,216,0.3)] transition-all transform active:scale-95 flex items-center justify-center uppercase tracking-widest text-sm"
               >
-                Salvar Configurações <Save className="w-5 h-5"/>
+                Salvar Configurações
+              </button>
+              <button 
+                onClick={() => {
+                  setEditingSubjectId(null);
+                  setDraftSubject(null);
+                }}
+                className="w-full py-2 text-slate-400 font-bold hover:text-white transition-colors uppercase text-[10px] tracking-widest"
+              >
+                Cancelar Edição
               </button>
             </div>
           </div>
         </div>
-      )}
+      ), document.body)}
+
     </div>
   );
 }

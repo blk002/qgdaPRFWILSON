@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Play } from 'lucide-react';
 
 export default function ClassCompletionModal({ isOpen, onClose, onConfirm, topicName, maxClasses }) {
@@ -8,8 +9,8 @@ export default function ClassCompletionModal({ isOpen, onClose, onConfirm, topic
 
   const currentNum = Number(numClasses) || 0;
 
-  return (
-    <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[110] p-4 fade-in">
+  return createPortal(
+    <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[110] p-4 fade-in font-sans">
       <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-sm w-full p-8 text-center border border-slate-200 dark:border-slate-800 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-emerald-500 to-blue-500 opacity-50"></div>
         
@@ -83,6 +84,7 @@ export default function ClassCompletionModal({ isOpen, onClose, onConfirm, topic
           </button>
         </div>
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }

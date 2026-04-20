@@ -3,7 +3,7 @@ import { useStore } from '../store/useStore';
 import { 
   Radar, RadarChart, PolarGrid, PolarAngleAxis, PolarRadiusAxis, ResponsiveContainer 
 } from 'recharts';
-import { PieChart, Activity, FastForward, Info, TrendingUp, X, StickyNote, Save, BarChart2, ChevronDown, ChevronUp } from 'lucide-react';
+import { PieChart, Activity, FastForward, Info, X, StickyNote, Save, BarChart2, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function Estatisticas() {
   const { subjects, setSubjects, weeklySprint, userStats } = useStore();
@@ -150,25 +150,32 @@ export default function Estatisticas() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 dark:bg-slate-900 dark:border-slate-800 flex flex-col items-center">
+        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 dark:bg-slate-900 dark:border-slate-800 flex flex-col items-center min-h-[300px] justify-center">
           <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 dark:text-slate-100">Equilíbrio Operacional</h3>
-          <div className="w-full h-[300px]">
-            <ResponsiveContainer width="100%" height="100%">
-              <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
-                <PolarGrid stroke="#e2e8f0" />
-                <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} />
-                <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                <Radar
-                  name="Evolução"
-                  dataKey="A"
-                  stroke="#3b82f6"
-                  fill="#3b82f6"
-                  fillOpacity={0.5}
-                />
-              </RadarChart>
-            </ResponsiveContainer>
-          </div>
-          <p className="text-[10px] text-slate-400 font-bold uppercase mt-4 text-center">O radar mostra seu equilíbrio entre as frentes do edital e constância física.</p>
+          {stats.length > 0 ? (
+            <div className="w-full h-[300px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
+                  <PolarGrid stroke="#e2e8f0" />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} />
+                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+                  <Radar
+                    name="Evolução"
+                    dataKey="A"
+                    stroke="#3b82f6"
+                    fill="#3b82f6"
+                    fillOpacity={0.5}
+                  />
+                </RadarChart>
+              </ResponsiveContainer>
+              <p className="text-[10px] text-slate-400 font-bold uppercase mt-4 text-center">O radar mostra seu equilíbrio entre as frentes do edital e constância física.</p>
+            </div>
+          ) : (
+            <div className="flex flex-col items-center justify-center py-10 opacity-50">
+              <BarChart2 className="w-12 h-12 text-slate-300 mb-2" />
+              <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Sem dados para análise radar</p>
+            </div>
+          )}
         </div>
 
         <div className="bg-gradient-to-r from-slate-900 to-blue-900 rounded-2xl p-6 border border-slate-800 shadow-xl overflow-hidden relative">
@@ -225,8 +232,8 @@ export default function Estatisticas() {
           <div key={sub.id} className="bg-white dark:bg-slate-900 rounded-2xl border border-slate-200 dark:border-slate-800 shadow-sm overflow-hidden transition-all hover:border-blue-300 dark:hover:border-blue-700">
              <div onClick={() => setExpandedSubject(expandedSubject === sub.id ? null : sub.id)} className="p-4 sm:p-5 flex items-center justify-between cursor-pointer group">
                 <div className="flex items-center gap-4">
-                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-xs ${sub.color} shadow-sm group-hover:scale-110 transition-transform`}>
-                     {sub.id.split('_').pop().toUpperCase()}
+                   <div className={`w-12 h-12 rounded-xl flex items-center justify-center font-black text-[10px] ${sub.color} shadow-sm group-hover:scale-110 transition-transform p-1 text-center leading-none`}>
+                     {sub.name.substring(0, 3).toUpperCase()}
                    </div>
                    <div>
                       <h3 className="font-black text-slate-800 dark:text-white uppercase tracking-tight">{sub.name}</h3>

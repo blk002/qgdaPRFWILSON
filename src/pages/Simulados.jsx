@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { createPortal } from 'react-dom';
 import { useStore } from '../store/useStore';
-import { Target, Plus, TrendingUp, Edit2, Trash2, BarChart2, Trophy, Activity, Info, Target as TargetIcon } from 'lucide-react';
+import { Target, Plus, TrendingUp, Edit2, Trash2, BarChart2, Trophy, Activity, Info } from 'lucide-react';
 
 export default function Simulados() {
   const {
@@ -8,7 +9,9 @@ export default function Simulados() {
     setSimulados,
     addXP,
     unlockMedal,
-    updateMissionProgress
+    updateMissionProgress,
+    setGlobalModal,
+    isDarkMode
   } = useStore();
   
   const [showModal, setShowModal] = useState(false);
@@ -150,7 +153,13 @@ export default function Simulados() {
                       <td className="p-3 sm:p-4 text-center">
                         <div className="flex justify-center gap-2">
                            <button onClick={() => { setEditingSimulado(sim); setShowModal(true); }} className="p-2 text-slate-400 hover:text-blue-500 hover:bg-white rounded transition-all dark:hover:bg-slate-800 shadow-sm border border-transparent hover:border-blue-100" title="Editar"><Edit2 className="w-4 h-4" /></button>
-                           <button onClick={() => { if (window.confirm('Excluir este simulado?')) setSimulados(prev => prev.filter(s => s.id !== sim.id)); }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded transition-all dark:hover:bg-slate-800 shadow-sm border border-transparent hover:border-red-100" title="Excluir"><Trash2 className="w-4 h-4" /></button>
+                           <button onClick={() => {
+                             setGlobalModal({
+                               title: "Excluir Simulado?",
+                               message: "Esta ação removerá permanentemente a nota do seu histórico de evolução estratégica.",
+                               onConfirm: () => setSimulados(prev => prev.filter(s => s.id !== sim.id))
+                             });
+                           }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded transition-all dark:hover:bg-slate-800 shadow-sm border border-transparent hover:border-red-100" title="Excluir"><Trash2 className="w-4 h-4" /></button>
                         </div>
                       </td>
                     </tr>
@@ -205,14 +214,14 @@ export default function Simulados() {
                <Info className="w-3 h-3"/> Diagnóstico Cebraspe
              </h4>
              <p className="text-xs text-slate-400 leading-relaxed">
-               O seu bloco mais fraco atualmente é o **{weakPoint}**. Foque em exercícios de fixação para subir sua média líquida geral.
+               O seu bloco mais fraco atualmente é o <strong className="text-white">{weakPoint}</strong>. Foque em exercícios de fixação para subir sua média líquida geral.
              </p>
           </div>
         </div>
       </div>
 
-      {showModal && (
-        <div className="fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[60] p-4 fade-in backdrop-blur-sm">
+      {showModal && createPortal(
+        <div className={`${isDarkMode ? 'dark' : ''} fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[999] p-4 fade-in backdrop-blur-sm`}>
           <form onSubmit={(e) => {
             e.preventDefault();
             const dataVal = e.target.data.value;
@@ -235,62 +244,96 @@ export default function Simulados() {
               setSimulados(prev => [...prev, { id: Date.now(), data: dataVal, b1C, b1E, b2C, b2E, b3C, b3E, b1Liquida, b2Liquida, b3Liquida, liquida }]);
               addXP(500, "Simulado de Prova registrado");
               updateMissionProgress('simulado', 1);
-              if (liquida >= 96) unlockMedal('elite'); 
+              const MAX_PONTOS = 120;
+              const LIMIAR_ELITE = MAX_PONTOS * 0.8;
+              if (liquida >= LIMIAR_ELITE) unlockMedal('elite');
             }
             setShowModal(false);
             setEditingSimulado(null);
-          }} className="bg-white rounded-2xl w-full max-w-md overflow-hidden shadow-2xl flex flex-col max-h-[90vh] dark:bg-slate-900">
-            <div className="p-5 border-b border-slate-100 dark:border-slate-800">
-              <h3 className="text-lg font-black flex items-center gap-2"><TargetIcon className="w-5 h-5 text-purple-600"/> {editingSimulado ? 'Corrigir Simulado' : 'Registro de Combate'}</h3>
-              <p className="text-xs font-bold text-slate-500 mt-1 dark:text-slate-400">Insira seus erros e acertos segmentados. O sistema fará a auditoria de eliminação.</p>
+          }} className="bg-[#0f172a] rounded-2xl shadow-2xl max-w-lg w-full p-8 border border-slate-800 relative overflow-hidden flex flex-col">
+            
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-600 via-pink-400 to-purple-600 opacity-80"></div>
+
+            <div className="flex justify-between items-start mb-6">
+              <div>
+                <h3 className="text-[22px] font-black text-white uppercase tracking-tight flex items-center gap-2 leading-none mb-1">
+                  <Target className="w-6 h-6 text-purple-500"/> {editingSimulado ? 'Corrigir Simulado' : 'Registro de Combate'}
+                </h3>
+                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">
+                  Insira seus erros e acertos segmentados. Auditoria de eliminação ativa.
+                </p>
+              </div>
             </div>
             
-            <div className="p-5 overflow-y-auto custom-scrollbar flex flex-col gap-4">
+            <div className="overflow-y-auto custom-scrollbar pr-2 max-h-[60vh] flex flex-col gap-5">
               <div>
-                <label className="text-xs font-bold text-slate-500 block mb-1 dark:text-slate-400">Data de Execução</label>
-                <input name="data" type="text" required defaultValue={editingSimulado ? editingSimulado.data : new Date().toLocaleDateString('pt-BR')} className="w-full border-2 border-slate-200 p-2.5 rounded-lg font-bold text-slate-800 outline-none focus:border-purple-400 dark:text-slate-100 dark:border-slate-800 dark:bg-slate-800 dark:text-white dark:border-slate-700"/>
+                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Data de Execução</label>
+                <input name="data" type="text" required defaultValue={editingSimulado ? editingSimulado.data : new Date().toLocaleDateString('pt-BR')} className="w-full bg-[#020617] border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all placeholder:text-slate-600"/>
               </div>
 
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm dark:bg-slate-950 dark:border-slate-800">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-black text-slate-700 uppercase dark:text-slate-200">Bloco I - Básicas</span>
-                  <span className="text-[10px] font-bold text-slate-400">Total: 55 | Min: 15</span>
+              <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-xs font-black text-white uppercase tracking-widest">Bloco I - Básicas</span>
+                  <span className="text-[10px] font-black text-slate-500 uppercase">Tot: 55 | Min: 15</span>
                 </div>
-                <div className="flex gap-3">
-                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase dark:text-slate-400">Certas</label><input name="b1C" type="number" min="0" max="55" required defaultValue={editingSimulado?.b1C ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-emerald-600 text-center outline-none focus:border-emerald-400 dark:border-slate-800 dark:bg-slate-800 dark:text-white dark:border-slate-700"/></div>
-                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase dark:text-slate-400">Erradas</label><input name="b1E" type="number" min="0" max="55" required defaultValue={editingSimulado?.b1E ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-red-500 text-center outline-none focus:border-red-400 dark:border-slate-800 dark:bg-slate-800 dark:text-white dark:border-slate-700"/></div>
-                </div>
-              </div>
-
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm dark:bg-slate-950 dark:border-slate-800">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-black text-slate-700 uppercase dark:text-slate-200">Bloco II - Trânsito</span>
-                  <span className="text-[10px] font-bold text-slate-400">Total: 30 | Min: 10</span>
-                </div>
-                <div className="flex gap-3">
-                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase dark:text-slate-400">Certas</label><input name="b2C" type="number" min="0" max="30" required defaultValue={editingSimulado?.b2C ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-emerald-600 text-center outline-none focus:border-emerald-400 dark:border-slate-800 dark:bg-slate-800 dark:text-white dark:border-slate-700"/></div>
-                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase dark:text-slate-400">Erradas</label><input name="b2E" type="number" min="0" max="30" required defaultValue={editingSimulado?.b2E ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-red-500 text-center outline-none focus:border-red-400 dark:border-slate-800 dark:bg-slate-800 dark:text-white dark:border-slate-700"/></div>
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <label className="text-[10px] font-black text-emerald-500 uppercase mb-1 block">Certas</label>
+                    <input name="b1C" type="number" min="0" max="55" required defaultValue={editingSimulado?.b1C ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-emerald-400 text-center text-sm outline-none focus:border-emerald-500 transition-colors"/>
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-[10px] font-black text-red-500 uppercase mb-1 block">Erradas</label>
+                    <input name="b1E" type="number" min="0" max="55" required defaultValue={editingSimulado?.b1E ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-red-400 text-center text-sm outline-none focus:border-red-500 transition-colors"/>
+                  </div>
                 </div>
               </div>
 
-              <div className="bg-slate-50 p-4 rounded-xl border border-slate-200 shadow-sm dark:bg-slate-950 dark:border-slate-800">
-                <div className="flex justify-between items-center mb-2">
-                  <span className="text-xs font-black text-slate-700 uppercase dark:text-slate-200">Bloco III - Direito</span>
-                  <span className="text-[10px] font-bold text-slate-400">Total: 35 | Min: 10</span>
+              <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-xs font-black text-white uppercase tracking-widest">Bloco II - Trânsito</span>
+                  <span className="text-[10px] font-black text-slate-500 uppercase">Tot: 30 | Min: 10</span>
                 </div>
-                <div className="flex gap-3">
-                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase dark:text-slate-400">Certas</label><input name="b3C" type="number" min="0" max="35" required defaultValue={editingSimulado?.b3C ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-emerald-600 text-center outline-none focus:border-emerald-400 dark:border-slate-800 dark:bg-slate-800 dark:text-white dark:border-slate-700"/></div>
-                  <div className="flex-1"><label className="text-[10px] font-bold text-slate-400 uppercase dark:text-slate-400">Erradas</label><input name="b3E" type="number" min="0" max="35" required defaultValue={editingSimulado?.b3E ?? ''} className="w-full mt-1 border-2 border-slate-200 p-2 rounded-lg font-bold text-red-500 text-center outline-none focus:border-red-400 dark:border-slate-800 dark:bg-slate-800 dark:text-white dark:border-slate-700"/></div>
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <label className="text-[10px] font-black text-emerald-500 uppercase mb-1 block">Certas</label>
+                    <input name="b2C" type="number" min="0" max="30" required defaultValue={editingSimulado?.b2C ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-emerald-400 text-center text-sm outline-none focus:border-emerald-500 transition-colors"/>
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-[10px] font-black text-red-500 uppercase mb-1 block">Erradas</label>
+                    <input name="b2E" type="number" min="0" max="30" required defaultValue={editingSimulado?.b2E ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-red-400 text-center text-sm outline-none focus:border-red-500 transition-colors"/>
+                  </div>
+                </div>
+              </div>
+
+              <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
+                <div className="flex justify-between items-center mb-3">
+                  <span className="text-xs font-black text-white uppercase tracking-widest">Bloco III - Direito</span>
+                  <span className="text-[10px] font-black text-slate-500 uppercase">Tot: 35 | Min: 10</span>
+                </div>
+                <div className="flex gap-4">
+                  <div className="flex-1">
+                    <label className="text-[10px] font-black text-emerald-500 uppercase mb-1 block">Certas</label>
+                    <input name="b3C" type="number" min="0" max="35" required defaultValue={editingSimulado?.b3C ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-emerald-400 text-center text-sm outline-none focus:border-emerald-500 transition-colors"/>
+                  </div>
+                  <div className="flex-1">
+                    <label className="text-[10px] font-black text-red-500 uppercase mb-1 block">Erradas</label>
+                    <input name="b3E" type="number" min="0" max="35" required defaultValue={editingSimulado?.b3E ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-red-400 text-center text-sm outline-none focus:border-red-500 transition-colors"/>
+                  </div>
                 </div>
               </div>
             </div>
 
-            <div className="bg-slate-50 p-4 flex gap-3 border-t border-slate-200 dark:bg-slate-950 dark:border-slate-800">
-              <button type="button" onClick={() => { setShowModal(false); setEditingSimulado(null); }} className="flex-1 py-3 font-bold text-slate-600 bg-white border border-slate-300 rounded-xl hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors dark:bg-slate-900 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700">Abortar</button>
-              <button type="submit" className="flex-1 py-3 font-bold text-white bg-purple-600 rounded-xl hover:bg-purple-700 shadow-md transition-colors">Executar Auditoria</button>
+            <div className="flex flex-col gap-3 mt-6">
+              <button type="submit" className="w-full py-4 bg-[#9333ea] hover:bg-purple-600 outline-none focus:ring-4 focus:ring-purple-500/50 text-white font-black rounded-xl shadow-[0_0_20px_rgba(147,51,234,0.3)] transition-all transform active:scale-95 flex items-center justify-center uppercase tracking-widest text-sm">
+                Executar Auditoria
+              </button>
+              <button type="button" onClick={() => { setShowModal(false); setEditingSimulado(null); }} className="w-full py-2 text-slate-400 font-bold hover:text-white transition-colors uppercase text-[10px] tracking-widest">
+                Abortar Missão
+              </button>
             </div>
           </form>
-        </div>
+        </div>,
+        document.body
       )}
     </div>
   );

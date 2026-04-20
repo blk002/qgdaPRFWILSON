@@ -1,49 +1,52 @@
 import { create } from 'zustand';
-import { persist } from 'zustand/middleware';
-import { PATENTES, MEDALHAS } from '../hooks/useGamification';
 import { supabase } from '../lib/supabaseClient';
+import { toast } from 'sonner';
+import { PATENTES, MEDALHAS } from '../hooks/useGamification';
 
-const initialSubjects = {};
-const initialCycle = [];
+const getCleanInitialState = () => ({
+  subjects: {},
+  cycle: [],
+  currentDayIndex: 0,
+  completedToday: [],
+  targetExamDate: '2026-08-15',
+  coins: 250,
+  userStats: { xp: 0, medals: [], totalStudyMinutes: 0 },
+  streakData: { currentStreak: 0, lastCheckDate: null },
+  weeklySprint: { goalHours: 35, currentMinutes: 0, weekStart: new Date().toISOString() },
+  reviews: [],
+  reviewStats: { totalDone: 0, correct: 0, streak: 0 },
+  simulados: [],
+  tafHistory: [],
+  tafTrainingStatus: { lastDoneDate: null },
+  isDarkMode: true,
+  activeTab: 'carreira',
+  // todayStr removido do estado — agora é computado via getLocalDateStr()
+  calendarDate: new Date(),
+  reviewCalendarDate: new Date(),
+  seasonalData: {
+    currentSeason: 1,
+    seasonName: "Recruta Operacional",
+    seasonXp: 0,
+    seasonGoalXp: 5000,
+    startDate: new Date().toISOString(),
+    endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
+  },
+  weeklyMissions: [
+    { id: 'm1', title: 'Cérebro Ativo', description: 'Complete 10 revisões FSRS', goal: 10, current: 0, xpReward: 150, coinReward: 50, type: 'review', completed: false, claimed: false },
+    { id: 'm2', title: 'Combatente Físico', description: 'Registre 2 treinos TAF', goal: 2, current: 0, xpReward: 100, coinReward: 30, type: 'taf', completed: false, claimed: false },
+    { id: 'm3', title: 'Simulado de Elite', description: 'Registre 1 novo Simulado', goal: 1, current: 0, xpReward: 120, coinReward: 40, type: 'simulado', completed: false, claimed: false },
+    { id: 'm4', title: 'Persistência Total', description: 'Assista 4 aulas de teoria', goal: 4, current: 0, xpReward: 200, coinReward: 60, type: 'study', completed: false, claimed: false },
+  ],
+});
 
 export const useStore = create(
-  persist(
     (set, get) => ({
-      // --- ESTADOS ---
-      subjects: initialSubjects,
-      cycle: initialCycle,
-      currentDayIndex: 0,
-      completedToday: [],
-      targetExamDate: '2026-08-15',
-      coins: 250,
-      userStats: { xp: 0, medals: [], totalStudyMinutes: 0 },
-      streakData: { currentStreak: 0, lastCheckDate: null },
-      weeklySprint: { goalHours: 35, currentMinutes: 0, weekStart: new Date().toISOString() },
-      reviews: [], // Reset absoluto para o novo motor FSRS v6
-      reviewStats: { totalDone: 0, correct: 0, streak: 0 },
-      simulados: [],
-      tafHistory: [],
-      tafTrainingStatus: { lastDoneDate: null },
+      // --- ESTADOS INICIAIS (NUVEM) ---
+      ...getCleanInitialState(),
+      isSyncing: true,
+
+      // --- ESTADOS VOLÁTEIS (INTERFACE) ---
       globalModal: null,
-      isDarkMode: true,
-      activeTab: 'carreira',
-      todayStr: '2026-05-28', // Viagem no tempo para testes
-      calendarDate: new Date(),
-      reviewCalendarDate: new Date(),
-      seasonalData: {
-        currentSeason: 1,
-        seasonName: "Recruta Operacional",
-        seasonXp: 0,
-        seasonGoalXp: 5000,
-        startDate: new Date().toISOString(),
-        endDate: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-      },
-      weeklyMissions: [
-        { id: 'm1', title: 'Cérebro Ativo', description: 'Complete 10 revisões FSRS', goal: 10, current: 0, xpReward: 150, coinReward: 50, type: 'review', completed: false, claimed: false },
-        { id: 'm2', title: 'Combatente Físico', description: 'Registre 2 treinos TAF', goal: 2, current: 0, xpReward: 100, coinReward: 30, type: 'taf', completed: false, claimed: false },
-        { id: 'm3', title: 'Simulado de Elite', description: 'Registre 1 novo Simulado', goal: 1, current: 0, xpReward: 120, coinReward: 40, type: 'simulado', completed: false, claimed: false },
-        { id: 'm4', title: 'Persistência Total', description: 'Assista 4 aulas de teoria', goal: 4, current: 0, xpReward: 200, coinReward: 60, type: 'study', completed: false, claimed: false },
-      ],
       reviewModal: null,
       classConfirmModal: null,
       replaceSubjectModal: null,
@@ -60,34 +63,58 @@ export const useStore = create(
         window.location.reload();
       },
 
-      loadFromCloud: async () => {
-        const { user } = get();
-        if (!user) return;
+      loadFromCloud: async (retryCount = 0) => {
+        const { user, isLoadingFromCloud } = get();
+        if (!user) return false;
+        if (isLoadingFromCloud && retryCount === 0) return false;
+
+        if (retryCount === 0) {
+          console.log('☁️ [Nuvem] Iniciando carregamento de dados seguros...');
+          set({ isSyncing: true, isLoadingFromCloud: true });
+        }
 
         try {
-          const { data, error } = await supabase
-            .from('profiles')
-            .select('full_data')
-            .eq('id', user.id)
-            .single();
+          // Timeout ultra-rápido de 2.5 segundos para não travar o usuário
+          const timeoutPromise = new Promise((_, reject) => 
+            setTimeout(() => reject(new Error("Timeout")), 2500)
+          );
 
-          if (error && error.code !== 'PGRST116') throw error;
+          const fetchPromise = supabase.from('profiles').select('full_data').eq('id', user.id).limit(1);
+          const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
+
+          if (error) throw error;
           
-          if (data?.full_data) {
-            set(data.full_data);
+          if (data && data.length > 0 && data[0].full_data) {
+            console.log("✅ [Nuvem] Dados sincronizados com sucesso.");
+            const { isSyncing: _, ...cleanData } = data[0].full_data;
+            if (cleanData.calendarDate) cleanData.calendarDate = new Date(cleanData.calendarDate);
+            if (cleanData.reviewCalendarDate) cleanData.reviewCalendarDate = new Date(cleanData.reviewCalendarDate);
+            
+            set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false });
             return true;
           }
+          console.log('ℹ️ [Nuvem] Perfil pronto para uso.');
         } catch (error) {
-          console.error('Erro ao carregar dados da nuvem:', error);
+          if (retryCount < 2) {
+            console.warn(`⚠️ [Nuvem] Tentativa ${retryCount + 1} falhou (ou timeout). Tentando novamente...`);
+            return await get().loadFromCloud(retryCount + 1);
+          }
+          console.error('❌ [Nuvem] Falha após retentativas:', error.message);
+          toast.error("O Supabase está demorando para responder. Tente atualizar a página (F5).");
+        } finally {
+          if (retryCount >= 2 || !get().isLoadingFromCloud) {
+             set({ isSyncing: false, isLoadingFromCloud: false });
+          }
         }
         return false;
       },
 
       saveToCloud: async () => {
-        const { user, ...state } = get();
-        if (!user) return;
+        const { user, isLoadingFromCloud, ...state } = get();
+        if (!user || isLoadingFromCloud) return;
 
-        // Limpar dados voláteis antes de salvar
+        console.log('📤 [Nuvem] Despachando dados para o servidor...');
+        
         const persistedKeys = [
           'subjects', 'cycle', 'currentDayIndex', 'completedToday', 'targetExamDate', 
           'coins', 'userStats', 'streakData', 'weeklySprint', 'reviews', 
@@ -97,28 +124,41 @@ export const useStore = create(
         ];
         
         const dataToSave = {};
-        persistedKeys.forEach(key => {
-          if (state[key] !== undefined) dataToSave[key] = state[key];
-        });
+        persistedKeys.forEach(key => { if (state[key] !== undefined) dataToSave[key] = state[key]; });
 
         try {
-          const { error } = await supabase
-            .from('profiles')
-            .upsert({ 
-              id: user.id, 
-              full_data: dataToSave,
-              updated_at: new Date().toISOString()
-            });
+          // Timeout de 5 segundos para o salvamento
+          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout Nuvem")), 5000));
+          
+          const savePromise = (async () => {
+             const { data: updateData, error: updateError } = await supabase
+              .from('profiles')
+              .update({ full_data: dataToSave, updated_at: new Date().toISOString() })
+              .eq('id', user.id)
+              .select();
 
-          if (error) throw error;
+            if (updateError) throw updateError;
+
+            if (!updateData || updateData.length === 0) {
+              const { error: insertError } = await supabase
+                .from('profiles')
+                .insert({ id: user.id, full_data: dataToSave, updated_at: new Date().toISOString() });
+              if (insertError) throw insertError;
+            }
+          })();
+
+          await Promise.race([savePromise, timeoutPromise]);
+          toast.success("Nuvem atualizada! ☁️", { duration: 800 });
         } catch (error) {
-          console.error('Erro ao salvar dados na nuvem:', error);
+          console.error('❌ [Nuvem] Erro no Upload:', error.message);
+          // Omitimos o toast de erro para não poluir a interface se for apenas oscilação
         }
       },
 
       getPendingReviews: () => {
-        const { reviews, todayStr } = get();
-        return reviews.filter(r => r.nextDateStr <= todayStr);
+        const { reviews, getLocalDateStr } = get();
+        const today = getLocalDateStr();
+        return reviews.filter(r => r.nextDateStr <= today);
       },
 
       // --- SETTERS BÁSICOS ---
@@ -129,8 +169,8 @@ export const useStore = create(
       setStreakData: (streakData) => set((state) => ({ streakData: typeof streakData === 'function' ? streakData(state.streakData) : streakData })),
       
       getTodayDate: () => {
-        const { todayStr } = get();
-        return new Date(`${todayStr}T12:00:00`);
+        const today = get().getLocalDateStr();
+        return new Date(`${today}T12:00:00`);
       },
 
       // --- MOTOR FSRS v6 (21 PARÂMETROS) ---
@@ -296,15 +336,19 @@ export const useStore = create(
 
       handleReplaceSubject: (dayIndex, slotIndex, oldSubjectId, newSubjectId) => {
         if (!newSubjectId) return;
-        set(state => ({
-          cycle: state.cycle.map(daySlots => 
-            daySlots.map(subId => subId === oldSubjectId ? newSubjectId : subId)
-          )
-        }));
+        set(state => {
+          const newCycle = state.cycle.map((daySlots, dIdx) => {
+            if (dIdx !== dayIndex) return daySlots;
+            return daySlots.map((subId, sIdx) => 
+              sIdx === slotIndex && subId === oldSubjectId ? newSubjectId : subId
+            );
+          });
+          return { cycle: newCycle };
+        });
       },
 
       getLocalDateStr: (date) => {
-        if (!date) return get().todayStr; // Se não passar data, usa a simulada do sistema
+        if (!date) return new Date().toISOString().split('T')[0]; // Sempre usa data real do sistema
         const offset = date.getTimezoneOffset();
         const localDate = new Date(date.getTime() - (offset * 60 * 1000));
         return localDate.toISOString().split('T')[0];
@@ -402,7 +446,7 @@ export const useStore = create(
         });
       },
 
-      executeTacticalReset: () => {
+      executeTacticalReset: async () => {
         const realToday = new Date().toISOString().split('T')[0];
         set((state) => ({
           subjects: {},
@@ -412,7 +456,7 @@ export const useStore = create(
           reviews: [],
           coins: 0,
           currentDayIndex: 0,
-          todayStr: realToday,
+          // todayStr dinâmico via getLocalDateStr()
           calendarDate: new Date(),
           reviewCalendarDate: new Date(),
           userStats: { xp: 0, medals: [], totalStudyMinutes: 0 },
@@ -424,13 +468,56 @@ export const useStore = create(
           seasonalData: { ...state.seasonalData, seasonXp: 0 },
           weeklyMissions: state.weeklyMissions.map(m => ({ ...m, current: 0, completed: false, claimed: false }))
         }));
+        
+        // Sincroniza o reset com a nuvem imediatamente
+        const { saveToCloud } = get();
+        await saveToCloud();
       },
 
-      executeTotalWipe: () => {
-        if (window.confirm("🔴 PROTOCOLO DE DESTRUIÇÃO 🔴\n\nIsto apagará permanentemente todos os seus dados. Deseja prosseguir?")) {
-          localStorage.removeItem('prf-qg-storage');
-          window.location.reload();
+      executeTotalWipe: async () => {
+        const { user } = get();
+        console.log("🔴 PROTOCOLO DE DESTRUIÇÃO ABSOLUTA INICIADO...");
+        
+        const cleanState = getCleanInitialState();
+
+        // 1. Limpa memória imediatamente
+        set(cleanState);
+
+        // 2. Força sobrescrita na nuvem (Supabase) como fonte da verdade
+        if (user) {
+          try {
+            const { data: updateData, error: updateError } = await supabase
+              .from('profiles')
+              .update({ 
+                full_data: cleanState, 
+                updated_at: new Date().toISOString() 
+              })
+              .eq('id', user.id)
+              .select();
+            
+            if (updateError) throw updateError;
+            
+            if (!updateData || updateData.length === 0) {
+              const { error: insertError } = await supabase
+                .from('profiles')
+                .insert({
+                  id: user.id,
+                  full_data: cleanState,
+                  updated_at: new Date().toISOString()
+                });
+                
+              if (insertError) throw insertError;
+            }
+            console.log("✅ Nuvem purificada com sucesso.");
+          } catch (error) {
+            console.error('❌ Erro crítico ao limpar nuvem:', error);
+            alert("Erro ao limpar dados na nuvem. Verifique sua conexão.");
+            return;
+          }
         }
+
+        // 3. Recarregamento limpo para garantir integridade
+        window.location.reload();
       },
 
       updateMissionProgress: (type, amount) => {
@@ -608,7 +695,7 @@ export const useStore = create(
 
         const mesesNomesFull = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
         const mesesNomesShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-        
+
         return {
           short: `${String(completionDate.getDate()).padStart(2, '0')}/${mesesNomesShort[completionDate.getMonth()]}/${completionDate.getFullYear()}`,
           full: `${String(completionDate.getDate()).padStart(2, '0')} de ${mesesNomesFull[completionDate.getMonth()]} de ${completionDate.getFullYear()}`,
@@ -617,118 +704,42 @@ export const useStore = create(
           examDateFormatted: `${String(examDateObj.getDate()).padStart(2, '0')}/${mesesNomesShort[examDateObj.getMonth()]}/${examDateObj.getFullYear()}`
         };
       }
-    }),
-    {
-      name: 'prf-qg-storage',
-      partialize: (state) => {
-        const persistedKeys = [
-          'subjects', 'cycle', 'currentDayIndex', 'completedToday', 'targetExamDate', 
-          'coins', 'userStats', 'streakData', 'weeklySprint', 'reviews', 
-          'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus', 
-          'isDarkMode', 'activeTab', 'calendarDate', 'reviewCalendarDate', 
-          'seasonalData', 'weeklyMissions', 'session', 'user'
-        ];
-        const data = {};
-        persistedKeys.forEach(key => {
-          if (state[key] !== undefined && typeof state[key] !== 'function') {
-            data[key] = state[key];
-          }
-        });
-        return data;
-      },
-      onRehydrateStorage: () => (state) => {
-        if (state) {
-          // Hydrate Dates
-          if (state.calendarDate) state.calendarDate = new Date(state.calendarDate);
-          if (state.reviewCalendarDate) state.reviewCalendarDate = new Date(state.reviewCalendarDate);
-          
-          // Migration: Expand Abbreviations
-          const nameMapping = {
-            'LIN. POR': 'PORTUGUÊS',
-            'DIR. ADM': 'DIREITO ADM.',
-            'RLM': 'RAC. LÓGICO',
-            'LEG. ESPECIAL': 'LEGISLAÇÃO ESP.',
-            'RES. CONTRAN': 'CONTRAN',
-            'CTB': 'CÓD. TRÂNSITO'
-          };
-          
-          state.userStats = {
-            xp: state.userStats?.xp ?? 0,
-            medals: state.userStats?.medals ?? [],
-            totalStudyMinutes: state.userStats?.totalStudyMinutes ?? 0,
-          };
-          
-          state.seasonalData = {
-            currentSeason: state.seasonalData?.currentSeason ?? 1,
-            seasonName: state.seasonalData?.seasonName ?? "Recruta Operacional",
-            seasonXp: state.seasonalData?.seasonXp ?? 0,
-            seasonGoalXp: state.seasonalData?.seasonGoalXp ?? 5000,
-            startDate: state.seasonalData?.startDate ?? new Date().toISOString(),
-            endDate: state.seasonalData?.endDate ?? new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString(),
-          };
-
-          state.streakData = { 
-            currentStreak: state.streakData?.currentStreak ?? 0, 
-            lastCheckDate: state.streakData?.lastCheckDate ?? null 
-          };
-          
-          state.reviewStats = { 
-            totalDone: state.reviewStats?.totalDone ?? 0, 
-            correct: state.reviewStats?.correct ?? 0, 
-            streak: state.reviewStats?.streak ?? 0 
-          };
-          
-          state.weeklySprint = { 
-            goalHours: state.weeklySprint?.goalHours ?? 35, 
-            currentMinutes: state.weeklySprint?.currentMinutes ?? 0, 
-            weekStart: state.weeklySprint?.weekStart ?? new Date().toISOString() 
-          };
-          
-          state.coins = typeof state.coins === 'number' ? state.coins : 250;
-          state.currentDayIndex = typeof state.currentDayIndex === 'number' ? state.currentDayIndex : 0;
-          state.targetExamDate = state.targetExamDate || '2026-08-15';
-
-          if (!state.subjects || typeof state.subjects !== 'object') {
-            state.subjects = {};
-          } else {
-            Object.values(state.subjects).forEach(sub => {
-              if (nameMapping[sub.name]) {
-                sub.name = nameMapping[sub.name];
-              }
-            });
-          }
-
-          if (!Array.isArray(state.cycle)) {
-            state.cycle = [];
-          }
-          if (!Array.isArray(state.reviews)) {
-            state.reviews = [];
-          }
-          if (!Array.isArray(state.completedToday)) {
-            state.completedToday = [];
-          }
-
-          // Migration: Weekly Missions check (Pomodoro Removal)
-          if (state.weeklyMissions) {
-            const hasPomodoro = state.weeklyMissions.some(m => m.id === 'm3' && m.type === 'pomodoro');
-            if (hasPomodoro) {
-              state.weeklyMissions = state.weeklyMissions.map(m => 
-                m.id === 'm3' ? { id: 'm3', title: 'Simulado de Elite', description: 'Registre 1 novo Simulado', goal: 1, current: 0, xpReward: 120, coinReward: 40, type: 'simulado', completed: false, claimed: false } : m
-              );
-            }
-          } else {
-            state.weeklyMissions = [
-              { id: 'm1', title: 'Cérebro Ativo', description: 'Complete 10 revisões FSRS', goal: 10, current: 0, xpReward: 150, coinReward: 50, type: 'review', completed: false, claimed: false },
-              { id: 'm2', title: 'Combatente Físico', description: 'Registre 2 treinos TAF', goal: 2, current: 0, xpReward: 100, coinReward: 30, type: 'taf', completed: false, claimed: false },
-              { id: 'm3', title: 'Simulado de Elite', description: 'Registre 1 novo Simulado', goal: 1, current: 0, xpReward: 120, coinReward: 40, type: 'simulado', completed: false, claimed: false },
-              { id: 'm4', title: 'Persistência Total', description: 'Assista 4 aulas de teoria', goal: 4, current: 0, xpReward: 200, coinReward: 60, type: 'study', completed: false, claimed: false },
-            ];
-          }
-
-          // Force delete pomodoro state
-          if (state.pomodoro) delete state.pomodoro;
-        }
-      }
-    }
-  )
+    })
 );
+
+// Motor de replicação em nuvem em Segundo Plano - AGORA INSTANTÂNEO
+const persistedKeysParaMonitorar = [
+  'subjects', 'cycle', 'currentDayIndex', 'completedToday', 'targetExamDate', 
+  'coins', 'userStats', 'streakData', 'weeklySprint', 'reviews', 
+  'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus', 
+  'isDarkMode', 'activeTab', 'calendarDate', 'reviewCalendarDate', 
+  'seasonalData', 'weeklyMissions'
+];
+
+let pendingSaves = 0;
+
+// Proteção ativa contra fechamento/F5 da aba durante um salvamento em andamento
+window.addEventListener('beforeunload', (e) => {
+  if (pendingSaves > 0) {
+    e.preventDefault();
+    e.returnValue = "Seus dados ainda estão sendo enviados para a Nuvem de forma 100% online. Fechar agora cancelará o envio.";
+    return e.returnValue;
+  }
+});
+
+useStore.subscribe((state, prevState) => {
+  if (state.isLoadingFromCloud || !state.user) return;
+
+  const sofreuAlteracao = persistedKeysParaMonitorar.some(key => state[key] !== prevState[key]);
+  
+  if (sofreuAlteracao) {
+    clearTimeout(useStore._debounceTimer);
+    useStore._debounceTimer = setTimeout(() => {
+      pendingSaves++;
+      state.saveToCloud().finally(() => {
+        pendingSaves = Math.max(0, pendingSaves - 1);
+      });
+    }, 1500);
+  }
+});
+

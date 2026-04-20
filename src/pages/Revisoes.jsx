@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { 
   BrainCircuit, AlertTriangle, Target as TargetIcon, Clock, Eye, EyeOff, 
@@ -5,15 +6,12 @@ import {
   TrendingUp, TrendingDown
 } from 'lucide-react';
 
-export default function Revisoes({
-  showBacklog,
-  setShowBacklog
-}) {
+export default function Revisoes() {
+  const [showBacklog, setShowBacklog] = useState(false);
   const {
     reviews,
     reviewStats,
     subjects,
-    todayStr,
     getThermometer,
     getLocalDateStr,
     getPendingReviews,
@@ -23,6 +21,7 @@ export default function Revisoes({
   } = useStore();
   
   if (!reviewCalendarDate) return null; // Safety check
+  const todayStr = getLocalDateStr();
   const allDueToday = getPendingReviews()
     .sort((a, b) => a.ease - b.ease);
     

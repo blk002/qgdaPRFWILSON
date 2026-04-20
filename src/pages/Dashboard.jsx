@@ -3,12 +3,12 @@ import { useStore } from '../store/useStore';
 import { PATENTES, MEDALHAS } from '../hooks/useGamification';
 import { Activity, Trophy, Clock, AlertTriangle, CheckCircle, BarChart3 } from 'lucide-react';
 
-const enrollmentId = `PRF-${String(Date.now()).slice(-6)}`;
 
 export default function Dashboard() {
   const { 
     userStats, 
     coins, 
+    user,
     getCurrentPatente, 
     getEstimatedCompletionDate,
     getSubjectEstimates,
@@ -16,6 +16,8 @@ export default function Dashboard() {
     seasonalData = {},
     claimMissionReward
   } = useStore();
+
+  const enrollmentId = `PRF-${(user?.id || 'ANON').slice(-6).toUpperCase()}`;
 
   const patenteAtual = getCurrentPatente();
   const nextPatente = PATENTES[PATENTES.indexOf(patenteAtual) + 1] || null;
@@ -124,14 +126,10 @@ export default function Dashboard() {
             <h3 className="font-black text-slate-800 dark:text-white uppercase text-sm mb-4 flex items-center gap-2">
               <Activity className="w-5 h-5 text-blue-500" /> Estatísticas Virtuais
             </h3>
-            <div className="grid grid-cols-2 gap-4">
-              <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
-                <span className="text-[10px] font-black text-slate-400 uppercase block">Tempo de Estudo</span>
-                <span className="text-lg font-black text-slate-700 dark:text-slate-100">{Math.floor(userStats.totalStudyMinutes / 60)}h {userStats.totalStudyMinutes % 60}m</span>
-              </div>
-              <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
+            <div className="grid grid-cols-1 gap-4">
+              <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-slate-800 flex justify-between items-center">
                 <span className="text-[10px] font-black text-slate-400 uppercase block">Patrimônio</span>
-                <span className="text-lg font-black text-yellow-500">{coins} <span className="text-xs">Moedas</span></span>
+                <span className="text-lg font-black text-yellow-500">{coins} <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Moedas</span></span>
               </div>
             </div>
           </div>
