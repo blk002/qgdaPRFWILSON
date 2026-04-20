@@ -53,7 +53,7 @@ export default function App() {
     handleReviewSubmit, watchClass, handleReplaceSubject,
     subjects, isSyncing,
     session, setSession, loadFromCloud, signOut,
-    getCurrentPatente, playSound
+    playSound
   } = useStore();
   
   const [promotionModal, setPromotionModal] = useState(null);
