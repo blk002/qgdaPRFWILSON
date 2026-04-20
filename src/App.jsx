@@ -21,14 +21,10 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { 
   Search, Library, Clock, Calendar as CalendarIcon, Repeat, Dumbbell, 
   Target as TargetIcon, BarChart2, Store, Settings, Award, BrainCircuit, 
-  X, Check, ArrowRight, ShieldCheck, Trophy 
+  X, Check, ArrowRight, ShieldCheck, Trophy, Sun, Moon, Coins, 
+  AlertTriangle, Info, LogOut, Shield 
 } from 'lucide-react';
 import { PATENTES } from './hooks/useGamification';
-import { 
-  Repeat, Dumbbell, Store, Award,
-  BarChart2, Sun, Moon, Coins, BrainCircuit, AlertTriangle, Target as TargetIcon,
-  Calendar as CalendarIcon, Settings, Info, Check, LogOut, Shield
-} from 'lucide-react';
 
 const availableColors = [
   { id: 'slate', color: 'bg-slate-200 text-slate-900', label: 'Cinza' },
