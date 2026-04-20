@@ -509,7 +509,15 @@ export default function App() {
                 className="w-48 h-48 mx-auto mb-6 relative z-10 drop-shadow-[0_0_30px_rgba(59,130,246,0.6)] flex justify-center items-center"
               >
                 {promotionModal.icon.includes('/') ? (
-                  <img src={promotionModal.icon} alt={promotionModal.name} className="w-full h-full object-contain" />
+                  <img 
+                    src={promotionModal.icon} 
+                    alt={promotionModal.name} 
+                    className="w-full h-full object-contain" 
+                    style={{ 
+                      maskImage: 'radial-gradient(circle, white 60%, transparent 95%)',
+                      WebkitMaskImage: 'radial-gradient(circle, white 60%, transparent 95%)'
+                    }}
+                  />
                 ) : (
                   <span className="text-8xl">{promotionModal.icon}</span>
                 )}
