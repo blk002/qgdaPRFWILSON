@@ -8,9 +8,9 @@ export const PATENTES = [
 ];
 
 export const MEDALHAS = [
-  { id: 'fenix', title: 'Fênix', desc: 'Recuperou uma sequência de 7 dias após uma pausa.', icon: '/src/assets/gamification/phoenix.png' },
-  { id: 'elite', title: 'Atirador de Elite', desc: 'Nota superior a 80% em um Simulado.', icon: '/src/assets/gamification/sniper.png' },
-  { id: 'ironman', title: 'Ironman', desc: 'Nota máxima (25 pts) em um TAF.', icon: '/src/assets/gamification/ironman.png' },
-  { id: 'muralha', title: 'Muralha', desc: 'Manteve 100% de revisões por 5 dias.', icon: '/src/assets/gamification/wall.png' },
-  { id: 'investidor', title: 'Investidor', desc: 'Comprou 5 itens na loja de recompensas.', icon: '/src/assets/gamification/investor.png' }
+  { id: 'fenix', title: 'Fênix', desc: 'Recuperou uma sequência de 7 dias após uma pausa.', icon: 'assets/gamification/phoenix.png' },
+  { id: 'elite', title: 'Atirador de Elite', desc: 'Nota superior a 80% em um Simulado.', icon: 'assets/gamification/sniper.png' },
+  { id: 'ironman', title: 'Ironman', desc: 'Nota máxima (25 pts) em um TAF.', icon: 'assets/gamification/ironman.png' },
+  { id: 'muralha', title: 'Muralha', desc: 'Manteve 100% de revisões por 5 dias.', icon: 'assets/gamification/wall.png' },
+  { id: 'investidor', title: 'Investidor', desc: 'Comprou 5 itens na loja de recompensas.', icon: 'assets/gamification/investor.png' }
 ];

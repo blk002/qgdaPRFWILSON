@@ -48,7 +48,7 @@ export default function Dashboard() {
           {/* Avatar e Patente Principal */}
           <div className="relative group">
             <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)] relative z-10 bg-slate-800">
-               <img src={userStats.avatar || '/src/assets/gamification/avatar_male.png'} alt="Avatar" className="w-full h-full object-cover" />
+               <img src={userStats.avatar || 'assets/gamification/avatar_male.png'} alt="Avatar" className="w-full h-full object-cover" />
             </div>
             <div className="absolute -bottom-2 -right-2 bg-blue-600 text-white p-2.5 rounded-2xl shadow-lg border-2 border-white dark:border-slate-900 z-20">
               <ShieldCheck className="w-6 h-6" />

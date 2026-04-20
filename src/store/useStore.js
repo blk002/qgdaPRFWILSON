@@ -10,7 +10,7 @@ const getCleanInitialState = () => ({
   completedToday: [],
   targetExamDate: '2026-08-15',
   coins: 250,
-  userStats: { xp: 0, medals: [], totalStudyMinutes: 0, avatar: '/src/assets/gamification/avatar_male.png' },
+  userStats: { xp: 0, medals: [], totalStudyMinutes: 0, avatar: '/assets/gamification/avatar_male.png' },
   streakData: { currentStreak: 0, lastCheckDate: null },
   enableSounds: true,
   weeklySprint: { goalHours: 35, currentMinutes: 0, weekStart: new Date().toISOString() },

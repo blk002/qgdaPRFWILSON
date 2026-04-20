@@ -312,7 +312,7 @@ export default function Config({
             <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Avatar Operacional</label>
             <div className="flex gap-4">
               {[
-                { id: 'male', src: '/src/assets/gamification/avatar_male.png' },
+                { id: 'male', src: 'assets/gamification/avatar_male.png' },
                 { id: 'female', src: 'https://cdn-icons-png.flaticon.com/512/6522/6522516.png' }, // Fallback para female pois quota acabou
                 { id: 'elite', src: 'https://cdn-icons-png.flaticon.com/512/3233/3233514.png' }  // Fallback para elite
               ].map(av => (
