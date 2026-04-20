@@ -10,8 +10,9 @@ const getCleanInitialState = () => ({
   completedToday: [],
   targetExamDate: '2026-08-15',
   coins: 250,
-  userStats: { xp: 0, medals: [], totalStudyMinutes: 0 },
+  userStats: { xp: 0, medals: [], totalStudyMinutes: 0, avatar: '/src/assets/gamification/avatar_male.png' },
   streakData: { currentStreak: 0, lastCheckDate: null },
+  enableSounds: true,
   weeklySprint: { goalHours: 35, currentMinutes: 0, weekStart: new Date().toISOString() },
   reviews: [],
   reviewStats: { totalDone: 0, correct: 0, streak: 0 },
@@ -256,10 +257,32 @@ export const useStore = create(
       setReviewModal: (reviewModal) => set({ reviewModal }),
       setClassConfirmModal: (classConfirmModal) => set({ classConfirmModal }),
       setReplaceSubjectModal: (replaceSubjectModal) => set({ replaceSubjectModal }),
+      setEnableSounds: (enableSounds) => set({ enableSounds }),
+
+      // --- SINALIZADOR DE ÁUDIO NO NAVEGADOR ---
+      playSound: (type) => {
+        const { enableSounds } = get();
+        if (!enableSounds) return;
+        
+        const sounds = {
+          xp: 'https://assets.mixkit.co/active_storage/sfx/2000/2000-preview.mp3',
+          coin: 'https://assets.mixkit.co/active_storage/sfx/2017/2017-preview.mp3',
+          levelUp: 'https://assets.mixkit.co/active_storage/sfx/1435/1435-preview.mp3',
+          click: 'https://assets.mixkit.co/active_storage/sfx/2568/2568-preview.mp3'
+        };
+        
+        const url = sounds[type];
+        if (url) {
+          const audio = new Audio(url);
+          audio.volume = 0.4;
+          audio.play().catch(() => {}); // Ignora erro de auto-play bloqueado
+        }
+      },
 
       // --- AÇÕES LÓGICAS ---
 
       addXP: (amount, message = "") => {
+        get().playSound('xp');
         set((state) => ({
           userStats: { ...state.userStats, xp: state.userStats.xp + amount },
           seasonalData: { ...state.seasonalData, seasonXp: state.seasonalData.seasonXp + amount }
@@ -284,6 +307,7 @@ export const useStore = create(
         if (tafTrainingStatus.lastDoneDate === today) return false;
 
         addXP(50, "Treino Físico do Dia concluído");
+        get().playSound('coin');
         setCoins(prev => prev + 30);
         setTafTrainingStatus({ lastDoneDate: today });
         updateMissionProgress('taf', 1);
@@ -329,6 +353,7 @@ export const useStore = create(
 
         addXP(rating > 1 ? 30 : 10, "Auditoria FSRS v6");
         if (rating > 1) {
+          get().playSound('coin');
           setCoins(c => c + 5);
           updateMissionProgress('review', 1);
         }
@@ -550,6 +575,7 @@ export const useStore = create(
 
         const mission = weeklyMissions[missionIndex];
         addXP(mission.xpReward, `Recompensa de Missão: ${mission.title}`);
+        get().playSound('coin');
         setCoins(c => c + mission.coinReward);
 
         const updatedMissions = [...weeklyMissions];

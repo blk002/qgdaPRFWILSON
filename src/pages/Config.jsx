@@ -1,6 +1,6 @@
 import { useStore } from '../store/useStore';
 import { toast } from 'sonner';
-import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save } from 'lucide-react';
+import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield } from 'lucide-react';
 
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -23,7 +23,10 @@ export default function Config({
     currentDayIndex,
     setCurrentDayIndex,
     executeTacticalReset,
-    executeTotalWipe
+    executeTotalWipe,
+    userStats,
+    enableSounds,
+    setEnableSounds
   } = useStore();
   const flatCycle = cycle.flat();
   const totalSlots = flatCycle.length;
@@ -294,6 +297,57 @@ export default function Config({
             Cronograma vazio. Adicione um dia para começar.
           </div>
         )}
+        </div>
+      </div>
+
+      {/* 👤 SEÇÃO: IDENTIDADE E PREFERÊNCIAS */}
+      <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 dark:bg-slate-900 dark:border-slate-800">
+        <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-6 dark:text-slate-100">
+          <User className="text-blue-600 w-5 h-5"/> Identidade e Preferências
+        </h3>
+        
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Seletor de Avatar */}
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Avatar Operacional</label>
+            <div className="flex gap-4">
+              {[
+                { id: 'male', src: '/src/assets/gamification/avatar_male.png' },
+                { id: 'female', src: 'https://cdn-icons-png.flaticon.com/512/6522/6522516.png' }, // Fallback para female pois quota acabou
+                { id: 'elite', src: 'https://cdn-icons-png.flaticon.com/512/3233/3233514.png' }  // Fallback para elite
+              ].map(av => (
+                <button 
+                  key={av.id}
+                  onClick={() => useStore.setState(s => ({ userStats: { ...s.userStats, avatar: av.src } }))}
+                  className={`relative w-16 h-16 rounded-2xl overflow-hidden border-2 transition-all ${userStats.avatar === av.src ? 'border-blue-500 ring-4 ring-blue-500/20 scale-110' : 'border-slate-200 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 dark:border-slate-700'}`}
+                >
+                  <img src={av.src} alt={av.id} className="w-full h-full object-cover" />
+                  {userStats.avatar === av.src && (
+                    <div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center">
+                       <Shield className="text-blue-600 w-6 h-6" />
+                    </div>
+                  )}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Configuração de Som */}
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Feedback Auditivo</label>
+            <button 
+              onClick={() => setEnableSounds(!enableSounds)}
+              className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all w-full max-w-xs ${enableSounds ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-900/50 dark:text-blue-400' : 'bg-slate-50 border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700'}`}
+            >
+              <div className={`p-2 rounded-lg ${enableSounds ? 'bg-blue-600 text-white' : 'bg-slate-400 text-white'}`}>
+                {enableSounds ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
+              </div>
+              <div className="text-left">
+                <p className="font-black text-sm uppercase">{enableSounds ? 'Sons Ativados' : 'Sons Desativados'}</p>
+                <p className="text-[10px] font-bold opacity-70">Feedback tático ao ganhar XP e moedas.</p>
+              </div>
+            </button>
+          </div>
         </div>
       </div>
 

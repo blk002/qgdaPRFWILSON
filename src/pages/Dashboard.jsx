@@ -1,8 +1,18 @@
 import React from 'react';
 import { useStore } from '../store/useStore';
 import { PATENTES, MEDALHAS } from '../hooks/useGamification';
-import { Activity, Trophy, Clock, AlertTriangle, CheckCircle, BarChart3 } from 'lucide-react';
-
+import { 
+  Activity, 
+  Trophy, 
+  Clock, 
+  AlertTriangle, 
+  CheckCircle, 
+  Coins, 
+  Flame, 
+  ShieldCheck,
+  Target
+} from 'lucide-react';
+import { motion } from 'framer-motion';
 
 export default function Dashboard() {
   const { 
@@ -13,205 +23,227 @@ export default function Dashboard() {
     getEstimatedCompletionDate,
     getSubjectEstimates,
     weeklyMissions = [],
-    seasonalData = {},
-    claimMissionReward
+    claimMissionReward,
+    streakData = { currentStreak: 0 }
   } = useStore();
 
   const enrollmentId = `PRF-${(user?.id || 'ANON').slice(-6).toUpperCase()}`;
-
   const patenteAtual = getCurrentPatente();
-  const nextPatente = PATENTES[PATENTES.indexOf(patenteAtual) + 1] || null;
+  const currentLevelIndex = PATENTES.findIndex(p => p.id === patenteAtual.id);
+  const nextPatente = PATENTES[currentLevelIndex + 1] || null;
   const progressToNext = nextPatente ? ((userStats.xp - patenteAtual.minXp) / (nextPatente.minXp - patenteAtual.minXp)) * 100 : 100;
 
   const estimatedDate = getEstimatedCompletionDate();
   const subjectEstimates = getSubjectEstimates();
+  const completionPercent = Math.round((subjectEstimates.filter(s => s.remaining === 0).length / subjectEstimates.length) * 100) || 0;
 
   return (
-    <div className="fade-in max-w-[1200px] mx-auto pb-10 px-4">
-      {/* Banner de Previsão de Edital */}
-      <div className={`p-4 sm:p-6 rounded-2xl mb-8 flex flex-col md:flex-row items-center justify-between gap-6 shadow-xl border-l-8 transition-all ${estimatedDate.isLate ? 'bg-red-50 border-red-600 dark:bg-red-900/10' : 'bg-blue-50 border-blue-600 dark:bg-blue-900/10'}`}>
-        <div className="flex items-center gap-4">
-           <div className={`p-3 rounded-full ${estimatedDate.isLate ? 'bg-red-100 text-red-600' : 'bg-blue-100 text-blue-600'}`}>
-              {estimatedDate.isLate ? <AlertTriangle className="w-8 h-8 animate-pulse" /> : <Clock className="w-8 h-8" />}
-           </div>
-           <div>
-              <p className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Previsão de Conclusão do Edital</p>
-               <div className="flex-1 min-w-0">
-                 <h2 className={`text-xl sm:text-2xl font-black whitespace-nowrap overflow-visible ${estimatedDate.isLate ? 'text-red-700 dark:text-red-400' : 'text-blue-700 dark:text-blue-400'}`}>{estimatedDate.full}</h2>
-               </div>
-              <div className="flex items-center gap-2 mt-1">
-                 <span className="text-[10px] font-bold text-slate-500 bg-slate-200/50 dark:bg-slate-800 px-2 py-0.5 rounded uppercase">Prova: {estimatedDate.examDateFormatted}</span>
-                 {estimatedDate.isLate && <span className="text-[10px] font-black text-red-500 dark:text-red-400">⚠️ {estimatedDate.daysDiff} DIAS DE ATRASO</span>}
-              </div>
-           </div>
-        </div>
-        <div className="flex flex-col items-center md:items-end w-full md:w-auto">
-           <span className="text-[10px] font-black text-slate-400 uppercase mb-2">Aproveitamento Global</span>
-           <div className="flex items-baseline gap-1">
-              <span className="text-4xl font-black text-slate-800 dark:text-slate-100">
-                {Math.round((subjectEstimates.filter(s => s.remaining === 0).length / subjectEstimates.length) * 100) || 0}
-              </span>
-              <span className="text-lg font-bold text-slate-400">%</span>
-           </div>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        {/* Temporada e Missões */}
-        <div className="lg:col-span-3">
-          <div className="bg-slate-900 rounded-2xl p-6 border-b-4 border-blue-600 shadow-2xl relative overflow-hidden mb-2">
-            <div className="absolute top-0 right-0 w-64 h-64 bg-blue-500/10 rounded-full -mr-20 -mt-20 blur-3xl"></div>
-            <div className="flex flex-col md:flex-row items-center justify-between gap-6 relative z-10">
-              <div className="flex items-center gap-4">
-                 <div className="bg-blue-600 text-white p-3 rounded-xl shadow-lg ring-4 ring-blue-500/20">
-                    <Trophy className="w-8 h-8" />
-                 </div>
-                 <div>
-                    <p className="text-[10px] font-black text-blue-400 uppercase tracking-widest leading-none mb-1">Temporada {seasonalData?.currentSeason || 1}</p>
-                    <h2 className="text-2xl font-black text-white">{seasonalData?.seasonName || "Carregando..."}</h2>
-                 </div>
-              </div>
-              
-              <div className="flex-1 w-full max-w-2xl">
-                <div className="flex justify-between items-end mb-2">
-                  <span className="text-[10px] font-black text-slate-400 uppercase">Progresso de Temporada</span>
-                  <span className="text-xs font-black text-blue-400">{seasonalData?.seasonXp || 0} / {seasonalData?.seasonGoalXp || 5000} XP</span>
-                </div>
-                <div className="w-full bg-slate-800 rounded-full h-4 p-1 border border-slate-700">
-                  <div className="bg-gradient-to-r from-blue-600 to-indigo-500 h-full rounded-full transition-all duration-1000 shadow-[0_0_15px_rgba(59,130,246,0.5)]" style={{ width: `${Math.min(100, ((seasonalData?.seasonXp || 0) / (seasonalData?.seasonGoalXp || 5000)) * 100)}%` }}></div>
-                </div>
-              </div>
-
-              <div className="text-right hidden md:block">
-                <p className="text-[10px] font-black text-slate-500 uppercase">Expira em</p>
-                <p className="text-sm font-black text-white">
-                  {(() => {
-                    const { getTodayDate } = useStore.getState();
-                    const end = new Date(seasonalData?.endDate);
-                    const today = getTodayDate();
-                    const diff = Math.ceil((end - today) / (1000 * 60 * 60 * 24));
-                    return diff > 0 ? `${diff} Dias` : 'Finalizada';
-                  })()}
-                </p>
-              </div>
+    <div className="fade-in max-w-[1400px] mx-auto pb-10 px-4">
+      
+      {/* 🔹 CABEÇALHO: DOSSIÊ DO AGENTE (GLASSMORPHISM) */}
+      <section className="relative mb-10 mt-6">
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20 blur-3xl rounded-3xl -z-10"></div>
+        <div className="bg-white/80 dark:bg-slate-900/80 backdrop-blur-xl rounded-3xl border border-white/20 dark:border-slate-800 p-6 sm:p-8 shadow-2xl flex flex-col md:flex-row items-center gap-8">
+          
+          {/* Avatar e Patente Principal */}
+          <div className="relative group">
+            <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)] relative z-10 bg-slate-800">
+               <img src={userStats.avatar || '/src/assets/gamification/avatar_male.png'} alt="Avatar" className="w-full h-full object-cover" />
             </div>
+            <div className="absolute -bottom-2 -right-2 bg-blue-600 text-white p-2.5 rounded-2xl shadow-lg border-2 border-white dark:border-slate-900 z-20">
+              <ShieldCheck className="w-6 h-6" />
+            </div>
+            <div className="absolute inset-0 bg-blue-500/10 rounded-full animate-ping opacity-20 -z-10"></div>
           </div>
-        </div>
-        {/* Status do Combatente */}
-        <div className="lg:col-span-1 space-y-6">
-          <div className="bg-slate-900 rounded-2xl p-8 border-2 border-slate-800 shadow-xl text-center relative overflow-hidden">
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-blue-500 to-transparent opacity-50"></div>
-            <div className="text-6xl mb-4 drop-shadow-lg">{patenteAtual.icon}</div>
-            <h2 className={`text-2xl font-black uppercase tracking-widest mb-1 ${patenteAtual.color}`}>{patenteAtual.name}</h2>
-            <div className="flex flex-col items-center gap-1 mb-6">
-              <span className="text-slate-500 text-[10px] font-black uppercase tracking-wider">Matrícula Operacional</span>
-              <span className="text-slate-400 text-xs font-mono font-bold px-3 py-0.5 bg-slate-800/50 rounded-full border border-slate-700/50">{enrollmentId}</span>
+
+          {/* Info do Agente */}
+          <div className="flex-1 text-center md:text-left">
+            <div className="flex flex-col md:flex-row md:items-end gap-2 mb-2">
+              <h1 className="text-3xl sm:text-4xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">{user?.name || "Combatente"}</h1>
+              <span className={`text-sm font-black px-3 py-1 rounded-lg uppercase tracking-widest bg-slate-100 dark:bg-slate-800 ${patenteAtual.color}`}>{patenteAtual.name}</span>
             </div>
             
-            <div className="space-y-4">
-              <div className="flex justify-between items-end text-xs font-black uppercase">
-                <span className="text-slate-400">Progresso de Carreira</span>
-                <span className="text-white">{userStats.xp.toLocaleString()} XP</span>
+            <div className="flex flex-wrap justify-center md:justify-start gap-4 mb-6">
+              <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-mono text-xs bg-slate-100 dark:bg-slate-800/50 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700/50">
+                <Target className="w-3.5 h-3.5" /> ID: {enrollmentId}
               </div>
-              <div className="w-full bg-slate-800 rounded-full h-3 border border-slate-700 overflow-hidden">
-                <div className="bg-blue-500 h-full transition-all duration-1000 shadow-[0_0_15px_rgba(59,130,246,0.5)]" style={{ width: `${progressToNext}%` }}></div>
+              <div className="flex items-center gap-1.5 text-orange-500 font-black text-xs bg-orange-50 dark:bg-orange-900/20 px-3 py-1 rounded-full border border-orange-200 dark:border-orange-900/50 animate-pulse">
+                <Flame className="w-3.5 h-3.5 fill-current" /> OFENSIVA: {streakData.currentStreak} DIAS
+              </div>
+            </div>
+
+            {/* Barra de XP de Carreira */}
+            <div className="max-w-xl mx-auto md:mx-0">
+              <div className="flex justify-between items-end mb-2">
+                <span className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-[0.2em]">Evolução de Carreira</span>
+                <span className="text-sm font-black text-slate-700 dark:text-slate-200">{userStats.xp.toLocaleString()} <span className="text-slate-400">XP</span></span>
+              </div>
+              <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-3.5 p-0.5 border border-slate-300 dark:border-slate-700 shadow-inner">
+                <motion.div 
+                  initial={{ width: 0 }}
+                  animate={{ width: `${progressToNext}%` }}
+                  transition={{ duration: 1.5, ease: "easeOut" }}
+                  className="bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-400 h-full rounded-full relative shadow-[0_0_15px_rgba(59,130,246,0.5)]"
+                >
+                   <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent rounded-full font-black"></div>
+                </motion.div>
               </div>
               {nextPatente && (
-                <p className="text-[10px] text-slate-500 font-bold uppercase">Faltam {(nextPatente.minXp - userStats.xp).toLocaleString()} XP para {nextPatente.name}</p>
+                <p className="text-[10px] text-slate-400 dark:text-slate-500 mt-2 font-bold uppercase tracking-wider">Faltam {(nextPatente.minXp - userStats.xp).toLocaleString()} XP para promoção a {nextPatente.name}</p>
               )}
             </div>
           </div>
 
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
-            <h3 className="font-black text-slate-800 dark:text-white uppercase text-sm mb-4 flex items-center gap-2">
-              <Activity className="w-5 h-5 text-blue-500" /> Estatísticas Virtuais
-            </h3>
-            <div className="grid grid-cols-1 gap-4">
-              <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-100 dark:border-slate-800 flex justify-between items-center">
-                <span className="text-[10px] font-black text-slate-400 uppercase block">Patrimônio</span>
-                <span className="text-lg font-black text-yellow-500">{coins} <span className="text-xs font-bold uppercase tracking-widest text-slate-500">Moedas</span></span>
-              </div>
+          {/* Dashboard Rápido (Coins & Stats) */}
+          <div className="grid grid-cols-2 gap-3 w-full md:w-auto">
+            <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-900/30 p-4 rounded-2xl flex flex-col items-center justify-center min-w-[120px]">
+               <Coins className="text-yellow-600 w-6 h-6 mb-1" />
+               <span className="text-2xl font-black text-yellow-700 dark:text-yellow-500 leading-none">{coins}</span>
+               <span className="text-[9px] font-black text-yellow-600/70 uppercase mt-1">Moedas</span>
             </div>
-          </div>
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
-            <h3 className="font-black text-slate-800 dark:text-white uppercase text-sm mb-4 flex items-center justify-between">
-              <span className="flex items-center gap-2"><CheckCircle className="w-5 h-5 text-emerald-500" /> Missões Semanais</span>
-              <span className="text-[10px] bg-slate-100 dark:bg-slate-800 px-2 py-0.5 rounded text-slate-500">4 Ativas</span>
-            </h3>
-            <div className="space-y-4">
-              {weeklyMissions?.map((mission) => (
-                <div key={mission.id} className={`p-3 rounded-xl border transition-all ${mission.claimed ? 'bg-slate-50 border-slate-100 opacity-60 dark:bg-slate-950 dark:border-slate-900' : mission.completed ? 'bg-emerald-50 border-emerald-200 dark:bg-emerald-900/10 dark:border-emerald-900/50' : 'bg-white border-slate-100 hover:border-slate-300 dark:bg-slate-900 dark:border-slate-800'}`}>
-                   <div className="flex justify-between items-start mb-2">
-                      <div>
-                        <p className={`text-xs font-black uppercase tracking-tighter ${mission.completed ? 'text-emerald-700 dark:text-emerald-400' : 'text-slate-700 dark:text-slate-100'}`}>{mission.title}</p>
-                        <p className="text-[9px] text-slate-400 font-bold leading-none mt-0.5">{mission.description}</p>
-                      </div>
-                      {mission.completed && !mission.claimed && (
-                        <button onClick={() => claimMissionReward(mission.id)} className="bg-emerald-600 hover:bg-emerald-700 text-white text-[9px] font-black px-2 py-1 rounded shadow-md animate-pulse transition-all">RESGATAR</button>
-                      )}
-                      {mission.claimed && (
-                        <span className="text-emerald-600"><CheckCircle className="w-4 h-4" /></span>
-                      )}
-                   </div>
-                   <div className="flex items-center gap-2">
-                      <div className="flex-1 bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                        <div className={`${mission.completed ? 'bg-emerald-500' : 'bg-blue-500'} h-full transition-all duration-700`} style={{ width: `${(mission.current / mission.goal) * 100}%` }}></div>
-                      </div>
-                      <span className="text-[9px] font-black text-slate-500">{mission.current}/{mission.goal}</span>
-                   </div>
-                </div>
-              ))}
+            <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/30 p-4 rounded-2xl flex flex-col items-center justify-center min-w-[120px]">
+               <CheckCircle className="text-emerald-600 w-6 h-6 mb-1" />
+               <span className="text-2xl font-black text-emerald-700 dark:text-emerald-500 leading-none">{completionPercent}%</span>
+               <span className="text-[9px] font-black text-emerald-600/70 uppercase mt-1">Edital</span>
             </div>
           </div>
 
-          {/* Mini Calendário (Lista de Prazos) */}
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-6 border border-slate-200 dark:border-slate-800 shadow-sm">
-             <h3 className="font-black text-slate-800 dark:text-white uppercase text-sm mb-4 flex items-center gap-2">
-               <BarChart3 className="w-5 h-5 text-purple-500" /> Próximos Alvos
-             </h3>
-             <div className="space-y-3">
-               {subjectEstimates.filter(s => s.remaining > 0).slice(0, 3).map(sub => (
-                 <div key={sub.id} className="flex items-center justify-between border-b border-slate-50 dark:border-slate-800 pb-2">
-                    <span className={`text-[9px] font-black px-1.5 py-0.5 rounded ${sub.color}`}>{sub.name}</span>
-                    <span className="text-xs font-bold text-slate-600 dark:text-slate-300">{sub.dateStr}</span>
+        </div>
+      </section>
+
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+        
+        {/* 🔹 COLUNA CENTRAL: MISSÕES E TIMELINE */}
+        <div className="lg:col-span-2 space-y-8">
+          
+          {/* Timeline de Promoções */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8 overflow-hidden">
+            <h3 className="font-black text-slate-800 dark:text-white uppercase text-base mb-8 flex items-center gap-3">
+              <Trophy className="w-6 h-6 text-yellow-500" /> Jornada de Promoções
+            </h3>
+            
+            <div className="relative flex justify-between items-center sm:px-4">
+               {/* Linha de Conexão Background */}
+               <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-100 dark:bg-slate-800 -translate-y-1/2 z-0"></div>
+               
+               {PATENTES.map((p, idx) => {
+                 const isCompleted = userStats.xp >= p.minXp;
+                 const isNext = !isCompleted && PATENTES[idx-1] && userStats.xp >= PATENTES[idx-1].minXp;
+                 const isActive = patenteAtual.id === p.id;
+                 
+                 return (
+                   <div key={p.id} className="relative z-10 flex flex-col items-center group">
+                      <div className={`w-10 h-10 sm:w-14 sm:h-14 rounded-xl flex items-center justify-center text-xl sm:text-2xl transition-all duration-500 shadow-lg ${isActive ? 'bg-blue-600 border-2 border-white scale-110 shadow-blue-500/50' : isCompleted ? 'bg-blue-900/40 border-2 border-blue-500/30' : 'bg-slate-100 dark:bg-slate-800 border-2 border-transparent opacity-40 grayscale'}`}>
+                        {p.icon}
+                      </div>
+                      <div className="absolute top-full mt-2 text-center w-max">
+                        <p className={`text-[8px] sm:text-[10px] font-black uppercase tracking-tight ${isCompleted ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>{p.id.replace('agente_', '')}</p>
+                      </div>
+                   </div>
+                 );
+               })}
+            </div>
+            <div className="mt-10 text-center">
+               <p className="text-xs font-bold text-slate-500 uppercase">Sua patente atual: <span className={`font-black ${patenteAtual.color}`}>{patenteAtual.name}</span></p>
+            </div>
+          </div>
+
+          {/* Central de Missões Semanal */}
+          <div className="bg-slate-900 rounded-3xl border-2 border-blue-900/30 p-6 sm:p-8 relative overflow-hidden">
+            <h3 className="font-black text-white uppercase text-base mb-6 flex items-center justify-between">
+              <span className="flex items-center gap-3"><Activity className="w-6 h-6 text-blue-500" /> Contratos Operacionais da Semana</span>
+              <span className="text-[10px] bg-blue-600/20 text-blue-400 px-3 py-1 rounded-full border border-blue-600/30">ATIVAS</span>
+            </h3>
+            
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+               {weeklyMissions.map(mission => (
+                 <div key={mission.id} className={`p-5 rounded-2xl border-2 transition-all relative overflow-hidden group ${mission.claimed ? 'bg-slate-950/50 border-slate-800' : mission.completed ? 'bg-blue-900/20 border-blue-600/50 shadow-lg shadow-blue-500/10' : 'bg-slate-800/40 border-slate-700 hover:border-slate-600'}`}>
+                    <div className="flex justify-between items-start relative z-10">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <CheckCircle className={`w-4 h-4 ${mission.completed ? 'text-blue-400' : 'text-slate-600'}`} />
+                          <h4 className={`text-sm font-black uppercase tracking-tight ${mission.completed ? 'text-white' : 'text-slate-400'}`}>{mission.title}</h4>
+                        </div>
+                        <p className="text-xs text-slate-500 font-bold leading-snug mb-4">{mission.description}</p>
+                        
+                        <div className="flex items-center gap-3">
+                           <div className="flex items-center gap-1 text-[10px] font-black text-blue-400 bg-blue-600/10 px-2 py-0.5 rounded border border-blue-600/20">+{mission.xpReward} XP</div>
+                           <div className="flex items-center gap-1 text-[10px] font-black text-yellow-500 bg-yellow-600/10 px-2 py-0.5 rounded border border-yellow-600/20">+{mission.coinReward} <Coins className="w-3 h-3" /></div>
+                        </div>
+                      </div>
+                      
+                      {mission.completed && !mission.claimed && (
+                        <button 
+                          onClick={() => claimMissionReward(mission.id)}
+                          className="absolute bottom-4 right-4 bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] px-4 py-2 rounded-xl shadow-lg transform transition-all hover:scale-105 active:scale-95"
+                        >
+                          RESGATAR
+                        </button>
+                      )}
+                    </div>
+                    {mission.claimed && <div className="absolute top-2 right-2 rotate-12 text-[10px] font-black text-slate-700 border-2 border-slate-700/50 px-2 py-1 rounded">CONCLUÍDO</div>}
                  </div>
                ))}
-               <p className="text-[10px] text-slate-400 text-center uppercase font-black mt-2">Veja cronograma completo na aba Calendário</p>
-             </div>
+            </div>
           </div>
         </div>
 
-        {/* Galeria de Honra (Medalhas) */}
-        <div className="lg:col-span-2">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl p-8 border border-slate-200 dark:border-slate-800 shadow-sm h-full">
-            <div className="flex items-center justify-between mb-8 border-b border-slate-100 dark:border-slate-800 pb-4">
-              <h2 className="text-2xl font-black text-slate-800 dark:text-white flex items-center gap-3">
-                <Trophy className="w-8 h-8 text-yellow-500" /> Galeria de Honra
-              </h2>
-              <span className="bg-blue-100 text-blue-700 px-3 py-1 rounded-full text-xs font-black uppercase dark:bg-blue-900/30 dark:text-blue-400">
-                {userStats.medals.length} / {MEDALHAS.length} Conquistas
-              </span>
-            </div>
-
-            <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
-              {MEDALHAS.map(medal => {
-                const unlocked = userStats.medals.includes(medal.id);
-                return (
-                  <div key={medal.id} className={`flex flex-col items-center text-center p-4 rounded-2xl border-2 transition-all duration-500 ${unlocked ? 'bg-orange-50 border-orange-200 dark:bg-orange-900/10 dark:border-orange-900/50' : 'bg-slate-50 border-slate-100 opacity-40 grayscale blur-[0.5px] dark:bg-slate-950 dark:border-slate-900'}`}>
-                    <div className={`text-4xl mb-3 ${unlocked ? 'animate-bounce-slow' : ''}`}>{medal.icon}</div>
-                    <h4 className="text-sm font-black text-slate-800 dark:text-white mb-1 uppercase tracking-tighter leading-none">{medal.title}</h4>
-                    <p className="text-[10px] text-slate-500 font-medium leading-tight">{unlocked ? medal.desc : 'Requisito Oculto'}</p>
-                  </div>
-                );
-              })}
-            </div>
-
-            {userStats.medals.length === 0 && (
-              <div className="mt-12 text-center py-12 border-2 border-dashed border-slate-100 dark:border-slate-800 rounded-3xl">
-                <p className="text-slate-400 font-bold italic">Nenhuma medalha conquistada ainda. Execute missões de peso para ser condecorado.</p>
-              </div>
-            )}
+        {/* 🔹 COLUNA LATERAL: HONRA E PREVISÃO */}
+        <div className="space-y-8">
+          
+          {/* Galeria de Honra (Medalhas 3D) */}
+          <div className="bg-white dark:bg-slate-900 rounded-3xl border border-slate-200 dark:border-slate-800 p-6 sm:p-8">
+             <h3 className="font-black text-slate-800 dark:text-white uppercase text-sm mb-6 flex items-center gap-3">
+               <ShieldCheck className="w-5 h-5 text-purple-500" /> Vitrine de Honra
+             </h3>
+             
+             <div className="grid grid-cols-2 gap-4">
+                {MEDALHAS.map(medal => {
+                  const isUnlocked = userStats.medals.includes(medal.id);
+                  return (
+                    <div key={medal.id} className={`p-4 rounded-2xl border text-center transition-all group relative overflow-hidden ${isUnlocked ? 'bg-slate-50 dark:bg-slate-800/30 border-blue-100 dark:border-blue-900/30 shadow-inner' : 'bg-slate-50/50 dark:bg-slate-950 border-slate-100 dark:border-slate-800 opacity-40'}`}>
+                       <div className="relative w-full aspect-square mb-3 flex items-center justify-center">
+                          {isUnlocked ? (
+                            <motion.img 
+                              whileHover={{ scale: 1.15, rotate: 5 }}
+                              src={medal.icon} 
+                              alt={medal.title} 
+                              className="w-full h-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.3)]"
+                              onError={(e) => { e.target.src = 'https://cdn-icons-png.flaticon.com/512/190/190411.png' }}
+                            />
+                          ) : (
+                            <div className="text-4xl filter grayscale contrast-0 opacity-20">🛡️</div>
+                          )}
+                       </div>
+                       <p className={`text-[11px] font-black uppercase ${isUnlocked ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>{medal.title}</p>
+                       <p className="text-[8px] text-slate-500 font-bold uppercase mt-1 leading-tight">{medal.desc}</p>
+                    </div>
+                  );
+                })}
+             </div>
           </div>
+
+          {/* Previsão de Conclusão */}
+          <div className={`p-6 rounded-3xl border shadow-xl relative overflow-hidden ${estimatedDate.isLate ? 'bg-red-900/10 border-red-900/30' : 'bg-blue-900/10 border-blue-900/30'}`}>
+             <div className="relative z-10">
+                <div className="flex items-center gap-3 mb-4">
+                   <div className={`p-2 rounded-xl ${estimatedDate.isLate ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'}`}>
+                      {estimatedDate.isLate ? <AlertTriangle className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
+                   </div>
+                   <span className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none">Status de Edital</span>
+                </div>
+                
+                <h2 className={`text-2xl font-black mb-1 ${estimatedDate.isLate ? 'text-red-500' : 'text-blue-500'}`}>{estimatedDate.full}</h2>
+                <div className="flex flex-col gap-1">
+                   <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider">Prova: {estimatedDate.examDateFormatted}</span>
+                   {estimatedDate.isLate && <span className="text-[10px] font-black text-red-600 bg-red-600/10 px-2 py-0.5 rounded w-fit uppercase Tracking-tighter mt-1">⚠️ ATENÇÃO AO CRONOGRAMA</span>}
+                </div>
+             </div>
+             <div className={`absolute -bottom-10 -right-10 w-28 h-28 ${estimatedDate.isLate ? 'text-red-600/10' : 'text-blue-600/10'}`}>
+                <Activity className="w-full h-full" />
+             </div>
+          </div>
+
         </div>
       </div>
     </div>

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, Suspense } from 'react';
+import React, { useState, useEffect, useMemo, Suspense, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from './lib/supabaseClient';
 import Login from './components/Login';
@@ -18,6 +18,12 @@ const Config = React.lazy(() => import('./pages/Config'));
 import { Routes, Route, Link, NavLink, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
+import { 
+  Search, Library, Clock, Calendar as CalendarIcon, Repeat, Dumbbell, 
+  Target as TargetIcon, BarChart2, Store, Settings, Award, BrainCircuit, 
+  X, Check, ArrowRight, ShieldCheck, Trophy 
+} from 'lucide-react';
+import { PATENTES } from './hooks/useGamification';
 import { 
   Repeat, Dumbbell, Store, Award,
   BarChart2, Sun, Moon, Coins, BrainCircuit, AlertTriangle, Target as TargetIcon,
@@ -50,8 +56,12 @@ export default function App() {
     replaceSubjectModal, setReplaceSubjectModal,
     handleReviewSubmit, watchClass, handleReplaceSubject,
     subjects, isSyncing,
-    session, setSession, loadFromCloud, signOut
+    session, setSession, loadFromCloud, signOut,
+    getCurrentPatente, playSound
   } = useStore();
+  
+  const [promotionModal, setPromotionModal] = useState(null);
+  const lastPatenteId = useRef(null);
 
   const [reviewInputs, setReviewInputs] = useState({ total: 10, correct: 0 });
   const location = useLocation();
@@ -114,6 +124,26 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, [setSession, loadFromCloud]);
+
+  // --- MONITOR DE PROMOÇÃO ---
+  useEffect(() => {
+    const currentP = getCurrentPatente();
+    if (!lastPatenteId.current) {
+      lastPatenteId.current = currentP.id;
+      return;
+    }
+    
+    if (currentP.id !== lastPatenteId.current) {
+      const oldIdx = PATENTES.findIndex(p => p.id === lastPatenteId.current);
+      const newIdx = PATENTES.findIndex(p => p.id === currentP.id);
+      
+      if (newIdx > oldIdx) {
+        setPromotionModal(currentP);
+        playSound('levelUp');
+      }
+      lastPatenteId.current = currentP.id;
+    }
+  }, [userStats.xp, getCurrentPatente, playSound]);
 
   if (!session) {
     return <Login />;
@@ -464,6 +494,46 @@ export default function App() {
         </div>,
         document.body
       )}
+
+      {/* 🎖️ MODAL DE CELEBRAÇÃO DE PROMOÇÃO */}
+      <AnimatePresence>
+        {promotionModal && createPortal(
+          <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+            <motion.div 
+              initial={{ scale: 0.5, opacity: 0, rotate: -10 }}
+              animate={{ scale: 1, opacity: 1, rotate: 0 }}
+              exit={{ scale: 1.2, opacity: 0 }}
+              className="bg-slate-900 border-4 border-blue-500 rounded-[2rem] p-8 max-w-sm w-full text-center relative overflow-hidden shadow-[0_0_50px_rgba(59,130,246,0.5)]"
+            >
+              <div className="absolute inset-0 bg-gradient-to-b from-blue-500/20 to-transparent pointer-events-none"></div>
+              
+              <motion.div 
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="text-8xl mb-6 relative z-10 drop-shadow-2xl flex justify-center"
+              >
+                {promotionModal.icon}
+              </motion.div>
+              
+              <h2 className="text-sm font-black text-blue-400 uppercase tracking-[0.3em] mb-2">Promoção de Carreira</h2>
+              <h1 className={`text-4xl font-black uppercase mb-4 tracking-tighter ${promotionModal.color}`}>
+                {promotionModal.name}
+              </h1>
+              <p className="text-slate-400 text-xs font-bold leading-relaxed mb-8">
+                Parabéns, combatente! Sua dedicação e disciplina elevaram seu status operacional. Um novo patamar de honra foi alcançado.
+              </p>
+              
+              <button 
+                onClick={() => setPromotionModal(null)}
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-95 uppercase tracking-widest text-sm"
+              >
+                Assumir Posto
+              </button>
+            </motion.div>
+          </div>,
+          document.body
+        )}
+      </AnimatePresence>
     </div>
   );
 }
