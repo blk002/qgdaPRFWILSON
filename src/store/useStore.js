@@ -20,6 +20,8 @@ const getCleanInitialState = () => ({
   tafHistory: [],
   tafTrainingStatus: { lastDoneDate: null },
   isDarkMode: true,
+  xpHistory: [],
+  studyDiary: {},
   activeTab: 'carreira',
   // todayStr removido do estado — agora é computado via getLocalDateStr()
   calendarDate: new Date(),
@@ -121,7 +123,7 @@ export const useStore = create(
           'coins', 'userStats', 'streakData', 'weeklySprint', 'reviews', 
           'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus', 
           'isDarkMode', 'activeTab', 'calendarDate', 'reviewCalendarDate', 
-          'seasonalData', 'weeklyMissions'
+          'seasonalData', 'weeklyMissions', 'xpHistory', 'studyDiary'
         ];
         
         const dataToSave = {};
@@ -283,11 +285,40 @@ export const useStore = create(
 
       addXP: (amount, message = "") => {
         get().playSound('xp');
+        const today = new Date().toISOString().split('T')[0];
+        set((state) => {
+          const history = [...(state.xpHistory || [])];
+          const todayIdx = history.findIndex(h => h.date === today);
+          if (todayIdx >= 0) {
+            history[todayIdx] = { ...history[todayIdx], xp: history[todayIdx].xp + amount };
+          } else {
+            history.push({ date: today, xp: amount });
+          }
+          // Manter apenas os últimos 30 dias
+          const trimmed = history.slice(-30);
+          return {
+            userStats: { ...state.userStats, xp: state.userStats.xp + amount },
+            seasonalData: { ...state.seasonalData, seasonXp: state.seasonalData.seasonXp + amount },
+            xpHistory: trimmed
+          };
+        });
+      },
+
+      saveDiaryEntry: (date, text, tags) => {
         set((state) => ({
-          userStats: { ...state.userStats, xp: state.userStats.xp + amount },
-          seasonalData: { ...state.seasonalData, seasonXp: state.seasonalData.seasonXp + amount }
+          studyDiary: {
+            ...state.studyDiary,
+            [date]: { text, tags, timestamp: new Date().toISOString() }
+          }
         }));
-        // Opcional: Aqui poderia ser disparado um toast com o 'message'
+      },
+
+      deleteDiaryEntry: (date) => {
+        set((state) => {
+          const newDiary = { ...state.studyDiary };
+          delete newDiary[date];
+          return { studyDiary: newDiary };
+        });
       },
 
       unlockMedal: (medalId) => {

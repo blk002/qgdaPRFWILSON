@@ -16,6 +16,7 @@ const Revisoes = React.lazy(() => import('./pages/Revisoes'));
 const Ciclo = React.lazy(() => import('./pages/Ciclo'));
 const Calendario = React.lazy(() => import('./pages/Calendario'));
 const Config = React.lazy(() => import('./pages/Config'));
+const DiarioEstudos = React.lazy(() => import('./pages/DiarioEstudos'));
 import { Routes, Route, Link, NavLink, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -23,7 +24,7 @@ import {
   Search, Library, Clock, Calendar as CalendarIcon, Repeat, Dumbbell, 
   Target as TargetIcon, BarChart2, Store, Settings, Award, BrainCircuit, 
   X, Check, ArrowRight, ShieldCheck, Trophy, Sun, Moon, Coins, 
-  AlertTriangle, Info, LogOut, Shield 
+  AlertTriangle, Info, LogOut, Shield, BookOpen 
 } from 'lucide-react';
 import { PATENTES } from './hooks/useGamification';
 
@@ -158,6 +159,7 @@ export default function App() {
     { id: '/simulados', label: 'Simulados', icon: TargetIcon },
     { id: '/estatisticas', label: 'Estatísticas', icon: BarChart2 },
     { id: '/loja', label: 'Loja', icon: Store },
+    { id: '/diario', label: 'Diário', icon: BookOpen },
     { id: '/config', label: 'Ajustes', icon: Settings },
   ];
 
@@ -281,6 +283,7 @@ export default function App() {
                   <Route path="/simulados" element={<Simulados />} />
                   <Route path="/estatisticas" element={<Estatisticas />} />
                   <Route path="/loja" element={<Loja />} />
+                  <Route path="/diario" element={<DiarioEstudos />} />
                   <Route path="/config" element={<Config availableColors={availableColors} />} />
                 </Routes>
               </Suspense>
@@ -496,11 +499,20 @@ export default function App() {
       <AnimatePresence>
         {promotionModal && createPortal(
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
+            {/* Confetti particles */}
+            {Array.from({ length: 16 }).map((_, i) => (
+              <div key={i} className="confetti-particle" style={{
+                left: `${10 + (i * 5.5)}%`,
+                animationDelay: `${i * 0.06}s`,
+                animationDuration: `${0.8 + Math.random() * 0.5}s`,
+                background: ['#3b82f6','#8b5cf6','#f59e0b','#10b981','#ef4444','#06b6d4'][i % 6],
+              }} />
+            ))}
             <motion.div 
               initial={{ scale: 0.5, opacity: 0, rotate: -10 }}
               animate={{ scale: 1, opacity: 1, rotate: 0 }}
               exit={{ scale: 1.2, opacity: 0 }}
-              className="bg-slate-900 border-4 border-blue-500 rounded-[2rem] p-8 max-w-sm w-full text-center relative overflow-hidden shadow-[0_0_50px_rgba(59,130,246,0.5)]"
+              className="bg-slate-900 border-4 border-blue-500 rounded-[2rem] p-8 max-w-sm w-full text-center relative overflow-hidden shadow-[0_0_50px_rgba(59,130,246,0.5)] animate-glow-pulse"
             >
               <div className="absolute inset-0 bg-gradient-to-b from-blue-500/20 to-transparent pointer-events-none"></div>
               
@@ -522,7 +534,7 @@ export default function App() {
               
               <button 
                 onClick={() => setPromotionModal(null)}
-                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-95 uppercase tracking-widest text-sm"
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-95 uppercase tracking-widest text-sm animate-bounce-in"
               >
                 Assumir Posto
               </button>
