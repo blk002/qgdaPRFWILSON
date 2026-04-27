@@ -16,7 +16,6 @@ const Revisoes = React.lazy(() => import('./pages/Revisoes'));
 const Ciclo = React.lazy(() => import('./pages/Ciclo'));
 const Calendario = React.lazy(() => import('./pages/Calendario'));
 const Config = React.lazy(() => import('./pages/Config'));
-const Jurisprudencias = React.lazy(() => import('./pages/Jurisprudencias'));
 import { Routes, Route, Link, NavLink, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -24,7 +23,7 @@ import {
   Search, Library, Clock, Calendar as CalendarIcon, Repeat, Dumbbell, 
   Target as TargetIcon, BarChart2, Store, Settings, Award, BrainCircuit, 
   X, Check, ArrowRight, ShieldCheck, Trophy, Sun, Moon, Coins, 
-  AlertTriangle, Info, LogOut, Shield, Scale 
+  AlertTriangle, Info, LogOut, Shield 
 } from 'lucide-react';
 import { PATENTES } from './hooks/useGamification';
 
@@ -159,7 +158,6 @@ export default function App() {
     { id: '/simulados', label: 'Simulados', icon: TargetIcon },
     { id: '/estatisticas', label: 'Estatísticas', icon: BarChart2 },
     { id: '/loja', label: 'Loja', icon: Store },
-    { id: '/jurisprudencias', label: 'Jurisprud.', icon: Scale },
     { id: '/config', label: 'Ajustes', icon: Settings },
   ];
 
@@ -283,7 +281,6 @@ export default function App() {
                   <Route path="/simulados" element={<Simulados />} />
                   <Route path="/estatisticas" element={<Estatisticas />} />
                   <Route path="/loja" element={<Loja />} />
-                  <Route path="/jurisprudencias" element={<Jurisprudencias />} />
                   <Route path="/config" element={<Config availableColors={availableColors} />} />
                 </Routes>
               </Suspense>
