@@ -20,13 +20,13 @@ function XpSparkline({ xpHistory }) {
     return { key, label, xp: entry?.xp || 0 };
   });
   const maxXp = Math.max(...days.map(d => d.xp), 1);
-  const W = 280, H = 80, padX = 10, padY = 8;
+  const W = 280, H = 48, padX = 10, padY = 6;
   const barW = (W - padX * 2) / 7 - 4;
   return (
     <div className="w-full">
-      <svg viewBox={`0 0 ${W} ${H + 24}`} className="w-full">
+      <svg viewBox={`0 0 ${W} ${H + 20}`} className="w-full" style={{ maxHeight: 80 }}>
         {days.map((day, i) => {
-          const barH = Math.max(4, ((day.xp / maxXp) * (H - padY * 2)));
+          const barH = Math.max(3, ((day.xp / maxXp) * (H - padY * 2)));
           const x = padX + i * ((W - padX * 2) / 7) + 2;
           const y = H - padY - barH;
           const isToday = i === 6;
@@ -36,10 +36,10 @@ function XpSparkline({ xpHistory }) {
                 fill={isToday ? '#3b82f6' : day.xp > 0 ? '#6366f1' : '#1e293b'}
                 opacity={day.xp > 0 ? 1 : 0.4} />
               {day.xp > 0 && (
-                <text x={x + barW / 2} y={y - 3} textAnchor="middle" fontSize="7"
+                <text x={x + barW / 2} y={y - 2} textAnchor="middle" fontSize="6"
                   fill={isToday ? '#93c5fd' : '#818cf8'} fontWeight="bold">{day.xp}</text>
               )}
-              <text x={x + barW / 2} y={H + 16} textAnchor="middle" fontSize="8"
+              <text x={x + barW / 2} y={H + 14} textAnchor="middle" fontSize="7"
                 fill={isToday ? '#94a3b8' : '#475569'} fontWeight="bold">{day.label}</text>
             </g>
           );
@@ -204,10 +204,10 @@ export default function Dashboard() {
       </motion.div>
 
       {/* GRÁFICO XP SEMANAL */}
-      <div className="bg-slate-900 rounded-3xl border border-slate-800 p-6 mb-8">
-        <div className="flex items-center justify-between mb-4">
-          <h3 className="font-black text-white uppercase text-sm flex items-center gap-2">
-            <Zap className="w-4 h-4 text-blue-400" /> XP por Dia — Últimos 7 Dias
+      <div className="bg-slate-900 rounded-2xl border border-slate-800 px-5 py-4 mb-8">
+        <div className="flex items-center justify-between mb-2">
+          <h3 className="font-black text-white uppercase text-xs flex items-center gap-2">
+            <Zap className="w-3.5 h-3.5 text-blue-400" /> XP por Dia — Últimos 7 Dias
           </h3>
           <span className="text-[10px] text-slate-500 font-bold">
             Semana: <span className="text-blue-400 font-black">{xpThisWeek.toLocaleString()} XP</span>
