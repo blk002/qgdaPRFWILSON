@@ -1,6 +1,7 @@
 import React from 'react';
 import { useStore } from '../store/useStore';
 import { PATENTES, MEDALHAS } from '../hooks/useGamification';
+import RankBadge from '../components/RankBadge';
 import { 
   Activity, 
   Trophy, 
@@ -133,24 +134,13 @@ export default function Dashboard() {
                  
                  return (
                    <div key={p.id} className="relative z-10 flex flex-col items-center group">
-                      <div className={`w-12 h-12 sm:w-20 sm:h-20 rounded-2xl flex items-center justify-center transition-all duration-500 shadow-xl ${isActive ? 'bg-gradient-to-br from-blue-600 to-indigo-700 border-2 border-white/50 scale-125 shadow-blue-500/50 z-20' : isCompleted ? 'bg-slate-800/80 border-2 border-blue-500/30' : 'bg-slate-100 dark:bg-slate-900 border-2 border-transparent opacity-30 grayscale'}`}>
-                        {p.icon.includes('/') ? (
-                          <img 
-                            src={p.icon} 
-                            alt={p.name} 
-                            className={`w-full h-full object-contain p-1 ${isActive ? 'drop-shadow-[0_0_10px_rgba(255,255,255,0.5)]' : ''}`} 
-                            style={{ 
-                              maskImage: 'radial-gradient(circle, white 60%, transparent 85%)',
-                              WebkitMaskImage: 'radial-gradient(circle, white 60%, transparent 85%)'
-                            }}
-                          />
-                        ) : (
-                          <span className="text-xl sm:text-3xl">{p.icon}</span>
-                        )}
+                      <div className={`transition-all duration-500 ${isActive ? 'scale-125' : isCompleted ? 'scale-100' : 'opacity-30 grayscale saturate-0'}`}>
+                        <RankBadge level={p.level} size={48} />
                       </div>
-                      <div className="absolute top-full mt-2 text-center w-max">
-                        <p className={`text-[8px] sm:text-[10px] font-black uppercase tracking-tight ${isCompleted ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>{p.id.replace('agente_', '')}</p>
+                      <div className="absolute top-full mt-3 text-center w-max">
+                        <p className={`text-[8px] sm:text-[10px] font-black uppercase tracking-tight ${isActive ? patenteAtual.color : isCompleted ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>{p.name.split(' ')[0]}</p>
                       </div>
+                      {isNext && <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-[7px] font-black text-white px-2 py-0.5 rounded-full animate-pulse">PRÓXIMO</span>}
                    </div>
                  );
                })}

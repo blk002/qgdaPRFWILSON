@@ -5,6 +5,7 @@ import Login from './components/Login';
 import { useStore } from './store/useStore';
 import Dashboard from './pages/Dashboard';
 import ClassCompletionModal from './components/ClassCompletionModal';
+import RankBadge from './components/RankBadge';
 
 // Code-splitting: páginas carregadas sob demanda
 const TreinoTAF = React.lazy(() => import('./pages/TreinoTAF'));
@@ -504,23 +505,11 @@ export default function App() {
               <div className="absolute inset-0 bg-gradient-to-b from-blue-500/20 to-transparent pointer-events-none"></div>
               
               <motion.div 
-                animate={{ y: [0, -10, 0], rotate: [0, 5, -5, 0] }}
-                transition={{ duration: 4, repeat: Infinity, ease: "easeInOut" }}
-                className="w-48 h-48 mx-auto mb-6 relative z-10 drop-shadow-[0_0_30px_rgba(59,130,246,0.6)] flex justify-center items-center"
+                animate={{ y: [0, -10, 0] }}
+                transition={{ duration: 2, repeat: Infinity }}
+                className="mb-6 relative z-10 flex justify-center"
               >
-                {promotionModal.icon.includes('/') ? (
-                  <img 
-                    src={promotionModal.icon} 
-                    alt={promotionModal.name} 
-                    className="w-full h-full object-contain" 
-                    style={{ 
-                      maskImage: 'radial-gradient(circle, white 60%, transparent 95%)',
-                      WebkitMaskImage: 'radial-gradient(circle, white 60%, transparent 95%)'
-                    }}
-                  />
-                ) : (
-                  <span className="text-8xl">{promotionModal.icon}</span>
-                )}
+                <RankBadge level={promotionModal.level || 1} size={120} />
               </motion.div>
               
               <h2 className="text-sm font-black text-blue-400 uppercase tracking-[0.3em] mb-2">Promoção de Carreira</h2>
