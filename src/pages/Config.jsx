@@ -307,29 +307,54 @@ export default function Config({
         </h3>
         
         <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Seletor de Avatar */}
+          {/* Upload de Foto */}
           <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Avatar Operacional</label>
-            <div className="flex gap-4">
-              {[
-                { id: 'male', src: 'assets/gamification/avatar_male.png' },
-                { id: 'female', src: 'https://cdn-icons-png.flaticon.com/512/6522/6522516.png' }, // Fallback para female pois quota acabou
-                { id: 'elite', src: 'https://cdn-icons-png.flaticon.com/512/3233/3233514.png' }  // Fallback para elite
-              ].map(av => (
-                <button 
-                  key={av.id}
-                  onClick={() => useStore.setState(s => ({ userStats: { ...s.userStats, avatar: av.src } }))}
-                  className={`relative w-16 h-16 rounded-2xl overflow-hidden border-2 transition-all ${userStats.avatar === av.src ? 'border-blue-500 ring-4 ring-blue-500/20 scale-110' : 'border-slate-200 grayscale opacity-60 hover:grayscale-0 hover:opacity-100 dark:border-slate-700'}`}
-                >
-                  <img src={av.src} alt={av.id} className="w-full h-full object-cover" />
-                  {userStats.avatar === av.src && (
-                    <div className="absolute inset-0 bg-blue-500/10 flex items-center justify-center">
-                       <Shield className="text-blue-600 w-6 h-6" />
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Foto de Perfil</label>
+            <div className="flex items-center gap-6">
+              <div className="relative group">
+                <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-blue-500 shadow-lg bg-slate-800">
+                  {userStats.avatar ? (
+                    <img src={userStats.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center">
+                      <User className="w-8 h-8 text-slate-500" />
                     </div>
                   )}
-                </button>
-              ))}
+                </div>
+              </div>
+              <div className="flex flex-col gap-2">
+                <label className="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-wider px-5 py-2.5 rounded-xl transition-all active:scale-95 shadow-md shadow-blue-500/20 text-center">
+                  Enviar Foto
+                  <input 
+                    type="file" 
+                    accept="image/*" 
+                    className="hidden"
+                    onChange={(e) => {
+                      const file = e.target.files?.[0];
+                      if (!file) return;
+                      if (file.size > 500 * 1024) {
+                        setGlobalModal({ title: 'Arquivo Grande', message: 'A imagem deve ter no máximo 500KB. Tente uma foto mais leve.', isAlert: true });
+                        return;
+                      }
+                      const reader = new FileReader();
+                      reader.onloadend = () => {
+                        useStore.setState(s => ({ userStats: { ...s.userStats, avatar: reader.result } }));
+                      };
+                      reader.readAsDataURL(file);
+                    }}
+                  />
+                </label>
+                {userStats.avatar && (
+                  <button 
+                    onClick={() => useStore.setState(s => ({ userStats: { ...s.userStats, avatar: '' } }))}
+                    className="text-[10px] font-black text-red-400 hover:text-red-300 uppercase tracking-wider transition-colors"
+                  >
+                    Remover Foto
+                  </button>
+                )}
+              </div>
             </div>
+            <p className="text-[9px] text-slate-500 mt-3 font-bold">Formato: JPG, PNG. Máximo: 500KB.</p>
           </div>
 
           {/* Configuração de Som */}

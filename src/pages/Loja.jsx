@@ -12,24 +12,24 @@ const STORE_CATEGORIES = [
 
 const REWARDS = [
   // Lazer
-  { id: 1, title: 'Episódio de Série', desc: 'Assista 1 episódio sem culpa.', cost: 50, icon: '📺', category: 'lazer', rarity: 'common' },
-  { id: 2, title: 'Hora de Jogo', desc: '1 hora de videogame livre.', cost: 80, icon: '🎮', category: 'lazer', rarity: 'common' },
-  { id: 3, title: 'Rolagem Livre', desc: '30 min de redes sociais.', cost: 40, icon: '📱', category: 'lazer', rarity: 'common' },
-  { id: 4, title: 'Filme Completo', desc: 'Sessão cinema em casa.', cost: 120, icon: '🎬', category: 'lazer', rarity: 'uncommon' },
+  { id: 1, title: 'Episódio de Série', desc: 'Assista 1 episódio sem culpa.', cost: 150, icon: '📺', category: 'lazer', rarity: 'common' },
+  { id: 2, title: 'Hora de Jogo', desc: '1 hora de videogame livre.', cost: 200, icon: '🎮', category: 'lazer', rarity: 'common' },
+  { id: 3, title: 'Rolagem Livre', desc: '30 min de redes sociais.', cost: 120, icon: '📱', category: 'lazer', rarity: 'common' },
+  { id: 4, title: 'Filme Completo', desc: 'Sessão cinema em casa.', cost: 350, icon: '🎬', category: 'lazer', rarity: 'uncommon' },
 
   // Bem-Estar
-  { id: 5, title: 'Lanche Premium', desc: 'Hambúrguer, pizza ou açaí.', cost: 150, icon: '🍔', category: 'bem-estar', rarity: 'uncommon' },
-  { id: 6, title: 'Café Especial', desc: 'Cappuccino ou frappuccino.', cost: 60, icon: '☕', category: 'bem-estar', rarity: 'common' },
-  { id: 7, title: 'Soneca Tática', desc: '20 min de descanso extra.', cost: 70, icon: '😴', category: 'bem-estar', rarity: 'common' },
-  { id: 8, title: 'Dia de Folga', desc: 'Domingo inteiro sem estudar.', cost: 300, icon: '🏖️', category: 'bem-estar', rarity: 'rare' },
+  { id: 5, title: 'Lanche Premium', desc: 'Hambúrguer, pizza ou açaí.', cost: 400, icon: '🍔', category: 'bem-estar', rarity: 'uncommon' },
+  { id: 6, title: 'Café Especial', desc: 'Cappuccino ou frappuccino.', cost: 180, icon: '☕', category: 'bem-estar', rarity: 'common' },
+  { id: 7, title: 'Soneca Tática', desc: '20 min de descanso extra.', cost: 200, icon: '😴', category: 'bem-estar', rarity: 'common' },
+  { id: 8, title: 'Dia de Folga', desc: 'Domingo inteiro sem estudar.', cost: 800, icon: '🏖️', category: 'bem-estar', rarity: 'rare' },
 
   // Bônus
-  { id: 9, title: 'Boost de XP (2x)', desc: 'Próximas 5 ações rendem XP dobrado.', cost: 200, icon: '⚡', category: 'bonus', rarity: 'rare', isGameplay: true },
-  { id: 10, title: 'Escudo de Streak', desc: 'Protege sua ofensiva por 1 dia.', cost: 250, icon: '🛡️', category: 'bonus', rarity: 'rare', isGameplay: true },
+  { id: 9, title: 'Boost de XP (2x)', desc: 'Próximas 5 ações rendem XP dobrado.', cost: 500, icon: '⚡', category: 'bonus', rarity: 'rare', isGameplay: true },
+  { id: 10, title: 'Escudo de Streak', desc: 'Protege sua ofensiva por 1 dia.', cost: 600, icon: '🛡️', category: 'bonus', rarity: 'rare', isGameplay: true },
   
   // Premium
-  { id: 11, title: 'Jantar Especial', desc: 'Restaurante ou delivery premium.', cost: 500, icon: '🥂', category: 'premium', rarity: 'epic' },
-  { id: 12, title: 'Item de Desejo', desc: 'Compre algo que você quiser.', cost: 1000, icon: '🎁', category: 'premium', rarity: 'legendary' },
+  { id: 11, title: 'Jantar Especial', desc: 'Restaurante ou delivery premium.', cost: 1500, icon: '🥂', category: 'premium', rarity: 'epic' },
+  { id: 12, title: 'Item de Desejo', desc: 'Compre algo que você quiser.', cost: 3000, icon: '🎁', category: 'premium', rarity: 'legendary' },
 ];
 
 const RARITY_STYLES = {

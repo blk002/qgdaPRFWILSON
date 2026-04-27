@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useStore } from '../store/useStore';
 import { PATENTES, MEDALHAS } from '../hooks/useGamification';
 import RankBadge from '../components/RankBadge';
@@ -11,7 +11,9 @@ import {
   Coins, 
   Flame, 
   ShieldCheck,
-  Target
+  Target,
+  Pencil,
+  Check as CheckIcon
 } from 'lucide-react';
 import { motion } from 'framer-motion';
 
@@ -38,6 +40,17 @@ export default function Dashboard() {
   const subjectEstimates = getSubjectEstimates();
   const completionPercent = Math.round((subjectEstimates.filter(s => s.remaining === 0).length / subjectEstimates.length) * 100) || 0;
 
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState(userStats.displayName || '');
+  const displayName = userStats.displayName || user?.email?.split('@')[0] || 'Combatente';
+
+  const handleSaveName = () => {
+    if (tempName.trim()) {
+      useStore.setState(s => ({ userStats: { ...s.userStats, displayName: tempName.trim() } }));
+    }
+    setIsEditingName(false);
+  };
+
   return (
     <div className="fade-in max-w-[1400px] mx-auto pb-10 px-4">
       
@@ -49,7 +62,13 @@ export default function Dashboard() {
           {/* Avatar e Patente Principal */}
           <div className="relative group">
             <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)] relative z-10 bg-slate-800">
-               <img src={userStats.avatar || 'assets/gamification/avatar_male.png'} alt="Avatar" className="w-full h-full object-cover" />
+               {userStats.avatar ? (
+                 <img src={userStats.avatar} alt="Avatar" className="w-full h-full object-cover" />
+               ) : (
+                 <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-700 to-slate-900">
+                   <RankBadge level={patenteAtual.level} size={80} />
+                 </div>
+               )}
             </div>
             <div className="absolute -bottom-2 -right-2 bg-blue-600 text-white p-2.5 rounded-2xl shadow-lg border-2 border-white dark:border-slate-900 z-20">
               <ShieldCheck className="w-6 h-6" />
@@ -60,7 +79,33 @@ export default function Dashboard() {
           {/* Info do Agente */}
           <div className="flex-1 text-center md:text-left">
             <div className="flex flex-col md:flex-row md:items-end gap-2 mb-2">
-              <h1 className="text-3xl sm:text-4xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">{user?.name || "Combatente"}</h1>
+              {isEditingName ? (
+                <div className="flex items-center gap-2">
+                  <input 
+                    type="text" 
+                    value={tempName} 
+                    onChange={(e) => setTempName(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                    autoFocus
+                    maxLength={30}
+                    className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white tracking-tighter uppercase bg-transparent border-b-2 border-blue-500 outline-none w-64"
+                    placeholder="Seu nome..."
+                  />
+                  <button onClick={handleSaveName} className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-500 transition-all">
+                    <CheckIcon className="w-5 h-5" />
+                  </button>
+                </div>
+              ) : (
+                <div className="flex items-center gap-2 group/name">
+                  <h1 className="text-3xl sm:text-4xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">{displayName}</h1>
+                  <button 
+                    onClick={() => { setTempName(displayName); setIsEditingName(true); }}
+                    className="p-1.5 text-slate-400 hover:text-blue-500 opacity-0 group-hover/name:opacity-100 transition-all rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20"
+                  >
+                    <Pencil className="w-4 h-4" />
+                  </button>
+                </div>
+              )}
               <span className={`text-sm font-black px-3 py-1 rounded-lg uppercase tracking-widest bg-slate-100 dark:bg-slate-800 ${patenteAtual.color}`}>{patenteAtual.name}</span>
             </div>
             
