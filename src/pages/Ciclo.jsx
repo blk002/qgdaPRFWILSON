@@ -248,14 +248,14 @@ export default function Ciclo() {
         <Layers className="w-4 h-4" /> Fila de Conteúdo Novo / Avanço
       </h3>
 
-      <div id="cycle-scroll-container" className="overflow-x-auto pt-5 pb-6 custom-scrollbar snap-x snap-mandatory -mx-4 px-4 sm:mx-0 sm:px-0">
-        <div className="flex gap-4 sm:gap-6 min-w-max items-stretch">
+      <div id="cycle-scroll-container" className="pt-2 pb-6">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-stretch">
           {cycle.length > 0 && cycle.map((daySubjects, dayIndex) => {
             const dateInfo = getRelativeDateInfo(dayIndex);
             const isToday = dateInfo.isToday;
             
             return (
-              <div id={`cycle-day-${dayIndex}`} key={dayIndex} className={`w-[85vw] sm:w-[320px] shrink-0 snap-start flex flex-col rounded-2xl border-2 transition-all mt-2 ${
+              <div id={`cycle-day-${dayIndex}`} key={dayIndex} className={`w-full flex flex-col rounded-2xl border-2 transition-all mt-2 ${
                   isToday ? 'border-blue-500 bg-slate-50 shadow-lg ring-4 ring-blue-50 relative dark:bg-slate-900 dark:border-blue-600 dark:ring-blue-900/20' : 'border-slate-200 bg-white opacity-70 hover:opacity-100 scale-[0.98] hover:scale-100 dark:border-slate-800 dark:bg-slate-950'
               }`}>
                 {isToday && (
