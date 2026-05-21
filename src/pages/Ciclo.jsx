@@ -24,6 +24,18 @@ export default function Ciclo() {
   } = useStore();
   const pendingReviews = getPendingReviews().slice(0, 4);
 
+  const visibleDays = (() => {
+    if (!cycle || cycle.length === 0) return [];
+    const safeCurrentDayIndex = currentDayIndex % cycle.length;
+    const visibleCount = Math.min(5, cycle.length);
+    const result = [];
+    for (let i = 0; i < visibleCount; i++) {
+      const dayIndex = (safeCurrentDayIndex + i) % cycle.length;
+      result.push({ daySubjects: cycle[dayIndex], dayIndex });
+    }
+    return result;
+  })();
+
   const [triggerConfetti, setTriggerConfetti] = useState(false);
   const canvasRef = useRef(null);
   const prevCompletedLength = useRef(completedToday.length);
@@ -250,7 +262,7 @@ export default function Ciclo() {
 
       <div id="cycle-scroll-container" className="overflow-x-auto pt-2 pb-6 no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
         <div className="flex gap-2.5 sm:gap-4 items-stretch w-full">
-          {cycle.length > 0 && cycle.map((daySubjects, dayIndex) => {
+          {visibleDays.map(({ daySubjects, dayIndex }) => {
             const dateInfo = getRelativeDateInfo(dayIndex);
             const isToday = dateInfo.isToday;
             
