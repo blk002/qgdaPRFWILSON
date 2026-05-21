@@ -1,6 +1,7 @@
 import { useStore } from '../store/useStore';
 import { Target, AlertTriangle, Activity, Trophy, ChevronRight, Flame, Layers, PlayCircle, BrainCircuit, Shuffle, CheckCircle } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
+import { useState, useEffect, useRef } from 'react';
 
 export default function Ciclo() {
   const navigate = useNavigate();
@@ -22,6 +23,90 @@ export default function Ciclo() {
     setReplaceSubjectModal
   } = useStore();
   const pendingReviews = getPendingReviews().slice(0, 4);
+
+  const [triggerConfetti, setTriggerConfetti] = useState(false);
+  const canvasRef = useRef(null);
+  const prevCompletedLength = useRef(completedToday.length);
+
+  useEffect(() => {
+    const totalSlots = cycle[currentDayIndex]?.length || 0;
+    if (completedToday.length === totalSlots && totalSlots > 0 && prevCompletedLength.current < totalSlots) {
+      setTimeout(() => {
+        setTriggerConfetti(true);
+      }, 0);
+    }
+    prevCompletedLength.current = completedToday.length;
+  }, [completedToday.length, cycle, currentDayIndex]);
+
+  useEffect(() => {
+    if (!triggerConfetti) return;
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext('2d');
+    canvas.width = window.innerWidth;
+    canvas.height = window.innerHeight;
+
+    const colors = ['#f43f5e', '#3b82f6', '#10b981', '#eab308', '#a855f7', '#ff7849'];
+    const particles = [];
+
+    for (let i = 0; i < 120; i++) {
+      particles.push({
+        x: Math.random() * canvas.width,
+        y: Math.random() * canvas.height - canvas.height,
+        r: Math.random() * 6 + 4,
+        d: Math.random() * canvas.height,
+        color: colors[Math.floor(Math.random() * colors.length)],
+        tilt: Math.random() * 10 - 5,
+        tiltAngleIncremental: Math.random() * 0.07 + 0.02,
+        tiltAngle: 0
+      });
+    }
+
+    let animationFrameId;
+    let startTime = Date.now();
+
+    const draw = () => {
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      let active = false;
+      
+      particles.forEach((p) => {
+        p.tiltAngle += p.tiltAngleIncremental;
+        p.y += (Math.cos(p.d) + 3 + p.r / 2) / 2;
+        p.x += Math.sin(p.tiltAngle);
+        p.tilt = Math.sin(p.tiltAngle - p.r/3) * 15;
+
+        if (p.y <= canvas.height) {
+          active = true;
+        }
+
+        ctx.beginPath();
+        ctx.lineWidth = p.r;
+        ctx.strokeStyle = p.color;
+        ctx.moveTo(p.x + p.tilt + p.r / 2, p.y);
+        ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r / 2);
+        ctx.stroke();
+      });
+
+      if (active && Date.now() - startTime < 2500) {
+        animationFrameId = requestAnimationFrame(draw);
+      } else {
+        setTriggerConfetti(false);
+      }
+    };
+
+    draw();
+
+    const handleResize = () => {
+      canvas.width = window.innerWidth;
+      canvas.height = window.innerHeight;
+    };
+    window.addEventListener('resize', handleResize);
+
+    return () => {
+      cancelAnimationFrame(animationFrameId);
+      window.removeEventListener('resize', handleResize);
+    };
+  }, [triggerConfetti]);
   return (
     <div className="fade-in pb-10 max-w-[1400px] px-2 sm:px-4 mx-auto">
       
@@ -117,26 +202,31 @@ export default function Ciclo() {
             const isDone = progress === 100;
 
             return (
-              <div key={sub.id} className={`min-w-[110px] sm:min-w-[120px] shrink-0 snap-start rounded-xl p-3 flex flex-col items-center justify-center gap-3 relative overflow-hidden transition-all shadow-sm border ${isDone ? 'bg-emerald-900/20 border-emerald-800/50' : 'bg-slate-800 border-slate-700 hover:border-slate-600'}`}>
+              <div key={sub.id} className={`min-w-[110px] sm:min-w-[120px] shrink-0 snap-start rounded-xl p-3 flex flex-col items-center justify-center gap-3 relative overflow-hidden transition-all shadow-sm border ${isDone ? 'bg-emerald-900/20 border-emerald-800/50 hover:border-emerald-600' : 'bg-slate-800 border-slate-700 hover:border-slate-500'}`}>
                 
                 {isDone && <div className="absolute inset-0 bg-gradient-to-t from-emerald-500/10 to-transparent pointer-events-none"></div>}
 
                 <div className="relative flex items-center justify-center group z-10">
-                  <svg className="transform -rotate-90 w-14 h-14 sm:w-16 sm:h-16 drop-shadow-md" viewBox="0 0 100 100">
+                  <svg className="transform -rotate-90 w-14 h-14 sm:w-16 sm:h-16 drop-shadow-md overflow-visible" viewBox="0 0 100 100">
                     <defs>
                       <linearGradient id={`grad-cycle-${sub.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
                         <stop offset="0%" stopColor={isDone ? '#10b981' : '#c084fc'} />
                         <stop offset="100%" stopColor={isDone ? '#059669' : '#3b82f6'} />
                       </linearGradient>
+                      <filter id={`glow-cycle-${sub.id}`} x="-20%" y="-20%" width="140%" height="140%">
+                        <feGaussianBlur stdDeviation="3" result="blur" />
+                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
+                      </filter>
                     </defs>
-                    <circle cx="50" cy="50" r={radius} stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-700 dark:text-slate-200" />
+                    <circle cx="50" cy="50" r={radius} stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-100 dark:text-slate-800" />
                     <circle 
                       cx="50" cy="50" r={radius} 
                       stroke={`url(#grad-cycle-${sub.id})`} 
                       strokeWidth="8" fill="transparent" 
                       strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} 
                       strokeLinecap="round" 
-                      className="transition-all duration-1000 ease-out" 
+                      className="transition-all duration-1000 ease-out origin-center" 
+                      filter={`url(#glow-cycle-${sub.id})`}
                     />
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
@@ -270,6 +360,13 @@ export default function Ciclo() {
           })}
         </div>
       </div>
+      {/* Canvas de Confete ao bater a meta */}
+      {triggerConfetti && (
+        <canvas 
+          ref={canvasRef} 
+          className="fixed inset-0 pointer-events-none z-50 w-full h-full"
+        />
+      )}
     </div>
   );
 }

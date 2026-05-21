@@ -16,7 +16,7 @@ const Revisoes = React.lazy(() => import('./pages/Revisoes'));
 const Ciclo = React.lazy(() => import('./pages/Ciclo'));
 const Calendario = React.lazy(() => import('./pages/Calendario'));
 const Config = React.lazy(() => import('./pages/Config'));
-const DiarioEstudos = React.lazy(() => import('./pages/DiarioEstudos'));
+const PortuguesSintaxe = React.lazy(() => import('./pages/PortuguesSintaxe'));
 import { Routes, Route, Link, NavLink, useLocation } from 'react-router-dom';
 import { Toaster } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -24,7 +24,7 @@ import {
   Search, Library, Clock, Calendar as CalendarIcon, Repeat, Dumbbell, 
   Target as TargetIcon, BarChart2, Store, Settings, Award, BrainCircuit, 
   X, Check, ArrowRight, ShieldCheck, Trophy, Sun, Moon, Coins, 
-  AlertTriangle, Info, LogOut, Shield, BookOpen 
+  AlertTriangle, Info, LogOut, Shield 
 } from 'lucide-react';
 import { PATENTES } from './hooks/useGamification';
 
@@ -153,13 +153,13 @@ export default function App() {
   const tabs = [
     { id: '/', label: 'Carreira', icon: Award },
     { id: '/revisoes', label: 'Revisões', icon: BrainCircuit, count: allDueToday.length },
+    { id: '/sintaxe', label: 'Sintaxe (PT)', icon: Library },
     { id: '/ciclo', label: 'Ciclo', icon: Repeat },
     { id: '/calendario', label: 'Calendário', icon: CalendarIcon },
     { id: '/taf', label: 'Treino TAF', icon: Dumbbell },
     { id: '/simulados', label: 'Simulados', icon: TargetIcon },
     { id: '/estatisticas', label: 'Estatísticas', icon: BarChart2 },
     { id: '/loja', label: 'Loja', icon: Store },
-    { id: '/diario', label: 'Diário', icon: BookOpen },
     { id: '/config', label: 'Ajustes', icon: Settings },
   ];
 
@@ -170,75 +170,85 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+    <div className={`min-h-screen transition-colors duration-300 relative overflow-x-hidden ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+      {/* Tactical background gradient and grid */}
+      <div className="absolute inset-0 tactical-grid pointer-events-none -z-20"></div>
+      {isDarkMode && (
+        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[120px] pointer-events-none -z-10 pulse-bg-glow"></div>
+      )}
       <Toaster position="top-right" richColors closeButton />
       
-      <header className={`${isDarkMode ? 'bg-slate-900 border-slate-800' : 'bg-slate-900'} text-white shadow-md sticky top-0 z-50`}>
-        <div className="max-w-[1400px] mx-auto px-2 sm:px-4 py-3 sm:py-4 flex justify-between items-center">
-          <Link to="/" className="flex items-center gap-3">
-            <Award className="text-blue-400 w-5 h-5 sm:w-6 sm:h-6" />
-            <h1 className="text-lg sm:text-xl font-bold tracking-wider text-white">QG DA PRF</h1>
-          </Link>
-          
-          <div className="flex items-center gap-2 sm:gap-4">
-            {/* Patente Badge */}
-            <div className={`hidden lg:flex flex-col items-center gap-1 bg-slate-800/50 px-3 py-2 rounded-xl border border-slate-700 shadow-sm ${getCurrentPatente().color}`}>
-               <div className="flex items-center gap-2">
-                  <span className="text-xl leading-none">{getCurrentPatente().icon}</span>
-                  <span className="text-[10px] font-black uppercase tracking-widest">{getCurrentPatente().name}</span>
-               </div>
-               <div className="w-24 bg-slate-700/50 rounded-full h-1.5 overflow-hidden">
-                  <div 
-                    className="bg-current h-full transition-all duration-1000 shadow-[0_0_8px_rgba(255,255,255,0.3)]" 
-                    style={{ width: `${Math.min(100, (userStats.xp % 1000) / 10)}%` }}
-                  ></div>
-               </div>
-            </div>
-
-
-            {/* Coins */}
-            <div className="flex items-center gap-1 bg-slate-800 px-3 py-1.5 rounded-full border border-slate-700 shadow-sm">
-              <Coins className="text-yellow-400 w-4 h-4 sm:w-5 sm:h-5" />
-              <span className="font-black text-sm sm:text-lg text-white">{coins}</span>
-            </div>
+      <header className="sticky top-4 z-50 mx-auto max-w-[1400px] px-4 w-full pt-2">
+        <div className={`glass-card rounded-[1.8rem] ${isDarkMode ? 'bg-slate-900/75 border-slate-800/80 shadow-2xl' : 'bg-white/80 border-slate-200/50 shadow-lg shadow-slate-100/30'} overflow-hidden`}>
+          <div className="px-4 py-3 sm:px-6 flex justify-between items-center">
+            <Link to="/" className="flex items-center gap-3">
+              <div className="p-2 bg-blue-600/10 dark:bg-blue-500/15 rounded-xl border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.15)]">
+                <Award className="text-blue-600 dark:text-blue-400 w-5 h-5 sm:w-6 sm:h-6" />
+              </div>
+              <h1 className="text-base sm:text-lg font-black tracking-wider text-slate-800 dark:text-white uppercase leading-none">QG DA PRF</h1>
+            </Link>
             
-            {/* Logout Button */}
-            <button 
-              onClick={signOut}
-              className="p-2 sm:p-2.5 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-full border border-red-500/20 transition-all"
-              title="Sair do QG"
-            >
-              <LogOut className="w-4 h-4 sm:w-5 sm:h-5" />
-            </button>
+            <div className="flex items-center gap-2 sm:gap-4">
+              {/* Patente Badge */}
+              <div className={`hidden lg:flex flex-col items-center gap-1 bg-slate-100 dark:bg-slate-850 px-3 py-1.5 rounded-2xl border border-slate-200 dark:border-slate-800/60 shadow-inner ${getCurrentPatente().color}`}>
+                 <div className="flex items-center gap-2">
+                    <span className="text-lg leading-none">{getCurrentPatente().icon}</span>
+                    <span className="text-[9px] font-black uppercase tracking-widest">{getCurrentPatente().name}</span>
+                 </div>
+                 <div className="w-24 bg-slate-200 dark:bg-slate-700 rounded-full h-1 overflow-hidden">
+                    <div 
+                      className="bg-current h-full transition-all duration-1000 shadow-[0_0_8px_rgba(255,255,255,0.3)]" 
+                      style={{ width: `${Math.min(100, (userStats.xp % 1000) / 10)}%` }}
+                    ></div>
+                 </div>
+              </div>
 
-            {/* Dark Mode Toggle */}
-            <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 sm:p-2.5 bg-slate-800 hover:bg-slate-700 rounded-full border border-slate-700 transition-all text-white">
-              {isDarkMode ? <Sun className="w-4 h-4 sm:w-5 sm:h-5" /> : <Moon className="w-4 h-4 sm:w-5 sm:h-5" />}
-            </button>
-          </div>
-        </div>
-
-        <nav className="max-w-[1400px] mx-auto px-2 sm:px-4 overflow-x-auto no-scrollbar border-t border-white/5 bg-slate-900/50 backdrop-blur-md">
-          <div className="flex gap-4 sm:gap-6 min-w-max">
-            {tabs.map(tab => (
-              <NavLink 
-                key={tab.id}
-                to={tab.id}
-                className={({ isActive }) => `flex items-center gap-2 py-3 sm:py-4 px-1 border-b-4 transition-all whitespace-nowrap text-sm font-black uppercase tracking-tighter sm:tracking-normal ${
-                  isActive ? 'border-blue-500 text-blue-400' : 'border-transparent text-slate-400 hover:text-slate-200'
-                }`}
+              {/* Coins */}
+              <div className="flex items-center gap-1.5 bg-yellow-500/10 dark:bg-yellow-500/15 px-3 py-1.5 rounded-full border border-yellow-500/20 shadow-sm">
+                <Coins className="text-yellow-600 dark:text-yellow-400 w-4 h-4 sm:w-5 sm:h-5" />
+                <span className="font-black text-sm sm:text-base text-yellow-600 dark:text-yellow-400">{coins}</span>
+              </div>
+              
+              {/* Logout Button */}
+              <button 
+                onClick={signOut}
+                className="p-2 bg-red-600/10 hover:bg-red-700 text-red-500 hover:text-white rounded-xl border border-red-500/10 transition-all hover:scale-105 active:scale-95 cursor-pointer"
+                title="Sair do QG"
               >
-                <tab.icon className="w-4 h-4" />
-                <span>{tab.label}</span>
-                {tab.count > 0 && (
-                  <span className="bg-red-500 text-white text-[10px] w-4 h-4 flex items-center justify-center rounded-full animate-bounce">
-                    {tab.count}
-                  </span>
-                )}
-              </NavLink>
-            ))}
+                <LogOut className="w-4 h-4" />
+              </button>
+
+              {/* Dark Mode Toggle */}
+              <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition-all text-slate-700 dark:text-white hover:scale-105 active:scale-95 cursor-pointer">
+                {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              </button>
+            </div>
           </div>
-        </nav>
+
+          <nav className={`px-4 sm:px-6 overflow-x-auto no-scrollbar border-t ${isDarkMode ? 'border-slate-800/80 bg-slate-950/20' : 'border-slate-200/50 bg-slate-50/50'}`}>
+            <div className="flex gap-1.5 py-2.5 min-w-max">
+              {tabs.map(tab => (
+                <NavLink 
+                  key={tab.id}
+                  to={tab.id}
+                  className={({ isActive }) => `flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all duration-300 whitespace-nowrap text-xs font-black uppercase tracking-tight cursor-pointer ${
+                    isActive 
+                      ? 'bg-blue-600 dark:bg-blue-500 text-white shadow-md shadow-blue-500/15' 
+                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/40'
+                  }`}
+                >
+                  <tab.icon className="w-3.5 h-3.5" />
+                  <span>{tab.label}</span>
+                  {tab.count > 0 && (
+                    <span className="bg-red-500 text-white text-[9px] w-4.5 h-4.5 flex items-center justify-center rounded-full font-black">
+                      {tab.count}
+                    </span>
+                  )}
+                </NavLink>
+              ))}
+            </div>
+          </nav>
+        </div>
       </header>
 
       <main className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-10">
@@ -277,13 +287,13 @@ export default function App() {
                 <Routes location={location}>
                   <Route path="/" element={<Dashboard />} />
                   <Route path="/revisoes" element={<Revisoes />} />
+                  <Route path="/sintaxe" element={<PortuguesSintaxe />} />
                   <Route path="/ciclo" element={<Ciclo />} />
                   <Route path="/calendario" element={<Calendario />} />
                   <Route path="/taf" element={<TreinoTAF />} />
                   <Route path="/simulados" element={<Simulados />} />
                   <Route path="/estatisticas" element={<Estatisticas />} />
                   <Route path="/loja" element={<Loja />} />
-                  <Route path="/diario" element={<DiarioEstudos />} />
                   <Route path="/config" element={<Config availableColors={availableColors} />} />
                 </Routes>
               </Suspense>
@@ -499,20 +509,11 @@ export default function App() {
       <AnimatePresence>
         {promotionModal && createPortal(
           <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/90 backdrop-blur-md">
-            {/* Confetti particles */}
-            {Array.from({ length: 16 }).map((_, i) => (
-              <div key={i} className="confetti-particle" style={{
-                left: `${10 + (i * 5.5)}%`,
-                animationDelay: `${i * 0.06}s`,
-                animationDuration: `${0.8 + Math.random() * 0.5}s`,
-                background: ['#3b82f6','#8b5cf6','#f59e0b','#10b981','#ef4444','#06b6d4'][i % 6],
-              }} />
-            ))}
             <motion.div 
               initial={{ scale: 0.5, opacity: 0, rotate: -10 }}
               animate={{ scale: 1, opacity: 1, rotate: 0 }}
               exit={{ scale: 1.2, opacity: 0 }}
-              className="bg-slate-900 border-4 border-blue-500 rounded-[2rem] p-8 max-w-sm w-full text-center relative overflow-hidden shadow-[0_0_50px_rgba(59,130,246,0.5)] animate-glow-pulse"
+              className="bg-slate-900 border-4 border-blue-500 rounded-[2rem] p-8 max-w-sm w-full text-center relative overflow-hidden shadow-[0_0_50px_rgba(59,130,246,0.5)]"
             >
               <div className="absolute inset-0 bg-gradient-to-b from-blue-500/20 to-transparent pointer-events-none"></div>
               
@@ -534,7 +535,7 @@ export default function App() {
               
               <button 
                 onClick={() => setPromotionModal(null)}
-                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-95 uppercase tracking-widest text-sm animate-bounce-in"
+                className="w-full bg-blue-600 hover:bg-blue-500 text-white font-black py-4 rounded-2xl shadow-xl transition-all active:scale-95 uppercase tracking-widest text-sm"
               >
                 Assumir Posto
               </button>

@@ -8,7 +8,8 @@ import {
   AlertTriangle, 
   Clock, 
   BookOpen, 
-  CheckCircle 
+  CheckCircle,
+  Activity
 } from 'lucide-react';
 
 export default function Calendario() {
@@ -20,7 +21,8 @@ export default function Calendario() {
     calendarDate,
     setCalendarDate,
     getSubjectEstimates,
-    getEstimatedCompletionDate
+    getEstimatedCompletionDate,
+    studyHistory
   } = useStore();
   
   if (!calendarDate) return null;
@@ -66,6 +68,31 @@ export default function Calendario() {
       });
       futureSchedule[i] = scheduledThisDay;
   }
+
+  // --- GitHub Contribution Grid Calculation ---
+  const gridDays = [];
+  const startDay = new Date();
+  startDay.setDate(startDay.getDate() - 364);
+  const dayOfWeek = startDay.getDay();
+  startDay.setDate(startDay.getDate() - dayOfWeek); // Alinha com o domingo
+
+  for (let i = 0; i < 371; i++) {
+    const d = new Date(startDay);
+    d.setDate(startDay.getDate() + i);
+    gridDays.push(d);
+  }
+
+  const monthLabels = [];
+  let currentMonth = -1;
+  gridDays.forEach((d, index) => {
+    if (d.getDay() === 0) {
+      const m = d.getMonth();
+      if (m !== currentMonth) {
+        monthLabels.push({ name: mesesNomes[m].substring(0, 3), colIndex: Math.floor(index / 7) });
+        currentMonth = m;
+      }
+    }
+  });
 
   return (
     <div className="flex flex-col lg:flex-row items-start gap-4 md:gap-6 max-w-[1400px] px-2 sm:px-4 mx-auto pb-10 fade-in">
@@ -158,6 +185,79 @@ export default function Calendario() {
               })}
             </div>
           </div>
+        </div>
+
+        {/* Gráfico de Consistência Anual (Estilo GitHub) */}
+        <div className="mt-8 border-t border-slate-150 pt-6 dark:border-slate-800/80">
+           <h3 className="text-sm font-bold text-slate-700 flex items-center gap-2 mb-4 dark:text-slate-350">
+              <Activity className="w-4 h-4 text-purple-500" /> Registro Anual de Consistência
+           </h3>
+           
+           <div className="flex gap-3 items-end">
+              {/* Rótulos dos dias da semana */}
+              <div className="flex flex-col justify-between text-[9px] font-bold text-slate-400 h-[84px] pb-1 select-none">
+                 <span>Seg</span>
+                 <span>Qua</span>
+                 <span>Sex</span>
+              </div>
+              
+              <div className="flex-1 overflow-x-auto scrollbar-thin">
+                 {/* Rótulos dos meses */}
+                 <div className="relative h-4 text-[9px] font-black text-slate-400 uppercase mb-1 select-none" style={{ minWidth: `${53 * 14}px` }}>
+                    {monthLabels.map((lbl, idx) => (
+                      <span
+                        key={idx}
+                        className="absolute"
+                        style={{ left: `${lbl.colIndex * 14}px` }}
+                      >
+                        {lbl.name}
+                      </span>
+                    ))}
+                 </div>
+                 
+                 {/* O Grid das 52 semanas */}
+                 <div className="grid grid-flow-col grid-rows-7 gap-[2px]" style={{ minWidth: `${53 * 14}px`, gridTemplateRows: 'repeat(7, minmax(0, 1fr))' }}>
+                    {gridDays.map((d, index) => {
+                      const dateStr = d.toISOString().split('T')[0];
+                      const mins = studyHistory[dateStr] || 0;
+                      
+                      let bg = "bg-slate-100 dark:bg-slate-800/85";
+                      if (mins > 0 && mins < 30) bg = "bg-purple-100 dark:bg-purple-950/60";
+                      else if (mins >= 30 && mins < 60) bg = "bg-purple-300 dark:bg-purple-800/60";
+                      else if (mins >= 60 && mins < 120) bg = "bg-purple-500 dark:bg-purple-600";
+                      else if (mins >= 120) bg = "bg-purple-700 dark:bg-purple-400";
+
+                      const formattedDate = d.toLocaleDateString('pt-BR', { day: 'numeric', month: 'short', year: 'numeric' });
+                      const tooltipText = `${formattedDate} • ${mins}m estudados`;
+
+                      return (
+                        <div
+                          key={index}
+                          className={`w-[11px] h-[11px] rounded-[2px] ${bg} transition-all duration-150 hover:scale-125 cursor-pointer relative group/cell`}
+                        >
+                          <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-1.5 hidden group-hover/cell:flex flex-col items-center z-50 pointer-events-none">
+                            <div className="bg-slate-950 text-white text-[9px] font-black py-1 px-2 rounded shadow-md whitespace-nowrap">
+                              {tooltipText}
+                            </div>
+                            <div className="w-1 h-1 bg-slate-950 rotate-45 -mt-[2px]" />
+                          </div>
+                        </div>
+                      );
+                    })}
+                 </div>
+              </div>
+           </div>
+           
+           {/* Legenda de cores */}
+           <div className="flex justify-end items-center gap-1.5 mt-3 text-[10px] text-slate-400 font-bold select-none">
+              <span>Menos</span>
+              <div className="w-[11px] h-[11px] rounded-[2px] bg-slate-100 dark:bg-slate-800/85" />
+              <div className="w-[11px] h-[11px] rounded-[2px] bg-purple-100 dark:bg-purple-950/60" />
+              <div className="w-[11px] h-[11px] rounded-[2px] bg-purple-300 dark:bg-purple-800/60" />
+              <div className="w-[11px] h-[11px] rounded-[2px] bg-purple-500 dark:bg-purple-600" />
+              <div className="w-[11px] h-[11px] rounded-[2px] bg-purple-700 dark:bg-purple-400" />
+              <span>Mais</span>
+           </div>
         </div>
       </div>
 

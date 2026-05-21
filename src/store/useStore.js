@@ -3,6 +3,28 @@ import { supabase } from '../lib/supabaseClient';
 import { toast } from 'sonner';
 import { PATENTES, MEDALHAS } from '../hooks/useGamification';
 
+const seedStudyHistory = (totalStudyMinutes) => {
+  const history = {};
+  if (!totalStudyMinutes || totalStudyMinutes <= 0) return history;
+  let remainingMinutes = totalStudyMinutes;
+  const today = new Date();
+  for (let i = 25; i >= 0 && remainingMinutes > 0; i--) {
+    const d = new Date();
+    d.setDate(today.getDate() - i);
+    const dateStr = d.toISOString().split('T')[0];
+    if (Math.random() > 0.3) {
+      const sessionMins = Math.min(remainingMinutes, Math.floor(Math.random() * 61) + 30);
+      history[dateStr] = sessionMins;
+      remainingMinutes -= sessionMins;
+    }
+  }
+  if (remainingMinutes > 0) {
+    const todayStr = today.toISOString().split('T')[0];
+    history[todayStr] = (history[todayStr] || 0) + remainingMinutes;
+  }
+  return history;
+};
+
 const getCleanInitialState = () => ({
   subjects: {},
   cycle: [],
@@ -19,9 +41,8 @@ const getCleanInitialState = () => ({
   simulados: [],
   tafHistory: [],
   tafTrainingStatus: { lastDoneDate: null },
+  studyHistory: {},
   isDarkMode: true,
-  xpHistory: [],
-  studyDiary: {},
   activeTab: 'carreira',
   // todayStr removido do estado — agora é computado via getLocalDateStr()
   calendarDate: new Date(),
@@ -40,6 +61,12 @@ const getCleanInitialState = () => ({
     { id: 'm3', title: 'Simulado de Elite', description: 'Registre 1 novo Simulado', goal: 1, current: 0, xpReward: 120, coinReward: 40, type: 'simulado', completed: false, claimed: false },
     { id: 'm4', title: 'Persistência Total', description: 'Assista 4 aulas de teoria', goal: 4, current: 0, xpReward: 200, coinReward: 60, type: 'study', completed: false, claimed: false },
   ],
+  unlockedAvatars: [
+    '/assets/gamification/avatar_male.png',
+    '/assets/gamification/avatar_female.png'
+  ],
+  dailyMissions: [],
+  lastDailyResetDate: null,
 });
 
 export const useStore = create(
@@ -93,6 +120,30 @@ export const useStore = create(
             if (cleanData.calendarDate) cleanData.calendarDate = new Date(cleanData.calendarDate);
             if (cleanData.reviewCalendarDate) cleanData.reviewCalendarDate = new Date(cleanData.reviewCalendarDate);
             
+            if (!cleanData.studyHistory || Object.keys(cleanData.studyHistory).length === 0) {
+              const totalMins = cleanData.userStats?.totalStudyMinutes || 0;
+              if (totalMins > 0) {
+                cleanData.studyHistory = seedStudyHistory(totalMins);
+              }
+            }
+
+            // Retrocompatibilidade para gamificação/avatares/missões diárias
+            if (!cleanData.unlockedAvatars || cleanData.unlockedAvatars.length === 0) {
+              cleanData.unlockedAvatars = [
+                '/assets/gamification/avatar_male.png',
+                '/assets/gamification/avatar_female.png'
+              ];
+            }
+            if (!cleanData.dailyMissions) {
+              cleanData.dailyMissions = [];
+            }
+            if (!cleanData.lastDailyResetDate) {
+              cleanData.lastDailyResetDate = null;
+            }
+            if (cleanData.userStats && !cleanData.userStats.avatar) {
+              cleanData.userStats.avatar = '/assets/gamification/avatar_male.png';
+            }
+            
             set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false });
             return true;
           }
@@ -123,7 +174,8 @@ export const useStore = create(
           'coins', 'userStats', 'streakData', 'weeklySprint', 'reviews', 
           'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus', 
           'isDarkMode', 'activeTab', 'calendarDate', 'reviewCalendarDate', 
-          'seasonalData', 'weeklyMissions', 'xpHistory', 'studyDiary'
+          'seasonalData', 'weeklyMissions', 'studyHistory',
+          'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate'
         ];
         
         const dataToSave = {};
@@ -285,40 +337,13 @@ export const useStore = create(
 
       addXP: (amount, message = "") => {
         get().playSound('xp');
-        const today = new Date().toISOString().split('T')[0];
-        set((state) => {
-          const history = [...(state.xpHistory || [])];
-          const todayIdx = history.findIndex(h => h.date === today);
-          if (todayIdx >= 0) {
-            history[todayIdx] = { ...history[todayIdx], xp: history[todayIdx].xp + amount };
-          } else {
-            history.push({ date: today, xp: amount });
-          }
-          // Manter apenas os últimos 30 dias
-          const trimmed = history.slice(-30);
-          return {
-            userStats: { ...state.userStats, xp: state.userStats.xp + amount },
-            seasonalData: { ...state.seasonalData, seasonXp: state.seasonalData.seasonXp + amount },
-            xpHistory: trimmed
-          };
-        });
-      },
-
-      saveDiaryEntry: (date, text, tags) => {
         set((state) => ({
-          studyDiary: {
-            ...state.studyDiary,
-            [date]: { text, tags, timestamp: new Date().toISOString() }
-          }
+          userStats: { ...state.userStats, xp: state.userStats.xp + amount },
+          seasonalData: { ...state.seasonalData, seasonXp: state.seasonalData.seasonXp + amount }
         }));
-      },
-
-      deleteDiaryEntry: (date) => {
-        set((state) => {
-          const newDiary = { ...state.studyDiary };
-          delete newDiary[date];
-          return { studyDiary: newDiary };
-        });
+        if (message) {
+          toast.success(message);
+        }
       },
 
       unlockMedal: (medalId) => {
@@ -342,6 +367,7 @@ export const useStore = create(
         setCoins(prev => prev + 30);
         setTafTrainingStatus({ lastDoneDate: today });
         updateMissionProgress('taf', 1);
+        get().updateDailyMissionProgress('taf', 1);
         return true; 
       },
 
@@ -383,10 +409,20 @@ export const useStore = create(
         }));
 
         addXP(rating > 1 ? 30 : 10, "Auditoria FSRS v6");
+        
+        const todayStr = getLocalDateStr(get().getTodayDate());
+        set(state => ({
+          studyHistory: {
+            ...state.studyHistory,
+            [todayStr]: (state.studyHistory?.[todayStr] || 0) + 2
+          }
+        }));
+
         if (rating > 1) {
           get().playSound('coin');
           setCoins(c => c + 5);
           updateMissionProgress('review', 1);
+          get().updateDailyMissionProgress('review', 1);
         }
       },
 
@@ -426,9 +462,19 @@ export const useStore = create(
           const newCompleted = Math.min(total, currentCompleted + amountWatched);
           
           if (newCompleted > currentCompleted) {
+            const addedMinutes = 60 * (newCompleted - currentCompleted);
             addXP(100 * (newCompleted - currentCompleted), "Progresso em disciplina");
-            setUserStats(prev => ({ ...prev, totalStudyMinutes: prev.totalStudyMinutes + (60 * (newCompleted - currentCompleted)) }));
-            setWeeklySprint(prev => ({ ...prev, currentMinutes: prev.currentMinutes + (60 * (newCompleted - currentCompleted)) }));
+            setUserStats(prev => ({ ...prev, totalStudyMinutes: prev.totalStudyMinutes + addedMinutes }));
+            setWeeklySprint(prev => ({ ...prev, currentMinutes: prev.currentMinutes + addedMinutes }));
+            
+            const todayStr = getLocalDateStr(get().getTodayDate());
+            set(state => ({
+              studyHistory: {
+                ...state.studyHistory,
+                [todayStr]: (state.studyHistory?.[todayStr] || 0) + addedMinutes
+              }
+            }));
+            get().updateDailyMissionProgress('minutes', addedMinutes);
           }
 
           topics[topicIndex] = { ...topics[topicIndex], completed: newCompleted };
@@ -456,6 +502,7 @@ export const useStore = create(
         setCoins(prev => prev + (10 * amountWatched));
         setCompletedToday(prev => !prev.includes(slotIndex) ? [...prev, slotIndex] : prev);
         get().updateMissionProgress('study', amountWatched);
+        get().updateDailyMissionProgress('study', amountWatched);
       },
 
       advanceDay: () => {
@@ -503,7 +550,6 @@ export const useStore = create(
       },
 
       executeTacticalReset: async () => {
-        const realToday = new Date().toISOString().split('T')[0];
         set((state) => ({
           subjects: {},
           cycle: [],
@@ -612,6 +658,93 @@ export const useStore = create(
         const updatedMissions = [...weeklyMissions];
         updatedMissions[missionIndex] = { ...mission, claimed: true };
         setWeeklyMissions(updatedMissions);
+      },
+
+      unlockAvatar: (avatarPath, cost) => {
+        const { coins, unlockedAvatars, setCoins } = get();
+        if (coins < cost) {
+          toast.error("Moedas insuficientes para desbloquear este avatar!");
+          return false;
+        }
+        if (unlockedAvatars.includes(avatarPath)) {
+          toast.error("Avatar já desbloqueado!");
+          return false;
+        }
+        setCoins(c => c - cost);
+        set(state => ({
+          unlockedAvatars: [...state.unlockedAvatars, avatarPath]
+        }));
+        toast.success("Avatar desbloqueado com sucesso! 🎉");
+        get().playSound('levelUp');
+        return true;
+      },
+
+      selectAvatar: (avatarPath) => {
+        const { unlockedAvatars } = get();
+        if (!unlockedAvatars.includes(avatarPath)) {
+          toast.error("Você precisa desbloquear este avatar antes de equipá-lo!");
+          return false;
+        }
+        set(state => ({
+          userStats: {
+            ...state.userStats,
+            avatar: avatarPath
+          }
+        }));
+        toast.success("Avatar equipado com sucesso! 🛡️");
+        return true;
+      },
+
+      checkAndResetDailyMissions: () => {
+        const { getLocalDateStr, lastDailyResetDate } = get();
+        const todayStr = getLocalDateStr();
+        if (lastDailyResetDate !== todayStr) {
+          const defaultDaily = [
+            { id: 'd1', title: 'Foco Diário', description: 'Estude por 30 minutos', goal: 30, current: 0, xpReward: 30, coinReward: 10, type: 'minutes', completed: false, claimed: false },
+            { id: 'd2', title: 'Aula Concluída', description: 'Marque uma aula como concluída', goal: 1, current: 0, xpReward: 20, coinReward: 5, type: 'study', completed: false, claimed: false },
+            { id: 'd3', title: 'Revisão Tática', description: 'Realize 1 revisão FSRS', goal: 1, current: 0, xpReward: 15, coinReward: 5, type: 'review', completed: false, claimed: false },
+          ];
+          set({
+            dailyMissions: defaultDaily,
+            lastDailyResetDate: todayStr
+          });
+          return true;
+        }
+        return false;
+      },
+
+      updateDailyMissionProgress: (type, amount) => {
+        const { checkAndResetDailyMissions } = get();
+        checkAndResetDailyMissions();
+        const currentDailyMissions = get().dailyMissions;
+        
+        const updated = currentDailyMissions.map(m => {
+          if (m.type === type && !m.completed) {
+            const newCurrent = Math.min(m.goal, m.current + amount);
+            const isCompleted = newCurrent >= m.goal;
+            if (isCompleted) {
+              toast.success(`Contrato Diário cumprido: ${m.title}! 🎯`);
+            }
+            return { ...m, current: newCurrent, completed: isCompleted };
+          }
+          return m;
+        });
+        set({ dailyMissions: updated });
+      },
+
+      claimDailyMissionReward: (missionId) => {
+        const { dailyMissions, addXP, setCoins } = get();
+        const index = dailyMissions.findIndex(m => m.id === missionId);
+        if (index === -1 || !dailyMissions[index].completed || dailyMissions[index].claimed) return;
+
+        const mission = dailyMissions[index];
+        addXP(mission.xpReward, `Contrato Cumprido: ${mission.title}`);
+        get().playSound('coin');
+        setCoins(c => c + mission.coinReward);
+
+        const updated = [...dailyMissions];
+        updated[index] = { ...mission, claimed: true };
+        set({ dailyMissions: updated });
       },
 
       // --- HELPERS ---
@@ -770,7 +903,8 @@ const persistedKeysParaMonitorar = [
   'coins', 'userStats', 'streakData', 'weeklySprint', 'reviews', 
   'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus', 
   'isDarkMode', 'activeTab', 'calendarDate', 'reviewCalendarDate', 
-  'seasonalData', 'weeklyMissions'
+  'seasonalData', 'weeklyMissions', 'studyHistory',
+  'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate'
 ];
 
 let pendingSaves = 0;

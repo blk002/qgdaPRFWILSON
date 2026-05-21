@@ -9,4 +9,4 @@ WshShell.Run "cmd /c npm run dev", 0, False
 WScript.Sleep 2000
 
 ' Abre o navegador apontando para o servidor seguro
-WshShell.Run "http://localhost:5173/", 0, False
+WshShell.Run "http://localhost:5173/qgdaPRFWILSON/", 0, False

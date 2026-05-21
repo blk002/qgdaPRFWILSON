@@ -79,6 +79,7 @@ export default function TreinoTAF() {
 
   const [showModal, setShowModal] = useState(false);
   const [editingTaf, setEditingTaf] = useState(null);
+  const [hoveredPoint, setHoveredPoint] = useState(null);
 
   const totalSimuladosTaf = tafHistory.length;
   const mediaPts = totalSimuladosTaf > 0 ? (tafHistory.reduce((acc, sim) => acc + sim.totalPts, 0) / totalSimuladosTaf).toFixed(1) : 0;
@@ -108,24 +109,50 @@ export default function TreinoTAF() {
   const maxPts = 25;
   const notaCorte = 12;
 
+  const getBezierCurvePath = (points) => {
+    if (points.length === 0) return "";
+    if (points.length === 1) return `M 0 ${points[0].y} L ${chartWidth} ${points[0].y}`;
+    
+    let d = `M ${points[0].x} ${points[0].y}`;
+    for (let i = 0; i < points.length - 1; i++) {
+      const curr = points[i];
+      const next = points[i + 1];
+      const cp1x = curr.x + (next.x - curr.x) / 3;
+      const cp1y = curr.y;
+      const cp2x = curr.x + 2 * (next.x - curr.x) / 3;
+      const cp2y = next.y;
+      d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${next.x} ${next.y}`;
+    }
+    return d;
+  };
+
+  const getBezierAreaPath = (points, height) => {
+    if (points.length === 0) return "";
+    const curve = getBezierCurvePath(points);
+    return `${curve} L ${points[points.length - 1].x} ${height} L ${points[0].x} ${height} Z`;
+  };
+
   const getChartData = () => {
     if (totalSimuladosTaf === 0) return { line: "", area: "", points: [] };
+    
+    const ptsObj = tafHistory.map((sim, index) => {
+      const x = (index / (totalSimuladosTaf - 1 || 1)) * chartWidth;
+      const y = chartHeight - (sim.totalPts / maxPts) * chartHeight;
+      return { x, y, val: sim.totalPts, sim };
+    });
+
     if (totalSimuladosTaf === 1) {
-       const y = chartHeight - (tafHistory[0].totalPts / maxPts) * chartHeight;
+       const y = ptsObj[0].y;
        return {
-          line: `0,${y} ${chartWidth},${y}`,
-          area: `0,${chartHeight} 0,${y} ${chartWidth},${y} ${chartWidth},${chartHeight}`,
-          points: [{ x: chartWidth/2, y, val: tafHistory[0].totalPts }]
+          line: `M 0 ${y} L ${chartWidth} ${y}`,
+          area: `M 0 ${y} L ${chartWidth} ${y} L ${chartWidth} ${chartHeight} L 0 ${chartHeight} Z`,
+          points: [{ x: chartWidth/2, y, val: ptsObj[0].val, sim: ptsObj[0].sim }]
        };
     }
-    const ptsObj = tafHistory.map((sim, index) => {
-      const x = (index / (totalSimuladosTaf - 1)) * chartWidth;
-      const y = chartHeight - (sim.totalPts / maxPts) * chartHeight;
-      return { x, y, val: sim.totalPts };
-    });
-    const lineStr = ptsObj.map(p => `${p.x},${p.y}`).join(" ");
-    const areaStr = `0,${chartHeight} ${lineStr} ${chartWidth},${chartHeight}`;
-    return { line: lineStr, area: areaStr, points: ptsObj };
+
+    const linePath = getBezierCurvePath(ptsObj);
+    const areaPath = getBezierAreaPath(ptsObj, chartHeight);
+    return { line: linePath, area: areaPath, points: ptsObj };
   };
 
   const chartData = getChartData();
@@ -189,7 +216,7 @@ export default function TreinoTAF() {
                </div>
                
                <div className="relative w-full h-[420px] mt-4">
-                  <div className="absolute w-full border-t-2 border-dashed border-red-400 z-0 flex items-end justify-end" style={{ top: `${targetY}px` }}>
+                  <div className="absolute w-full border-t-2 border-dashed border-red-400/50 z-0 flex items-end justify-end" style={{ top: `${targetY}px` }}>
                      <span className="text-[11px] sm:text-xs font-black text-red-500 bg-white px-2 -mt-2.5 sm:-mt-3 absolute left-0 sm:left-auto sm:right-0 dark:bg-slate-900">Corte Mínimo Global (12 pts)</span>
                   </div>
                   
@@ -201,16 +228,71 @@ export default function TreinoTAF() {
                         </linearGradient>
                      </defs>
                      
-                     <polyline points={chartData.area} fill="url(#chartFillTaf)" />
-                     <polyline points={chartData.line} fill="none" stroke="#ea580c" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
+                     <path d={chartData.area} fill="url(#chartFillTaf)" />
+                     <path d={chartData.line} fill="none" stroke="#ea580c" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
                      
                      {chartData.points.map((p, index) => (
                         <g key={index}>
-                          <circle cx={p.x} cy={p.y} r="5" fill="#fff" stroke="#ea580c" strokeWidth="3" className="hover:r-[7px] transition-all cursor-pointer"/>
-                          <text x={p.x} y={p.y - 12} textAnchor="middle" fill="#475569" fontSize="14" fontWeight="900" className="drop-shadow-sm">{p.val}</text>
+                          <circle 
+                            cx={p.x} 
+                            cy={p.y} 
+                            r="5" 
+                            fill="#fff" 
+                            stroke="#ea580c" 
+                            strokeWidth="3" 
+                            className="hover:r-[7px] hover:stroke-orange-500 transition-all cursor-pointer"
+                            onMouseEnter={() => setHoveredPoint({ ...p, index })}
+                            onMouseLeave={() => setHoveredPoint(null)}
+                          />
                         </g>
                      ))}
                   </svg>
+
+                  {hoveredPoint && (
+                    <div 
+                      className="absolute bg-slate-900/95 border border-orange-500/50 text-white rounded-xl p-3 shadow-2xl z-50 pointer-events-none transition-all duration-200 backdrop-blur-md flex flex-col gap-1 min-w-[180px]"
+                      style={{
+                        left: `${(hoveredPoint.x / chartWidth) * 100}%`,
+                        top: `${(hoveredPoint.y / chartHeight) * 100 - 4}%`,
+                        transform: 'translate(-50%, -100%)',
+                      }}
+                    >
+                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-slate-900" />
+                      
+                      <div className="flex justify-between items-center border-b border-slate-700/50 pb-1 mb-1">
+                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">TAF #{hoveredPoint.index + 1}</span>
+                        <span className="text-[10px] text-slate-400 font-medium">{hoveredPoint.sim.data.split('-').reverse().join('/')}</span>
+                      </div>
+                      
+                      <div className="flex justify-between items-center">
+                        <span className="text-xs text-slate-300">Pontuação Total:</span>
+                        <span className="text-sm font-black text-orange-400">{hoveredPoint.val} pts</span>
+                      </div>
+                      
+                      <div className="grid grid-cols-2 gap-1.5 mt-2 pt-2 border-t border-slate-800 text-[10px] text-slate-300">
+                        <div className="flex justify-between">
+                          <span>Barra:</span>
+                          <span className="font-bold text-white">{hoveredPoint.sim.barra} ({hoveredPoint.sim.ptsBarra} pts)</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Abdo:</span>
+                          <span className="font-bold text-white">{hoveredPoint.sim.abdominal} ({hoveredPoint.sim.ptsAbdominal} pts)</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Impulso:</span>
+                          <span className="font-bold text-white">{hoveredPoint.sim.impulsao}m ({hoveredPoint.sim.ptsImpulsao} pts)</span>
+                        </div>
+                        <div className="flex justify-between">
+                          <span>Corrida:</span>
+                          <span className="font-bold text-white">{hoveredPoint.sim.corrida}m ({hoveredPoint.sim.ptsCorrida} pts)</span>
+                        </div>
+                        <div className="flex justify-between col-span-2 border-t border-slate-800/50 pt-1">
+                          <span>Shuttle Run:</span>
+                          <span className="font-bold text-white">{hoveredPoint.sim.shuttle}s ({hoveredPoint.sim.ptsShuttle} pts)</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                </div>
                <div className="flex justify-between text-[10px] text-slate-400 font-bold mt-2 border-t border-slate-100 pt-2 px-1 dark:border-slate-800">
                   <span>Mais antigo</span>
