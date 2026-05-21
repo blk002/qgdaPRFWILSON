@@ -245,7 +245,7 @@ export default function PortuguesSintaxe() {
   };
 
   return (
-    <div className="fade-in max-w-5xl mx-auto px-4 pb-12">
+    <div className="fade-in w-full max-w-5xl mx-auto pb-12">
       {/* Cabeçalho */}
       <section className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
         <div className="flex items-center gap-3">

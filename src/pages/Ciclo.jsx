@@ -108,7 +108,7 @@ export default function Ciclo() {
     };
   }, [triggerConfetti]);
   return (
-    <div className="fade-in pb-10 w-full px-2 sm:px-4 mx-auto">
+    <div className="fade-in w-full pb-10">
       
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-4">

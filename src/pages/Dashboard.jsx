@@ -160,7 +160,7 @@ export default function Dashboard() {
   const fadeUp = { hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
 
   return (
-    <div className="fade-in w-full pb-10 px-4">
+    <div className="fade-in w-full pb-10">
       
       {/* CABEÇALHO */}
       <section className="relative mb-8 mt-6">
