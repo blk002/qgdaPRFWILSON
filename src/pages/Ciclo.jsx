@@ -248,32 +248,32 @@ export default function Ciclo() {
         <Layers className="w-4 h-4" /> Fila de Conteúdo Novo / Avanço
       </h3>
 
-      <div id="cycle-scroll-container" className="pt-2 pb-6">
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6 items-stretch">
+      <div id="cycle-scroll-container" className="overflow-x-auto pt-2 pb-6 no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
+        <div className="flex gap-2.5 sm:gap-4 items-stretch w-full">
           {cycle.length > 0 && cycle.map((daySubjects, dayIndex) => {
             const dateInfo = getRelativeDateInfo(dayIndex);
             const isToday = dateInfo.isToday;
             
             return (
-              <div id={`cycle-day-${dayIndex}`} key={dayIndex} className={`w-full flex flex-col rounded-2xl border-2 transition-all mt-2 ${
+              <div id={`cycle-day-${dayIndex}`} key={dayIndex} className={`flex-1 min-w-[260px] sm:min-w-0 flex flex-col rounded-2xl border-2 transition-all mt-2 ${
                   isToday ? 'border-blue-500 bg-slate-50 shadow-lg ring-4 ring-blue-50 relative dark:bg-slate-900 dark:border-blue-600 dark:ring-blue-900/20' : 'border-slate-200 bg-white opacity-70 hover:opacity-100 scale-[0.98] hover:scale-100 dark:border-slate-800 dark:bg-slate-950'
               }`}>
                 {isToday && (
-                   <div className="absolute -top-3.5 sm:-top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white text-xs sm:text-sm font-black uppercase tracking-wider px-4 py-1.5 rounded-full shadow-sm z-10 border-2 border-white dark:border-slate-900 whitespace-nowrap">
+                   <div className="absolute -top-3.5 sm:-top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white text-[10px] sm:text-xs font-black uppercase tracking-wider px-3 sm:px-4 py-1.5 rounded-full shadow-sm z-10 border-2 border-white dark:border-slate-900 whitespace-nowrap">
                      Ordem do Dia
                    </div>
                 )}
 
-                <div className={`p-4 text-center border-b-2 flex flex-col gap-0.5 rounded-t-xl ${isToday ? 'border-blue-200 bg-blue-100/40 pt-6 dark:border-blue-900/50 dark:bg-blue-900/20' : 'border-slate-100 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-900/50'}`}>
-                  <span className={`text-xs font-black uppercase tracking-widest ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`}>
+                <div className={`p-2.5 sm:p-4 text-center border-b-2 flex flex-col gap-0.5 rounded-t-xl ${isToday ? 'border-blue-200 bg-blue-100/40 pt-5 sm:pt-6 dark:border-blue-900/50 dark:bg-blue-900/20' : 'border-slate-100 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-900/50'}`}>
+                  <span className={`text-[9px] sm:text-xs font-black uppercase tracking-widest ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`}>
                     {dateInfo.title} • {dateInfo.dateStr}
                   </span>
-                  <span className={`font-black text-3xl tracking-tighter ${isToday ? 'text-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-400'}`}>
+                  <span className={`font-black text-lg sm:text-3xl tracking-tighter ${isToday ? 'text-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-400'}`}>
                     DIA {dayIndex + 1}
                   </span>
                 </div>
 
-                <div className="p-3 sm:p-4 flex flex-col gap-3 sm:gap-4 flex-1">
+                <div className="p-2 sm:p-4 flex flex-col gap-2 sm:gap-4 flex-1">
                   {daySubjects.map((subjectId, slotIndex) => {
                     const subject = subjects[subjectId];
                     if (!subject) return null;
@@ -283,12 +283,12 @@ export default function Ciclo() {
                     return (
                       <div key={slotIndex} className={`bg-white dark:bg-slate-900 border rounded-xl overflow-hidden flex flex-col shadow-sm transition-all ${isSlotCompleted ? 'border-emerald-200 dark:border-emerald-800 opacity-80' : isToday ? 'border-slate-300 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md' : 'border-slate-200 dark:border-slate-800'}`}>
                         
-                        <div className={`px-3 py-2 flex justify-between items-center border-b border-black/5 ${subject.color}`}>
-                          <span className="font-black text-xs uppercase tracking-wider">{subject.name}</span>
-                          <span className="text-[9px] font-black bg-white/30 dark:bg-slate-900/50 dark:text-white px-1.5 py-0.5 rounded backdrop-blur-sm">{subject.block || 'B?'}</span>
+                        <div className={`px-2 py-1.5 sm:px-3 sm:py-2 flex justify-between items-center border-b border-black/5 ${subject.color}`}>
+                          <span className="font-black text-[9px] sm:text-xs uppercase tracking-wider truncate max-w-[70%]" title={subject.name}>{subject.name}</span>
+                          <span className="text-[8px] sm:text-[9px] font-black bg-white/30 dark:bg-slate-900/50 dark:text-white px-1 sm:px-1.5 py-0.5 rounded backdrop-blur-sm shrink-0">{subject.block || 'B?'}</span>
                         </div>
 
-                        <div className="p-3 sm:p-4 flex flex-col gap-3 flex-1 justify-center">
+                        <div className="p-2 sm:p-4 flex flex-col gap-2 sm:gap-3 flex-1 justify-center">
                           {isSlotCompleted ? (
                             <div className="text-center py-4 fade-in flex flex-col items-center">
                               <CheckCircle className="w-8 h-8 text-emerald-500 mb-2" />
@@ -297,17 +297,17 @@ export default function Ciclo() {
                           ) : activeTopic ? (
                             <>
                               <div>
-                                <span className="text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-0.5 flex items-center gap-1"><Flame className="w-3 h-3 text-orange-500"/> Assunto na Fornalha</span>
-                                <p className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-snug">{activeTopic.name}</p>
+                                <span className="text-[8px] sm:text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-0.5 flex items-center gap-1"><Flame className="w-3 h-3 text-orange-500 shrink-0"/> <span className="truncate">Assunto na Fornalha</span></span>
+                                <p className="text-[11px] sm:text-sm font-bold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2" title={activeTopic.name}>{activeTopic.name}</p>
                               </div>
                               
-                              <div className="bg-slate-50 p-2 rounded-lg border border-slate-100 dark:bg-slate-950 dark:border-slate-800">
-                                <div className="flex items-center justify-between mb-1.5">
-                                  <span className="text-[10px] text-slate-500 font-bold uppercase dark:text-slate-400">Teoria Restante</span>
-                                  <span className="text-[10px] font-black text-blue-600">{activeTopic.completed}/{activeTopic.total} Aulas</span>
+                              <div className="bg-slate-50 p-1.5 sm:p-2 rounded-lg border border-slate-100 dark:bg-slate-950 dark:border-slate-800">
+                                <div className="flex items-center justify-between mb-1">
+                                  <span className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase dark:text-slate-400">Teoria Restante</span>
+                                  <span className="text-[8px] sm:text-[10px] font-black text-blue-600">{activeTopic.completed}/{activeTopic.total} Aulas</span>
                                 </div>
-                                <div className="w-full bg-slate-200 rounded-full h-1.5 dark:bg-slate-800">
-                                  <div className="bg-blue-500 h-1.5 rounded-full" style={{ width: `${(activeTopic.completed / activeTopic.total) * 100}%` }}></div>
+                                <div className="w-full bg-slate-200 rounded-full h-1 dark:bg-slate-800">
+                                  <div className="bg-blue-500 h-1 rounded-full" style={{ width: `${(activeTopic.completed / activeTopic.total) * 100}%` }}></div>
                                 </div>
                               </div>
 
@@ -318,10 +318,10 @@ export default function Ciclo() {
                                   
                                   if (hasRetentionDebt) {
                                     return (
-                                      <div className="mt-2 text-center bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-lg p-2.5">
-                                        <AlertTriangle className="w-5 h-5 text-red-500 mx-auto mb-1" />
-                                        <span className="text-[10px] font-black text-red-700 dark:text-red-400 block uppercase">Avanço Bloqueado</span>
-                                        <p className="text-[9px] text-red-600 dark:text-red-400/80 mt-1 font-medium leading-tight">Você possui falhas críticas no FSRS desta matéria. Restaure a retenção antes de ver conteúdo novo.</p>
+                                      <div className="mt-2 text-center bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-lg p-2">
+                                        <AlertTriangle className="w-4 h-4 text-red-500 mx-auto mb-1" />
+                                        <span className="text-[8px] sm:text-[10px] font-black text-red-700 dark:text-red-400 block uppercase">Avanço Bloqueado</span>
+                                        <p className="text-[8px] text-red-600 dark:text-red-400/80 mt-1 font-medium leading-tight">Você possui falhas críticas no FSRS desta matéria. Restaure a retenção antes de ver conteúdo novo.</p>
                                       </div>
                                     );
                                   }
@@ -329,25 +329,25 @@ export default function Ciclo() {
                                   return (
                                     <button 
                                       onClick={() => setClassConfirmModal({ subjectId, slotIndex, topicName: activeTopic.name, maxClasses: activeTopic.total - activeTopic.completed })} 
-                                      className="mt-2 flex items-center justify-center gap-1.5 w-full py-2.5 bg-slate-900 dark:bg-slate-800 hover:bg-orange-600 dark:hover:bg-orange-600 text-white rounded-xl text-xs font-black transition-all shadow-lg border-2 border-slate-200 dark:border-slate-600 hover:border-orange-500 dark:hover:border-orange-500 hover:scale-[1.02] active:scale-95 group"
+                                      className="mt-1 flex items-center justify-center gap-1 w-full py-2 bg-slate-900 dark:bg-slate-800 hover:bg-orange-600 dark:hover:bg-orange-600 text-white rounded-lg text-[9px] sm:text-xs font-black transition-all shadow-md border border-slate-200 dark:border-slate-600 hover:border-orange-500 dark:hover:border-orange-500 hover:scale-[1.02] active:scale-95 group"
                                     >
-                                      <PlayCircle className="w-4 h-4 group-hover:scale-110 transition-transform text-orange-400 group-hover:text-white" />
-                                      Queimar Teoria (+1 FSRS)
+                                      <PlayCircle className="w-3.5 h-3.5 group-hover:scale-110 transition-transform text-orange-400 group-hover:text-white shrink-0" />
+                                      <span className="truncate">Queimar Teoria (+1 FSRS)</span>
                                     </button>
                                   );
                                 })()
                               )}
                             </>
                           ) : (
-                            <div className="text-center py-3 flex flex-col items-center">
-                              <div className="bg-emerald-100 p-2 rounded-full mb-2"><BrainCircuit className="w-5 h-5 text-emerald-600" /></div>
-                              <span className="text-[10px] font-black text-emerald-700 uppercase tracking-wider mb-3">100% no FSRS (Só Questões)</span>
+                            <div className="text-center py-2 flex flex-col items-center">
+                              <div className="bg-emerald-100 dark:bg-emerald-950/50 p-1.5 rounded-full mb-1.5"><BrainCircuit className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /></div>
+                              <span className="text-[8px] sm:text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-2">100% no FSRS (Só Questões)</span>
                               
-                              <button onClick={() => setReplaceSubjectModal({ dayIndex, slotIndex, oldSubjectId: subjectId })} className="w-full py-2 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white rounded-lg text-[11px] font-black transition-all flex items-center justify-center gap-1.5 border border-blue-100 hover:border-blue-600">
-                                <Shuffle className="w-3.5 h-3.5" /> Reestruturar Vaga
+                              <button onClick={() => setReplaceSubjectModal({ dayIndex, slotIndex, oldSubjectId: subjectId })} className="w-full py-1.5 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white rounded-lg text-[9px] sm:text-[11px] font-black transition-all flex items-center justify-center gap-1 border border-blue-100 hover:border-blue-600">
+                                <Shuffle className="w-3 h-3" /> <span className="truncate">Reestruturar Vaga</span>
                               </button>
                               
-                              {isToday && <button onClick={() => setCompletedToday(prev => [...prev, slotIndex])} className="mt-2 text-[10px] font-bold text-slate-400 hover:text-slate-600 underline underline-offset-2 dark:text-slate-300">Pular esta vaga hoje</button>}
+                              {isToday && <button onClick={() => setCompletedToday(prev => [...prev, slotIndex])} className="mt-1 text-[8px] sm:text-[10px] font-bold text-slate-400 hover:text-slate-600 underline underline-offset-2 dark:text-slate-300">Pular hoje</button>}
                             </div>
                           )}
                         </div>
