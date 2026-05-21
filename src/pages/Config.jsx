@@ -51,7 +51,7 @@ export default function Config({
   const isB1TooLow = b1Percent > 0 && 35 > b1Percent;
 
   return (
-    <div className="fade-in max-w-[1400px] px-2 sm:px-4 mx-auto pb-10">
+    <div className="fade-in w-full px-2 sm:px-4 mx-auto pb-10">
       
       <div className="bg-slate-900 p-5 sm:p-6 rounded-xl shadow-lg border border-slate-800 mb-6 relative overflow-hidden text-white">
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-bl-full pointer-events-none"></div>

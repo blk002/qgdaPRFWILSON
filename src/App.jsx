@@ -178,7 +178,7 @@ export default function App() {
       )}
       <Toaster position="top-right" richColors closeButton />
       
-      <header className="sticky top-4 z-50 mx-auto max-w-[1400px] px-4 w-full pt-2">
+      <header className="sticky top-4 z-50 mx-auto max-w-[98%] px-2 sm:px-4 w-full pt-2">
         <div className={`glass-card rounded-[1.8rem] ${isDarkMode ? 'bg-slate-900/75 border-slate-800/80 shadow-2xl' : 'bg-white/80 border-slate-200/50 shadow-lg shadow-slate-100/30'} overflow-hidden`}>
           <div className="px-4 py-3 sm:px-6 flex justify-between items-center">
             <Link to="/" className="flex items-center gap-3">
@@ -251,7 +251,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-[1400px] mx-auto p-4 sm:p-6 lg:p-10">
+      <main className="max-w-[98%] mx-auto p-2 sm:p-4 lg:p-6">
         {isSyncing ? (
           <div className="flex flex-col items-center justify-center p-20 text-center opacity-80 animate-pulse">
             <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center mb-4 shadow-inner">

@@ -193,7 +193,7 @@ export default function TreinoTAF() {
   };
 
   return (
-    <div className="fade-in max-w-[1400px] mx-auto pb-10">
+    <div className="fade-in w-full pb-10">
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex-1 min-w-0">
           <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 dark:bg-slate-900 dark:border-slate-800">

@@ -194,7 +194,7 @@ export default function Loja() {
   };
 
   return (
-    <div className="fade-in max-w-[1400px] mx-auto pb-10 px-4">
+    <div className="fade-in w-full pb-10 px-4">
 
       {/* Header Premium Glassmorphic */}
       <section className="relative mb-8 mt-6">

@@ -55,7 +55,7 @@ export default function Revisoes() {
   const rDays = Array.from({ length: rDaysInMonth }, (_, i) => i + 1);
 
   return (
-    <div className="fade-in max-w-[1400px] px-2 sm:px-4 mx-auto pb-10">
+    <div className="fade-in w-full px-2 sm:px-4 mx-auto pb-10">
       
       <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center dark:bg-slate-900 dark:border-slate-800">
         <div className="flex items-center gap-4">

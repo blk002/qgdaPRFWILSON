@@ -88,7 +88,7 @@ export default function Estatisticas() {
   };
 
   return (
-    <div className="fade-in max-w-[1400px] px-2 sm:px-4 mx-auto pb-10">
+    <div className="fade-in w-full px-2 sm:px-4 mx-auto pb-10">
       {editingNotes && (
         <div className="fixed inset-0 bg-slate-900/80 backdrop-blur-sm z-[100] flex items-center justify-center p-4 animate-in fade-in duration-200">
           <div className="bg-white text-slate-900 w-full max-w-lg rounded-2xl shadow-2xl border overflow-hidden dark:bg-slate-900">
