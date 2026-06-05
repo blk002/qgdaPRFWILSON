@@ -10,6 +10,11 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+
+# Variáveis de ambiente (não versionar segredos/credenciais)
+.env
+.env.local
+.env.*.local
 *.local
 
 # Editor directories and files
