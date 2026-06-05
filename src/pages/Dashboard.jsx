@@ -117,12 +117,56 @@ export default function Dashboard() {
     unlockedAvatars = [], selectAvatar,
     streakData = { currentStreak: 0 },
     reviewStats = { totalDone: 0, correct: 0, streak: 0 },
-    xpHistory = []
+    xpHistory = [],
+    isSyncing
   } = useStore();
 
   useEffect(() => {
     checkAndResetDailyMissions();
   }, [checkAndResetDailyMissions]);
+
+  const [isEditingName, setIsEditingName] = useState(false);
+  const [tempName, setTempName] = useState(userStats?.displayName || '');
+
+  if (isSyncing) {
+    return (
+      <div className="fade-in w-full pb-10 space-y-8 animate-pulse font-sans">
+        {/* Skeleton CABEÇALHO */}
+        <div className="glass-card rounded-[2rem] p-6 sm:p-8 flex flex-col md:flex-row items-center gap-8 border border-slate-200 dark:border-slate-800/80 bg-slate-900/10">
+          <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-slate-200 dark:bg-slate-800" />
+          <div className="flex-1 space-y-4">
+            <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded-lg w-2/3" />
+            <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-lg w-1/3" />
+            <div className="h-6 bg-slate-200 dark:bg-slate-800 rounded-lg w-full mt-4" />
+          </div>
+        </div>
+
+        {/* Skeleton KPIs */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
+          {[1, 2, 3, 4].map(n => (
+            <div key={n} className="glass-card rounded-2xl p-4 border border-slate-200 dark:border-slate-800 bg-slate-900/10 space-y-2">
+              <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-1/2" />
+              <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded w-3/4" />
+              <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-1/3" />
+            </div>
+          ))}
+        </div>
+
+        {/* Skeleton Grid */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-8">
+          {/* Col 1 */}
+          <div className="lg:col-span-8 space-y-8">
+            <div className="glass-card rounded-[2rem] p-6 border border-slate-200 dark:border-slate-800 bg-slate-900/10 h-64 animate-pulse" />
+            <div className="glass-card rounded-[2rem] p-6 border border-slate-200 dark:border-slate-800 bg-slate-900/10 h-64 animate-pulse" />
+          </div>
+          {/* Col 2 */}
+          <div className="lg:col-span-4 space-y-8">
+            <div className="glass-card rounded-[2rem] p-6 border border-slate-200 dark:border-slate-800 bg-slate-900/10 h-96 animate-pulse" />
+          </div>
+        </div>
+      </div>
+    );
+  }
 
   const enrollmentId = `PRF-${(user?.id || 'ANON').slice(-6).toUpperCase()}`;
   const patenteAtual = getCurrentPatente();
@@ -134,9 +178,7 @@ export default function Dashboard() {
   const subjectEstimates = getSubjectEstimates();
   const completionPercent = Math.round((subjectEstimates.filter(s => s.remaining === 0).length / subjectEstimates.length) * 100) || 0;
 
-  const [isEditingName, setIsEditingName] = useState(false);
-  const [tempName, setTempName] = useState(userStats.displayName || '');
-  const displayName = userStats.displayName || user?.email?.split('@')[0] || 'Combatente';
+  const displayName = userStats?.displayName || user?.email?.split('@')[0] || 'Combatente';
 
   const handleSaveName = () => {
     if (tempName.trim()) useStore.setState(s => ({ userStats: { ...s.userStats, displayName: tempName.trim() } }));
@@ -333,7 +375,7 @@ export default function Dashboard() {
                     <div className="relative z-10 flex-1">
                       <div className="flex items-center gap-2 mb-1.5">
                         <CheckCircle className={`w-4 h-4 flex-shrink-0 ${mission.completed ? 'text-emerald-500' : 'text-slate-400'}`} />
-                        <h4 className={`text-xs font-black uppercase tracking-tight leading-tight ${mission.completed ? 'text-slate-850 dark:text-white' : 'text-slate-400'}`}>{mission.title}</h4>
+                        <h4 className={`text-xs font-black uppercase tracking-tight leading-tight ${mission.completed ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>{mission.title}</h4>
                       </div>
                       <p className="text-[10px] text-slate-500 font-bold leading-snug mb-4 min-h-[32px]">{mission.description}</p>
                       
@@ -383,7 +425,7 @@ export default function Dashboard() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <CheckCircle className={`w-4 h-4 ${mission.completed ? 'text-blue-500' : 'text-slate-400'}`} />
-                          <h4 className={`text-sm font-black uppercase tracking-tight ${mission.completed ? 'text-slate-850 dark:text-white' : 'text-slate-400'}`}>{mission.title}</h4>
+                          <h4 className={`text-sm font-black uppercase tracking-tight ${mission.completed ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>{mission.title}</h4>
                         </div>
                         <p className="text-xs text-slate-500 font-bold leading-snug mb-4">{mission.description}</p>
                         <div className="flex items-center gap-3">

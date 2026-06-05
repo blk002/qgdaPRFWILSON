@@ -26,7 +26,15 @@ export default function Config({
     executeTotalWipe,
     userStats,
     enableSounds,
-    setEnableSounds
+    setEnableSounds,
+    dailyGoalMinutes,
+    setDailyGoalMinutes,
+    subjectGoals,
+    setSubjectGoal,
+    pushSettings,
+    setPushSettings,
+    pushTime,
+    setPushTime
   } = useStore();
   const flatCycle = cycle.flat();
   const totalSlots = flatCycle.length;
@@ -372,6 +380,176 @@ export default function Config({
                 <p className="text-[10px] font-bold opacity-70">Feedback tático ao ganhar XP e moedas.</p>
               </div>
             </button>
+          </div>
+        </div>
+      </div>
+
+      {/* 🎯 SEÇÃO: METAS DE ESTUDO DIÁRIAS */}
+      <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 dark:bg-slate-900 dark:border-slate-800">
+        <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-6 dark:text-slate-100">
+          <Clock className="text-blue-600 w-5 h-5"/> Metas de Estudo Operacionais
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          {/* Meta Diária Global */}
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Meta Diária Global (Minutos)</label>
+            <div className="flex items-center gap-4">
+              <input 
+                type="number" 
+                min="10" 
+                max="1440"
+                value={dailyGoalMinutes} 
+                onChange={(e) => setDailyGoalMinutes(parseInt(e.target.value) || 0)} 
+                className="w-32 bg-slate-50 border border-slate-200 dark:bg-slate-950 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-black text-slate-800 dark:text-white"
+              />
+              <span className="text-xs text-slate-500 font-bold dark:text-slate-400">minutos sugeridos de estudo por dia.</span>
+            </div>
+            <div className="flex gap-2 mt-3">
+              {[60, 120, 180, 240, 300, 360].map(mins => (
+                <button
+                  key={mins}
+                  onClick={() => setDailyGoalMinutes(mins)}
+                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${dailyGoalMinutes === mins ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200'}`}
+                >
+                  {mins / 60}h
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Metas Individuais por Matéria */}
+          <div>
+            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Metas de Teoria por Disciplina (Minutos por Dia)</label>
+            <div className="flex flex-col gap-3 max-h-56 overflow-y-auto pr-2 custom-scrollbar">
+              {Object.values(subjects).map(sub => (
+                <div key={sub.id} className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-950/60">
+                  <div className="flex items-center gap-2">
+                    <div className={`w-3 h-3 rounded-full ${sub.color?.split(' ')[0] || 'bg-slate-500'}`}></div>
+                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate max-w-44">{sub.name}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="number" 
+                      min="0"
+                      placeholder="0"
+                      value={subjectGoals?.[sub.id] || ''}
+                      onChange={(e) => setSubjectGoal(sub.id, parseInt(e.target.value) || 0)}
+                      className="w-20 bg-white border border-slate-200 dark:bg-slate-900 dark:border-slate-700 rounded-lg px-2 py-1 text-center text-xs font-black text-slate-800 dark:text-white"
+                    />
+                    <span className="text-[10px] text-slate-400 font-bold">min</span>
+                  </div>
+                </div>
+              ))}
+              {Object.values(subjects).length === 0 && (
+                <p className="text-[11px] font-bold text-slate-500 italic text-center py-4">Nenhuma disciplina cadastrada para definir metas.</p>
+              )}
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 🔔 SEÇÃO: NOTIFICAÇÕES PUSH */}
+      <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 dark:bg-slate-900 dark:border-slate-800">
+        <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-6 dark:text-slate-100">
+          <Shield className="text-blue-600 w-5 h-5"/> Notificações e Lembretes Operacionais
+        </h3>
+
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+          <div>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 font-bold leading-relaxed">
+              Ative notificações no navegador para receber alertas operacionais e manter a consistência da sua farda. O sistema enviará lembretes de revisões FSRS e alertas quando seu streak diário estiver sob perigo de quebra.
+            </p>
+            {Notification.permission === 'default' && (
+              <button
+                onClick={() => {
+                  Notification.requestPermission().then(perm => {
+                    if (perm === 'granted') {
+                      setPushSettings({ ...pushSettings, enabled: true });
+                      toast.success("Notificações autorizadas com sucesso! 🛡️");
+                    } else {
+                      toast.error("Permissão de notificações recusada.");
+                    }
+                  });
+                }}
+                className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95 flex items-center gap-2"
+              >
+                Ativar Notificações no Navegador
+              </button>
+            )}
+            {Notification.permission === 'granted' && (
+              <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/50 rounded-lg px-4 py-2 text-emerald-700 dark:text-emerald-400 text-xs font-bold">
+                <CheckCircle className="w-4 h-4" /> Permissão Concedida pelo Navegador
+              </div>
+            )}
+            {Notification.permission === 'denied' && (
+              <div className="inline-flex items-center gap-2 bg-red-50 border border-red-200 dark:bg-red-950/20 dark:border-red-900/50 rounded-lg px-4 py-2 text-red-700 dark:text-red-400 text-xs font-bold">
+                <AlertTriangle className="w-4 h-4" /> Notificações bloqueadas nas configurações do seu navegador.
+              </div>
+            )}
+          </div>
+
+          <div className="flex flex-col gap-4">
+            {/* Toggle Geral */}
+            <div className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40">
+              <div>
+                <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase">Alertas Ativos</h4>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Ativa ou desativa todo o fluxo de notificações.</p>
+              </div>
+              <input 
+                type="checkbox"
+                checked={pushSettings.enabled}
+                disabled={Notification.permission !== 'granted'}
+                onChange={(e) => setPushSettings({ ...pushSettings, enabled: e.target.checked })}
+                className="w-5 h-5 rounded accent-blue-600 cursor-pointer disabled:cursor-not-allowed"
+              />
+            </div>
+
+            {/* Seletor de Horário para o Pomodoro Push */}
+            {pushSettings.enabled && (
+              <div className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40 animate-fade-in-down">
+                <div>
+                  <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase">Horário de Estudo</h4>
+                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Defina o horário diário para receber o lembrete.</p>
+                </div>
+                <input 
+                  type="time"
+                  value={pushTime || '08:00'}
+                  onChange={(e) => setPushTime(e.target.value)}
+                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-blue-500"
+                />
+              </div>
+            )}
+
+            {/* Toggle Streak Warning */}
+            <div className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40">
+              <div>
+                <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase">Streak em Perigo</h4>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Aviso no fim do dia se você ainda não queimou teoria ou revisou.</p>
+              </div>
+              <input 
+                type="checkbox"
+                checked={pushSettings.streakWarning}
+                disabled={!pushSettings.enabled}
+                onChange={(e) => setPushSettings({ ...pushSettings, streakWarning: e.target.checked })}
+                className="w-5 h-5 rounded accent-blue-600 cursor-pointer disabled:cursor-not-allowed"
+              />
+            </div>
+
+            {/* Toggle Reviews Pending */}
+            <div className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40">
+              <div>
+                <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase">Revisões Acumuladas</h4>
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Alerta inteligente se você tiver mais de 5 revisões pendentes FSRS.</p>
+              </div>
+              <input 
+                type="checkbox"
+                checked={pushSettings.reviewsPending}
+                disabled={!pushSettings.enabled}
+                onChange={(e) => setPushSettings({ ...pushSettings, reviewsPending: e.target.checked })}
+                className="w-5 h-5 rounded accent-blue-600 cursor-pointer disabled:cursor-not-allowed"
+              />
+            </div>
           </div>
         </div>
       </div>

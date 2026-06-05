@@ -3,30 +3,98 @@ import { supabase } from '../lib/supabaseClient';
 import { toast } from 'sonner';
 import { PATENTES, MEDALHAS } from '../hooks/useGamification';
 
-const seedStudyHistory = (totalStudyMinutes) => {
-  const history = {};
-  if (!totalStudyMinutes || totalStudyMinutes <= 0) return history;
-  let remainingMinutes = totalStudyMinutes;
-  const today = new Date();
-  for (let i = 25; i >= 0 && remainingMinutes > 0; i--) {
-    const d = new Date();
-    d.setDate(today.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
-    if (Math.random() > 0.3) {
-      const sessionMins = Math.min(remainingMinutes, Math.floor(Math.random() * 61) + 30);
-      history[dateStr] = sessionMins;
-      remainingMinutes -= sessionMins;
+export const THEME_DEFINITIONS = {
+  blue: {
+    name: 'Dark Blue (Padrão)',
+    colors: {
+      50: '#eff6ff',
+      100: '#dbeafe',
+      200: '#bfdbfe',
+      300: '#93c5fd',
+      400: '#60a5fa',
+      500: '#3b82f6',
+      600: '#2563eb',
+      700: '#1d4ed8',
+      800: '#1e40af',
+      900: '#1e3a8a',
+      950: '#172554',
+      '500-glow': 'rgba(59, 130, 246, 0.15)'
+    }
+  },
+  forest: {
+    name: 'Forest Green',
+    colors: {
+      50: '#f0fdf4',
+      100: '#dcfce7',
+      200: '#bbf7d0',
+      300: '#86efac',
+      400: '#4ade80',
+      500: '#22c55e',
+      600: '#16a34a',
+      700: '#15803d',
+      800: '#166534',
+      900: '#14532d',
+      950: '#052e16',
+      '500-glow': 'rgba(34, 197, 94, 0.15)'
+    }
+  },
+  purple: {
+    name: 'Cyber Purple',
+    colors: {
+      50: '#faf5ff',
+      100: '#f3e8ff',
+      200: '#e9d5ff',
+      300: '#d8b4fe',
+      400: '#c084fc',
+      500: '#a855f7',
+      600: '#9333ea',
+      700: '#7e22ce',
+      800: '#6b21a8',
+      900: '#581c87',
+      950: '#3b0764',
+      '500-glow': 'rgba(168, 85, 247, 0.15)'
+    }
+  },
+  gold: {
+    name: 'Obsidian Gold',
+    colors: {
+      50: '#fffbeb',
+      100: '#fef3c7',
+      200: '#fde68a',
+      300: '#fcd34d',
+      400: '#fbbf24',
+      500: '#f59e0b',
+      600: '#d97706',
+      700: '#b45309',
+      800: '#92400e',
+      900: '#78350f',
+      950: '#451a03',
+      '500-glow': 'rgba(245, 158, 11, 0.15)'
+    }
+  },
+  crimson: {
+    name: 'Crimson Red',
+    colors: {
+      50: '#fef2f2',
+      100: '#fee2e2',
+      200: '#fecaca',
+      300: '#fca5a5',
+      400: '#f87171',
+      500: '#ef4444',
+      600: '#dc2626',
+      700: '#b91c1c',
+      800: '#991b1b',
+      900: '#7f1d1d',
+      950: '#450a0a',
+      '500-glow': 'rgba(239, 68, 68, 0.15)'
     }
   }
-  if (remainingMinutes > 0) {
-    const todayStr = today.toISOString().split('T')[0];
-    history[todayStr] = (history[todayStr] || 0) + remainingMinutes;
-  }
-  return history;
 };
 
 const getCleanInitialState = () => ({
   subjects: {},
+  pushEnabled: false,
+  pushTime: '08:00',
   cycle: [],
   currentDayIndex: 0,
   completedToday: [],
@@ -67,6 +135,14 @@ const getCleanInitialState = () => ({
   ],
   dailyMissions: [],
   lastDailyResetDate: null,
+  activeBoosts: { xpBoostActions: 0, streakShieldActive: false },
+  dailyReviewStats: {},
+  syntaxLevel: 0,
+  activeTheme: 'blue',
+  unlockedThemes: ['blue'],
+  dailyGoalMinutes: 240,
+  subjectGoals: {},
+  pushSettings: { enabled: false, streakWarning: true, reviewsPending: true },
 });
 
 export const useStore = create(
@@ -74,6 +150,8 @@ export const useStore = create(
       // --- ESTADOS INICIAIS (NUVEM) ---
       ...getCleanInitialState(),
       isSyncing: true,
+      // Marca temporal da última versão sincronizada da nuvem (controle de concorrência)
+      lastSyncedAt: null,
 
       // --- ESTADOS VOLÁTEIS (INTERFACE) ---
       globalModal: null,
@@ -109,22 +187,20 @@ export const useStore = create(
             setTimeout(() => reject(new Error("Timeout")), 2500)
           );
 
-          const fetchPromise = supabase.from('profiles').select('full_data').eq('id', user.id).limit(1);
+          const fetchPromise = supabase.from('profiles').select('full_data, updated_at').eq('id', user.id).limit(1);
           const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
 
           if (error) throw error;
-          
+
           if (data && data.length > 0 && data[0].full_data) {
             console.log("✅ [Nuvem] Dados sincronizados com sucesso.");
-            const { isSyncing: _, ...cleanData } = data[0].full_data;
+            const remoteUpdatedAt = data[0].updated_at || null;
+            const { isSyncing: _, lastSyncedAt: __, ...cleanData } = data[0].full_data;
             if (cleanData.calendarDate) cleanData.calendarDate = new Date(cleanData.calendarDate);
             if (cleanData.reviewCalendarDate) cleanData.reviewCalendarDate = new Date(cleanData.reviewCalendarDate);
             
-            if (!cleanData.studyHistory || Object.keys(cleanData.studyHistory).length === 0) {
-              const totalMins = cleanData.userStats?.totalStudyMinutes || 0;
-              if (totalMins > 0) {
-                cleanData.studyHistory = seedStudyHistory(totalMins);
-              }
+            if (!cleanData.studyHistory) {
+              cleanData.studyHistory = {};
             }
 
             // Retrocompatibilidade para gamificação/avatares/missões diárias
@@ -143,8 +219,43 @@ export const useStore = create(
             if (cleanData.userStats && !cleanData.userStats.avatar) {
               cleanData.userStats.avatar = '/assets/gamification/avatar_male.png';
             }
+            if (cleanData.userStats && cleanData.userStats.totalPurchases === undefined) {
+              cleanData.userStats.totalPurchases = 0;
+            }
+            if (!cleanData.activeBoosts) {
+              cleanData.activeBoosts = { xpBoostActions: 0, streakShieldActive: false };
+            }
+            if (!cleanData.dailyReviewStats) {
+              cleanData.dailyReviewStats = {};
+            }
+            if (cleanData.syntaxLevel === undefined) {
+              cleanData.syntaxLevel = 0;
+            }
+            if (cleanData.enableSounds === undefined) {
+              cleanData.enableSounds = true;
+            }
+            if (cleanData.streakData && cleanData.streakData.hasHadBreak === undefined) {
+              cleanData.streakData.hasHadBreak = false;
+            }
+            if (!cleanData.activeTheme) {
+              cleanData.activeTheme = 'blue';
+            }
+            if (!cleanData.unlockedThemes) {
+              cleanData.unlockedThemes = ['blue'];
+            }
+            if (cleanData.dailyGoalMinutes === undefined) {
+              cleanData.dailyGoalMinutes = 240;
+            }
+            if (!cleanData.subjectGoals) {
+              cleanData.subjectGoals = {};
+            }
+            if (!cleanData.pushSettings) {
+              cleanData.pushSettings = { enabled: false, streakWarning: true, reviewsPending: true };
+            }
             
-            set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false });
+            set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false, lastSyncedAt: remoteUpdatedAt });
+            get().checkAndResetWeekly();
+            get().checkAndAdvanceSeason();
             return true;
           }
           console.log('ℹ️ [Nuvem] Perfil pronto para uso.');
@@ -154,6 +265,33 @@ export const useStore = create(
             return await get().loadFromCloud(retryCount + 1);
           }
           console.error('❌ [Nuvem] Falha após retentativas:', error.message);
+          
+          // Tentar carregar do backup local
+          try {
+            const backupsJson = localStorage.getItem('prf_qg_backups');
+            if (backupsJson) {
+              const backups = JSON.parse(backupsJson);
+              if (backups && backups.length > 0) {
+                const latestBackup = backups[0];
+                const backupDate = new Date(latestBackup.timestamp).toLocaleString();
+                console.log(`💡 [Backup Local] Carregando backup criado em ${backupDate}`);
+                
+                const cleanData = latestBackup.data;
+                if (cleanData.calendarDate) cleanData.calendarDate = new Date(cleanData.calendarDate);
+                if (cleanData.reviewCalendarDate) cleanData.reviewCalendarDate = new Date(cleanData.reviewCalendarDate);
+                
+                set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false });
+                get().checkAndResetWeekly();
+                get().checkAndAdvanceSeason();
+                
+                toast.info(`⚠️ Usando backup local off-line (${backupDate}) devido a erro de conexão.`);
+                return true;
+              }
+            }
+          } catch (backupErr) {
+            console.error("Falha ao restaurar backup local:", backupErr);
+          }
+
           toast.error("O Supabase está demorando para responder. Tente atualizar a página (F5).");
         } finally {
           if (retryCount >= 2 || !get().isLoadingFromCloud) {
@@ -164,31 +302,55 @@ export const useStore = create(
       },
 
       saveToCloud: async () => {
-        const { user, isLoadingFromCloud, ...state } = get();
+        const { user, isLoadingFromCloud, lastSyncedAt, ...state } = get();
         if (!user || isLoadingFromCloud) return;
 
         console.log('📤 [Nuvem] Despachando dados para o servidor...');
-        
+
+        // --- GUARDA DE CONCORRÊNCIA (proteção multi-dispositivo) ---
+        // Se já temos uma baseline e a nuvem tiver uma versão mais recente,
+        // significa que outro dispositivo gravou — recarregamos em vez de sobrescrever.
+        if (lastSyncedAt) {
+          try {
+            const { data: remoteMeta } = await supabase
+              .from('profiles').select('updated_at').eq('id', user.id).limit(1);
+            const remoteUpdatedAt = remoteMeta?.[0]?.updated_at;
+            if (remoteUpdatedAt && new Date(remoteUpdatedAt) > new Date(lastSyncedAt)) {
+              console.warn('⚠️ [Nuvem] Versão remota mais recente detectada. Sincronizando para evitar perda de dados.');
+              toast.info('🔄 Dados atualizados em outro dispositivo. Carregando a versão mais recente...');
+              await get().loadFromCloud();
+              return;
+            }
+          } catch (guardErr) {
+            // Falha na verificação não bloqueia o salvamento (evita perda de dados)
+            console.warn('Verificação de conflito ignorada:', guardErr?.message);
+          }
+        }
+
         const persistedKeys = [
           'subjects', 'cycle', 'currentDayIndex', 'completedToday', 'targetExamDate', 
           'coins', 'userStats', 'streakData', 'weeklySprint', 'reviews', 
           'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus', 
           'isDarkMode', 'activeTab', 'calendarDate', 'reviewCalendarDate', 
           'seasonalData', 'weeklyMissions', 'studyHistory',
-          'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate'
+          'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate', 'pushEnabled', 'pushTime',
+          'enableSounds', 'activeBoosts', 'dailyReviewStats', 'syntaxLevel',
+          'activeTheme', 'unlockedThemes', 'dailyGoalMinutes', 'subjectGoals', 'pushSettings'
         ];
         
         const dataToSave = {};
         persistedKeys.forEach(key => { if (state[key] !== undefined) dataToSave[key] = state[key]; });
 
+        const newUpdatedAt = new Date().toISOString();
+
         try {
           // Timeout de 5 segundos para o salvamento
           const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout Nuvem")), 5000));
-          
+
           const savePromise = (async () => {
              const { data: updateData, error: updateError } = await supabase
               .from('profiles')
-              .update({ full_data: dataToSave, updated_at: new Date().toISOString() })
+              .update({ full_data: dataToSave, updated_at: newUpdatedAt })
               .eq('id', user.id)
               .select();
 
@@ -197,12 +359,30 @@ export const useStore = create(
             if (!updateData || updateData.length === 0) {
               const { error: insertError } = await supabase
                 .from('profiles')
-                .insert({ id: user.id, full_data: dataToSave, updated_at: new Date().toISOString() });
+                .insert({ id: user.id, full_data: dataToSave, updated_at: newUpdatedAt });
               if (insertError) throw insertError;
             }
           })();
 
-          await Promise.race([savePromise, timeoutPromise]);
+           await Promise.race([savePromise, timeoutPromise]);
+
+          // Atualiza a baseline de sincronização após gravação bem-sucedida
+          set({ lastSyncedAt: newUpdatedAt });
+
+          // Backup local automático (últimos 3 backups)
+          try {
+            const backupsJson = localStorage.getItem('prf_qg_backups');
+            let backups = backupsJson ? JSON.parse(backupsJson) : [];
+            backups.unshift({
+              timestamp: Date.now(),
+              data: dataToSave
+            });
+            backups = backups.slice(0, 3);
+            localStorage.setItem('prf_qg_backups', JSON.stringify(backups));
+          } catch (err) {
+            console.error("Erro ao criar backup local:", err);
+          }
+
           toast.success("Nuvem atualizada! ☁️", { duration: 800 });
         } catch (error) {
           console.error('❌ [Nuvem] Erro no Upload:', error.message);
@@ -222,6 +402,8 @@ export const useStore = create(
       setCoins: (coins) => set((state) => ({ coins: typeof coins === 'function' ? coins(state.coins) : coins })),
       setUserStats: (userStats) => set((state) => ({ userStats: typeof userStats === 'function' ? userStats(state.userStats) : userStats })),
       setStreakData: (streakData) => set((state) => ({ streakData: typeof streakData === 'function' ? streakData(state.streakData) : streakData })),
+      setPushEnabled: (enabled) => set({ pushEnabled: enabled }),
+      setPushTime: (time) => set({ pushTime: time }),
       
       getTodayDate: () => {
         const today = get().getLocalDateStr();
@@ -337,13 +519,34 @@ export const useStore = create(
 
       addXP: (amount, message = "") => {
         get().playSound('xp');
-        set((state) => ({
-          userStats: { ...state.userStats, xp: state.userStats.xp + amount },
-          seasonalData: { ...state.seasonalData, seasonXp: state.seasonalData.seasonXp + amount }
-        }));
-        if (message) {
-          toast.success(message);
+        let finalAmount = amount;
+        let boostUsed = false;
+        
+        const activeBoosts = get().activeBoosts || { xpBoostActions: 0, streakShieldActive: false };
+        if (activeBoosts.xpBoostActions > 0) {
+          finalAmount = amount * 2;
+          boostUsed = true;
         }
+
+        set((state) => {
+          const stateActiveBoosts = state.activeBoosts || { xpBoostActions: 0, streakShieldActive: false };
+          return {
+            userStats: { ...state.userStats, xp: state.userStats.xp + finalAmount },
+            seasonalData: { ...state.seasonalData, seasonXp: state.seasonalData.seasonXp + finalAmount },
+            activeBoosts: boostUsed ? {
+              ...stateActiveBoosts,
+              xpBoostActions: Math.max(0, stateActiveBoosts.xpBoostActions - 1)
+            } : stateActiveBoosts
+          };
+        });
+
+        if (message) {
+          const boostMsg = boostUsed ? ` [Boost 2x Ativo! +${finalAmount - amount} XP]` : "";
+          toast.success(`${message}${boostMsg}`);
+        }
+
+        // Verifica avanço de temporada
+        get().checkAndAdvanceSeason();
       },
 
       unlockMedal: (medalId) => {
@@ -411,12 +614,44 @@ export const useStore = create(
         addXP(rating > 1 ? 30 : 10, "Auditoria FSRS v6");
         
         const todayStr = getLocalDateStr(get().getTodayDate());
-        set(state => ({
-          studyHistory: {
-            ...state.studyHistory,
-            [todayStr]: (state.studyHistory?.[todayStr] || 0) + 2
+        set(state => {
+          const dailyReviewStats = state.dailyReviewStats || {};
+          const todayStats = dailyReviewStats[todayStr] || { total: 0, correct: 0 };
+          const newDailyReviewStats = {
+            ...dailyReviewStats,
+            [todayStr]: {
+              total: todayStats.total + 1,
+              correct: rating > 1 ? todayStats.correct + 1 : todayStats.correct
+            }
+          };
+
+          const newState = {
+            studyHistory: {
+              ...state.studyHistory,
+              [todayStr]: (state.studyHistory?.[todayStr] || 0) + 2
+            },
+            dailyReviewStats: newDailyReviewStats
+          };
+
+          return newState;
+        });
+
+        // Verifica medalha Muralha (5 dias consecutivos com 100% de acerto nas revisões executadas)
+        const dailyReviewStatsAfter = get().dailyReviewStats || {};
+        let has5DaysAfter = true;
+        for (let i = 0; i < 5; i++) {
+          const checkDate = new Date(get().getTodayDate());
+          checkDate.setDate(checkDate.getDate() - i);
+          const checkDateStr = getLocalDateStr(checkDate);
+          const dayStat = dailyReviewStatsAfter[checkDateStr];
+          if (!dayStat || dayStat.total === 0 || dayStat.correct !== dayStat.total) {
+            has5DaysAfter = false;
+            break;
           }
-        }));
+        }
+        if (has5DaysAfter) {
+          get().unlockMedal('muralha');
+        }
 
         if (rating > 1) {
           get().playSound('coin');
@@ -440,10 +675,30 @@ export const useStore = create(
       },
 
       getLocalDateStr: (date) => {
-        if (!date) return new Date().toISOString().split('T')[0]; // Sempre usa data real do sistema
-        const offset = date.getTimezoneOffset();
-        const localDate = new Date(date.getTime() - (offset * 60 * 1000));
+        const targetDate = date || new Date();
+        const offset = targetDate.getTimezoneOffset();
+        const localDate = new Date(targetDate.getTime() - (offset * 60 * 1000));
         return localDate.toISOString().split('T')[0];
+      },
+
+      addStudyMinutes: (minutes) => {
+        const { getLocalDateStr, setUserStats, setWeeklySprint, addXP } = get();
+        if (minutes <= 0) return;
+        
+        const todayStr = getLocalDateStr();
+        setUserStats(prev => ({ ...prev, totalStudyMinutes: (prev.totalStudyMinutes || 0) + minutes }));
+        setWeeklySprint(prev => ({ ...prev, currentMinutes: (prev.currentMinutes || 0) + minutes }));
+        
+        // XP reward for using pomodoro (2 XP per minute)
+        addXP(minutes * 2, "Sessão Pomodoro Concluída");
+        
+        set(state => ({
+          studyHistory: {
+            ...state.studyHistory,
+            [todayStr]: (state.studyHistory?.[todayStr] || 0) + minutes
+          }
+        }));
+        get().updateDailyMissionProgress('minutes', minutes);
       },
 
       watchClass: (subjectId, slotIndex, amountWatched = 1) => {
@@ -512,22 +767,47 @@ export const useStore = create(
         const today = getLocalDateStr();
         const lastCheckDate = streakData.lastCheckDate;
         let newStreak = streakData.currentStreak;
+        let newHasHadBreak = streakData.hasHadBreak || false;
 
         if (lastCheckDate !== today) {
           const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
           const yesterdayStr = getLocalDateStr(yesterday);
-          if (lastCheckDate === yesterdayStr) newStreak += 1;
-          else newStreak = 1;
+          if (lastCheckDate === yesterdayStr) {
+            newStreak += 1;
+          } else {
+            // Se quebrou streak, verifica escudo
+            const activeBoosts = get().activeBoosts || { xpBoostActions: 0, streakShieldActive: false };
+            if (activeBoosts.streakShieldActive) {
+              set(state => ({
+                activeBoosts: {
+                  ...(state.activeBoosts || {}),
+                  streakShieldActive: false
+                }
+              }));
+              toast.success("🛡️ Escudo de Streak consumido! Sua ofensiva foi protegida.");
+              newStreak = streakData.currentStreak || 1;
+            } else {
+              newStreak = 1;
+              newHasHadBreak = true; // Registra que houve uma quebra/pausa
+            }
+          }
 
-          setStreakData({ lastCheckDate: today, currentStreak: newStreak });
+          setStreakData({ lastCheckDate: today, currentStreak: newStreak, hasHadBreak: newHasHadBreak });
           if (newStreak === 7) {
             setCoins(c => c + 100);
+            if (newHasHadBreak) {
+              get().unlockMedal('fenix');
+            }
           }
         }
 
         const nextIndex = (currentDayIndex + 1) % cycle.length;
         setCurrentDayIndex(nextIndex);
         setCompletedToday([]);
+
+        // Lógica de verificação semanal e temporada
+        get().checkAndResetWeekly();
+        get().checkAndAdvanceSeason();
       },
 
       handleBulkAddConfirm: (subjectId, bulkText) => {
@@ -696,9 +976,21 @@ export const useStore = create(
       },
 
       checkAndResetDailyMissions: () => {
-        const { getLocalDateStr, lastDailyResetDate } = get();
+        const { getLocalDateStr, lastDailyResetDate, getPendingReviews } = get();
         const todayStr = getLocalDateStr();
+        
         if (lastDailyResetDate !== todayStr) {
+          // --- MULTA DE PROCRASTINAÇÃO ---
+          // Se não é a primeira execução da vida (lastDailyResetDate existe)
+          // E o usuário tem mais de 5 revisões pendentes (backlog acumulado)
+          if (lastDailyResetDate) {
+            const pendingCount = getPendingReviews().length;
+            if (pendingCount > 5) {
+              const penalty = (pendingCount - 5) * 2; // -2 moedas por cada revisão atrasada além de 5
+              set(state => ({ coins: Math.max(0, state.coins - penalty) }));
+            }
+          }
+
           const defaultDaily = [
             { id: 'd1', title: 'Foco Diário', description: 'Estude por 30 minutos', goal: 30, current: 0, xpReward: 30, coinReward: 10, type: 'minutes', completed: false, claimed: false },
             { id: 'd2', title: 'Aula Concluída', description: 'Marque uma aula como concluída', goal: 1, current: 0, xpReward: 20, coinReward: 5, type: 'study', completed: false, claimed: false },
@@ -893,6 +1185,237 @@ export const useStore = create(
           daysDiff: daysDiff,
           examDateFormatted: `${String(examDateObj.getDate()).padStart(2, '0')}/${mesesNomesShort[examDateObj.getMonth()]}/${examDateObj.getFullYear()}`
         };
+      },
+
+      getStartOfWeek: (dateInput) => {
+        const date = dateInput ? new Date(dateInput) : new Date();
+        const day = date.getDay();
+        const diff = date.getDate() - day + (day === 0 ? -6 : 1);
+        const monday = new Date(date.setDate(diff));
+        monday.setHours(0, 0, 0, 0);
+        return monday;
+      },
+
+      checkAndResetWeekly: () => {
+        const { weeklySprint, getStartOfWeek } = get();
+        const now = new Date();
+        const currentWeekStart = getStartOfWeek(now).toISOString();
+        const sprintWeekStart = weeklySprint.weekStart ? getStartOfWeek(new Date(weeklySprint.weekStart)).toISOString() : null;
+
+        if (!sprintWeekStart || currentWeekStart !== sprintWeekStart) {
+          set(state => ({
+            weeklySprint: {
+              ...state.weeklySprint,
+              currentMinutes: 0,
+              weekStart: currentWeekStart
+            },
+            weeklyMissions: state.weeklyMissions.map(m => ({
+              ...m,
+              current: 0,
+              completed: false,
+              claimed: false
+            }))
+          }));
+          return true;
+        }
+        return false;
+      },
+
+      checkAndAdvanceSeason: () => {
+        const { seasonalData, setCoins } = get();
+        const now = new Date();
+        const endDate = new Date(seasonalData.endDate);
+        
+        if (now >= endDate || seasonalData.seasonXp >= seasonalData.seasonGoalXp) {
+          const reachedGoal = seasonalData.seasonXp >= seasonalData.seasonGoalXp;
+          const nextSeasonNum = seasonalData.currentSeason + 1;
+          
+          const seasonNames = [
+            "Recruta Operacional",
+            "Patrulheiro Tático",
+            "Inspetor de Elite",
+            "Guardião das Rodovias",
+            "Comandante do Asfalto",
+            "Força Especial PRF"
+          ];
+          const newName = seasonNames[(nextSeasonNum - 1) % seasonNames.length];
+          
+          if (reachedGoal) {
+            setCoins(c => c + 500);
+            toast.success(`🎉 Temporada concluída! Você atingiu o objetivo de XP e ganhou 500 moedas bônus!`);
+          } else {
+            toast.info(`⏳ A temporada anterior terminou. Iniciando nova temporada.`);
+          }
+
+          set({
+            seasonalData: {
+              currentSeason: nextSeasonNum,
+              seasonName: newName,
+              seasonXp: 0,
+              seasonGoalXp: 5000 + (nextSeasonNum - 1) * 1000,
+              startDate: now.toISOString(),
+              endDate: new Date(now.getTime() + 30 * 24 * 60 * 60 * 1000).toISOString()
+            }
+          });
+          return true;
+        }
+        return false;
+      },
+
+      buyReward: (reward) => {
+        const { coins, unlockAvatar, unlockMedal } = get();
+        if (coins < reward.cost) {
+          toast.error(`Moedas insuficientes para resgatar "${reward.title}"!`);
+          return false;
+        }
+
+        if (reward.category === 'customizacao') {
+          return unlockAvatar(reward.avatarPath, reward.cost);
+        }
+
+        // Gameplay boosters
+        if (reward.isGameplay) {
+          if (reward.id === 9) { // Boost XP (2x)
+            set(state => {
+              const activeBoosts = state.activeBoosts || { xpBoostActions: 0, streakShieldActive: false };
+              return {
+                coins: state.coins - reward.cost,
+                activeBoosts: {
+                  ...activeBoosts,
+                  xpBoostActions: (activeBoosts.xpBoostActions || 0) + 5
+                },
+                userStats: {
+                  ...state.userStats,
+                  totalPurchases: (state.userStats.totalPurchases || 0) + 1
+                }
+              };
+            });
+            const newPurchases = (get().userStats.totalPurchases || 0);
+            if (newPurchases >= 5) unlockMedal('investidor');
+            toast.success(`Boost de XP (2x) ativado para as próximas 5 ações! ⚡`);
+            return true;
+          }
+
+          if (reward.id === 10) { // Escudo de Streak
+            set(state => {
+              const activeBoosts = state.activeBoosts || { xpBoostActions: 0, streakShieldActive: false };
+              return {
+                coins: state.coins - reward.cost,
+                activeBoosts: {
+                  ...activeBoosts,
+                  streakShieldActive: true
+                },
+                userStats: {
+                  ...state.userStats,
+                  totalPurchases: (state.userStats.totalPurchases || 0) + 1
+                }
+              };
+            });
+            const newPurchases = (get().userStats.totalPurchases || 0);
+            if (newPurchases >= 5) unlockMedal('investidor');
+            toast.success(`Escudo de Streak ativado! Seu streak está protegido. 🛡️`);
+            return true;
+          }
+        }
+
+        // Normal reward (Leisure/Well-being/Premium)
+        set(state => ({
+          coins: state.coins - reward.cost,
+          userStats: {
+            ...state.userStats,
+            totalPurchases: (state.userStats.totalPurchases || 0) + 1
+          }
+        }));
+
+        const newPurchases = (get().userStats.totalPurchases || 0);
+        if (newPurchases >= 5) unlockMedal('investidor');
+        toast.success(`Você resgatou com sucesso: "${reward.title}"! 🎉`);
+        return true;
+      },
+
+      setSyntaxLevel: (syntaxLevel) => set({ syntaxLevel }),
+
+      applyTheme: (themeId) => {
+        const theme = THEME_DEFINITIONS[themeId] || THEME_DEFINITIONS['blue'];
+        const root = document.documentElement;
+        Object.keys(theme.colors).forEach(shade => {
+          root.style.setProperty(`--theme-blue-${shade}`, theme.colors[shade]);
+        });
+        set({ activeTheme: themeId });
+      },
+
+      unlockTheme: (themeId, cost) => {
+        const { coins, unlockedThemes, setCoins } = get();
+        if (coins < cost) {
+          toast.error("Moedas insuficientes para desbloquear este tema!");
+          return false;
+        }
+        if (unlockedThemes.includes(themeId)) {
+          toast.error("Tema já desbloqueado!");
+          return false;
+        }
+        setCoins(c => c - cost);
+        set(state => ({
+          unlockedThemes: [...state.unlockedThemes, themeId]
+        }));
+        toast.success("Tema de cores desbloqueado com sucesso! 🎨");
+        get().playSound('levelUp');
+        return true;
+      },
+
+      selectTheme: (themeId) => {
+        const { unlockedThemes, applyTheme } = get();
+        if (!unlockedThemes.includes(themeId)) {
+          toast.error("Você precisa desbloquear este tema antes de equipá-lo!");
+          return false;
+        }
+        applyTheme(themeId);
+        toast.success("Tema de cores equipado com sucesso!");
+        return true;
+      },
+
+      setDailyGoalMinutes: (minutes) => set({ dailyGoalMinutes: minutes }),
+
+      setSubjectGoal: (subjectId, minutes) => set(state => ({
+        subjectGoals: {
+          ...state.subjectGoals,
+          [subjectId]: minutes
+        }
+      })),
+
+      setPushSettings: (pushSettings) => set({ pushSettings }),
+
+      triggerNotification: async (title, options) => {
+        const { pushSettings } = get();
+        if (!pushSettings.enabled) return;
+        if (Notification.permission === 'granted') {
+          try {
+            const registration = await navigator.serviceWorker.ready;
+            if (registration && registration.showNotification) {
+              registration.showNotification(title, options);
+            } else {
+              new Notification(title, options);
+            }
+          } catch {
+            new Notification(title, options);
+          }
+        }
+      },
+
+      saveTopicNotes: (subjectId, topicId, notes) => {
+        set(state => {
+          const newSubjects = { ...state.subjects };
+          if (newSubjects[subjectId]) {
+            const subject = { ...newSubjects[subjectId] };
+            const topics = (subject.topics || []).map(t => 
+              t.id === topicId ? { ...t, notes } : t
+            );
+            subject.topics = topics;
+            newSubjects[subjectId] = subject;
+          }
+          return { subjects: newSubjects };
+        });
+        toast.success("Anotação salva com sucesso!");
       }
     })
 );
@@ -904,7 +1427,9 @@ const persistedKeysParaMonitorar = [
   'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus', 
   'isDarkMode', 'activeTab', 'calendarDate', 'reviewCalendarDate', 
   'seasonalData', 'weeklyMissions', 'studyHistory',
-  'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate'
+  'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate', 'pushEnabled', 'pushTime',
+  'enableSounds', 'activeBoosts', 'dailyReviewStats', 'syntaxLevel',
+  'activeTheme', 'unlockedThemes', 'dailyGoalMinutes', 'subjectGoals', 'pushSettings'
 ];
 
 let pendingSaves = 0;

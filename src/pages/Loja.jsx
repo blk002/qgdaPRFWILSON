@@ -1,4 +1,5 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState } from 'react';
+import { useConfetti } from '../hooks/useConfetti';
 import { useStore } from '../store/useStore';
 import { Store, Coins, Sparkles, Coffee, Gamepad2, Heart, Zap, Gift, Crown, Star, Lock, User } from 'lucide-react';
 
@@ -35,6 +36,11 @@ const REWARDS = [
   { id: 23, title: 'Investidor PRF', desc: 'Avatar exclusivo da divisão financeira.', cost: 400, icon: '💼', category: 'customizacao', rarity: 'rare', avatarPath: '/assets/gamification/investor.png' },
   { id: 24, title: 'Agente de Ferro', desc: 'Avatar especial blindado com exoesqueleto.', cost: 1000, icon: '🤖', category: 'customizacao', rarity: 'legendary', avatarPath: '/assets/gamification/ironman.png' },
   { id: 25, title: 'Diretor Geral', desc: 'Avatar máximo do comando central da PRF.', cost: 1500, icon: '🦁', category: 'customizacao', rarity: 'legendary', avatarPath: '/assets/gamification/diretor_geral.png' },
+  { id: 30, title: 'Tema Forest Green', desc: 'Customização visual verde floresta tática.', cost: 300, icon: '🌲', category: 'customizacao', rarity: 'uncommon', isTheme: true, themeId: 'forest' },
+  { id: 31, title: 'Tema Cyber Purple', desc: 'Customização visual roxa neon cibernética.', cost: 400, icon: '🔮', category: 'customizacao', rarity: 'rare', isTheme: true, themeId: 'purple' },
+  { id: 32, title: 'Tema Obsidian Gold', desc: 'Customização visual ouro obsidiana de elite.', cost: 600, icon: '🔱', category: 'customizacao', rarity: 'epic', isTheme: true, themeId: 'gold' },
+  { id: 33, title: 'Tema Crimson Red', desc: 'Customização visual vermelha carmesim operacional.', cost: 500, icon: '🩸', category: 'customizacao', rarity: 'rare', isTheme: true, themeId: 'crimson' },
+  { id: 34, title: 'Tema Dark Blue', desc: 'Customização visual padrão azul marinho PRF.', cost: 0, icon: '🔵', category: 'customizacao', rarity: 'common', isTheme: true, themeId: 'blue' },
   { id: 11, title: 'Jantar Especial', desc: 'Restaurante ou delivery premium.', cost: 1500, icon: '🥂', category: 'premium', rarity: 'epic' },
   { id: 12, title: 'Item de Desejo', desc: 'Compre algo que você quiser.', cost: 3000, icon: '🎁', category: 'premium', rarity: 'legendary' },
 ];
@@ -83,101 +89,36 @@ const RARITY_STYLES = {
 };
 
 export default function Loja() {
-  const { coins, setCoins, setUserStats, unlockMedal, setGlobalModal, unlockAvatar, unlockedAvatars = [] } = useStore();
+  const { coins, setGlobalModal, unlockedAvatars = [], unlockedThemes = [], activeTheme, buyReward, unlockTheme, selectTheme } = useStore();
   const [activeCategory, setActiveCategory] = useState('all');
-  const [triggerConfetti, setTriggerConfetti] = useState(false);
-  const canvasRef = useRef(null);
-
-  useEffect(() => {
-    if (!triggerConfetti) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-    const colors = ['#f43f5e', '#3b82f6', '#10b981', '#eab308', '#a855f7', '#ff7849'];
-    const particles = [];
-
-    for (let i = 0; i < 120; i++) {
-      particles.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height - canvas.height,
-        r: Math.random() * 6 + 4,
-        d: Math.random() * canvas.height,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        tilt: Math.random() * 10 - 5,
-        tiltAngleIncremental: Math.random() * 0.07 + 0.02,
-        tiltAngle: 0
-      });
-    }
-
-    let animationFrameId;
-    let startTime = Date.now();
-
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      let active = false;
-      
-      particles.forEach((p) => {
-        p.tiltAngle += p.tiltAngleIncremental;
-        p.y += (Math.cos(p.d) + 3 + p.r / 2) / 2;
-        p.x += Math.sin(p.tiltAngle);
-        p.tilt = Math.sin(p.tiltAngle - p.r/3) * 15;
-
-        if (p.y <= canvas.height) {
-          active = true;
-        }
-
-        ctx.beginPath();
-        ctx.lineWidth = p.r;
-        ctx.strokeStyle = p.color;
-        ctx.moveTo(p.x + p.tilt + p.r / 2, p.y);
-        ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r / 2);
-        ctx.stroke();
-      });
-
-      if (active && Date.now() - startTime < 2500) {
-        animationFrameId = requestAnimationFrame(draw);
-      } else {
-        setTriggerConfetti(false);
-      }
-    };
-
-    draw();
-
-    const handleResize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [triggerConfetti]);
+  const { setTriggerConfetti, ConfettiCanvas } = useConfetti();
 
   const filteredRewards = activeCategory === 'all' 
     ? REWARDS 
     : REWARDS.filter(r => r.category === activeCategory);
 
   const handlePurchase = (rew) => {
-    if (rew.category === 'customizacao') {
-      const success = unlockAvatar(rew.avatarPath, rew.cost);
+    if (rew.isTheme) {
+      const success = unlockTheme(rew.themeId, rew.cost);
       if (success) {
         setTriggerConfetti(true);
+        setGlobalModal({
+          title: "Tema Adquirido!",
+          message: `Você desbloqueou o tema: "${rew.title}". Você pode equipá-lo agora!`,
+          isAlert: true
+        });
+      } else {
+        setGlobalModal({
+          title: "Moedas Insuficientes",
+          message: `Você precisa de ${rew.cost - coins} moedas a mais para resgatar "${rew.title}".`,
+          isAlert: true
+        });
       }
       return;
     }
 
-    if (coins >= rew.cost) {
-      setCoins(prev => prev - rew.cost);
-      setUserStats(prev => {
-        const newPurchases = (prev.totalPurchases || 0) + 1;
-        if (newPurchases >= 5) unlockMedal('investidor');
-        return { ...prev, totalPurchases: newPurchases };
-      });
+    const success = buyReward(rew);
+    if (success) {
       setTriggerConfetti(true);
       setGlobalModal({
         title: "Resgate Efetuado!",
@@ -249,10 +190,13 @@ export default function Loja() {
       </div>
 
       {/* Grade de Itens */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 gap-6">
+      <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-6">
         {filteredRewards.map(rew => {
           const rarity = RARITY_STYLES[rew.rarity];
-          const isUnlockedAvatar = rew.category === 'customizacao' && unlockedAvatars.includes(rew.avatarPath);
+          const isTheme = rew.isTheme;
+          const isUnlocked = isTheme ? unlockedThemes.includes(rew.themeId) : (rew.avatarPath ? unlockedAvatars.includes(rew.avatarPath) : false);
+          const isEquipped = isTheme ? activeTheme === rew.themeId : false;
+          const isUnlockedAvatar = rew.avatarPath && unlockedAvatars.includes(rew.avatarPath);
           const canAfford = coins >= rew.cost;
           
           return (
@@ -266,7 +210,7 @@ export default function Loja() {
                   {rarity.label}
                 </span>
               </div>
-
+ 
               <div className="p-6 flex flex-col items-center text-center relative z-10 h-full justify-between">
                 <div className="flex flex-col items-center w-full">
                   {/* Ícone ou Imagem de Avatar com efeito hover */}
@@ -290,37 +234,50 @@ export default function Loja() {
                   {/* Preço */}
                   <div className="flex items-center gap-1.5 mb-4 bg-slate-50 dark:bg-slate-800/30 px-3.5 py-1.5 rounded-full border border-slate-100 dark:border-slate-800">
                     <Coins className="w-4 h-4 text-yellow-500 drop-shadow-[0_0_4px_rgba(234,179,8,0.2)]" />
-                    <span className={`text-base font-black ${isUnlockedAvatar ? 'text-slate-400 dark:text-slate-600 line-through' : canAfford ? 'text-yellow-600 dark:text-yellow-400' : 'text-slate-400'}`}>
+                    <span className={`text-base font-black ${isUnlocked ? 'text-slate-400 dark:text-slate-600 line-through' : canAfford ? 'text-yellow-600 dark:text-yellow-400' : 'text-slate-400'}`}>
                       {rew.cost}
                     </span>
                   </div>
                   
                   {/* Botão */}
-                  <button 
-                    disabled={isUnlockedAvatar}
-                    onClick={() => handlePurchase(rew)}
-                    className={`w-full py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all border cursor-pointer ${
-                      isUnlockedAvatar
-                        ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-250 dark:border-slate-700 text-slate-400 dark:text-slate-500 cursor-default'
-                        : canAfford 
-                          ? 'bg-gradient-to-r from-blue-600 to-indigo-600 border-blue-500 text-white hover:from-blue-500 hover:to-indigo-500 hover:scale-[1.02] active:scale-95 shadow-md shadow-blue-500/20' 
-                          : 'bg-slate-50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'
-                    }`}
-                  >
-                    {isUnlockedAvatar ? (
-                      <span className="flex items-center justify-center gap-2">
-                        Adquirido ✓
-                      </span>
-                    ) : canAfford ? (
-                      <span className="flex items-center justify-center gap-2">
-                        <Gift className="w-4 h-4 animate-bounce" /> Resgatar
-                      </span>
-                    ) : (
-                      <span className="flex items-center justify-center gap-2">
-                        <Lock className="w-3.5 h-3.5" /> Saldo Insuficiente
-                      </span>
-                    )}
-                  </button>
+                  {isTheme && isUnlocked ? (
+                    <button 
+                      onClick={() => selectTheme(rew.themeId)}
+                      className={`w-full py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all border cursor-pointer ${
+                        isEquipped
+                          ? 'bg-emerald-600 border-emerald-500 text-white shadow-md shadow-emerald-500/20'
+                          : 'bg-blue-600 hover:bg-blue-700 border-blue-500 text-white hover:scale-[1.02] active:scale-95 shadow-md shadow-blue-500/20'
+                      }`}
+                    >
+                      {isEquipped ? 'Equipado ✓' : 'Equipar'}
+                    </button>
+                  ) : (
+                    <button 
+                      disabled={isUnlockedAvatar}
+                      onClick={() => handlePurchase(rew)}
+                      className={`w-full py-3 rounded-xl font-black text-xs uppercase tracking-wider transition-all border cursor-pointer ${
+                        isUnlockedAvatar
+                          ? 'bg-slate-100 dark:bg-slate-800/50 border-slate-200 dark:border-slate-700 text-slate-400 dark:text-slate-500 cursor-default'
+                          : canAfford 
+                            ? 'bg-gradient-to-r from-blue-600 to-indigo-600 border-blue-500 text-white hover:from-blue-500 hover:to-indigo-500 hover:scale-[1.02] active:scale-95 shadow-md shadow-blue-500/20' 
+                            : 'bg-slate-50 dark:bg-slate-800/30 border-slate-200 dark:border-slate-800 text-slate-400 dark:text-slate-600 cursor-not-allowed'
+                      }`}
+                    >
+                      {isUnlockedAvatar ? (
+                        <span className="flex items-center justify-center gap-2">
+                          Adquirido ✓
+                        </span>
+                      ) : canAfford ? (
+                        <span className="flex items-center justify-center gap-2">
+                          <Gift className="w-4 h-4 animate-bounce" /> Resgatar
+                        </span>
+                      ) : (
+                        <span className="flex items-center justify-center gap-2">
+                          <Lock className="w-3.5 h-3.5" /> Saldo Insuficiente
+                        </span>
+                      )}
+                    </button>
+                  )}
                 </div>
               </div>
 
@@ -345,12 +302,7 @@ export default function Loja() {
       </div>
 
       {/* Canvas do Confete de Sucesso */}
-      {triggerConfetti && (
-        <canvas 
-          ref={canvasRef} 
-          className="fixed inset-0 pointer-events-none z-50 w-full h-full"
-        />
-      )}
+      <ConfettiCanvas />
     </div>
   );
 }

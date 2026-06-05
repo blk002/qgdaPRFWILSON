@@ -139,8 +139,8 @@ const AVAILABLE_TAGS = [
 ];
 
 export default function PortuguesSintaxe() {
-  const { addXP, setCoins, playSound } = useStore();
-  const [currentSentenceIndex, setCurrentSentenceIndex] = useState(0);
+  const { addXP, setCoins, playSound, syntaxLevel, setSyntaxLevel } = useStore();
+  const [currentSentenceIndex, setCurrentSentenceIndex] = useState(syntaxLevel || 0);
   const [assignedTags, setAssignedTags] = useState({});
   const [selectedTag, setSelectedTag] = useState(null);
   const [isVerified, setIsVerified] = useState(false);
@@ -151,16 +151,12 @@ export default function PortuguesSintaxe() {
 
   const currentSentence = SYNTAX_SENTENCES[currentSentenceIndex];
 
-  // Carregar progresso local ao iniciar
+  // Sincronizar progresso da nuvem com o estado local
   useEffect(() => {
-    const saved = localStorage.getItem('prf_syntax_level');
-    if (saved) {
-      const idx = parseInt(saved);
-      if (idx < SYNTAX_SENTENCES.length) {
-        setCurrentSentenceIndex(idx);
-      }
+    if (syntaxLevel !== undefined && syntaxLevel < SYNTAX_SENTENCES.length) {
+      setCurrentSentenceIndex(syntaxLevel);
     }
-  }, []);
+  }, [syntaxLevel]);
 
   const handleSelectTag = (tag) => {
     setSelectedTag(tag);
@@ -234,12 +230,12 @@ export default function PortuguesSintaxe() {
     const nextIdx = currentSentenceIndex + 1;
     if (nextIdx < SYNTAX_SENTENCES.length) {
       setCurrentSentenceIndex(nextIdx);
-      localStorage.setItem('prf_syntax_level', nextIdx.toString());
+      setSyntaxLevel(nextIdx);
       handleReset();
     } else {
       toast.success("🏆 Você concluiu todas as sentenças de Sintaxe!");
       setCurrentSentenceIndex(0);
-      localStorage.setItem('prf_syntax_level', '0');
+      setSyntaxLevel(0);
       handleReset();
     }
   };
@@ -382,7 +378,7 @@ export default function PortuguesSintaxe() {
                           ? 'border-blue-500 text-blue-500 bg-blue-500/10 shadow-[0_0_12px_rgba(59,130,246,0.15)] scale-[1.02]'
                           : selectedTag
                             ? 'border-blue-500/60 text-blue-500 bg-blue-500/5 animate-pulse'
-                            : 'border-slate-350 dark:border-slate-800 text-slate-400 dark:text-slate-500'
+                            : 'border-slate-300 dark:border-slate-800 text-slate-400 dark:text-slate-500'
                       }`}
                     >
                       {selectedTag ? "Toque na linha para colar" : "Arraste / Clique no termo"}

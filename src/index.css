@@ -10,6 +10,18 @@
   --color-tactical-blue: #0f1e36;
   --color-tactical-slate: #1e293b;
   --color-tactical-dark: #070c14;
+
+  --color-blue-50: var(--theme-blue-50, #eff6ff);
+  --color-blue-100: var(--theme-blue-100, #dbeafe);
+  --color-blue-200: var(--theme-blue-200, #bfdbfe);
+  --color-blue-300: var(--theme-blue-300, #93c5fd);
+  --color-blue-400: var(--theme-blue-400, #60a5fa);
+  --color-blue-500: var(--theme-blue-500, #3b82f6);
+  --color-blue-600: var(--theme-blue-600, #2563eb);
+  --color-blue-700: var(--theme-blue-700, #1d4ed8);
+  --color-blue-800: var(--theme-blue-800, #1e40af);
+  --color-blue-900: var(--theme-blue-900, #1e3a8a);
+  --color-blue-950: var(--theme-blue-950, #172554);
 }
 
 @layer base {
@@ -74,7 +86,7 @@
 
 /* Custom Neon Accent Shadows */
 .glow-blue {
-  box-shadow: 0 0 20px rgba(59, 130, 246, 0.15);
+  box-shadow: 0 0 20px var(--theme-blue-500-glow, rgba(59, 130, 246, 0.15));
 }
 
 .glow-emerald {
@@ -102,4 +114,55 @@
 
 .pulse-bg-glow {
   animation: pulse-glow 3s infinite ease-in-out;
+}
+
+/* Professional CSS Print Styles */
+@media print {
+  html, body {
+    background: #000000 !important; /* Force dark mode look even when printing or keep white? The app is dark by default but printing usually fits white paper. Let's make it a clean white paper report for readability, or keep dark style. Standard print is white bg with dark text. Let's make a beautiful high-contrast printed report. */
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+    font-size: 12pt !important;
+  }
+  
+  header, nav, button, .no-print, [role="tablist"], [role="navigation"] {
+    display: none !important;
+  }
+  
+  main {
+    padding: 0 !important;
+    margin: 0 !important;
+  }
+
+  .glass-card {
+    background: #ffffff !important;
+    border: 1px solid #e2e8f0 !important;
+    box-shadow: none !important;
+    color: #0f172a !important;
+  }
+
+  h1, h2, h3, h4, h5, h6, p, span, div {
+    color: #0f172a !important;
+  }
+
+  .text-white {
+    color: #0f172a !important;
+  }
+
+  .bg-slate-900, .bg-slate-950, .dark\:bg-slate-900, .dark\:bg-slate-950 {
+    background-color: #ffffff !important;
+    color: #0f172a !important;
+  }
+
+  .bg-blue-600, .bg-blue-500, .dark\:bg-blue-600, .dark\:bg-blue-500 {
+    background-color: #2563eb !important;
+    color: #ffffff !important;
+    -webkit-print-color-adjust: exact;
+    print-color-adjust: exact;
+  }
+
+  .print-page {
+    page-break-after: always;
+    page-break-inside: avoid;
+  }
 }

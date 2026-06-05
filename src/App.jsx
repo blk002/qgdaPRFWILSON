@@ -6,6 +6,7 @@ import { useStore } from './store/useStore';
 import Dashboard from './pages/Dashboard';
 import ClassCompletionModal from './components/ClassCompletionModal';
 import RankBadge from './components/RankBadge';
+import { useConfetti } from './hooks/useConfetti';
 
 // Code-splitting: páginas carregadas sob demanda
 const TreinoTAF = React.lazy(() => import('./pages/TreinoTAF'));
@@ -17,14 +18,15 @@ const Ciclo = React.lazy(() => import('./pages/Ciclo'));
 const Calendario = React.lazy(() => import('./pages/Calendario'));
 const Config = React.lazy(() => import('./pages/Config'));
 const PortuguesSintaxe = React.lazy(() => import('./pages/PortuguesSintaxe'));
+const Hoje = React.lazy(() => import('./pages/Hoje'));
 import { Routes, Route, Link, NavLink, useLocation } from 'react-router-dom';
-import { Toaster } from 'sonner';
+import { Toaster, toast } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
 import { 
   Search, Library, Clock, Calendar as CalendarIcon, Repeat, Dumbbell, 
   Target as TargetIcon, BarChart2, Store, Settings, Award, BrainCircuit, 
   X, Check, ArrowRight, ShieldCheck, Trophy, Sun, Moon, Coins, 
-  AlertTriangle, Info, LogOut, Shield 
+  AlertTriangle, Info, LogOut, Shield, RefreshCw 
 } from 'lucide-react';
 import { PATENTES } from './hooks/useGamification';
 
@@ -55,7 +57,8 @@ export default function App() {
     handleReviewSubmit, watchClass, handleReplaceSubject,
     subjects, isSyncing,
     session, setSession, loadFromCloud, signOut,
-    playSound
+    playSound, activeTheme, applyTheme,
+    pushSettings, pushTime
   } = useStore();
   
   const [promotionModal, setPromotionModal] = useState(null);
@@ -63,6 +66,14 @@ export default function App() {
 
   const [reviewInputs, setReviewInputs] = useState({ total: 10, correct: 0 });
   const location = useLocation();
+
+  const { setTriggerConfetti, ConfettiCanvas } = useConfetti();
+
+  useEffect(() => {
+    if (promotionModal) {
+      setTriggerConfetti(true);
+    }
+  }, [promotionModal, setTriggerConfetti]);
 
   // Memoizar predição FSRS para evitar recalcular 4x por render
   const fsrsPrediction = useMemo(() => {
@@ -85,6 +96,54 @@ export default function App() {
       document.documentElement.classList.remove('dark');
     }
   }, [isDarkMode]);
+
+  // Sincronizar o tema de cores ativo
+  useEffect(() => {
+    if (activeTheme) {
+      applyTheme(activeTheme);
+    }
+  }, [activeTheme, applyTheme]);
+
+  // --- PUSH NOTIFICATIONS (Local Simulation) ---
+  useEffect(() => {
+    if (!pushSettings?.enabled || !pushTime) return;
+
+    const checkTime = () => {
+      const now = new Date();
+      const currentHours = now.getHours().toString().padStart(2, '0');
+      const currentMinutes = now.getMinutes().toString().padStart(2, '0');
+      const currentTimeStr = `${currentHours}:${currentMinutes}`;
+      
+      const lastNotifiedDate = localStorage.getItem('lastPushNotificationDate');
+      const todayStr = getLocalDateStr(now);
+
+      if (currentTimeStr === pushTime && lastNotifiedDate !== todayStr) {
+        // Trigger notification
+        if (Notification.permission === 'granted') {
+          new Notification('Hora de Estudar!', {
+            body: 'O seu Pomodoro Tático está aguardando você. Vamos bater a meta?',
+            icon: '/favicon.ico' // using default favicon if any
+          });
+        } else {
+          // Se não tiver permissão nativa, tenta usar um toast de sistema (na UI já usa toast)
+          toast('📢 Hora de Estudar!', {
+            description: 'Seu lembrete de estudos diário! Vamos nessa?',
+            duration: 10000,
+            icon: '⏰'
+          });
+        }
+        localStorage.setItem('lastPushNotificationDate', todayStr);
+      }
+    };
+
+    // Solicita permissão apenas se estiver ativado
+    if (Notification.permission === 'default' && pushSettings?.enabled) {
+      Notification.requestPermission();
+    }
+
+    const interval = setInterval(checkTime, 30000); // Check every 30 seconds
+    return () => clearInterval(interval);
+  }, [pushSettings?.enabled, pushTime, getLocalDateStr]);
 
   // --- AUTH & INITIALIZATION ---
   // PONTO ÚNICO DE INICIALIZAÇÃO: onAuthStateChange dispara INITIAL_SESSION automaticamente
@@ -152,6 +211,7 @@ export default function App() {
 
   const tabs = [
     { id: '/', label: 'Carreira', icon: Award },
+    { id: '/hoje', label: 'Hoje', icon: ShieldCheck },
     { id: '/revisoes', label: 'Revisões', icon: BrainCircuit, count: allDueToday.length },
     { id: '/sintaxe', label: 'Sintaxe (PT)', icon: Library },
     { id: '/ciclo', label: 'Ciclo', icon: Repeat },
@@ -171,6 +231,7 @@ export default function App() {
 
   return (
     <div className={`min-h-screen transition-colors duration-300 relative overflow-x-hidden ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+      <ConfettiCanvas />
       {/* Tactical background gradient and grid */}
       <div className="absolute inset-0 tactical-grid pointer-events-none -z-20"></div>
       {isDarkMode && (
@@ -185,12 +246,17 @@ export default function App() {
               <div className="p-2 bg-blue-600/10 dark:bg-blue-500/15 rounded-xl border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.15)]">
                 <Award className="text-blue-600 dark:text-blue-400 w-5 h-5 sm:w-6 sm:h-6" />
               </div>
-              <h1 className="text-base sm:text-lg font-black tracking-wider text-slate-800 dark:text-white uppercase leading-none">QG DA PRF</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-base sm:text-lg font-black tracking-wider text-slate-800 dark:text-white uppercase leading-none">QG DA PRF</h1>
+                {isSyncing && (
+                  <RefreshCw className="w-4 h-4 text-blue-500 animate-spin" />
+                )}
+              </div>
             </Link>
             
             <div className="flex items-center gap-2 sm:gap-4">
               {/* Patente Badge */}
-              <div className={`hidden lg:flex flex-col items-center gap-1 bg-slate-100 dark:bg-slate-850 px-3 py-1.5 rounded-2xl border border-slate-200 dark:border-slate-800/60 shadow-inner ${getCurrentPatente().color}`}>
+              <div className={`hidden lg:flex flex-col items-center gap-1 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-2xl border border-slate-200 dark:border-slate-800/60 shadow-inner ${getCurrentPatente().color}`}>
                  <div className="flex items-center gap-2">
                     <span className="text-lg leading-none">{getCurrentPatente().icon}</span>
                     <span className="text-[9px] font-black uppercase tracking-widest">{getCurrentPatente().name}</span>
@@ -240,7 +306,7 @@ export default function App() {
                   <tab.icon className="w-3.5 h-3.5" />
                   <span>{tab.label}</span>
                   {tab.count > 0 && (
-                    <span className="bg-red-500 text-white text-[9px] w-4.5 h-4.5 flex items-center justify-center rounded-full font-black">
+                    <span className="bg-red-500 text-white text-[9px] w-[18px] h-[18px] flex items-center justify-center rounded-full font-black">
                       {tab.count}
                     </span>
                   )}
@@ -252,54 +318,39 @@ export default function App() {
       </header>
 
       <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
-        {isSyncing ? (
-          <div className="flex flex-col items-center justify-center p-20 text-center opacity-80 animate-pulse">
-            <div className="w-16 h-16 bg-blue-500/10 border border-blue-500/20 rounded-2xl flex items-center justify-center mb-4 shadow-inner">
-               <Shield className="w-8 h-8 text-blue-500" />
-            </div>
-            <h2 className="text-xl font-black text-slate-800 dark:text-slate-100 uppercase tracking-widest">Sincronizando Nuvem...</h2>
-            <p className="text-sm font-bold text-slate-500 dark:text-slate-400 mt-2">Puxando seus dados seguros em tempo real.</p>
-            <button 
-              onClick={() => useStore.setState({ isSyncing: false })} 
-              className="mt-8 text-[11px] font-black tracking-widest uppercase text-slate-400 hover:text-blue-500 transition-colors underline decoration-slate-300 dark:decoration-slate-700"
-            >
-              Acesso de Emergência (Pular Sincronização)
-            </button>
-          </div>
-        ) : (
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              variants={pageVariants}
-              transition={{ duration: 0.2 }}
-            >
-              <Suspense fallback={
-                <div className="flex items-center justify-center py-20">
-                  <div className="flex flex-col items-center gap-3">
-                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Carregando módulo...</span>
-                  </div>
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={location.pathname}
+            initial="initial"
+            animate="animate"
+            exit="exit"
+            variants={pageVariants}
+            transition={{ duration: 0.2 }}
+          >
+            <Suspense fallback={
+              <div className="flex items-center justify-center py-20">
+                <div className="flex flex-col items-center gap-3">
+                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                  <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Carregando módulo...</span>
                 </div>
-              }>
-                <Routes location={location}>
-                  <Route path="/" element={<Dashboard />} />
-                  <Route path="/revisoes" element={<Revisoes />} />
-                  <Route path="/sintaxe" element={<PortuguesSintaxe />} />
-                  <Route path="/ciclo" element={<Ciclo />} />
-                  <Route path="/calendario" element={<Calendario />} />
-                  <Route path="/taf" element={<TreinoTAF />} />
-                  <Route path="/simulados" element={<Simulados />} />
-                  <Route path="/estatisticas" element={<Estatisticas />} />
-                  <Route path="/loja" element={<Loja />} />
-                  <Route path="/config" element={<Config availableColors={availableColors} />} />
-                </Routes>
-              </Suspense>
-            </motion.div>
-          </AnimatePresence>
-        )}
+              </div>
+            }>
+              <Routes location={location}>
+                <Route path="/" element={<Dashboard />} />
+                <Route path="/hoje" element={<Hoje />} />
+                <Route path="/revisoes" element={<Revisoes />} />
+                <Route path="/sintaxe" element={<PortuguesSintaxe />} />
+                <Route path="/ciclo" element={<Ciclo />} />
+                <Route path="/calendario" element={<Calendario />} />
+                <Route path="/taf" element={<TreinoTAF />} />
+                <Route path="/simulados" element={<Simulados />} />
+                <Route path="/estatisticas" element={<Estatisticas />} />
+                <Route path="/loja" element={<Loja />} />
+                <Route path="/config" element={<Config availableColors={availableColors} />} />
+              </Routes>
+            </Suspense>
+          </motion.div>
+        </AnimatePresence>
       </main>
 
       {/* Modais do Sistema - Renderizados via Portal para garantir z-index absoluto */}

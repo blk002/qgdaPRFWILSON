@@ -1,7 +1,9 @@
 import { useStore } from '../store/useStore';
-import { Target, AlertTriangle, Activity, Trophy, ChevronRight, Flame, Layers, PlayCircle, BrainCircuit, Shuffle, CheckCircle } from 'lucide-react';
+import { Target, AlertTriangle, Activity, Trophy, ChevronRight, Flame, Layers, PlayCircle, BrainCircuit, Shuffle, CheckCircle, FileText, Save } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
+import { useConfetti } from '../hooks/useConfetti';
+import NotesDrawer from '../components/NotesDrawer';
 
 export default function Ciclo() {
   const navigate = useNavigate();
@@ -20,7 +22,8 @@ export default function Ciclo() {
     reviews,
     setReviewModal,
     setClassConfirmModal,
-    setReplaceSubjectModal
+    setReplaceSubjectModal,
+    saveTopicNotes
   } = useStore();
   const pendingReviews = getPendingReviews().slice(0, 4);
 
@@ -36,10 +39,33 @@ export default function Ciclo() {
     return result;
   })();
 
-  const [triggerConfetti, setTriggerConfetti] = useState(false);
-  const canvasRef = useRef(null);
+  const { setTriggerConfetti, ConfettiCanvas } = useConfetti();
   const prevCompletedLength = useRef(completedToday.length);
 
+  const [noteDrawerOpen, setNoteDrawerOpen] = useState(false);
+  const [selectedSubjectId, setSelectedSubjectId] = useState(null);
+  const [selectedTopic, setSelectedTopic] = useState(null);
+  const [noteContent, setNoteContent] = useState('');
+
+  const handleOpenNotes = (subjectId, topic) => {
+    setSelectedSubjectId(subjectId);
+    setSelectedTopic(topic);
+    setNoteContent(topic.notes || '');
+    setNoteDrawerOpen(true);
+  };
+
+  const handleSaveNotes = () => {
+    if (!selectedSubjectId || !selectedTopic) return;
+    saveTopicNotes(selectedSubjectId, selectedTopic.id, noteContent);
+    setNoteDrawerOpen(false);
+  };
+
+  // Garante scroll reset ao montar
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, []);
+
+  // Ao completar a meta do dia, dispara o confetti
   useEffect(() => {
     const totalSlots = cycle[currentDayIndex]?.length || 0;
     if (completedToday.length === totalSlots && totalSlots > 0 && prevCompletedLength.current < totalSlots) {
@@ -48,79 +74,11 @@ export default function Ciclo() {
       }, 0);
     }
     prevCompletedLength.current = completedToday.length;
-  }, [completedToday.length, cycle, currentDayIndex]);
+  }, [completedToday.length, cycle, currentDayIndex, setTriggerConfetti]);
 
-  useEffect(() => {
-    if (!triggerConfetti) return;
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    canvas.width = window.innerWidth;
-    canvas.height = window.innerHeight;
-
-    const colors = ['#f43f5e', '#3b82f6', '#10b981', '#eab308', '#a855f7', '#ff7849'];
-    const particles = [];
-
-    for (let i = 0; i < 120; i++) {
-      particles.push({
-        x: Math.random() * canvas.width,
-        y: Math.random() * canvas.height - canvas.height,
-        r: Math.random() * 6 + 4,
-        d: Math.random() * canvas.height,
-        color: colors[Math.floor(Math.random() * colors.length)],
-        tilt: Math.random() * 10 - 5,
-        tiltAngleIncremental: Math.random() * 0.07 + 0.02,
-        tiltAngle: 0
-      });
-    }
-
-    let animationFrameId;
-    let startTime = Date.now();
-
-    const draw = () => {
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      let active = false;
-      
-      particles.forEach((p) => {
-        p.tiltAngle += p.tiltAngleIncremental;
-        p.y += (Math.cos(p.d) + 3 + p.r / 2) / 2;
-        p.x += Math.sin(p.tiltAngle);
-        p.tilt = Math.sin(p.tiltAngle - p.r/3) * 15;
-
-        if (p.y <= canvas.height) {
-          active = true;
-        }
-
-        ctx.beginPath();
-        ctx.lineWidth = p.r;
-        ctx.strokeStyle = p.color;
-        ctx.moveTo(p.x + p.tilt + p.r / 2, p.y);
-        ctx.lineTo(p.x + p.tilt, p.y + p.tilt + p.r / 2);
-        ctx.stroke();
-      });
-
-      if (active && Date.now() - startTime < 2500) {
-        animationFrameId = requestAnimationFrame(draw);
-      } else {
-        setTriggerConfetti(false);
-      }
-    };
-
-    draw();
-
-    const handleResize = () => {
-      canvas.width = window.innerWidth;
-      canvas.height = window.innerHeight;
-    };
-    window.addEventListener('resize', handleResize);
-
-    return () => {
-      cancelAnimationFrame(animationFrameId);
-      window.removeEventListener('resize', handleResize);
-    };
-  }, [triggerConfetti]);
   return (
     <div className="fade-in w-full pb-10">
+      
       
       <div className="mb-8">
         <div className="flex items-center gap-3 mb-4">
@@ -308,9 +266,18 @@ export default function Ciclo() {
                             </div>
                           ) : activeTopic ? (
                             <>
-                              <div>
-                                <span className="text-[8px] sm:text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-0.5 flex items-center gap-1"><Flame className="w-3 h-3 text-orange-500 shrink-0"/> <span className="truncate">Assunto na Fornalha</span></span>
-                                <p className="text-[11px] sm:text-sm font-bold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2" title={activeTopic.name}>{activeTopic.name}</p>
+                              <div className="flex justify-between items-start gap-1">
+                                <div className="flex-1">
+                                  <span className="text-[8px] sm:text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-0.5 flex items-center gap-1"><Flame className="w-3 h-3 text-orange-500 shrink-0"/> <span className="truncate">Assunto na Fornalha</span></span>
+                                  <p className="text-[11px] sm:text-sm font-bold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2" title={activeTopic.name}>{activeTopic.name}</p>
+                                </div>
+                                <button 
+                                  onClick={() => handleOpenNotes(subjectId, activeTopic)}
+                                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded text-slate-400 hover:text-blue-500 transition-colors shrink-0"
+                                  title="Anotações do Tópico"
+                                >
+                                  <FileText className="w-4 h-4" />
+                                </button>
                               </div>
                               
                               <div className="bg-slate-50 p-1.5 sm:p-2 rounded-lg border border-slate-100 dark:bg-slate-950 dark:border-slate-800">
@@ -373,12 +340,17 @@ export default function Ciclo() {
         </div>
       </div>
       {/* Canvas de Confete ao bater a meta */}
-      {triggerConfetti && (
-        <canvas 
-          ref={canvasRef} 
-          className="fixed inset-0 pointer-events-none z-50 w-full h-full"
-        />
-      )}
+      <ConfettiCanvas />
+
+      {/* Slide Drawer de Anotações de Tópico */}
+      <NotesDrawer
+        isOpen={noteDrawerOpen}
+        onClose={() => setNoteDrawerOpen(false)}
+        topic={selectedTopic}
+        noteContent={noteContent}
+        setNoteContent={setNoteContent}
+        onSave={handleSaveNotes}
+      />
     </div>
   );
 }
