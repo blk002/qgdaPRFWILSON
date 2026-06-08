@@ -91,7 +91,7 @@ export const THEME_DEFINITIONS = {
   }
 };
 
-const getCleanInitialState = () => ({
+export const getCleanInitialState = () => ({
   subjects: {},
   pushEnabled: false,
   pushTime: '08:00',
@@ -144,6 +144,20 @@ const getCleanInitialState = () => ({
   subjectGoals: {},
   pushSettings: { enabled: false, streakWarning: true, reviewsPending: true },
 });
+
+// Fonte única de verdade das chaves persistidas (nuvem, backup local,
+// export/import e gatilho de auto-save). Mantê-la única evita divergências
+// como a do export de backup, que silenciosamente perdia dados.
+export const PERSISTED_KEYS = [
+  'subjects', 'cycle', 'currentDayIndex', 'completedToday', 'targetExamDate',
+  'coins', 'userStats', 'streakData', 'weeklySprint', 'reviews',
+  'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus',
+  'isDarkMode', 'activeTab', 'calendarDate', 'reviewCalendarDate',
+  'seasonalData', 'weeklyMissions', 'studyHistory',
+  'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate', 'pushEnabled', 'pushTime',
+  'enableSounds', 'activeBoosts', 'dailyReviewStats', 'syntaxLevel',
+  'activeTheme', 'unlockedThemes', 'dailyGoalMinutes', 'subjectGoals', 'pushSettings'
+];
 
 export const useStore = create(
     (set, get) => ({
@@ -256,6 +270,7 @@ export const useStore = create(
             set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false, lastSyncedAt: remoteUpdatedAt });
             get().checkAndResetWeekly();
             get().checkAndAdvanceSeason();
+            get().checkAndResetDailyMissions();
             return true;
           }
           console.log('ℹ️ [Nuvem] Perfil pronto para uso.');
@@ -283,7 +298,8 @@ export const useStore = create(
                 set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false });
                 get().checkAndResetWeekly();
                 get().checkAndAdvanceSeason();
-                
+                get().checkAndResetDailyMissions();
+
                 toast.info(`⚠️ Usando backup local off-line (${backupDate}) devido a erro de conexão.`);
                 return true;
               }
@@ -327,19 +343,8 @@ export const useStore = create(
           }
         }
 
-        const persistedKeys = [
-          'subjects', 'cycle', 'currentDayIndex', 'completedToday', 'targetExamDate', 
-          'coins', 'userStats', 'streakData', 'weeklySprint', 'reviews', 
-          'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus', 
-          'isDarkMode', 'activeTab', 'calendarDate', 'reviewCalendarDate', 
-          'seasonalData', 'weeklyMissions', 'studyHistory',
-          'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate', 'pushEnabled', 'pushTime',
-          'enableSounds', 'activeBoosts', 'dailyReviewStats', 'syntaxLevel',
-          'activeTheme', 'unlockedThemes', 'dailyGoalMinutes', 'subjectGoals', 'pushSettings'
-        ];
-        
         const dataToSave = {};
-        persistedKeys.forEach(key => { if (state[key] !== undefined) dataToSave[key] = state[key]; });
+        PERSISTED_KEYS.forEach(key => { if (state[key] !== undefined) dataToSave[key] = state[key]; });
 
         const newUpdatedAt = new Date().toISOString();
 
@@ -893,7 +898,7 @@ export const useStore = create(
             console.log("✅ Nuvem purificada com sucesso.");
           } catch (error) {
             console.error('❌ Erro crítico ao limpar nuvem:', error);
-            alert("Erro ao limpar dados na nuvem. Verifique sua conexão.");
+            toast.error("Erro ao limpar dados na nuvem. Verifique sua conexão.");
             return;
           }
         }
@@ -1388,6 +1393,7 @@ export const useStore = create(
       triggerNotification: async (title, options) => {
         const { pushSettings } = get();
         if (!pushSettings.enabled) return;
+        if (typeof Notification === 'undefined') return;
         if (Notification.permission === 'granted') {
           try {
             const registration = await navigator.serviceWorker.ready;
@@ -1421,17 +1427,6 @@ export const useStore = create(
 );
 
 // Motor de replicação em nuvem em Segundo Plano - AGORA INSTANTÂNEO
-const persistedKeysParaMonitorar = [
-  'subjects', 'cycle', 'currentDayIndex', 'completedToday', 'targetExamDate', 
-  'coins', 'userStats', 'streakData', 'weeklySprint', 'reviews', 
-  'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus', 
-  'isDarkMode', 'activeTab', 'calendarDate', 'reviewCalendarDate', 
-  'seasonalData', 'weeklyMissions', 'studyHistory',
-  'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate', 'pushEnabled', 'pushTime',
-  'enableSounds', 'activeBoosts', 'dailyReviewStats', 'syntaxLevel',
-  'activeTheme', 'unlockedThemes', 'dailyGoalMinutes', 'subjectGoals', 'pushSettings'
-];
-
 let pendingSaves = 0;
 
 // Proteção ativa contra fechamento/F5 da aba durante um salvamento em andamento
@@ -1446,7 +1441,7 @@ window.addEventListener('beforeunload', (e) => {
 useStore.subscribe((state, prevState) => {
   if (state.isLoadingFromCloud || !state.user) return;
 
-  const sofreuAlteracao = persistedKeysParaMonitorar.some(key => state[key] !== prevState[key]);
+  const sofreuAlteracao = PERSISTED_KEYS.some(key => state[key] !== prevState[key]);
   
   if (sofreuAlteracao) {
     clearTimeout(useStore._debounceTimer);

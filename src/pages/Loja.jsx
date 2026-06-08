@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import { useConfetti } from '../hooks/useConfetti';
 import { useStore } from '../store/useStore';
+import { assetUrl } from '../lib/assets';
 import { Store, Coins, Sparkles, Coffee, Gamepad2, Heart, Zap, Gift, Crown, Star, Lock, User } from 'lucide-react';
 
 const STORE_CATEGORIES = [
@@ -216,7 +217,7 @@ export default function Loja() {
                   {/* Ícone ou Imagem de Avatar com efeito hover */}
                   {rew.category === 'customizacao' && rew.avatarPath ? (
                     <div className="w-24 h-24 rounded-full overflow-hidden border-3 border-blue-500/20 dark:border-blue-500/30 mb-4 transform group-hover:scale-105 group-hover:border-blue-500 transition-all duration-300 shadow-lg bg-slate-800 relative">
-                      <img src={rew.avatarPath} alt={rew.title} className="w-full h-full object-cover" />
+                      <img src={assetUrl(rew.avatarPath)} alt={rew.title} className="w-full h-full object-cover" />
                       <div className="absolute inset-0 bg-gradient-to-t from-black/40 via-transparent to-transparent opacity-60"></div>
                     </div>
                   ) : (

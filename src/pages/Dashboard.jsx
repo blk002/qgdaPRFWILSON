@@ -3,6 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import { PATENTES, MEDALHAS } from '../hooks/useGamification';
 import RankBadge from '../components/RankBadge';
+import { assetUrl } from '../lib/assets';
 import { 
   Activity, Trophy, Clock, AlertTriangle, CheckCircle, Coins, 
   Flame, ShieldCheck, Target, Pencil, Check as CheckIcon,
@@ -211,7 +212,7 @@ export default function Dashboard() {
                   <div className="relative group cursor-pointer" onClick={() => setIsAvatarModalOpen(true)}>
             <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)] relative z-10 bg-slate-800 transition-all duration-300 group-hover:scale-105 group-hover:border-purple-500">
                {userStats.avatar ? (
-                 <img src={userStats.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                 <img src={assetUrl(userStats.avatar)} alt="Avatar" className="w-full h-full object-cover" />
                ) : (
                  <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-700 to-slate-900">
                     <RankBadge level={patenteAtual.level} size={80} />
@@ -464,7 +465,7 @@ export default function Dashboard() {
                     }`}>
                        <div className="relative w-full aspect-square mb-3 flex items-center justify-center">
                           {isUnlocked ? (
-                            <motion.img whileHover={{ scale: 1.15, rotate: 5 }} src={medal.icon} alt={medal.title}
+                            <motion.img whileHover={{ scale: 1.15, rotate: 5 }} src={assetUrl(medal.icon)} alt={medal.title}
                               className="w-full h-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.3)]"
                               onError={e => { e.target.src = 'https://cdn-icons-png.flaticon.com/512/190/190411.png' }} />
                           ) : (
@@ -558,7 +559,7 @@ export default function Dashboard() {
                       </div>
 
                       <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-slate-700 mb-3 bg-slate-800 group-hover:scale-105 transition-transform duration-300">
-                        <img src={avatar.path} alt={avatar.name} className="w-full h-full object-cover" />
+                        <img src={assetUrl(avatar.path)} alt={avatar.name} className="w-full h-full object-cover" />
                         {!isUnlocked && (
                           <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-[2px] flex items-center justify-center">
                             <Lock className="w-5 h-5 text-slate-400" />

@@ -119,7 +119,7 @@ export default function App() {
 
       if (currentTimeStr === pushTime && lastNotifiedDate !== todayStr) {
         // Trigger notification
-        if (Notification.permission === 'granted') {
+        if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           new Notification('Hora de Estudar!', {
             body: 'O seu Pomodoro Tático está aguardando você. Vamos bater a meta?',
             icon: '/favicon.ico' // using default favicon if any
@@ -137,7 +137,7 @@ export default function App() {
     };
 
     // Solicita permissão apenas se estiver ativado
-    if (Notification.permission === 'default' && pushSettings?.enabled) {
+    if (typeof Notification !== 'undefined' && Notification.permission === 'default' && pushSettings?.enabled) {
       Notification.requestPermission();
     }
 

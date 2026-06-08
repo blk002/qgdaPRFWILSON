@@ -1,9 +1,12 @@
-import { useStore } from '../store/useStore';
+import { useStore, getCleanInitialState, PERSISTED_KEYS } from '../store/useStore';
+import { assetUrl } from '../lib/assets';
 import { toast } from 'sonner';
-import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield } from 'lucide-react';
+import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle } from 'lucide-react';
 
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
+
+const notificationsSupported = typeof Notification !== 'undefined';
 
 export default function Config({
   availableColors
@@ -228,11 +231,14 @@ export default function Config({
                   >
                     <Sun className="w-4 h-4" />
                   </button>
-                  <button 
+                  <button
                     onClick={() => {
-                      setCycle(prev => prev.filter((_, i) => i !== dayIndex));
-                      if (currentDayIndex >= cycle.length - 1) setCurrentDayIndex(0);
-                    }} 
+                      setCycle(prev => {
+                        const newCycle = prev.filter((_, i) => i !== dayIndex);
+                        if (currentDayIndex >= newCycle.length) setCurrentDayIndex(0);
+                        return newCycle;
+                      });
+                    }}
                     className="p-1 text-slate-400 hover:text-red-500 hover:bg-white dark:hover:bg-slate-800 rounded transition-colors dark:bg-slate-900" title="Remover Dia"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -322,7 +328,7 @@ export default function Config({
               <div className="relative group">
                 <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-blue-500 shadow-lg bg-slate-800">
                   {userStats.avatar ? (
-                    <img src={userStats.avatar} alt="Avatar" className="w-full h-full object-cover" />
+                    <img src={assetUrl(userStats.avatar)} alt="Avatar" className="w-full h-full object-cover" />
                   ) : (
                     <div className="w-full h-full flex items-center justify-center">
                       <User className="w-8 h-8 text-slate-500" />
@@ -460,7 +466,7 @@ export default function Config({
             <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 font-bold leading-relaxed">
               Ative notificações no navegador para receber alertas operacionais e manter a consistência da sua farda. O sistema enviará lembretes de revisões FSRS e alertas quando seu streak diário estiver sob perigo de quebra.
             </p>
-            {Notification.permission === 'default' && (
+            {notificationsSupported && Notification.permission === 'default' && (
               <button
                 onClick={() => {
                   Notification.requestPermission().then(perm => {
@@ -477,14 +483,19 @@ export default function Config({
                 Ativar Notificações no Navegador
               </button>
             )}
-            {Notification.permission === 'granted' && (
+            {notificationsSupported && Notification.permission === 'granted' && (
               <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/50 rounded-lg px-4 py-2 text-emerald-700 dark:text-emerald-400 text-xs font-bold">
                 <CheckCircle className="w-4 h-4" /> Permissão Concedida pelo Navegador
               </div>
             )}
-            {Notification.permission === 'denied' && (
+            {notificationsSupported && Notification.permission === 'denied' && (
               <div className="inline-flex items-center gap-2 bg-red-50 border border-red-200 dark:bg-red-950/20 dark:border-red-900/50 rounded-lg px-4 py-2 text-red-700 dark:text-red-400 text-xs font-bold">
                 <AlertTriangle className="w-4 h-4" /> Notificações bloqueadas nas configurações do seu navegador.
+              </div>
+            )}
+            {!notificationsSupported && (
+              <div className="inline-flex items-center gap-2 bg-slate-100 border border-slate-200 dark:bg-slate-800 dark:border-slate-700 rounded-lg px-4 py-2 text-slate-500 dark:text-slate-400 text-xs font-bold">
+                <AlertTriangle className="w-4 h-4" /> Seu navegador não suporta notificações nativas.
               </div>
             )}
           </div>
@@ -499,7 +510,7 @@ export default function Config({
               <input 
                 type="checkbox"
                 checked={pushSettings.enabled}
-                disabled={Notification.permission !== 'granted'}
+                disabled={!notificationsSupported || Notification.permission !== 'granted'}
                 onChange={(e) => setPushSettings({ ...pushSettings, enabled: e.target.checked })}
                 className="w-5 h-5 rounded accent-blue-600 cursor-pointer disabled:cursor-not-allowed"
               />
@@ -566,15 +577,8 @@ export default function Config({
           <button 
             onClick={() => {
               const state = useStore.getState();
-              const persistedKeys = [
-                'subjects', 'cycle', 'currentDayIndex', 'completedToday', 'targetExamDate', 
-                'coins', 'userStats', 'streakData', 'weeklySprint', 'reviews', 
-                'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus', 
-                'isDarkMode', 'activeTab', 'calendarDate', 'reviewCalendarDate', 
-                'seasonalData', 'weeklyMissions'
-              ];
               const dataToExport = {};
-              persistedKeys.forEach(key => { if (state[key] !== undefined) dataToExport[key] = state[key]; });
+              PERSISTED_KEYS.forEach(key => { if (state[key] !== undefined) dataToExport[key] = state[key]; });
               
               const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
               const url = URL.createObjectURL(blob);
@@ -604,12 +608,24 @@ export default function Config({
                   try {
                     const content = event.target.result;
                     const parsed = JSON.parse(content);
-                    
+
+                    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+                      throw new Error('formato inválido');
+                    }
+                    // Exige ao menos uma chave reconhecida para não sobrescrever tudo com um arquivo vazio
+                    if (!PERSISTED_KEYS.some(k => parsed[k] !== undefined)) {
+                      throw new Error('backup sem dados reconhecíveis');
+                    }
+
+                    // Mescla sobre os defaults: chaves ausentes no backup não ficam undefined
+                    const merged = { ...getCleanInitialState() };
+                    PERSISTED_KEYS.forEach(k => { if (parsed[k] !== undefined) merged[k] = parsed[k]; });
+
                     // Hidratar dates
-                    if (parsed.calendarDate) parsed.calendarDate = new Date(parsed.calendarDate);
-                    if (parsed.reviewCalendarDate) parsed.reviewCalendarDate = new Date(parsed.reviewCalendarDate);
-                    
-                    useStore.setState(parsed);
+                    if (merged.calendarDate) merged.calendarDate = new Date(merged.calendarDate);
+                    if (merged.reviewCalendarDate) merged.reviewCalendarDate = new Date(merged.reviewCalendarDate);
+
+                    useStore.setState(merged);
                     await useStore.getState().saveToCloud();
                     toast.success("Backup restaurado com sucesso!");
                   } catch {

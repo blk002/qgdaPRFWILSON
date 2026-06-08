@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore';
 import { toast } from 'sonner';
 
 export default function PomodoroTimer() {
-  const { addStudyMinutes, enableSounds } = useStore();
+  const { addStudyMinutes, playSound } = useStore();
   const [mode, setMode] = useState(25); // minutes
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
@@ -17,16 +17,11 @@ export default function PomodoroTimer() {
     setIsRunning(false);
     setIsPaused(false);
     addStudyMinutes(sessionMinutes);
-
-    if (enableSounds) {
-      const audio = new Audio(`${import.meta.env.BASE_URL}sounds/level-up.mp3`);
-      audio.volume = 0.5;
-      audio.play().catch(() => {}); // Ignora falha de auto-play / arquivo ausente
-    }
+    playSound('levelUp');
 
     toast.success(`Sessão de ${sessionMinutes}m concluída! XP contabilizado no histórico diário.`);
     setTimeLeft(mode * 60);
-  }, [addStudyMinutes, sessionMinutes, enableSounds, mode]);
+  }, [addStudyMinutes, sessionMinutes, playSound, mode]);
 
   useEffect(() => {
     if (isRunning && !isPaused) {
