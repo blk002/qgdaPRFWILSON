@@ -1,9 +1,11 @@
-const CACHE_NAME = 'qg-prf-cache-v1';
+const CACHE_NAME = 'qg-prf-cache-v2';
+// Base derivada da localização do próprio SW (ex.: '/qgdaPRFWILSON/')
+const BASE = self.location.pathname.replace(/sw\.js$/, '');
 const PRECACHE_ASSETS = [
-  '/',
-  '/index.html',
-  '/favicon.svg',
-  '/icons.svg'
+  BASE,
+  BASE + 'index.html',
+  BASE + 'favicon.svg',
+  BASE + 'icons.svg'
 ];
 
 // Instalação do Service Worker e cache inicial (Precache)
@@ -11,7 +13,14 @@ self.addEventListener('install', (event) => {
   event.waitUntil(
     caches.open(CACHE_NAME).then((cache) => {
       console.log('📦 [Service Worker] Pre-caching shell assets');
-      return cache.addAll(PRECACHE_ASSETS);
+      // add() individual com tolerância a falha: um asset 404 não aborta o install inteiro
+      return Promise.all(
+        PRECACHE_ASSETS.map((asset) =>
+          cache.add(asset).catch((err) =>
+            console.warn('⚠️ [Service Worker] Falha ao pré-cachear', asset, err)
+          )
+        )
+      );
     }).then(() => self.skipWaiting())
   );
 });
@@ -76,7 +85,7 @@ self.addEventListener('push', (event) => {
   if (event.data) {
     try {
       data = event.data.json();
-    } catch (e) {
+    } catch {
       data = { body: event.data.text() };
     }
   }
@@ -84,10 +93,10 @@ self.addEventListener('push', (event) => {
   const title = data.title || 'QG DA PRF — Alerta do Centro de Comando';
   const options = {
     body: data.body || 'Seu horário de estudo ou revisão está pendente. Não perca a ofensiva!',
-    icon: '/favicon.svg',
-    badge: '/favicon.svg',
+    icon: BASE + 'favicon.svg',
+    badge: BASE + 'favicon.svg',
     vibrate: [100, 50, 100],
-    data: data.data || { url: '/#/hoje' },
+    data: data.data || { url: BASE + '#/hoje' },
     actions: [
       { action: 'open', title: 'Estudar Agora' }
     ]
@@ -102,15 +111,15 @@ self.addEventListener('push', (event) => {
 self.addEventListener('notificationclick', (event) => {
   event.notification.close();
   
-  let targetUrl = '/';
+  let targetUrl = BASE;
   if (event.notification.data && event.notification.data.url) {
     targetUrl = event.notification.data.url;
   }
 
   event.waitUntil(
-    clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+    self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
       // Se houver uma aba aberta da plataforma, foca nela
-      for (let client of windowClients) {
+      for (const client of windowClients) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
           return client.focus().then((focusedClient) => {
             if (focusedClient.url !== self.location.origin + targetUrl) {
@@ -120,8 +129,8 @@ self.addEventListener('notificationclick', (event) => {
         }
       }
       // Se não houver, abre uma nova janela
-      if (clients.openWindow) {
-        return clients.openWindow(targetUrl);
+      if (self.clients.openWindow) {
+        return self.clients.openWindow(targetUrl);
       }
     })
   );

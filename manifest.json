@@ -4,25 +4,25 @@
   "description": "Plataforma gamificada de estudos para o concurso da PRF. Ciclo de estudos, revisões FSRS, simulados, treino TAF e gamificação operacional.",
   "icons": [
     {
-      "src": "/favicon.svg",
+      "src": "favicon.svg",
       "type": "image/svg+xml",
       "sizes": "any",
       "purpose": "any"
     },
     {
-      "src": "/favicon.svg",
+      "src": "favicon.svg",
       "type": "image/svg+xml",
       "sizes": "192x192",
       "purpose": "any"
     },
     {
-      "src": "/favicon.svg",
+      "src": "favicon.svg",
       "type": "image/svg+xml",
       "sizes": "512x512",
-      "purpose": "any animate"
+      "purpose": "any"
     }
   ],
-  "start_url": "/#/",
+  "start_url": "./#/",
   "background_color": "#070c14",
   "theme_color": "#0f1e36",
   "display": "standalone",
