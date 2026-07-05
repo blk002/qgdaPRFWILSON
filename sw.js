@@ -1,4 +1,4 @@
-const CACHE_NAME = 'qg-prf-cache-v12';
+const CACHE_NAME = 'qg-prf-cache-v13';
 // Base derivada da localização do próprio SW (ex.: '/qgdaPRFWILSON/')
 const BASE = self.location.pathname.replace(/sw\.js$/, '');
 const PRECACHE_ASSETS = [
