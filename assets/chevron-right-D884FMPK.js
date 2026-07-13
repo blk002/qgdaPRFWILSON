@@ -1,1 +1,0 @@
-import{l as e}from"./useStore-CRG5lsPp.js";var t=e(`chevron-right`,[[`path`,{d:`m9 18 6-6-6-6`,key:`mthhwq`}]]);export{t};
