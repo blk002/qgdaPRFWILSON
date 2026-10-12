@@ -1,0 +1,1 @@
+import{l as e}from"./useStore-BE7PeAiR.js";var t=e(`fast-forward`,[[`path`,{d:`M12 6a2 2 0 0 1 3.414-1.414l6 6a2 2 0 0 1 0 2.828l-6 6A2 2 0 0 1 12 18z`,key:`b19h5q`}],[`path`,{d:`M2 6a2 2 0 0 1 3.414-1.414l6 6a2 2 0 0 1 0 2.828l-6 6A2 2 0 0 1 2 18z`,key:`h7h5ge`}]]),n=e(`x`,[[`path`,{d:`M18 6 6 18`,key:`1bl5f8`}],[`path`,{d:`m6 6 12 12`,key:`d8bk6v`}]]);export{t as n,n as t};
