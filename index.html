@@ -16,7 +16,7 @@
     <link rel="preconnect" href="https://fonts.googleapis.com" />
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700;800;900&family=Plus+Jakarta+Sans:wght@500;700;800&display=swap" rel="stylesheet" />
-    <script type="module" crossorigin src="/qgdaPRFWILSON/assets/index-DrY9bkem.js"></script>
+    <script type="module" crossorigin src="/qgdaPRFWILSON/assets/index-B3XWYUEA.js"></script>
     <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/useStore-BqP79uzz.js">
     <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/flame-C4tZgOGe.js">
     <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/activity-D-zoBl1N.js">
@@ -25,22 +25,37 @@
     <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/calendar-BJ_BM3vK.js">
     <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/chart-no-axes-column-Cmf7luMa.js">
     <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/check-mrhAGQOi.js">
-    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/triangle-alert-BWVUM-IK.js">
-    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/store-B7IvEgOS.js">
-    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/play-CKx338eh.js">
-    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/x-CvGgE0ci.js">
-    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/info-BetN1oaK.js">
-    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/sun-CmVFBvnO.js">
-    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/target-DVzhX5eI.js">
-    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/trending-up-BdQG2nG_.js">
-    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/trophy-DKhSqQsQ.js">
-    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/zap-zromeukh.js">
-    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/useConfetti-4CTu13vi.js">
-    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/assets-C7B2TpAP.js">
-    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/durationHelpers-FUaMWnae.js">
-    <link rel="stylesheet" crossorigin href="/qgdaPRFWILSON/assets/index-DKyoCvdv.css">
+    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/triangle-alert-DKmytX7Y.js">
+    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/store-D6UkUVbS.js">
+    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/play-BeipTAHB.js">
+    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/x-Co30oWLZ.js">
+    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/info-Cbtr-bhs.js">
+    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/sun-CB5EnL9G.js">
+    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/target-BU37SL5X.js">
+    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/trending-up-BEI1dT78.js">
+    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/trophy-t_Ifo3wW.js">
+    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/zap-COn3YLuU.js">
+    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/useConfetti-B-YHjsnA.js">
+    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/assets-D4YxxRAY.js">
+    <link rel="modulepreload" crossorigin href="/qgdaPRFWILSON/assets/durationHelpers-BHcaze27.js">
+    <link rel="stylesheet" crossorigin href="/qgdaPRFWILSON/assets/index-CzxlENCV.css">
   </head>
   <body>
+    <script>
+      // Garante desregistro de Service Worker e limpeza de caches antigos no localhost
+      if (window.location.hostname === 'localhost' || window.location.hostname === '127.0.0.1') {
+        if ('serviceWorker' in navigator) {
+          navigator.serviceWorker.getRegistrations().then(function(regs) {
+            for (var r of regs) { r.unregister(); }
+          });
+        }
+        if ('caches' in window) {
+          caches.keys().then(function(keys) {
+            for (var k of keys) { caches.delete(k); }
+          });
+        }
+      }
+    </script>
     <div id="root"></div>
   </body>
 </html>

@@ -1,4 +1,4 @@
-const CACHE_NAME = 'qg-prf-cache-v43';
+const CACHE_NAME = 'qg-prf-cache-v45';
 // Base derivada da localização do próprio SW (ex.: '/qgdaPRFWILSON/')
 const BASE = self.location.pathname.replace(/sw\.js$/, '');
 const PRECACHE_ASSETS = [
@@ -10,19 +10,7 @@ const PRECACHE_ASSETS = [
 
 // Instalação do Service Worker e cache inicial (Precache)
 self.addEventListener('install', (event) => {
-  event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => {
-      console.log('📦 [Service Worker] Pre-caching shell assets');
-      // add() individual com tolerância a falha: um asset 404 não aborta o install inteiro
-      return Promise.all(
-        PRECACHE_ASSETS.map((asset) =>
-          cache.add(asset).catch((err) =>
-            console.warn('⚠️ [Service Worker] Falha ao pré-cachear', asset, err)
-          )
-        )
-      );
-    }).then(() => self.skipWaiting())
-  );
+  self.skipWaiting();
 });
 
 // Ativação e limpeza de caches antigos
@@ -31,10 +19,8 @@ self.addEventListener('activate', (event) => {
     caches.keys().then((cacheNames) => {
       return Promise.all(
         cacheNames.map((cache) => {
-          if (cache !== CACHE_NAME) {
-            console.log('🧹 [Service Worker] Cleaning old cache:', cache);
-            return caches.delete(cache);
-          }
+          console.log('🧹 [Service Worker] Cleaning old cache:', cache);
+          return caches.delete(cache);
         })
       );
     }).then(() => self.clients.claim())
@@ -45,6 +31,11 @@ self.addEventListener('activate', (event) => {
 self.addEventListener('fetch', (event) => {
   const { request } = event;
   const url = new URL(request.url);
+
+  // Não intercepta requisições em ambiente de desenvolvimento local (localhost / 127.0.0.1)
+  if (url.hostname === 'localhost' || url.hostname === '127.0.0.1' || url.port === '5173') {
+    return;
+  }
 
   // Ignora requisições não-GET
   if (request.method !== 'GET') {
