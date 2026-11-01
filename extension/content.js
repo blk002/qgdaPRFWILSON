@@ -1,7 +1,7 @@
-// QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3 Strict — Somente Cliques Reais)
+// QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v3 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v3.1 ativo em:', window.location.href);
 
   const QG_WEB_URL = 'https://blk002.github.io/qgdaPRFWILSON/#/caveira';
   const STORAGE_KEY = 'qg_caveira_questions';
@@ -16,8 +16,11 @@
   let lastUserClickedChoice = null;
   let activeQuestionData = null;
   let scanDebounceTimer = null;
+  let scrollRafId = null;
 
-  // Rastreia questões que já estavam respondidas quando a página carregou (não devem ser contadas de novo)
+  // Armazena o tempo individual de cada questão (permite rolar entre questões sem perder a contagem de cada uma)
+  const questionTimers = new Map();
+  // Rastreia questões que já estavam respondidas quando a página carregou
   const preAnsweredOnLoad = new Set();
   // Rastreia questões já contabilizadas nesta sessão da página
   const processedInSession = new Set();
@@ -31,11 +34,9 @@
     errors: 0
   };
 
-  // Inicialização e limpeza automática de dados corrompidos de versões anteriores
   function loadInitialState() {
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
       chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY], (res) => {
-        // Migração v3: limpa as 115 questões fantasmas geradas pelo bug anterior da barra de progresso
         if (res[SCHEMA_KEY] !== 'v3_strict_clean') {
           const cleanSession = { total: 0, hits: 0, errors: 0 };
           chrome.storage.local.set({
@@ -61,7 +62,6 @@
 
   loadInitialState();
 
-  // Escuta mudanças no storage (ex: botão "Zerar Sessão" no popup)
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === 'local' && changes[SESSION_KEY]) {
@@ -156,7 +156,6 @@
     document.body.appendChild(hud);
     updateHudStats();
 
-    // Evento Minimizar / Expandir
     const btnMin = hud.querySelector('#qg-btn-min');
     btnMin.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -171,13 +170,11 @@
       }
     });
 
-    // Fechar prompt manualmente
     hud.querySelector('#qg-prompt-close')?.addEventListener('click', (e) => {
       e.stopPropagation();
       dismissPrompt();
     });
 
-    // Botões de Confiança
     hud.querySelectorAll('[data-confidence]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -193,7 +190,6 @@
       });
     });
 
-    // Botões de Motivo do Erro
     hud.querySelectorAll('[data-reason]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -210,12 +206,13 @@
     startTimerInterval();
   }
 
-  // --- 2. CRONÔMETRO DE QUESTÃO ---
+  // --- 2. CRONÔMETRO POR QUESTÃO ---
   function startTimerInterval() {
     if (timerInterval) return;
     timerInterval = setInterval(() => {
-      if (isTimerRunning) {
-        timerSeconds++;
+      if (isTimerRunning && currentQuestionId) {
+        timerSeconds = (questionTimers.get(currentQuestionId) || 0) + 1;
+        questionTimers.set(currentQuestionId, timerSeconds);
         renderTimerDisplay();
       }
     }, 1000);
@@ -233,21 +230,28 @@
     isTimerRunning = false;
   }
 
-  function resetAndStartTimerForQuestion(newQId) {
-    if (!newQId || currentQuestionId === newQId) return;
+  function switchActiveQuestion(newQId, isAlreadyAnswered = false) {
+    if (!newQId) return;
+    const isDifferentQuestion = currentQuestionId !== newQId;
+    if (!isDifferentQuestion && isTimerRunning === !isAlreadyAnswered) return;
 
     currentQuestionId = newQId;
-    timerSeconds = 0;
-    isTimerRunning = true;
-    lastUserClickedChoice = null;
-    activeQuestionData = null;
+    timerSeconds = questionTimers.get(newQId) || 0;
+    isTimerRunning = !isAlreadyAnswered;
 
-    dismissPrompt();
+    if (isDifferentQuestion) {
+      lastUserClickedChoice = null;
+      // Se o usuário rolou para outra questão diferente da que acabou de responder, fecha o prompt anterior
+      if (!activeQuestionData || activeQuestionData.id !== newQId) {
+        dismissPrompt();
+      }
+    }
+
     renderTimerDisplay();
 
     const currentQEl = document.getElementById('qg-current-q-id');
     if (currentQEl) {
-      currentQEl.textContent = newQId;
+      currentQEl.textContent = isAlreadyAnswered ? `${newQId} ✓` : newQId;
     }
   }
 
@@ -267,7 +271,7 @@
     elNet.className = `qg-hud-stat-value ${net > 0 ? 'green' : net < 0 ? 'red' : 'gold'}`;
   }
 
-  // --- 4. SELEÇÃO E VERIFICAÇÃO ESTRITA DE QUESTÃO ---
+  // --- 4. SELEÇÃO DE CARDS E DETECÇÃO POR VIEWPORT (SCROLL) ---
   function getQuestionCards() {
     const allCards = document.querySelectorAll('.q-card');
     return Array.from(allCards).filter(card => {
@@ -277,6 +281,40 @@
       const hasAlternatives = Boolean(card.querySelector('.question-alternatives, .alternative'));
       return hasNumber && hasAlternatives;
     });
+  }
+
+  // Identifica qual card de questão está no centro de leitura da tela durante a rolagem
+  function findCardInViewport(cards) {
+    if (!cards || cards.length === 0) return null;
+    if (cards.length === 1) return cards[0];
+
+    const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+    // Ponto focal de leitura do olho humano (cerca de 38% a partir do topo da janela)
+    const focalY = viewportHeight * 0.38;
+
+    let bestCard = null;
+    let bestDistance = Infinity;
+
+    for (const card of cards) {
+      const rect = card.getBoundingClientRect();
+      // Ignora cards que estão totalmente fora da tela
+      if (rect.bottom < 40 || rect.top > viewportHeight - 40) continue;
+
+      // Se o card atravessa a linha de leitura principal (focalY), ele é o card ativo imediato
+      if (rect.top <= focalY && rect.bottom >= focalY) {
+        return card;
+      }
+
+      // Caso contrário, pega o card mais próximo da linha focal de leitura
+      const cardCenter = (rect.top + rect.bottom) / 2;
+      const dist = Math.abs(cardCenter - focalY);
+      if (dist < bestDistance) {
+        bestDistance = dist;
+        bestCard = card;
+      }
+    }
+
+    return bestCard || cards[0];
   }
 
   function extractQuestionId(card) {
@@ -289,8 +327,6 @@
     return null;
   }
 
-  // IMPORTANTE: No Caveira, barras de progresso (.q-linear-progress) já possuem .error-percentage e .bg-incorrect-2
-  // mesmo ANTES de responder! O único indicador real de questão respondida é a existência da .stats-box ("PARABÉNS!" / "ERROU")!
   function isCardAnswered(card) {
     if (!card) return false;
     const statsBox = card.querySelector('.stats-box');
@@ -308,7 +344,6 @@
   function extractQuestionData(card, qId) {
     if (!card) return null;
 
-    // Disciplina e Tópico
     const subjectEl = card.querySelector('.subject');
     let subject = 'Geral';
     let topic = 'Geral';
@@ -319,7 +354,6 @@
       topic = parts.slice(1).join('->').trim() || subject;
     }
 
-    // Metadados (Banca, Ano, Dificuldade)
     const infoText = card.querySelector('.question-info')?.textContent || '';
     const bancaMatch = infoText.match(/Banca:\s*([^Ano\n]+)/i);
     const anoMatch = infoText.match(/Ano:\s*(\d+)/i);
@@ -329,10 +363,8 @@
     const ano = anoMatch ? anoMatch[1].trim() : '2026';
     const difficulty = diffMatch ? diffMatch[1].trim() : 'Média';
 
-    // Enunciado
     const content = card.querySelector('.content')?.innerText?.trim() || '';
 
-    // Análise estrita da .stats-box oficial
     const statsBox = card.querySelector('.stats-box');
     const statsText = statsBox ? statsBox.textContent : '';
 
@@ -340,7 +372,6 @@
                       statsText.includes('PARABÉNS') ||
                       statsText.includes('acertou');
 
-    // Verifica APENAS a letra da alternativa (.alternative-letter), NUNCA a barra de progresso (.q-linear-progress)
     let markedLetter = null;
     const letterEls = card.querySelectorAll('.alternative-letter');
     letterEls.forEach(letterEl => {
@@ -360,7 +391,6 @@
     let correctChoice = userChoice;
 
     if (!isCorrect) {
-      // No Caveira, quando erra, a .subtitle-stats diz "Resposta correta: C"
       const ansMatch = statsText.match(/Resposta correta:\s*([A-E])/i);
       if (ansMatch) {
         correctChoice = ansMatch[1].toUpperCase();
@@ -369,7 +399,8 @@
       }
     }
 
-    const durationSeconds = Math.max(3, timerSeconds || 10);
+    const elapsedForThisQ = questionTimers.get(qId) || timerSeconds || 10;
+    const durationSeconds = Math.max(3, elapsedForThisQ);
 
     return {
       id: qId,
@@ -467,7 +498,7 @@
     }, 10000);
   }
 
-  // --- 7. VARREDURA DE CARDS ---
+  // --- 7. VARREDURA DE CARDS E DETECÇÃO DE VIEWPORT ---
   let isInitialScan = true;
 
   function scanCards() {
@@ -476,16 +507,12 @@
     const cards = getQuestionCards();
     if (!cards || cards.length === 0) return;
 
-    let firstUnansweredQId = null;
-
     cards.forEach(card => {
       const qId = extractQuestionId(card);
       if (!qId) return;
 
       const answered = isCardAnswered(card);
 
-      // No primeiro scan ao abrir a página, qualquer questão que JÁ esteja respondida na tela
-      // é marcada como antiga para não ser contabilizada sem o usuário ter respondido agora
       if (isInitialScan && answered) {
         preAnsweredOnLoad.add(qId);
         processedInSession.add(qId);
@@ -493,15 +520,9 @@
       }
 
       if (!answered) {
-        if (!firstUnansweredQId) {
-          firstUnansweredQId = qId;
-        }
-        // Se a questão está não-respondida na tela, libera caso estivesse em preAnsweredOnLoad
         preAnsweredOnLoad.delete(qId);
         processedInSession.delete(qId);
       } else {
-        // Só contabiliza se a questão está respondida, ainda não foi processada nesta sessão,
-        // E o usuário realmente clicou em "Responder" nela (ou ela estava ativa no cronômetro como não-respondida)
         const wasSolvedNow = pendingAnswerQIds.has(qId) || (currentQuestionId === qId && !preAnsweredOnLoad.has(qId));
 
         if (wasSolvedNow && !processedInSession.has(qId)) {
@@ -527,8 +548,14 @@
 
     isInitialScan = false;
 
-    if (firstUnansweredQId && firstUnansweredQId !== currentQuestionId) {
-      resetAndStartTimerForQuestion(firstUnansweredQId);
+    // Atualiza a questão ativa de acordo com o card que está visível no centro da tela (scroll)
+    const focusedCard = findCardInViewport(cards);
+    if (focusedCard) {
+      const focusedQId = extractQuestionId(focusedCard);
+      const focusedAnswered = isCardAnswered(focusedCard);
+      if (focusedQId) {
+        switchActiveQuestion(focusedQId, focusedAnswered);
+      }
     }
   }
 
@@ -537,8 +564,31 @@
     scanDebounceTimer = setTimeout(scanCards, delay);
   }
 
-  // --- 8. GATILHOS DE INTERAÇÃO ---
+  // Handler leve para rolagem da página (detecta imediatamente quando o usuário rola para a questão de baixo)
+  function handleScrollUpdate() {
+    if (scrollRafId) return;
+    scrollRafId = requestAnimationFrame(() => {
+      scrollRafId = null;
+      const cards = getQuestionCards();
+      if (!cards || cards.length === 0) return;
+      const focusedCard = findCardInViewport(cards);
+      if (focusedCard) {
+        const focusedQId = extractQuestionId(focusedCard);
+        const focusedAnswered = isCardAnswered(focusedCard);
+        if (focusedQId) {
+          switchActiveQuestion(focusedQId, focusedAnswered);
+        }
+      }
+    });
+  }
+
+  // --- 8. GATILHOS DE INTERAÇÃO E ROLAGEM (SCROLL) ---
   function setupTriggers() {
+    // 1. Detecção em tempo real ao rolar a página (captura tanto scroll da janela quanto de containers internos do Quasar)
+    window.addEventListener('scroll', handleScrollUpdate, { capture: true, passive: true });
+    window.addEventListener('wheel', handleScrollUpdate, { passive: true });
+
+    // 2. Cliques do usuário
     document.addEventListener('click', (e) => {
       if (e.target.closest('#qg-caveira-hud')) return;
 
@@ -546,8 +596,8 @@
       const rootCard = (card && card.parentElement?.closest('.q-card')) ? card.parentElement.closest('.q-card') : card;
       const clickedCardQId = rootCard ? extractQuestionId(rootCard) : null;
 
-      if (rootCard && clickedCardQId && clickedCardQId !== currentQuestionId && !isCardAnswered(rootCard)) {
-        resetAndStartTimerForQuestion(clickedCardQId);
+      if (rootCard && clickedCardQId) {
+        switchActiveQuestion(clickedCardQId, isCardAnswered(rootCard));
       }
 
       const alt = e.target.closest('.alternative');
@@ -586,18 +636,20 @@
       }
     }, true);
 
+    // 3. Teclado (Enter, Setas, PageDown/PageUp)
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && currentQuestionId) {
         pendingAnswerQIds.add(currentQuestionId);
         setTimeout(scanCards, 80);
         setTimeout(scanCards, 350);
       }
-      if (e.key === 'ArrowRight' || e.key === 'PageDown') {
-        setTimeout(scanCards, 80);
-        setTimeout(scanCards, 350);
+      if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === 'PageUp') {
+        setTimeout(handleScrollUpdate, 60);
+        setTimeout(scanCards, 200);
       }
     });
 
+    // 4. MutationObserver para capturar respostas instantaneamente
     const observer = new MutationObserver((mutations) => {
       const isInternal = mutations.every(m => m.target.closest && m.target.closest('#qg-caveira-hud'));
       if (isInternal) return;
