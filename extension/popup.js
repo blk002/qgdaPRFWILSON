@@ -20,7 +20,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Botão Abrir QG da PRF
   document.getElementById('btn-open-qg').addEventListener('click', () => {
-    const targetUrl = 'http://localhost:5173/#/caveira';
+    const targetUrl = 'https://blk002.github.io/qgdaPRFWILSON/#/caveira';
     chrome.tabs.create({ url: targetUrl });
   });
 

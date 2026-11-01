@@ -1,7 +1,9 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira ativado.');
+  console.log('💀 [QG da PRF] Rastreador Caveira ativado em:', window.location.href);
+
+  const QG_WEB_URL = 'https://blk002.github.io/qgdaPRFWILSON/#/caveira';
 
   let currentQuestionId = null;
   let questionStartTime = Date.now();
@@ -94,7 +96,7 @@
       </div>
 
       <div class="qg-hud-footer">
-        <a href="http://localhost:5173/#/caveira" target="_blank" class="qg-btn-qg-link" id="qg-open-link">
+        <a href="${QG_WEB_URL}" target="_blank" class="qg-btn-qg-link" id="qg-open-link">
           <span>Abrir Diagnóstico QG</span>
           <span>→</span>
         </a>
@@ -181,12 +183,14 @@
   function extractQuestionData(card) {
     if (!card) return null;
 
-    // ID da Questão (ex: Q111494)
-    const idEl = card.querySelector('.number span');
-    const qId = idEl ? idEl.textContent.trim() : `Q_${Date.now()}`;
+    // 1. ID da Questão (ex: Q111494)
+    const idEl = card.querySelector('.number span, .number, [class*="number"]');
+    const idText = idEl ? idEl.textContent.trim() : '';
+    const matchId = idText.match(/Q\d+/i) || card.textContent.match(/\b(Q\d{4,8})\b/i);
+    const qId = matchId ? matchId[0].toUpperCase() : `Q_${Date.now()}`;
 
-    // Disciplina e Tópico
-    const subjectEl = card.querySelector('.subject');
+    // 2. Disciplina e Tópico
+    const subjectEl = card.querySelector('.subject, [class*="subject"]');
     let subject = 'Geral';
     let topic = 'Geral';
     if (subjectEl) {
@@ -196,8 +200,8 @@
       topic = parts.slice(1).join('->').trim() || subject;
     }
 
-    // Metadados (Banca, Ano, Dificuldade)
-    const infoText = card.querySelector('.question-info')?.textContent || '';
+    // 3. Metadados (Banca, Ano, Dificuldade)
+    const infoText = card.querySelector('.question-info, [class*="question-info"]')?.textContent || '';
     const bancaMatch = infoText.match(/Banca:\s*([^Ano\n]+)/i);
     const anoMatch = infoText.match(/Ano:\s*(\d+)/i);
     const diffMatch = infoText.match(/Dificuldade:\s*([^\n]+)/i);
@@ -206,46 +210,62 @@
     const ano = anoMatch ? anoMatch[1].trim() : '2026';
     const difficulty = diffMatch ? diffMatch[1].trim() : 'Média';
 
-    // Enunciado
-    const content = card.querySelector('.content')?.innerText?.trim() || '';
+    // 4. Enunciado
+    const content = card.querySelector('.content, [class*="content"]')?.innerText?.trim() || '';
 
-    // Alternativas e Escolha do Usuário
-    let userChoice = lastUserClickedChoice || 'C';
-    let isCorrect = false;
-    let correctChoice = 'C';
+    // 5. Análise de Acerto / Erro e Alternativas
+    const statsBox = card.querySelector('.stats-box, [class*="stats-box"]');
+    const cardText = card.textContent || '';
+    
+    const isSuccessBanner = (statsBox && (statsBox.querySelector('.bg-correct-1') || statsBox.textContent.includes('PARABÉNS') || statsBox.textContent.includes('acertou'))) ||
+                            cardText.includes('PARABÉNS!') || cardText.includes('Você acertou!');
+                            
+    const isErrorBanner = (statsBox && (statsBox.querySelector('.bg-incorrect-1') || statsBox.textContent.includes('ERROU') || statsBox.textContent.includes('Resposta correta'))) ||
+                          cardText.includes('Você errou!') || cardText.includes('QUE PENA');
 
-    // Identificar qual alternativa foi marcada
-    const altLetters = card.querySelectorAll('.alternative-letter');
-    altLetters.forEach(al => {
-      const letter = al.textContent.trim();
-      if (al.classList.contains('bg-correct-2')) {
-        userChoice = letter;
-        isCorrect = true;
-        correctChoice = letter;
-      } else if (al.classList.contains('bg-incorrect-2')) {
-        userChoice = letter;
-        isCorrect = false;
+    let detectedCorrectLetter = null;
+    let detectedIncorrectLetter = null;
+
+    // Varre todas as alternativas
+    const altContainers = card.querySelectorAll('.alternative, [class*="alternative"]');
+    altContainers.forEach(alt => {
+      const letterEl = alt.querySelector('.alternative-letter, [class*="alternative-letter"]');
+      const letter = letterEl ? letterEl.textContent.trim() : null;
+      if (!letter || letter.length > 2) return;
+
+      const isGreen = alt.querySelector('.bg-correct-2, .bg-correct-1') || (letterEl && (letterEl.classList.contains('bg-correct-2') || letterEl.classList.contains('bg-correct-1')));
+      const isRed = alt.querySelector('.bg-incorrect-2, .bg-incorrect-1') || (letterEl && (letterEl.classList.contains('bg-incorrect-2') || letterEl.classList.contains('bg-incorrect-1')));
+
+      if (isGreen) {
+        detectedCorrectLetter = letter;
+      }
+      if (isRed) {
+        detectedIncorrectLetter = letter;
       }
     });
 
-    // Análise da caixa de resultado (Stats Box)
-    const statsBox = card.querySelector('.stats-box');
-    if (statsBox) {
-      const titleText = statsBox.querySelector('.title-stats')?.textContent || '';
-      const subText = statsBox.querySelector('.subtitle-stats')?.textContent || '';
+    let isCorrect = false;
+    let userChoice = 'C';
+    let correctChoice = 'C';
 
-      if (titleText.includes('PARABÉNS') || subText.includes('acertou')) {
-        isCorrect = true;
-        correctChoice = userChoice;
-      } else if (titleText.includes('ERROU') || subText.includes('correta')) {
+    if (isSuccessBanner) {
+      isCorrect = true;
+      userChoice = detectedCorrectLetter || lastUserClickedChoice || 'C';
+      correctChoice = userChoice;
+    } else if (isErrorBanner) {
+      isCorrect = false;
+      userChoice = detectedIncorrectLetter || lastUserClickedChoice || (detectedCorrectLetter === 'C' ? 'E' : 'C');
+      correctChoice = detectedCorrectLetter || (userChoice === 'C' ? 'E' : 'C');
+    } else {
+      // Fallback
+      if (detectedIncorrectLetter) {
         isCorrect = false;
-        const matchCorrect = subText.match(/Resposta correta:\s*([A-E])/i);
-        if (matchCorrect) {
-          correctChoice = matchCorrect[1].trim();
-        } else {
-          // Se o usuário marcou E e errou, a certa é C (e vice-versa em Cebraspe)
-          correctChoice = userChoice === 'C' ? 'E' : 'C';
-        }
+        userChoice = detectedIncorrectLetter;
+        correctChoice = detectedCorrectLetter || (userChoice === 'C' ? 'E' : 'C');
+      } else if (detectedCorrectLetter) {
+        isCorrect = true;
+        userChoice = detectedCorrectLetter;
+        correctChoice = detectedCorrectLetter;
       }
     }
 
@@ -263,14 +283,15 @@
       correctChoice,
       hit: isCorrect,
       durationSeconds,
-      confidence: isCorrect ? 'sabia' : 'duvida', // padrão inicial
-      errorReason: isCorrect ? null : 'conteudo',  // padrão inicial se errou
+      confidence: isCorrect ? 'sabia' : 'duvida',
+      errorReason: isCorrect ? null : 'conteudo',
       timestamp: new Date().toISOString()
     };
   }
 
   // --- 5. SALVAR QUESTÃO E TRANSMITIR ---
   function saveQuestion(question) {
+    console.log('💀 [QG da PRF] Salvando questão:', question);
     if (typeof chrome !== 'undefined' && chrome.runtime) {
       chrome.runtime.sendMessage({
         type: 'CAVEIRA_QUESTION_ANSWERED',
@@ -302,76 +323,100 @@
 
     // Reset botões ativos
     promptBox.querySelectorAll('.qg-btn-tag').forEach(b => b.classList.remove('active'));
-
     promptBox.style.display = 'block';
 
-    // Fecha automaticamente após 12s se não interagir
+    // Fecha automaticamente após 15s se não interagir
     setTimeout(() => {
       if (promptBox && promptBox.style.display === 'block') {
         promptBox.style.display = 'none';
       }
-    }, 12000);
+    }, 15000);
   }
 
-  // --- 7. OBSERVAÇÃO DE MUTAÇÃO (QUANDO A QUESTÃO É RESPONDIDA) ---
-  function setupObserver() {
-    // Monitorar cliques em alternativas para registrar a intenção antes do envio
-    document.addEventListener('click', (e) => {
-      const alt = e.target.closest('.alternative');
-      if (alt) {
-        const letter = alt.querySelector('.alternative-letter')?.textContent?.trim();
-        if (letter) {
-          lastUserClickedChoice = letter;
+  // --- 7. VARREDURA DE QUESTÕES RESPONDIDAS ---
+  function scanCards() {
+    createHud();
+    const cards = document.querySelectorAll('.q-card, [class*="q-card"]');
+    cards.forEach(card => {
+      const idEl = card.querySelector('.number span, .number, [class*="number"]');
+      const idText = idEl ? idEl.textContent.trim() : '';
+      const matchId = idText.match(/Q\d+/i) || card.textContent.match(/\b(Q\d{4,8})\b/i);
+      if (!matchId) return;
+      const qId = matchId[0].toUpperCase();
+
+      // Atualizar questão ativa no HUD
+      const currentQEl = document.getElementById('qg-current-q-id');
+      if (currentQEl && currentQuestionId !== qId) {
+        currentQuestionId = qId;
+        currentQEl.textContent = qId;
+        resetTimer();
+      }
+
+      // Checar se a questão já foi respondida
+      const statsBox = card.querySelector('.stats-box, [class*="stats-box"]');
+      const hasCorrectBanner = card.querySelector('.bg-correct-1, .bg-correct-2');
+      const hasIncorrectBanner = card.querySelector('.bg-incorrect-1, .bg-incorrect-2');
+      const hasResult = statsBox || hasCorrectBanner || hasIncorrectBanner || card.textContent.includes('PARABÉNS') || card.textContent.includes('acertou!') || card.textContent.includes('Você errou');
+
+      if (hasResult && lastCapturedQuestionId !== qId) {
+        lastCapturedQuestionId = qId;
+        console.log(`💀 [QG da PRF] Questão ${qId} detectada com resultado! Processando...`);
+
+        const questionData = extractQuestionData(card);
+        if (questionData) {
+          activeQuestionData = questionData;
+          saveQuestion(questionData);
+          showPrompt(questionData);
+          playTacticalTone(questionData.hit);
         }
+      }
+    });
+  }
+
+  // --- 8. CONFIGURAÇÃO DOS GATILHOS E EVENTOS ---
+  function setupObserver() {
+    // 1. Monitorar cliques do usuário nas alternativas
+    document.addEventListener('click', (e) => {
+      const alt = e.target.closest('.alternative, [class*="alternative"]');
+      if (alt) {
+        const letter = alt.querySelector('.alternative-letter, [class*="alternative-letter"]')?.textContent?.trim();
+        if (letter && letter.length <= 2) {
+          lastUserClickedChoice = letter;
+          console.log(`💀 [QG da PRF] Alternativa clicada: ${letter}`);
+        }
+      }
+
+      // Clique no botão "Responder"
+      const btn = e.target.closest('button, .q-btn');
+      if (btn && (btn.textContent.includes('Responder') || btn.classList.contains('light-mode-answer-btn'))) {
+        console.log('💀 [QG da PRF] Botão Responder acionado. Agendando varredura...');
+        setTimeout(scanCards, 200);
+        setTimeout(scanCards, 500);
+        setTimeout(scanCards, 1000);
+        setTimeout(scanCards, 2000);
       }
     }, true);
 
+    // 2. MutationObserver no DOM
     const observer = new MutationObserver(() => {
-      // Procurar todos os cards de questão
-      const cards = document.querySelectorAll('.q-card');
-      cards.forEach(card => {
-        const qIdEl = card.querySelector('.number span');
-        if (!qIdEl) return;
-        const qId = qIdEl.textContent.trim();
-
-        // Atualizar indicador da questão atual no HUD
-        const currentQEl = document.getElementById('qg-current-q-id');
-        if (currentQEl && currentQuestionId !== qId) {
-          currentQuestionId = qId;
-          currentQEl.textContent = qId;
-          resetTimer();
-        }
-
-        // Checar se a questão foi respondida (presença de .stats-box ou badges coloridos)
-        const statsBox = card.querySelector('.stats-box');
-        const hasResult = statsBox || card.querySelector('.bg-correct-1') || card.querySelector('.bg-incorrect-1');
-
-        if (hasResult && lastCapturedQuestionId !== qId) {
-          lastCapturedQuestionId = qId;
-          console.log(`💀 [QG da PRF] Questão ${qId} detectada e resolvida!`);
-
-          const questionData = extractQuestionData(card);
-          if (questionData) {
-            activeQuestionData = questionData;
-            saveQuestion(questionData);
-            showPrompt(questionData);
-
-            // Tocar feedback sonoro tático
-            playTacticalTone(questionData.hit);
-          }
-        }
-      });
+      scanCards();
     });
 
     observer.observe(document.body, {
       childList: true,
       subtree: true,
       attributes: true,
-      attributeFilter: ['class']
+      attributeFilter: ['class', 'style', 'disabled']
     });
+
+    // 3. Polling de contingência a cada 1.2s
+    setInterval(scanCards, 1200);
+
+    // Executa varredura inicial imediata
+    scanCards();
   }
 
-  // Feedback de áudio sintético Web Audio API (sem dependências externas)
+  // Feedback de áudio Web Audio API
   function playTacticalTone(isSuccess) {
     try {
       const ctx = new (window.AudioContext || window.webkitAudioContext)();
@@ -381,8 +426,8 @@
       gain.connect(ctx.destination);
 
       if (isSuccess) {
-        osc.frequency.setValueAtTime(587.33, ctx.currentTime); // D5
-        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08); // A5
+        osc.frequency.setValueAtTime(587.33, ctx.currentTime);
+        osc.frequency.setValueAtTime(880, ctx.currentTime + 0.08);
         gain.gain.setValueAtTime(0.12, ctx.currentTime);
         gain.gain.exponentialRampToValueAtTime(0.001, ctx.currentTime + 0.25);
         osc.start();
@@ -398,7 +443,7 @@
     } catch (_) {}
   }
 
-  // Iniciar após carregar o DOM
+  // Inicialização
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       createHud();

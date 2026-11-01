@@ -13,8 +13,14 @@
     "tabs"
   ],
   "host_permissions": [
+    "*://*.caveira.com/*",
+    "*://caveira.com/*",
+    "*://*.caveira.com.br/*",
+    "*://caveira.com.br/*",
     "*://*.projetocaveira.com.br/*",
     "*://projetocaveira.com.br/*",
+    "*://*.projetocaveira.com/*",
+    "*://projetocaveira.com/*",
     "http://localhost:*/*",
     "https://blk002.github.io/qgdaPRFWILSON/*"
   ],
@@ -32,8 +38,14 @@
   "content_scripts": [
     {
       "matches": [
+        "*://*.caveira.com/*",
+        "*://caveira.com/*",
+        "*://*.caveira.com.br/*",
+        "*://caveira.com.br/*",
         "*://*.projetocaveira.com.br/*",
-        "*://projetocaveira.com.br/*"
+        "*://projetocaveira.com.br/*",
+        "*://*.projetocaveira.com/*",
+        "*://projetocaveira.com/*"
       ],
       "js": ["content.js"],
       "css": ["content.css"],
