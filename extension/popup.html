@@ -1,0 +1,175 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8">
+  <title>QG da PRF — Rastreador Caveira</title>
+  <style>
+    * { box-sizing: border-box; margin: 0; padding: 0; }
+    body {
+      width: 320px;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      background: #0f172a;
+      color: #f8fafc;
+      padding: 16px;
+    }
+    .header {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      margin-bottom: 14px;
+      padding-bottom: 12px;
+      border-bottom: 1px solid rgba(56, 189, 248, 0.2);
+    }
+    .logo-badge {
+      width: 36px;
+      height: 36px;
+      border-radius: 10px;
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-size: 18px;
+      box-shadow: 0 0 12px rgba(56, 189, 248, 0.3);
+    }
+    .title h1 {
+      font-size: 13px;
+      font-weight: 900;
+      letter-spacing: 0.5px;
+      text-transform: uppercase;
+      color: #fff;
+    }
+    .title p {
+      font-size: 10px;
+      color: #38bdf8;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+    .stats-card {
+      background: rgba(30, 41, 59, 0.7);
+      border: 1px solid rgba(255, 255, 255, 0.08);
+      border-radius: 14px;
+      padding: 12px;
+      margin-bottom: 14px;
+    }
+    .stats-grid {
+      display: grid;
+      grid-template-columns: repeat(3, 1fr);
+      gap: 8px;
+      text-align: center;
+      margin-top: 8px;
+    }
+    .stat-item {
+      background: rgba(15, 23, 42, 0.6);
+      padding: 8px 4px;
+      border-radius: 8px;
+      border: 1px solid rgba(255, 255, 255, 0.04);
+    }
+    .stat-label {
+      font-size: 9px;
+      font-weight: 700;
+      text-transform: uppercase;
+      color: #94a3b8;
+      display: block;
+    }
+    .stat-value {
+      font-size: 16px;
+      font-weight: 900;
+      margin-top: 2px;
+    }
+    .stat-value.green { color: #10b981; }
+    .stat-value.red { color: #ef4444; }
+    .stat-value.gold { color: #fbbf24; }
+    .btn {
+      width: 100%;
+      padding: 10px;
+      border-radius: 10px;
+      border: none;
+      font-weight: 800;
+      font-size: 11px;
+      text-transform: uppercase;
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      transition: all 0.2s;
+      margin-bottom: 8px;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, #0284c7, #2563eb);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(2, 132, 199, 0.3);
+    }
+    .btn-primary:hover {
+      background: linear-gradient(135deg, #0369a1, #1d4ed8);
+      transform: translateY(-1px);
+    }
+    .btn-secondary {
+      background: rgba(30, 41, 59, 0.9);
+      color: #cbd5e1;
+      border: 1px solid rgba(255, 255, 255, 0.1);
+    }
+    .btn-secondary:hover {
+      background: rgba(51, 65, 85, 0.9);
+      color: #fff;
+    }
+    .footer-note {
+      font-size: 9px;
+      color: #64748b;
+      text-align: center;
+      margin-top: 6px;
+      font-weight: 600;
+    }
+  </style>
+</head>
+<body>
+  <div class="header">
+    <div class="logo-badge">💀</div>
+    <div class="title">
+      <h1>QG da PRF • Caveira</h1>
+      <p>Rastreador de Questões</p>
+    </div>
+  </div>
+
+  <div class="stats-card">
+    <div style="display: flex; justify-content: space-between; align-items: center; font-size: 10px; font-weight: 700; color: #94a3b8; text-transform: uppercase;">
+      <span>Sessão Atual</span>
+      <span id="txt-total-saved">0 no histórico</span>
+    </div>
+
+    <div class="stats-grid">
+      <div class="stat-item">
+        <span class="stat-label">Certas</span>
+        <span class="stat-value green" id="stat-hits">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Erradas</span>
+        <span class="stat-value red" id="stat-errors">0</span>
+      </div>
+      <div class="stat-item">
+        <span class="stat-label">Líquida</span>
+        <span class="stat-value gold" id="stat-net">0</span>
+      </div>
+    </div>
+  </div>
+
+  <button class="btn btn-primary" id="btn-open-qg">
+    <span>Abrir Raio-X no QG</span>
+    <span>🎯</span>
+  </button>
+
+  <button class="btn btn-secondary" id="btn-copy-json">
+    <span>Copiar Questões (JSON)</span>
+    <span>📋</span>
+  </button>
+
+  <button class="btn btn-secondary" id="btn-reset-session" style="color: #f87171;">
+    <span>Zerar Sessão</span>
+    <span>🔄</span>
+  </button>
+
+  <p class="footer-note">Ativo automaticamente ao navegar no Projeto Caveira.</p>
+
+  <script src="popup.js"></script>
+</body>
+</html>

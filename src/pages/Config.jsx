@@ -1,7 +1,10 @@
 import { useStore, getCleanInitialState, PERSISTED_KEYS } from '../store/useStore';
 import { assetUrl } from '../lib/assets';
 import { toast } from 'sonner';
-import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle } from 'lucide-react';
+import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle, Camera, BookOpen, ScanLine, ChevronUp, ChevronDown, Zap, FastForward, Layers } from 'lucide-react';
+import ImportOCR from '../components/ImportOCR';
+import TopicLessonScanner from '../components/TopicLessonScanner';
+import { parseDurationToSeconds, formatSecondsToClock, formatSecondsToFriendly, getSubjectVideoStats, calculateSpeedComparison, formatMinutesToFriendly, calculateLessonsForGoal } from '../lib/durationHelpers';
 
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -13,12 +16,16 @@ export default function Config({
 }) {
   const [editingSubjectId, setEditingSubjectId] = useState(null);
   const [draftSubject, setDraftSubject] = useState(null);
+  const [showImportOCR, setShowImportOCR] = useState(false);
+  // Scanner de aulas por assunto
+  const [scannerTopicIdx, setScannerTopicIdx] = useState(null); // índice do tópico sendo escaneado
 
   const {
     cycle,
     setCycle,
     subjects,
     setSubjects,
+    setSubjectSpeed,
     targetExamDate,
     setTargetExamDate,
     setGlobalModal,
@@ -34,10 +41,20 @@ export default function Config({
     setDailyGoalMinutes,
     subjectGoals,
     setSubjectGoal,
+    subjectTimeGoal,
+    setSubjectTimeGoal,
     pushSettings,
     setPushSettings,
     pushTime,
-    setPushTime
+    setPushTime,
+    cycleScheduleType,
+    setCycleScheduleType,
+    cycleWeekStart,
+    setCycleWeekStart,
+    cycleDayNames,
+    setCycleDayNames,
+    fillFullWeekCycle,
+    getRelativeDateInfo
   } = useStore();
   const flatCycle = cycle.flat();
   const totalSlots = flatCycle.length;
@@ -149,168 +166,524 @@ export default function Config({
 
       <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 flex justify-between items-center dark:bg-slate-900 dark:border-slate-800">
         <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 dark:text-slate-100"><Settings className="text-slate-600 w-5 h-5 dark:text-slate-300"/> Minhas Disciplinas</h3>
-        <button onClick={() => {
-            const newId = 'sub_' + Date.now();
-            setDraftSubject({ id: newId, name: '', color: 'bg-slate-200 text-slate-900', block: 'B1', topics: [] });
-            setEditingSubjectId(newId);
-          }} 
-          className="bg-blue-100 text-blue-700 px-3 py-2 rounded-lg font-bold flex items-center gap-1 text-xs sm:text-sm">
-          <Plus className="w-4 h-4" /> Nova
-        </button>
+        <div className="flex gap-2">
+          <button onClick={() => setShowImportOCR(true)}
+            className="bg-emerald-100 text-emerald-700 px-3 py-2 rounded-lg font-bold flex items-center gap-1 text-xs sm:text-sm dark:bg-emerald-900/30 dark:text-emerald-400 hover:scale-105 transition-transform">
+            <Camera className="w-4 h-4" /> Importar
+          </button>
+          <button onClick={() => {
+              const newId = 'sub_' + Date.now();
+              setDraftSubject({ id: newId, name: '', color: 'bg-slate-200 text-slate-900', block: 'B1', speed: 1, topics: [] });
+              setEditingSubjectId(newId);
+            }} 
+            className="bg-blue-100 text-blue-700 px-3 py-2 rounded-lg font-bold flex items-center gap-1 text-xs sm:text-sm">
+            <Plus className="w-4 h-4" /> Nova
+          </button>
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Object.values(subjects || {}).map(sub => (
-          <div key={sub.id} className="border border-slate-200 rounded-lg p-4 flex flex-col gap-3 bg-slate-50 hover:border-blue-400 transition-colors dark:bg-slate-950 dark:border-slate-800">
-            <div className="flex justify-between items-start">
-              <span className={`text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider ${sub.color}`}>{sub.name} <span className="opacity-60 ml-1">({sub.block})</span></span>
-              <div className="flex gap-1">
-                <button onClick={() => {
-                  setDraftSubject({ ...sub });
-                  setEditingSubjectId(sub.id);
-                }} className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-blue-600 rounded dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800"><Edit2 className="w-4 h-4" /></button>
-                <button onClick={() => {
-                  setGlobalModal({
-                    title: "Excluir Disciplina",
-                    message: `Você tem certeza que deseja excluir a matéria "${sub.name}" permanentemente do seu planejamento?`,
-                    onConfirm: () => {
-                      setSubjects(prev => { const c = {...prev}; delete c[sub.id]; return c; });
-                      setCycle(prev => prev.map(day => day.filter(sId => sId !== sub.id)));
-                      setReviews(prev => prev.filter(r => r.subjectId !== sub.id)); 
-                    }
-                  });
-                }} className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-red-600 rounded dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800"><Trash2 className="w-4 h-4" /></button>
+        {Object.values(subjects || {}).map(sub => {
+          const st = getSubjectVideoStats(sub);
+          const currentSpeed = Number(sub.speed) || 1;
+          const currentTimeGoal = Number(sub.timeGoalMinutes || subjectTimeGoal?.[sub.id]) || 0;
+
+          return (
+            <div key={sub.id} className="border border-slate-200 rounded-lg p-4 flex flex-col gap-3 bg-slate-50 hover:border-blue-400 transition-colors dark:bg-slate-950 dark:border-slate-800">
+              <div className="flex justify-between items-start">
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <span className={`text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider ${sub.color}`}>
+                    {sub.name} <span className="opacity-60 ml-1">({sub.block})</span>
+                  </span>
+                  {currentSpeed > 1 && (
+                    <span className="text-[9px] font-black bg-blue-100 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-blue-200 dark:border-blue-900" title={`Aceleração configurada: ${currentSpeed}x`}>
+                      <Zap className="w-2.5 h-2.5 text-yellow-500 fill-yellow-500" /> {currentSpeed}x
+                    </span>
+                  )}
+                  {currentTimeGoal > 0 && (
+                    <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-emerald-200 dark:border-emerald-900" title={`Meta de tempo por bloco: ${currentTimeGoal} min`}>
+                      <Target className="w-2.5 h-2.5" /> {formatMinutesToFriendly(currentTimeGoal)}/bloco
+                    </span>
+                  )}
+                </div>
+                <div className="flex gap-1">
+                  <button onClick={() => {
+                    setDraftSubject({ 
+                      ...sub, 
+                      speed: sub.speed || 1,
+                      timeGoalMinutes: currentTimeGoal
+                    });
+                    setEditingSubjectId(sub.id);
+                  }} className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-blue-600 rounded dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800"><Edit2 className="w-4 h-4" /></button>
+                  <button onClick={() => {
+                    setGlobalModal({
+                      title: "Excluir Disciplina",
+                      message: `Você tem certeza que deseja excluir a matéria "${sub.name}" permanentemente do seu planejamento?`,
+                      onConfirm: () => {
+                        setSubjects(prev => { const c = {...prev}; delete c[sub.id]; return c; });
+                        setCycle(prev => prev.map(day => day.filter(sId => sId !== sub.id)));
+                        setReviews(prev => prev.filter(r => r.subjectId !== sub.id)); 
+                      }
+                    });
+                  }} className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-red-600 rounded dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800"><Trash2 className="w-4 h-4" /></button>
+                </div>
+              </div>
+              <div className="flex items-center justify-between text-xs text-slate-500 font-medium dark:text-slate-400">
+                <span>{sub.topics?.length || 0} {sub.topics?.length === 1 ? 'assunto' : 'assuntos'}</span>
+                <span className="text-[10px] font-mono text-slate-400" title={`Sem aceleração: ${st.totalFriendly} | Acelerado: ${st.acceleratedFriendly}`}>
+                  {st.acceleratedFriendly} {currentSpeed > 1 && `(${currentSpeed}x)`}
+                </span>
               </div>
             </div>
-            <div className="text-xs text-slate-500 font-medium dark:text-slate-400">
-              {sub.topics?.length || 0} {sub.topics?.length === 1 ? 'assunto cadastrado' : 'assuntos cadastrados'}
-            </div>
-          </div>
-        ))}
+          );
+        })}
       </div>
 
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mt-8 mb-6 dark:bg-slate-900 dark:border-slate-800">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6">
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 dark:text-slate-100">
-            <Calendar className="text-blue-600 w-5 h-5" /> Meu Cronograma
-          </h3>
-          <button 
-            onClick={() => cycle.length < 7 && setCycle([...cycle, []])} 
-            disabled={cycle.length >= 7}
-            className={`w-full sm:w-auto justify-center px-4 py-2 rounded-lg font-bold flex items-center gap-2 text-sm transition-all ${
-              cycle.length >= 7 
-                ? 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-600' 
-                : 'bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 dark:hover:bg-blue-900/60'
-            }`}
-          >
-            <Plus className="w-4 h-4" /> Adicionar Dia {cycle.length >= 7 && '(Limite)'}
-          </button>
+      {/* ⚡ SEÇÃO: ACELERAÇÃO DE VÍDEO-AULAS POR DISCIPLINA */}
+      <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 mt-8 mb-6 border-l-4 border-l-yellow-500 dark:bg-slate-900 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
+          <div>
+            <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 dark:text-slate-100">
+              <Zap className="text-yellow-500 w-5 h-5 fill-yellow-500"/> Aceleração de Vídeo-Aulas & Economia de Tempo
+            </h3>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
+              Defina a velocidade em que você assiste as aulas de cada matéria (1x, 1.25x, 1.5x, 1.75x, 2x). O sistema calcula os tempos reais e o total de horas poupadas na sua preparação.
+            </p>
+          </div>
         </div>
 
+        {/* Banner Geral de Economia de Tempo */}
+        {(() => {
+          let globalLessons = 0;
+          let globalOriginalSec = 0;
+          let globalAccelSec = 0;
+
+          Object.values(subjects || {}).forEach(sub => {
+            const st = getSubjectVideoStats(sub);
+            globalLessons += st.totalLessons;
+            globalOriginalSec += st.totalSeconds;
+            globalAccelSec += st.acceleratedSeconds;
+          });
+
+          const globalSavedSec = Math.max(0, globalOriginalSec - globalAccelSec);
+          const globalPercentSaved = globalOriginalSec > 0 ? Math.round((globalSavedSec / globalOriginalSec) * 100) : 0;
+
+          return (
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-900 text-white p-4 rounded-xl mb-6 shadow-md border border-slate-800">
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Aulas no Edital</span>
+                <span className="text-xl font-black text-white mt-0.5">{globalLessons} aulas</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Sem Aceleração (1x)</span>
+                <span className="text-xl font-black text-slate-300 mt-0.5">{formatSecondsToFriendly(globalOriginalSec)}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black text-blue-400 uppercase tracking-wider">Com Acelerações</span>
+                <span className="text-xl font-black text-blue-400 mt-0.5">{formatSecondsToFriendly(globalAccelSec)}</span>
+              </div>
+              <div className="flex flex-col">
+                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider">Tempo Poupado</span>
+                <span className="text-xl font-black text-emerald-400 mt-0.5">
+                  {globalSavedSec > 0 ? `-${formatSecondsToFriendly(globalSavedSec)} (${globalPercentSaved}%)` : '0m'}
+                </span>
+              </div>
+            </div>
+          );
+        })()}
+
+        {/* Lista de Disciplinas com Seletor Rápido e Comparativo */}
+        <div className="space-y-3">
+          {Object.values(subjects || {}).map(sub => {
+            const st = getSubjectVideoStats(sub);
+            const currentSpeed = Number(sub.speed) || 1;
+            const currentTimeGoal = Number(sub.timeGoalMinutes || subjectTimeGoal?.[sub.id]) || 0;
+
+            return (
+              <div key={sub.id} className="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/70 hover:border-blue-300 dark:border-slate-800 dark:bg-slate-950/70 flex flex-col lg:flex-row lg:items-center justify-between gap-4 transition-all">
+                {/* Info da Disciplina */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2 mb-1 flex-wrap">
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${sub.color}`}>
+                      {sub.name}
+                    </span>
+                    <span className="text-[9px] font-black bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded">
+                      {sub.block}
+                    </span>
+                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium ml-1">
+                      {st.totalLessons} {st.totalLessons === 1 ? 'aula' : 'aulas'}
+                    </span>
+                    {currentTimeGoal > 0 && (
+                      <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-emerald-200 dark:border-emerald-800">
+                        <Target className="w-2.5 h-2.5" /> Bloco: {formatMinutesToFriendly(currentTimeGoal)}
+                      </span>
+                    )}
+                  </div>
+
+                  {/* Comparativo de Tempos */}
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs mt-2">
+                    <div className="text-slate-500 dark:text-slate-400 font-medium">
+                      <span className="font-bold text-slate-700 dark:text-slate-300">Tempo Normal:</span> {st.totalFriendly}
+                    </div>
+                    <div className="text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1">
+                      <Zap className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
+                      <span>Com Aceleração ({currentSpeed}x):</span> {st.acceleratedFriendly}
+                    </div>
+                    {currentSpeed > 1 && (
+                      <div className="text-emerald-600 dark:text-emerald-400 font-black">
+                        Economia: -{st.savedFriendly} (-{st.percentSaved}%)
+                      </div>
+                    )}
+                  </div>
+                </div>
+
+                {/* Seletores Rápidos: Velocidade e Meta por Bloco */}
+                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0 self-start lg:self-center">
+                  {/* Velocidade */}
+                  <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <span className="text-[9px] font-black text-slate-400 uppercase px-1 hidden sm:inline">Velocidade:</span>
+                    {[1, 1.25, 1.5, 1.75, 2].map(spd => {
+                      const isSelected = currentSpeed === spd;
+                      return (
+                        <button
+                          key={spd}
+                          type="button"
+                          onClick={() => {
+                            setSubjectSpeed(sub.id, spd);
+                            toast.success(`${sub.name}: Velocidade definida em ${spd}x!`, { duration: 1200 });
+                          }}
+                          className={`px-2 py-1 rounded-lg text-xs font-black transition-all ${
+                            isSelected
+                              ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30 ring-2 ring-blue-400'
+                              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          {spd}x
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {/* Meta por Bloco */}
+                  <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-slate-800">
+                    <span className="text-[9px] font-black text-slate-400 uppercase px-1 flex items-center gap-0.5">
+                      <Target className="w-2.5 h-2.5 text-emerald-500" /> Bloco:
+                    </span>
+                    {[
+                      { label: '1 aula', val: 0 },
+                      { label: '45m', val: 45 },
+                      { label: '1h', val: 60 },
+                      { label: '1h30', val: 90 },
+                      { label: '2h', val: 120 }
+                    ].map(preset => {
+                      const isSel = currentTimeGoal === preset.val;
+                      return (
+                        <button
+                          key={preset.val}
+                          type="button"
+                          onClick={() => {
+                            setSubjectTimeGoal(sub.id, preset.val);
+                            toast.success(`${sub.name}: Meta por bloco definida em ${preset.label}!`, { duration: 1200 });
+                          }}
+                          className={`px-1.5 py-1 rounded-lg text-[10px] font-black transition-all ${
+                            isSel
+                              ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/30 ring-2 ring-emerald-400'
+                              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
+                          }`}
+                        >
+                          {preset.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+              </div>
+            );
+          })}
+
+          {Object.values(subjects || {}).length === 0 && (
+            <p className="text-xs font-bold text-slate-500 italic text-center py-6">
+              Nenhuma disciplina cadastrada para configurar aceleração.
+            </p>
+          )}
+        </div>
+      </div>
+
+      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-slate-200 mt-8 mb-6 dark:bg-slate-900 dark:border-slate-800">
+        <div className="flex flex-col md:flex-row justify-between items-start md:items-center gap-4 mb-5">
+          <div>
+            <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 dark:text-slate-100">
+              <Calendar className="text-blue-600 w-5 h-5" /> Meu Cronograma
+            </h3>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              Configure sua rotina de estudos organizada por dias da semana ou por ciclo sequencial contínuo.
+            </p>
+          </div>
+
+          <div className="flex flex-wrap items-center gap-2">
+            {/* Seletor de Modo: Dias da Semana vs Ciclo Sequencial */}
+            <div className="bg-slate-100 dark:bg-slate-800 p-1 rounded-xl flex items-center gap-1 border border-slate-200 dark:border-slate-700">
+              <button
+                type="button"
+                onClick={() => {
+                  setCycleScheduleType('weekly');
+                  if (cycle.length < 7) {
+                    fillFullWeekCycle(cycleWeekStart || 'sunday');
+                  }
+                }}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  cycleScheduleType === 'weekly'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Calendar className="w-3.5 h-3.5" /> Dias da Semana
+              </button>
+              <button
+                type="button"
+                onClick={() => setCycleScheduleType('numeric')}
+                className={`px-3 py-1.5 rounded-lg text-xs font-bold transition-all flex items-center gap-1.5 ${
+                  cycleScheduleType !== 'weekly'
+                    ? 'bg-blue-600 text-white shadow-xs'
+                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <Layers className="w-3.5 h-3.5" /> Ciclo Sequencial
+              </button>
+            </div>
+
+            {cycleScheduleType !== 'weekly' && (
+              <button 
+                onClick={() => cycle.length < 7 && setCycle([...cycle, []])} 
+                disabled={cycle.length >= 7}
+                className={`px-3 py-2 rounded-lg font-bold flex items-center gap-1.5 text-xs transition-all ${
+                  cycle.length >= 7 
+                    ? 'bg-slate-100 text-slate-400 cursor-not-allowed dark:bg-slate-800 dark:text-slate-600' 
+                    : 'bg-blue-100 hover:bg-blue-200 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300'
+                }`}
+              >
+                <Plus className="w-3.5 h-3.5" /> Adicionar Dia {cycle.length >= 7 && '(Limite 7)'}
+              </button>
+            )}
+          </div>
+        </div>
+
+        {/* Sub-barra de opções quando "Dias da Semana" está selecionado */}
+        {cycleScheduleType === 'weekly' && (
+          <div className="bg-blue-50/70 border border-blue-200/80 rounded-xl p-3 sm:p-4 mb-5 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 dark:bg-blue-950/20 dark:border-blue-900/40">
+            <div className="flex flex-wrap items-center gap-2">
+              <span className="text-xs font-bold text-slate-700 dark:text-slate-300">
+                Ordem da Semana:
+              </span>
+              <div className="inline-flex rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-800 p-0.5">
+                <button
+                  type="button"
+                  onClick={() => setCycleWeekStart('sunday')}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                    (cycleWeekStart || 'sunday') === 'sunday'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  Domingo a Sábado
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCycleWeekStart('monday')}
+                  className={`px-3 py-1 text-xs font-bold rounded-md transition-all ${
+                    cycleWeekStart === 'monday'
+                      ? 'bg-blue-600 text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  Segunda a Domingo
+                </button>
+              </div>
+            </div>
+
+            {cycle.length < 7 && (
+              <button
+                type="button"
+                onClick={() => fillFullWeekCycle(cycleWeekStart || 'sunday')}
+                className="w-full sm:w-auto px-3.5 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg shadow-xs transition-colors flex items-center justify-center gap-1.5"
+              >
+                <Plus className="w-3.5 h-3.5" /> Preencher 7 Dias Completos
+              </button>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-3">
-          {cycle.map((daySubjects, dayIndex) => (
-            <div key={dayIndex} className="bg-slate-50 border border-slate-300 rounded-xl flex flex-col overflow-hidden shadow-sm dark:bg-slate-950 dark:border-slate-700 transition-all hover:shadow-md">
-              <div className="bg-slate-200/70 p-2 sm:p-2.5 flex justify-between items-center border-b border-slate-300 dark:bg-slate-800 dark:border-slate-700">
-                <span className="font-black text-xs text-slate-700 dark:text-slate-200 uppercase tracking-wider">DIA {dayIndex + 1}</span>
-                <div className="flex items-center gap-1">
-                  <button 
-                    onClick={() => {
-                      setGlobalModal({
-                        title: `Limpar DIA ${dayIndex + 1}?`,
-                        message: "Isso removerá todas as matérias escaladas para este dia. O dia voltará a ser 'Livre'.",
-                        onConfirm: () => {
+          {cycle.map((daySubjects, dayIndex) => {
+            const dateInfo = getRelativeDateInfo(dayIndex);
+            const isTodayInCalendar = cycleScheduleType === 'weekly' && dateInfo.isToday;
+            const cardTitle = cycleScheduleType === 'weekly' 
+              ? (dateInfo.weekDayName || `Dia ${dayIndex + 1}`) 
+              : `DIA ${dayIndex + 1}`;
+
+            return (
+              <div 
+                key={dayIndex} 
+                className={`bg-slate-50 border rounded-xl flex flex-col overflow-hidden shadow-sm transition-all hover:shadow-md dark:bg-slate-950 ${
+                  isTodayInCalendar 
+                    ? 'border-blue-500 ring-2 ring-blue-400/40 dark:border-blue-500 dark:ring-blue-900/40' 
+                    : 'border-slate-300 dark:border-slate-700'
+                }`}
+              >
+                <div className={`p-2 sm:p-2.5 flex justify-between items-center border-b ${
+                  isTodayInCalendar
+                    ? 'bg-blue-100/70 border-blue-200 dark:bg-blue-950/60 dark:border-blue-900/60'
+                    : 'bg-slate-200/70 border-slate-300 dark:bg-slate-800 dark:border-slate-700'
+                }`}>
+                  <div className="flex items-center gap-1.5 min-w-0 pr-1">
+                    <span className={`font-black text-xs uppercase tracking-wider truncate ${
+                      isTodayInCalendar ? 'text-blue-700 dark:text-blue-300' : 'text-slate-700 dark:text-slate-200'
+                    }`}>
+                      {cardTitle}
+                    </span>
+                    {isTodayInCalendar && (
+                      <span className="shrink-0 bg-blue-600 text-white text-[9px] font-black px-1.5 py-0.5 rounded-full uppercase tracking-tighter">
+                        Hoje
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 shrink-0">
+                    <button 
+                      onClick={() => {
+                        setGlobalModal({
+                          title: `Limpar ${cardTitle}?`,
+                          message: "Isso removerá todas as matérias escaladas para este dia. O dia voltará a ser 'Livre / Descanso'.",
+                          onConfirm: () => {
+                            setCycle(prev => {
+                              const newCycle = [...prev];
+                              newCycle[dayIndex] = [];
+                              return newCycle;
+                            });
+                          }
+                        });
+                      }}
+                      className="p-1 text-slate-400 hover:text-orange-500 hover:bg-white dark:hover:bg-slate-800 rounded transition-colors dark:bg-slate-900" title="Limpar Dia (Tornar Livre / Descanso)"
+                    >
+                      <Sun className="w-4 h-4" />
+                    </button>
+                    <button
+                      onClick={() => {
+                        if (cycleScheduleType === 'weekly') {
+                          setGlobalModal({
+                            title: `Remover ${cardTitle}?`,
+                            message: "Em modo semanal, você pode deixar o dia livre (sem aulas) ou remover este slot do cronograma. Deseja remover o dia?",
+                            onConfirm: () => {
+                              setCycle(prev => {
+                                const newCycle = prev.filter((_, i) => i !== dayIndex);
+                                if (currentDayIndex >= newCycle.length) setCurrentDayIndex(0);
+                                return newCycle;
+                              });
+                            }
+                          });
+                        } else {
                           setCycle(prev => {
-                            const newCycle = [...prev];
-                            newCycle[dayIndex] = [];
+                            const newCycle = prev.filter((_, i) => i !== dayIndex);
+                            if (currentDayIndex >= newCycle.length) setCurrentDayIndex(0);
                             return newCycle;
                           });
                         }
-                      });
-                    }}
-                    className="p-1 text-slate-400 hover:text-orange-500 hover:bg-white dark:hover:bg-slate-800 rounded transition-colors dark:bg-slate-900" title="Limpar Dia (Livre)"
-                  >
-                    <Sun className="w-4 h-4" />
-                  </button>
-                  <button
-                    onClick={() => {
-                      setCycle(prev => {
-                        const newCycle = prev.filter((_, i) => i !== dayIndex);
-                        if (currentDayIndex >= newCycle.length) setCurrentDayIndex(0);
-                        return newCycle;
-                      });
-                    }}
-                    className="p-1 text-slate-400 hover:text-red-500 hover:bg-white dark:hover:bg-slate-800 rounded transition-colors dark:bg-slate-900" title="Remover Dia"
-                  >
-                    <Trash2 className="w-4 h-4" />
-                  </button>
-                </div>
-              </div>
-              
-              <div className="p-2 sm:p-2.5 flex flex-col gap-1.5 min-h-[120px]">
-                {daySubjects.length === 0 ? (
-                  <div className="flex-1 flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-200 rounded-lg bg-white/50 dark:bg-slate-900 dark:border-slate-800">
-                    <Sun className="w-8 h-8 text-orange-400 opacity-40 mb-2 drop-shadow-sm" />
-                    <span className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest text-center">Dia Livre / Descanso</span>
+                      }}
+                      className="p-1 text-slate-400 hover:text-red-500 hover:bg-white dark:hover:bg-slate-800 rounded transition-colors dark:bg-slate-900" title="Remover Dia"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </button>
                   </div>
-                ) : (
-                  daySubjects.map((subId, slotIndex) => {
-                    const subject = subjects[subId];
-                    return (
-                      <div key={slotIndex} className="flex items-center gap-2">
-                        <select 
-                          value={subId}
-                          onChange={(e) => {
-                            setCycle(prev => {
-                              const newCycle = [...prev];
-                              const newDay = [...newCycle[dayIndex]];
-                              if (e.target.value === '') {
-                                newCycle[dayIndex] = newDay.filter((_, i) => i !== slotIndex);
-                              } else {
-                                newDay[slotIndex] = e.target.value;
-                                newCycle[dayIndex] = newDay;
-                              }
-                              return newCycle;
-                            });
-                          }}
-                          className={`flex-1 text-[13px] font-bold p-2 rounded-md border border-slate-300 outline-none focus:ring-2 focus:ring-blue-400 shadow-sm transition-colors cursor-pointer ${subject ? subject.color : 'bg-white text-slate-900'}`}
-                        >
-                          <option value="" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">- Remover Aula -</option>
-                          {Object.values(subjects).map(s => (
-                            <option key={s.id} value={s.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">{s.name}</option>
-                          ))}
-                        </select>
-                      </div>
-                    );
-                  })
-                )}
-            
-              <button 
-                onClick={() => {
-                  if (Object.keys(subjects).length === 0) {
-                    toast.error("Cadastre pelo menos uma disciplina primeiro!");
-                    return;
-                  }
-                  setCycle(prev => {
-                    const newCycle = [...prev];
-                    const firstSub = Object.keys(subjects)[0];
-                    if (firstSub) {
-                      newCycle[dayIndex] = [...newCycle[dayIndex], firstSub];
+                </div>
+                
+                <div className="p-2 sm:p-2.5 flex flex-col gap-1.5 min-h-[120px]">
+                  {daySubjects.length === 0 ? (
+                    <div className="flex-1 flex flex-col items-center justify-center p-4 border-2 border-dashed border-slate-200 rounded-lg bg-white/50 dark:bg-slate-900 dark:border-slate-800">
+                      <Sun className="w-8 h-8 text-orange-400 opacity-40 mb-2 drop-shadow-sm" />
+                      <span className="text-[10px] sm:text-[11px] font-black text-slate-400 uppercase tracking-widest text-center">Dia Livre / Descanso</span>
+                    </div>
+                  ) : (
+                    daySubjects.map((subId, slotIndex) => {
+                      const subject = subjects[subId];
+                      return (
+                        <div key={slotIndex} className="flex items-center gap-2">
+                          <select 
+                            value={subId}
+                            onChange={(e) => {
+                              setCycle(prev => {
+                                const newCycle = [...prev];
+                                const newDay = [...newCycle[dayIndex]];
+                                if (e.target.value === '') {
+                                  newCycle[dayIndex] = newDay.filter((_, i) => i !== slotIndex);
+                                } else {
+                                  newDay[slotIndex] = e.target.value;
+                                  newCycle[dayIndex] = newDay;
+                                }
+                                return newCycle;
+                              });
+                            }}
+                            className={`flex-1 text-[13px] font-bold p-2 rounded-md border border-slate-300 outline-none focus:ring-2 focus:ring-blue-400 shadow-sm transition-colors cursor-pointer ${subject ? subject.color : 'bg-white text-slate-900'}`}
+                          >
+                            <option value="" className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">- Remover Aula -</option>
+                            {Object.values(subjects).map(s => (
+                              <option key={s.id} value={s.id} className="bg-white text-slate-900 dark:bg-slate-900 dark:text-slate-100">{s.name}</option>
+                            ))}
+                          </select>
+                        </div>
+                      );
+                    })
+                  )}
+              
+                <button 
+                  onClick={() => {
+                    if (Object.keys(subjects).length === 0) {
+                      toast.error("Cadastre pelo menos uma disciplina primeiro!");
+                      return;
                     }
-                    return newCycle;
-                  });
-                }}
-                className="mt-1 w-full py-2 border-2 border-dashed border-slate-300 bg-white text-slate-500 font-bold text-[11px] rounded-lg hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/40 transition-all flex items-center justify-center gap-1 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700"
-              >
-                <Plus className="w-3 h-3" /> Adicionar Bloco
-              </button>
+                    setCycle(prev => {
+                      const newCycle = [...prev];
+                      const firstSub = Object.keys(subjects)[0];
+                      if (firstSub) {
+                        newCycle[dayIndex] = [...newCycle[dayIndex], firstSub];
+                      }
+                      return newCycle;
+                    });
+                  }}
+                  className="mt-1 w-full py-2 border-2 border-dashed border-slate-300 bg-white text-slate-500 font-bold text-[11px] rounded-lg hover:border-blue-400 hover:text-blue-600 hover:bg-blue-50 dark:hover:bg-blue-900/40 transition-all flex items-center justify-center gap-1 dark:bg-slate-900 dark:text-slate-400 dark:border-slate-700"
+                >
+                  <Plus className="w-3 h-3" /> Adicionar Bloco
+                </button>
+              </div>
             </div>
-          </div>
-          ))}
-        {cycle.length === 0 && (
-          <div className="col-span-full text-center py-10 text-slate-400 border-2 border-dashed border-slate-200 rounded-xl dark:border-slate-800">
-            Cronograma vazio. Adicione um dia para começar.
-          </div>
-        )}
+            );
+          })}
+
+          {cycle.length === 0 && (
+            <div className="col-span-full text-center py-12 px-4 text-slate-400 border-2 border-dashed border-slate-200 rounded-xl dark:border-slate-800 flex flex-col items-center justify-center gap-3">
+              <Calendar className="w-10 h-10 text-slate-300 dark:text-slate-600 mb-1" />
+              <p className="font-bold text-slate-700 dark:text-slate-300 text-sm">
+                Nenhum dia configurado no cronograma.
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-md">
+                Você pode criar uma grade completa de Domingo a Sábado com um clique, ou adicionar dias sequenciais manualmente.
+              </p>
+              <div className="flex flex-wrap items-center justify-center gap-3 mt-2">
+                <button
+                  type="button"
+                  onClick={() => fillFullWeekCycle(cycleWeekStart || 'sunday')}
+                  className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-lg shadow-sm transition-colors flex items-center gap-2"
+                >
+                  <Calendar className="w-4 h-4" /> Criar Grade Semanal (Domingo a Sábado)
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setCycle([[]])}
+                  className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 font-bold text-xs rounded-lg transition-colors flex items-center gap-2 border border-slate-300 dark:border-slate-700"
+                >
+                  <Plus className="w-4 h-4" /> Adicionar Dia Avulso
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
 
@@ -754,6 +1127,143 @@ export default function Config({
               </div>
             </div>
 
+            {/* Velocidade de Vídeo-Aula (Aceleração Padrão) */}
+            <div className="mb-6 bg-slate-900/60 border border-slate-800 p-4 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <FastForward className="w-3.5 h-3.5 text-blue-400" /> Velocidade de Reprodução Padrão (Aceleração)
+                </label>
+                <span className="text-xs font-black text-blue-400 bg-blue-950/80 border border-blue-800 px-2 py-0.5 rounded">
+                  {draftSubject.speed || 1}x
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+                Defina em qual velocidade você assiste as videoaulas desta matéria. O sistema recalcula os tempos reais de estudo.
+              </p>
+              <div className="flex gap-2 mb-3">
+                {[1, 1.25, 1.5, 1.75, 2].map(s => {
+                  const isSel = (draftSubject.speed || 1) === s;
+                  return (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => setDraftSubject(prev => ({ ...prev, speed: s }))}
+                      className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all ${
+                        isSel
+                          ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-400'
+                          : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-white hover:border-slate-700'
+                      }`}
+                    >
+                      {s}x
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Comparativo de Tempo da Matéria */}
+              {(() => {
+                const stats = getSubjectVideoStats(draftSubject);
+                return (
+                  <div className="grid grid-cols-3 gap-2 bg-[#020617] p-2.5 rounded-lg border border-slate-800/80 text-center">
+                    <div>
+                      <span className="text-[8px] font-black text-slate-500 uppercase block">Sem Aceleração</span>
+                      <span className="text-xs font-black text-slate-300">{stats.totalFriendly}</span>
+                    </div>
+                    <div>
+                      <span className="text-[8px] font-black text-blue-400 uppercase block">Com Aceleração ({(draftSubject.speed || 1)}x)</span>
+                      <span className="text-xs font-black text-blue-400">{stats.acceleratedFriendly}</span>
+                    </div>
+                    <div>
+                      <span className="text-[8px] font-black text-emerald-400 uppercase block">Tempo Economizado</span>
+                      <span className="text-xs font-black text-emerald-400">
+                        {stats.savedSeconds > 0 ? `-${stats.savedFriendly} (${stats.percentSaved}%)` : '0m'}
+                      </span>
+                    </div>
+                  </div>
+                );
+              })()}
+            </div>
+
+            {/* Meta de Tempo por Bloco de Estudo no Ciclo */}
+            <div className="mb-6 bg-slate-900/60 border border-slate-800 p-4 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <Target className="w-3.5 h-3.5 text-emerald-400" /> Meta de Tempo por Bloco no Ciclo (Distribuição Automática)
+                </label>
+                <span className="text-xs font-black text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-2 py-0.5 rounded">
+                  {draftSubject.timeGoalMinutes > 0 ? formatMinutesToFriendly(draftSubject.timeGoalMinutes) : 'Sem meta (1 aula)'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+                Defina quanto tempo você quer estudar desta matéria em cada bloco do seu cronograma (ex: 1h30). O sistema agrupará as videoaulas calculando o tempo acelerado até completar a meta.
+              </p>
+              
+              {/* Presets Rápidos */}
+              <div className="grid grid-cols-5 gap-2 mb-3">
+                {[
+                  { label: '1 Aula', val: 0 },
+                  { label: '45m', val: 45 },
+                  { label: '1h', val: 60 },
+                  { label: '1h 30m', val: 90 },
+                  { label: '2h', val: 120 }
+                ].map(preset => {
+                  const isSel = (draftSubject.timeGoalMinutes || 0) === preset.val;
+                  return (
+                    <button
+                      key={preset.val}
+                      type="button"
+                      onClick={() => setDraftSubject(prev => ({ ...prev, timeGoalMinutes: preset.val }))}
+                      className={`py-1.5 rounded-lg text-xs font-black transition-all ${
+                        isSel
+                          ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-400'
+                          : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-white hover:border-slate-700'
+                      }`}
+                    >
+                      {preset.label}
+                    </button>
+                  );
+                })}
+              </div>
+
+              {/* Input customizado de minutos */}
+              <div className="flex items-center justify-between bg-[#020617] p-2.5 rounded-lg border border-slate-800 text-xs">
+                <span className="text-slate-400 font-bold">Tempo personalizado (em minutos):</span>
+                <div className="flex items-center gap-2">
+                  <input
+                    type="number"
+                    min="0"
+                    max="360"
+                    step="5"
+                    value={draftSubject.timeGoalMinutes || 0}
+                    onChange={(e) => {
+                      const val = Math.max(0, parseInt(e.target.value) || 0);
+                      setDraftSubject(prev => ({ ...prev, timeGoalMinutes: val }));
+                    }}
+                    className="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-center font-black text-emerald-400 outline-none focus:border-emerald-500"
+                  />
+                  <span className="text-slate-500 font-bold">min</span>
+                </div>
+              </div>
+
+              {/* Preview de quantas aulas cabem */}
+              {draftSubject.timeGoalMinutes > 0 && (() => {
+                const firstTopic = (draftSubject.topics || []).find(t => (t.lessons && t.lessons.length > 0) || t.total > 0);
+                const spd = draftSubject.speed || 1;
+                const sample = firstTopic
+                  ? calculateLessonsForGoal(firstTopic.lessons || [], 0, spd, draftSubject.timeGoalMinutes, firstTopic.total)
+                  : null;
+                return (
+                  <div className="mt-3 p-2.5 bg-emerald-950/30 border border-emerald-900/50 rounded-lg text-[11px] text-emerald-300 font-medium flex items-center gap-2">
+                    <Clock className="w-4 h-4 text-emerald-400 shrink-0" />
+                    <span>
+                      Com a meta de <strong>{formatMinutesToFriendly(draftSubject.timeGoalMinutes)}</strong> a <strong>{spd}x</strong>, 
+                      cada bloco agrupará <strong>~{sample?.count || 2} aulas</strong> no cronograma.
+                    </span>
+                  </div>
+                );
+              })()}
+            </div>
+
             {/* Assuntos */}
             <div className="mb-8">
               <div className="flex justify-between items-end mb-3 border-b border-slate-800 pb-2">
@@ -761,7 +1271,7 @@ export default function Config({
                 <button 
                   onClick={() => setDraftSubject(prev => {
                     const newTopics = [...(prev.topics || [])];
-                    newTopics.push({ id: 't' + Date.now(), name: 'NOVO ASSUNTO', total: 5, completed: 0 });
+                    newTopics.push({ id: 't' + Date.now(), name: 'NOVO ASSUNTO', total: 0, completed: 0, lessons: [] });
                     return { ...prev, topics: newTopics };
                   })}
                   className="flex items-center gap-1 text-[9px] font-black text-blue-500 bg-blue-900/30 px-2 py-1 rounded tracking-widest uppercase hover:text-white hover:bg-blue-600 transition-colors"
@@ -770,10 +1280,12 @@ export default function Config({
                 </button>
               </div>
               
-              <div className="space-y-2 max-h-40 overflow-y-auto custom-scrollbar pr-1">
+              <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar pr-1">
                 {(draftSubject.topics || []).map((topic, idx) => (
-                  <div key={topic.id} className="flex gap-3 items-center">
-                     <input 
+                  <div key={topic.id} className="bg-slate-900/60 border border-slate-800 rounded-xl p-3">
+                    {/* Linha do nome do assunto */}
+                    <div className="flex gap-2 items-center mb-2">
+                      <input 
                         type="text" 
                         value={topic.name}
                         onChange={(e) => setDraftSubject(prev => {
@@ -781,28 +1293,170 @@ export default function Config({
                           newTopics[idx] = { ...newTopics[idx], name: e.target.value };
                           return { ...prev, topics: newTopics };
                         })}
-                        className="flex-1 bg-transparent border-b border-slate-800 pb-1 font-bold text-xs text-white outline-none focus:border-blue-500 transition-colors"
+                        className="flex-1 bg-transparent border-b border-slate-700 pb-1 font-bold text-xs text-white outline-none focus:border-blue-500 transition-colors"
                         placeholder="Nome do Assunto..."
                       />
-                      <input 
-                        type="number" 
-                        value={topic.total}
-                        onChange={(e) => setDraftSubject(prev => {
-                          const newTopics = [...prev.topics];
-                          newTopics[idx] = { ...newTopics[idx], total: parseInt(e.target.value) || 0 };
-                          return { ...prev, topics: newTopics };
-                        })}
-                        className="w-12 bg-[#020617] border border-slate-800 rounded px-1 py-1 text-center text-xs font-black text-white"
-                      />
+                      {/* Botão escanear aulas */}
+                      <button
+                        onClick={() => setScannerTopicIdx(idx)}
+                        title="Adicionar aulas via Vision AI"
+                        className="flex items-center gap-1 text-[9px] font-black text-violet-400 bg-violet-900/30 px-2 py-1 rounded tracking-widest uppercase hover:text-white hover:bg-violet-600 transition-colors shrink-0"
+                      >
+                        <ScanLine className="w-3 h-3"/> Scan
+                      </button>
                       <button 
                         onClick={() => setDraftSubject(prev => ({
                           ...prev,
                           topics: prev.topics.filter((_, i) => i !== idx)
                         }))}
-                        className="p-1 text-slate-500 hover:text-red-500 transition-colors"
+                        className="p-1 text-slate-600 hover:text-red-500 transition-colors"
                       >
-                        <Trash2 className="w-4 h-4"/>
+                        <Trash2 className="w-3.5 h-3.5"/>
                       </button>
+                    </div>
+
+                    {/* Lista de aulas internas */}
+                    {(topic.lessons && topic.lessons.length > 0) ? (
+                      <div className="space-y-1 mt-2">
+                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1">
+                          <BookOpen className="w-3 h-3" /> {topic.lessons.length} aula{topic.lessons.length !== 1 ? 's' : ''} cadastrada{topic.lessons.length !== 1 ? 's' : ''}
+                        </p>
+                        {topic.lessons.map((lesson, lIdx) => {
+                          const isFirst = lIdx === 0;
+                          const isLast = lIdx === topic.lessons.length - 1;
+                          const moveLesson = (from, to) => setDraftSubject(prev => {
+                            const newTopics = [...prev.topics];
+                            const newLessons = [...(newTopics[idx].lessons || [])];
+                            const [moved] = newLessons.splice(from, 1);
+                            newLessons.splice(to, 0, moved);
+                            newTopics[idx] = { ...newTopics[idx], lessons: newLessons };
+                            return { ...prev, topics: newTopics };
+                          });
+                          const insertAfter = (afterIdx) => setDraftSubject(prev => {
+                            const newTopics = [...prev.topics];
+                            const newLessons = [...(newTopics[idx].lessons || [])];
+                            newLessons.splice(afterIdx + 1, 0, { name: 'NOVA AULA', duration: '00:00' });
+                            newTopics[idx] = { ...newTopics[idx], lessons: newLessons, total: newLessons.length };
+                            return { ...prev, topics: newTopics };
+                          });
+                          return (
+                            <div key={lIdx}>
+                              <div className="flex items-center gap-1.5 bg-slate-950/60 border border-slate-800 rounded-lg px-2 py-1.5">
+                                {/* Controles de ordem */}
+                                <div className="flex flex-col gap-0.5 shrink-0">
+                                  <button
+                                    onClick={() => moveLesson(lIdx, lIdx - 1)}
+                                    disabled={isFirst}
+                                    className="p-0.5 text-slate-600 hover:text-blue-400 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                                    title="Mover para cima"
+                                  >
+                                    <ChevronUp className="w-3 h-3" />
+                                  </button>
+                                  <button
+                                    onClick={() => moveLesson(lIdx, lIdx + 1)}
+                                    disabled={isLast}
+                                    className="p-0.5 text-slate-600 hover:text-blue-400 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                                    title="Mover para baixo"
+                                  >
+                                    <ChevronDown className="w-3 h-3" />
+                                  </button>
+                                </div>
+                                <span className="text-[9px] font-bold text-slate-600 shrink-0 w-4 text-right">{lIdx + 1}.</span>
+                                <input
+                                  type="text"
+                                  value={lesson.name}
+                                  onPaste={(e) => e.stopPropagation()}
+                                  onChange={(e) => setDraftSubject(prev => {
+                                    const newTopics = [...prev.topics];
+                                    const newLessons = [...(newTopics[idx].lessons || [])];
+                                    newLessons[lIdx] = { ...newLessons[lIdx], name: e.target.value };
+                                    newTopics[idx] = { ...newTopics[idx], lessons: newLessons, total: newLessons.length };
+                                    return { ...prev, topics: newTopics };
+                                  })}
+                                  className="flex-1 bg-transparent text-[11px] font-bold text-slate-200 outline-none border-b border-transparent focus:border-violet-500 pb-0.5 transition-colors min-w-0"
+                                />
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <input
+                                    type="text"
+                                    value={lesson.duration || '00:00'}
+                                    onPaste={(e) => e.stopPropagation()}
+                                    onChange={(e) => setDraftSubject(prev => {
+                                      const newTopics = [...prev.topics];
+                                      const newLessons = [...(newTopics[idx].lessons || [])];
+                                      newLessons[lIdx] = { ...newLessons[lIdx], duration: e.target.value };
+                                      newTopics[idx] = { ...newTopics[idx], lessons: newLessons };
+                                      return { ...prev, topics: newTopics };
+                                    })}
+                                    className="w-12 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-center text-[10px] font-mono text-emerald-400 outline-none"
+                                  />
+                                  {draftSubject.speed && draftSubject.speed > 1 && lesson.duration && lesson.duration !== '00:00' && (
+                                    <span 
+                                      className="text-[9px] font-mono font-bold text-blue-400 bg-blue-950/80 px-1 py-0.5 rounded border border-blue-900"
+                                      title={`Com aceleração de ${draftSubject.speed}x`}
+                                    >
+                                      ⚡{formatSecondsToClock(Math.round(parseDurationToSeconds(lesson.duration) / draftSubject.speed))}
+                                    </span>
+                                  )}
+                                </div>
+                                <button
+                                  onClick={() => setDraftSubject(prev => {
+                                    const newTopics = [...prev.topics];
+                                    const newLessons = (newTopics[idx].lessons || []).filter((_, i) => i !== lIdx);
+                                    newTopics[idx] = { ...newTopics[idx], lessons: newLessons, total: newLessons.length };
+                                    return { ...prev, topics: newTopics };
+                                  })}
+                                  className="p-0.5 text-slate-600 hover:text-red-400 transition-colors shrink-0"
+                                  title="Remover aula"
+                                >
+                                  <Trash2 className="w-3 h-3" />
+                                </button>
+                              </div>
+                              {/* Inserir aula abaixo deste item */}
+                              <button
+                                onClick={() => insertAfter(lIdx)}
+                                className="w-full flex items-center justify-center gap-1 text-[8px] font-black text-slate-700 hover:text-violet-400 hover:bg-violet-900/10 py-0.5 rounded transition-all group mt-0.5"
+                                title="Inserir aula aqui"
+                              >
+                                <div className="flex-1 h-px bg-slate-800 group-hover:bg-violet-800/50 transition-colors" />
+                                <Plus className="w-2.5 h-2.5" />
+                                <span className="uppercase tracking-widest">inserir aqui</span>
+                                <div className="flex-1 h-px bg-slate-800 group-hover:bg-violet-800/50 transition-colors" />
+                              </button>
+                            </div>
+                          );
+                        })}
+                        {/* Adicionar aula manual */}
+                        <button
+                          onClick={() => setDraftSubject(prev => {
+                            const newTopics = [...prev.topics];
+                            const newLessons = [...(newTopics[idx].lessons || []), { name: 'NOVA AULA', duration: '00:00' }];
+                            newTopics[idx] = { ...newTopics[idx], lessons: newLessons, total: newLessons.length };
+                            return { ...prev, topics: newTopics };
+                          })}
+                          className="flex items-center gap-1 text-[9px] font-black text-slate-500 hover:text-white px-2 py-1 rounded transition-colors mt-1"
+                        >
+                          <Plus className="w-3 h-3" /> Adicionar aula manualmente
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="flex items-center justify-between mt-2">
+                        <p className="text-[10px] text-slate-600 italic">Nenhuma aula. Use o botão Scan ou adicione manualmente.</p>
+                        <div className="flex items-center gap-1">
+                          <span className="text-[9px] text-slate-500 uppercase font-black">Qtd manual:</span>
+                          <input 
+                            type="number" 
+                            value={topic.total || 0}
+                            min={0}
+                            onChange={(e) => setDraftSubject(prev => {
+                              const newTopics = [...prev.topics];
+                              newTopics[idx] = { ...newTopics[idx], total: parseInt(e.target.value) || 0 };
+                              return { ...prev, topics: newTopics };
+                            })}
+                            className="w-12 bg-[#020617] border border-slate-800 rounded px-1 py-1 text-center text-xs font-black text-white"
+                          />
+                        </div>
+                      </div>
+                    )}
                   </div>
                 ))}
                 {(draftSubject.topics || []).length === 0 && (
@@ -822,6 +1476,9 @@ export default function Config({
                     return;
                   }
                   setSubjects(prev => ({ ...prev, [draftSubject.id]: draftSubject }));
+                  if (draftSubject.timeGoalMinutes !== undefined) {
+                    setSubjectTimeGoal(draftSubject.id, draftSubject.timeGoalMinutes || 0);
+                  }
                   setEditingSubjectId(null);
                   setDraftSubject(null);
                   toast.success("Disciplina salva com sucesso!");
@@ -843,6 +1500,38 @@ export default function Config({
           </div>
         </div>
       ), document.body)}
+
+      {/* Scanner de aulas para assunto específico */}
+      {scannerTopicIdx !== null && draftSubject && (
+        <TopicLessonScanner
+          topicName={(draftSubject.topics || [])[scannerTopicIdx]?.name || 'Assunto'}
+          onClose={() => setScannerTopicIdx(null)}
+          onConfirm={(newLessons) => {
+            setDraftSubject(prev => {
+              const newTopics = [...(prev.topics || [])];
+              const existing = newTopics[scannerTopicIdx].lessons || [];
+              const merged = [...existing, ...newLessons];
+              newTopics[scannerTopicIdx] = {
+                ...newTopics[scannerTopicIdx],
+                lessons: merged,
+                total: merged.length
+              };
+              return { ...prev, topics: newTopics };
+            });
+            setScannerTopicIdx(null);
+            toast.success(`${newLessons.length} aula(s) adicionada(s) ao assunto!`);
+          }}
+        />
+      )}
+
+      {showImportOCR && (
+        <ImportOCR
+          subjects={subjects}
+          setSubjects={setSubjects}
+          availableColors={availableColors}
+          onClose={() => setShowImportOCR(false)}
+        />
+      )}
 
     </div>
   );

@@ -1,9 +1,10 @@
 import { useStore } from '../store/useStore';
-import { Target, AlertTriangle, Activity, Trophy, ChevronRight, Flame, Layers, PlayCircle, BrainCircuit, Shuffle, CheckCircle, FileText, Save } from 'lucide-react';
+import { Target, AlertTriangle, Activity, Trophy, ChevronRight, ChevronLeft, Flame, Layers, PlayCircle, BrainCircuit, Shuffle, CheckCircle, FileText, Save, Clock, Zap, FastForward, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { useConfetti } from '../hooks/useConfetti';
 import NotesDrawer from '../components/NotesDrawer';
+import { parseDurationToSeconds, formatSecondsToClock, formatSecondsToFriendly, calculateLessonsForGoal, formatMinutesToFriendly } from '../lib/durationHelpers';
 
 export default function Ciclo() {
   const navigate = useNavigate();
@@ -23,21 +24,82 @@ export default function Ciclo() {
     setReviewModal,
     setClassConfirmModal,
     setReplaceSubjectModal,
-    saveTopicNotes
+    saveTopicNotes,
+    subjectTimeGoal,
+    cycleScheduleType,
+    cycleWeekStart,
+    setCurrentDayIndex,
+    studyHistory
   } = useStore();
+
   const pendingReviews = getPendingReviews().slice(0, 4);
+
+  // Sincroniza o dia atual quando em modo semanal
+  useEffect(() => {
+    if (cycleScheduleType === 'weekly' && cycle && cycle.length > 0) {
+      const today = new Date();
+      const currentRealDOW = today.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
+      const currentWeekIndex = (cycleWeekStart === 'monday') ? (currentRealDOW + 6) % 7 : currentRealDOW;
+      if (currentWeekIndex < cycle.length && currentDayIndex !== currentWeekIndex) {
+        setCurrentDayIndex(currentWeekIndex);
+      }
+    }
+  }, [cycleScheduleType, cycleWeekStart, cycle?.length]);
 
   const visibleDays = (() => {
     if (!cycle || cycle.length === 0) return [];
+    if (cycleScheduleType === 'weekly') {
+      return cycle.map((daySubjects, dayIndex) => ({ daySubjects, dayIndex }));
+    }
     const safeCurrentDayIndex = currentDayIndex % cycle.length;
-    const visibleCount = Math.min(5, cycle.length);
     const result = [];
-    for (let i = 0; i < visibleCount; i++) {
+    for (let i = 0; i < cycle.length; i++) {
       const dayIndex = (safeCurrentDayIndex + i) % cycle.length;
       result.push({ daySubjects: cycle[dayIndex], dayIndex });
     }
     return result;
   })();
+
+  const scrollContainerRef = useRef(null);
+
+  const scrollToDay = (index, smooth = true) => {
+    const el = document.getElementById(`cycle-day-${index}`);
+    if (el && scrollContainerRef.current) {
+      el.scrollIntoView({ behavior: smooth ? 'smooth' : 'auto', inline: 'center', block: 'nearest' });
+    }
+  };
+
+  const scrollByAmount = (amount) => {
+    if (scrollContainerRef.current) {
+      scrollContainerRef.current.scrollBy({ left: amount, behavior: 'smooth' });
+    }
+  };
+
+  // Suporte a rolagem horizontal via roda do mouse sobre o contêiner
+  useEffect(() => {
+    const container = scrollContainerRef.current;
+    if (!container) return;
+
+    const handleWheel = (e) => {
+      // Ignora se estiver rolando um sub-menu vertical interno
+      if (e.target.closest('.overflow-y-auto')) return;
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        container.scrollLeft += e.deltaY;
+      }
+    };
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, []);
+
+  // Centraliza o dia atual ao montar a página
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      scrollToDay(currentDayIndex, true);
+    }, 250);
+    return () => clearTimeout(timer);
+  }, [currentDayIndex]);
 
   const { setTriggerConfetti, ConfettiCanvas } = useConfetti();
   const prevCompletedLength = useRef(completedToday.length);
@@ -214,81 +276,428 @@ export default function Ciclo() {
         </div>
       </div>
 
-      <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider mb-4 flex items-center gap-2">
-        <Layers className="w-4 h-4" /> Fila de Conteúdo Novo / Avanço
-      </h3>
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+        <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
+          <Layers className="w-4 h-4 text-blue-500" /> Fila de Conteúdo Novo / Avanço
+          <span className="text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold ml-1">
+            {visibleDays.length} {visibleDays.length === 1 ? 'dia' : 'dias'}
+          </span>
+        </h3>
 
-      <div id="cycle-scroll-container" className="overflow-x-auto pt-2 pb-6 no-scrollbar -mx-4 px-4 sm:mx-0 sm:px-0">
-        <div className="flex gap-2.5 sm:gap-4 items-stretch w-full">
-          {visibleDays.map(({ daySubjects, dayIndex }) => {
-            const dateInfo = getRelativeDateInfo(dayIndex);
-            const isToday = dateInfo.isToday;
-            
-            return (
-              <div id={`cycle-day-${dayIndex}`} key={dayIndex} className={`flex-1 min-w-[260px] sm:min-w-0 flex flex-col rounded-2xl border-2 transition-all mt-2 ${
-                  isToday ? 'border-blue-500 bg-slate-50 shadow-lg ring-4 ring-blue-50 relative dark:bg-slate-900 dark:border-blue-600 dark:ring-blue-900/20' : 'border-slate-200 bg-white opacity-70 hover:opacity-100 scale-[0.98] hover:scale-100 dark:border-slate-800 dark:bg-slate-950'
-              }`}>
-                {isToday && (
-                   <div className="absolute -top-3.5 sm:-top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white text-[10px] sm:text-xs font-black uppercase tracking-wider px-3 sm:px-4 py-1.5 rounded-full shadow-sm z-10 border-2 border-white dark:border-slate-900 whitespace-nowrap">
-                     Ordem do Dia
-                   </div>
-                )}
+        <div className="flex items-center gap-2 self-end sm:self-auto">
+          <button 
+            type="button"
+            onClick={() => scrollToDay(currentDayIndex, true)}
+            className="px-3 py-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
+            title="Rolar direto para o dia de hoje"
+          >
+            <Calendar className="w-3.5 h-3.5" /> Ir para Hoje
+          </button>
+          <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60">
+            <button 
+              type="button"
+              onClick={() => scrollByAmount(-350)}
+              className="p-1.5 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer active:scale-95"
+              title="Rolar dias para a esquerda"
+              aria-label="Rolar dias para a esquerda"
+            >
+              <ChevronLeft className="w-4 h-4" />
+            </button>
+            <button 
+              type="button"
+              onClick={() => scrollByAmount(350)}
+              className="p-1.5 hover:bg-white dark:hover:bg-slate-700 rounded-md text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer active:scale-95"
+              title="Rolar dias para a direita"
+              aria-label="Rolar dias para a direita"
+            >
+              <ChevronRight className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      </div>
 
-                <div className={`p-2.5 sm:p-4 text-center border-b-2 flex flex-col gap-0.5 rounded-t-xl ${isToday ? 'border-blue-200 bg-blue-100/40 pt-5 sm:pt-6 dark:border-blue-900/50 dark:bg-blue-900/20' : 'border-slate-100 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-900/50'}`}>
-                  <span className={`text-[9px] sm:text-xs font-black uppercase tracking-widest ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-500'}`}>
-                    {dateInfo.title} • {dateInfo.dateStr}
-                  </span>
-                  <span className={`font-black text-lg sm:text-3xl tracking-tighter ${isToday ? 'text-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-400'}`}>
-                    DIA {dayIndex + 1}
-                  </span>
-                </div>
+      {/* Barra de atalhos rápidos para todos os dias do ciclo */}
+      <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar-x pb-2 mb-4 -mx-2 px-2 sm:mx-0 sm:px-0">
+        {visibleDays.map(({ dayIndex }) => {
+          const dateInfo = getRelativeDateInfo(dayIndex);
+          const isToday = dateInfo.isToday;
+          const isPast = dateInfo.isPast;
+          return (
+            <button
+              key={dayIndex}
+              type="button"
+              onClick={() => scrollToDay(dayIndex, true)}
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold whitespace-nowrap transition-all flex items-center gap-1.5 cursor-pointer border shrink-0 ${
+                isToday
+                  ? 'bg-blue-600 text-white border-blue-500 shadow-md ring-2 ring-blue-400/30'
+                  : isPast
+                  ? 'bg-slate-100/70 text-slate-400 border-slate-200 dark:bg-slate-900/40 dark:text-slate-500 dark:border-slate-800/80 hover:bg-slate-200 dark:hover:bg-slate-800'
+                  : 'bg-white hover:bg-slate-50 text-slate-700 border-slate-200 hover:border-slate-300 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-800 dark:hover:border-slate-700'
+              }`}
+            >
+              <span>{dateInfo.shortName || `D${dayIndex + 1}`}</span>
+              <span className={`text-[10px] ${isToday ? 'text-blue-100 font-black' : 'opacity-70'}`}>{dateInfo.dateStr}</span>
+              {isToday && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>}
+            </button>
+          );
+        })}
+      </div>
 
-                <div className="p-2 sm:p-4 flex flex-col gap-2 sm:gap-4 flex-1">
-                  {daySubjects.map((subjectId, slotIndex) => {
-                    const subject = subjects[subjectId];
-                    if (!subject) return null;
-                    const activeTopic = getActiveTopic(subjectId);
-                    const isSlotCompleted = isToday && completedToday.includes(slotIndex);
-                    
-                    return (
-                      <div key={slotIndex} className={`bg-white dark:bg-slate-900 border rounded-xl overflow-hidden flex flex-col shadow-sm transition-all ${isSlotCompleted ? 'border-emerald-200 dark:border-emerald-800 opacity-80' : isToday ? 'border-slate-300 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md' : 'border-slate-200 dark:border-slate-800'}`}>
-                        
-                        <div className={`px-2 py-1.5 sm:px-3 sm:py-2 flex justify-between items-center border-b border-black/5 ${subject.color}`}>
-                          <span className="font-black text-[9px] sm:text-xs uppercase tracking-wider truncate max-w-[70%]" title={subject.name}>{subject.name}</span>
-                          <span className="text-[8px] sm:text-[9px] font-black bg-white/30 dark:bg-slate-900/50 dark:text-white px-1 sm:px-1.5 py-0.5 rounded backdrop-blur-sm shrink-0">{subject.block || 'B?'}</span>
-                        </div>
+      <div 
+        ref={scrollContainerRef}
+        id="cycle-scroll-container" 
+        className="overflow-x-auto pt-2 pb-5 custom-scrollbar-x -mx-4 px-4 sm:mx-0 sm:px-0"
+      >
+        <div className="flex gap-2.5 sm:gap-4 items-stretch w-full min-w-max">
+          {(() => {
+            const simulatedIncrements = {};
+            return visibleDays.map(({ daySubjects, dayIndex }) => {
+              const dateInfo = getRelativeDateInfo(dayIndex);
+              const isToday = dateInfo.isToday;
+              const isPast = dateInfo.isPast;
+              
+              // Calcular tempo total do dia
+              let dayTotalSeconds = 0;
+              let dayAcceleratedSeconds = 0;
 
-                        <div className="p-2 sm:p-4 flex flex-col gap-2 sm:gap-3 flex-1 justify-center">
-                          {isSlotCompleted ? (
-                            <div className="text-center py-4 fade-in flex flex-col items-center">
-                              <CheckCircle className="w-8 h-8 text-emerald-500 mb-2" />
-                              <span className="text-xs font-black text-emerald-700 uppercase tracking-wider">Teoria Queimada!</span>
+              if (isPast) {
+                const pastMinutes = studyHistory?.[dateInfo.fullDateStr] || 0;
+                dayTotalSeconds = pastMinutes * 60;
+                dayAcceleratedSeconds = dayTotalSeconds;
+              } else {
+                const tempSim = { ...simulatedIncrements };
+                for (let i = 0; i < daySubjects.length; i++) {
+                  const subjectId = daySubjects[i];
+                  const subject = subjects[subjectId];
+                  if (!subject) continue;
+                  const isSlotCompleted = isToday && completedToday.includes(i);
+                  if (isSlotCompleted) continue;
+
+                  let tempIncrement = tempSim[subjectId] || 0;
+
+                  const topics = subject.topics || [];
+                  for (let t of topics) {
+                    const remaining = t.total - t.completed;
+                    if (tempIncrement < remaining) {
+                      const currentCompleted = t.completed + tempIncrement;
+                      const spd = Number(subject.speed) || 1;
+                      const goalMin = Number(subject.timeGoalMinutes || subjectTimeGoal?.[subjectId]) || 0;
+                      
+                      let count = 1;
+                      if (goalMin > 0) {
+                        const remainingInTopic = t.total - currentCompleted;
+                        const suggestion = calculateLessonsForGoal(t.lessons || [], currentCompleted, spd, goalMin, t.total);
+                        count = Math.min(remainingInTopic, Math.max(1, suggestion.count));
+                        dayTotalSeconds += suggestion.totalOrigSec;
+                        dayAcceleratedSeconds += suggestion.totalAccelSec;
+                      } else {
+                        const lessonEntry = t.lessons?.[currentCompleted];
+                        const durStr = lessonEntry?.duration || '';
+                        const sec = parseDurationToSeconds(durStr) || 3600;
+                        dayTotalSeconds += sec;
+                        dayAcceleratedSeconds += Math.round(sec / spd);
+                      }
+                      
+                      tempSim[subjectId] = (tempSim[subjectId] || 0) + count;
+                      break;
+                    } else {
+                      tempIncrement -= remaining;
+                    }
+                  }
+                }
+              }
+
+              const hasAcceleration = dayAcceleratedSeconds > 0 && dayAcceleratedSeconds < dayTotalSeconds;
+
+              return (
+                <div id={`cycle-day-${dayIndex}`} key={dayIndex} className={`flex-1 min-w-[290px] sm:min-w-[310px] md:min-w-[325px] max-w-[380px] flex flex-col rounded-2xl border-2 transition-all mt-2 ${
+                    isToday ? 'border-blue-500 bg-slate-50 shadow-xl ring-4 ring-blue-50 relative dark:bg-slate-900 dark:border-blue-500 dark:ring-blue-900/30' : 'border-slate-200 bg-white opacity-80 hover:opacity-100 scale-[0.99] hover:scale-100 dark:border-slate-800 dark:bg-slate-950'
+                }`}>
+                  {isToday && (
+                     <div className="absolute -top-3.5 sm:-top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white text-[10px] sm:text-xs font-black uppercase tracking-wider px-3 sm:px-4 py-1.5 rounded-full shadow-md z-10 border-2 border-white dark:border-slate-900 whitespace-nowrap">
+                       Ordem do Dia
+                     </div>
+                  )}
+
+                  <div className={`p-3 sm:p-4 text-center border-b-2 flex flex-col gap-1 rounded-t-xl ${isToday ? 'border-blue-200 bg-blue-100/40 pt-5 sm:pt-6 dark:border-blue-900/50 dark:bg-blue-950/30' : 'border-slate-100 bg-slate-50/70 dark:border-slate-800/80 dark:bg-slate-900/40'}`}>
+                    <span className={`text-[10px] sm:text-xs font-black uppercase tracking-widest ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-400'}`}>
+                      {dateInfo.title} • {dateInfo.dateStr}
+                    </span>
+                    <span className={`font-black text-xl sm:text-2xl md:text-3xl tracking-tight ${isToday ? 'text-slate-800 dark:text-white' : 'text-slate-700 dark:text-slate-300'}`}>
+                      {cycleScheduleType === 'weekly' ? (dateInfo.weekDayName || `DIA ${dayIndex + 1}`) : `DIA ${dayIndex + 1}`}
+                    </span>
+                    {isPast ? (
+                      <div className="flex flex-col items-center gap-1 mt-1">
+                        {dayTotalSeconds > 0 ? (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                            <CheckCircle className="w-3 h-3 text-emerald-500" /> Realizado ({formatSecondsToFriendly(dayTotalSeconds)})
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-300 dark:border-slate-700">
+                            Não Realizado
+                          </span>
+                        )}
+                      </div>
+                    ) : dayTotalSeconds > 0 && (
+                      <div className="flex flex-col items-center gap-1 mt-1">
+                        {hasAcceleration ? (
+                          <>
+                            <span 
+                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black shadow-xs ${
+                                isToday 
+                                  ? 'bg-blue-600 text-white' 
+                                  : 'bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-blue-300 border border-slate-300 dark:border-slate-700'
+                              }`}
+                              title={`Sem aceleração: ${formatSecondsToFriendly(dayTotalSeconds)} | Poupado: ${formatSecondsToFriendly(dayTotalSeconds - dayAcceleratedSeconds)}`}
+                            >
+                              <Zap className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                              <span>{formatSecondsToFriendly(dayAcceleratedSeconds)}</span>
+                              <span className="opacity-75 text-[9px] font-bold uppercase tracking-wider">acelerado</span>
+                            </span>
+                            <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 line-through">
+                              {formatSecondsToFriendly(dayTotalSeconds)} (1x)
+                            </span>
+                          </>
+                        ) : (
+                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black ${isToday ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/60 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-800' : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+                            <Clock className="w-3 h-3 text-yellow-500" /> {formatSecondsToFriendly(dayTotalSeconds)}
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="p-2 sm:p-4 flex flex-col gap-2 sm:gap-4 flex-1">
+                    {daySubjects.map((subjectId, slotIndex) => {
+                      const subject = subjects[subjectId];
+                      if (!subject) return null;
+
+                      if (isPast) {
+                        const pastMinutes = studyHistory?.[dateInfo.fullDateStr] || 0;
+                        const wasStudied = pastMinutes > 0;
+                        return (
+                          <div key={slotIndex} className="bg-white/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden flex flex-col shadow-xs opacity-75">
+                            <div className={`px-2.5 py-1.5 sm:px-3 sm:py-2 flex justify-between items-center border-b border-black/5 ${subject.color}`}>
+                              <span className="font-black text-[10px] sm:text-xs uppercase tracking-wider truncate max-w-[70%]" title={subject.name}>{subject.name}</span>
+                              <span className="text-[9px] font-black bg-white/30 dark:bg-slate-900/50 dark:text-white px-1.5 py-0.5 rounded backdrop-blur-sm shrink-0">{subject.block || 'B?'}</span>
                             </div>
-                          ) : activeTopic ? (
-                            <>
-                              <div className="flex justify-between items-start gap-1">
-                                <div className="flex-1">
-                                  <span className="text-[8px] sm:text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-wider block mb-0.5 flex items-center gap-1"><Flame className="w-3 h-3 text-orange-500 shrink-0"/> <span className="truncate">Assunto na Fornalha</span></span>
-                                  <p className="text-[11px] sm:text-sm font-bold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2" title={activeTopic.name}>{activeTopic.name}</p>
-                                </div>
-                                <button 
-                                  onClick={() => handleOpenNotes(subjectId, activeTopic)}
-                                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded text-slate-400 hover:text-blue-500 transition-colors shrink-0"
-                                  title="Anotações do Tópico"
-                                >
-                                  <FileText className="w-4 h-4" />
-                                </button>
+                            <div className="p-4 flex flex-col items-center justify-center text-center gap-1.5 flex-1 min-h-[140px]">
+                              {wasStudied ? (
+                                <>
+                                  <CheckCircle className="w-6 h-6 text-emerald-500 mb-1" />
+                                  <span className="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
+                                    Estudo Concluído
+                                  </span>
+                                  <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                                    {formatMinutesToFriendly(pastMinutes)} registrados neste dia
+                                  </span>
+                                </>
+                              ) : (
+                                <>
+                                  <Clock className="w-6 h-6 text-slate-400 dark:text-slate-500 mb-1" />
+                                  <span className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                                    Não Estudado
+                                  </span>
+                                  <span className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight max-w-[200px]">
+                                    A fila não avançou e começou em <strong className="text-blue-500 font-bold">Hoje</strong>.
+                                  </span>
+                                </>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      }
+                      
+                      const isSlotCompleted = isToday && completedToday.includes(slotIndex);
+                      
+                      // Simular progresso sequencial do ciclo
+                      let activeTopic = null;
+                      let activeLessonName = '';
+                      let activeLessonDuration = '';
+                      let currentCompleted = 0;
+                      let currentTotal = 0;
+                      let blockCount = 1;
+                      let blockAccelSec = 0;
+                      let blockOrigSec = 0;
+                      let plannedLessons = [];
+                      let goalMin = 0;
+                      let spd = 1;
+
+                      if (!isSlotCompleted) {
+                        const increment = simulatedIncrements[subjectId] || 0;
+                        let tempIncrement = increment;
+                        let found = false;
+
+                        const topics = subject.topics || [];
+                        for (let t of topics) {
+                          const remaining = t.total - t.completed;
+                          if (tempIncrement < remaining) {
+                            activeTopic = t;
+                            currentCompleted = t.completed + tempIncrement;
+                            currentTotal = t.total;
+                            spd = Number(subject.speed) || 1;
+                            goalMin = Number(subject.timeGoalMinutes || subjectTimeGoal?.[subjectId]) || 0;
+
+                            if (goalMin > 0) {
+                              const remainingInTopic = t.total - currentCompleted;
+                              const suggestion = calculateLessonsForGoal(t.lessons || [], currentCompleted, spd, goalMin, t.total);
+                              blockCount = Math.min(remainingInTopic, Math.max(1, suggestion.count));
+                              blockAccelSec = suggestion.totalAccelSec;
+                              blockOrigSec = suggestion.totalOrigSec;
+                              plannedLessons = suggestion.lessonsList;
+                              const firstLesson = plannedLessons[0];
+                              activeLessonName = firstLesson?.name || (t.lessons?.[currentCompleted]?.name) || `${t.name} - Aula ${currentCompleted + 1}`;
+                              activeLessonDuration = firstLesson?.durStr || (t.lessons?.[currentCompleted]?.duration) || '';
+                            } else {
+                              blockCount = 1;
+                              const lessonEntry = t.lessons?.[currentCompleted];
+                              activeLessonName = lessonEntry?.name || `${t.name} - Aula ${currentCompleted + 1}`;
+                              activeLessonDuration = lessonEntry?.duration || '';
+                              const origSec = parseDurationToSeconds(activeLessonDuration) || 3600;
+                              blockOrigSec = origSec;
+                              blockAccelSec = Math.round(origSec / spd);
+                              plannedLessons = [{
+                                index: currentCompleted,
+                                name: activeLessonName,
+                                origSec,
+                                accelSec: blockAccelSec,
+                                durStr: activeLessonDuration
+                              }];
+                            }
+
+                            found = true;
+                            break;
+                          } else {
+                            tempIncrement -= remaining;
+                          }
+                        }
+
+                        if (found) {
+                          simulatedIncrements[subjectId] = (simulatedIncrements[subjectId] || 0) + blockCount;
+                        }
+                      }
+
+                      return (
+                        <div key={slotIndex} className={`bg-white dark:bg-slate-900 border rounded-xl overflow-hidden flex flex-col shadow-sm transition-all ${isSlotCompleted ? 'border-emerald-200 dark:border-emerald-800 opacity-80' : isToday ? 'border-slate-300 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md' : 'border-slate-200 dark:border-slate-800'}`}>
+                          
+                          <div className={`px-2.5 py-1.5 sm:px-3 sm:py-2 flex justify-between items-center border-b border-black/5 ${subject.color}`}>
+                            <span className="font-black text-[10px] sm:text-xs uppercase tracking-wider truncate max-w-[70%]" title={subject.name}>{subject.name}</span>
+                            <span className="text-[9px] font-black bg-white/30 dark:bg-slate-900/50 dark:text-white px-1.5 py-0.5 rounded backdrop-blur-sm shrink-0">{subject.block || 'B?'}</span>
+                          </div>
+
+                          <div className="p-2.5 sm:p-3.5 flex flex-col gap-2.5 flex-1 justify-center">
+                            {isSlotCompleted ? (
+                              <div className="text-center py-4 fade-in flex flex-col items-center">
+                                <CheckCircle className="w-8 h-8 text-emerald-500 mb-2" />
+                                <span className="text-xs font-black text-emerald-700 uppercase tracking-wider">Teoria Queimada!</span>
                               </div>
-                              
-                              <div className="bg-slate-50 p-1.5 sm:p-2 rounded-lg border border-slate-100 dark:bg-slate-950 dark:border-slate-800">
-                                <div className="flex items-center justify-between mb-1">
-                                  <span className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase dark:text-slate-400">Teoria Restante</span>
-                                  <span className="text-[8px] sm:text-[10px] font-black text-blue-600">{activeTopic.completed}/{activeTopic.total} Aulas</span>
+                            ) : activeTopic ? (
+                              <>
+                                {/* Header do Tópico com Botão de Notas */}
+                                <div className="flex items-center justify-between gap-1.5 border-b border-slate-100 dark:border-slate-800/80 pb-1.5">
+                                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                    <Flame className="w-3.5 h-3.5 text-orange-500 shrink-0"/> 
+                                    <span className="text-[10px] sm:text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate" title={activeTopic.name}>
+                                      {activeTopic.name}
+                                    </span>
+                                  </div>
+                                  <button 
+                                    onClick={() => handleOpenNotes(subjectId, activeTopic)}
+                                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded text-slate-400 hover:text-blue-500 transition-colors shrink-0"
+                                    title="Anotações do Tópico"
+                                  >
+                                    <FileText className="w-3.5 h-3.5" />
+                                  </button>
                                 </div>
-                                <div className="w-full bg-slate-200 rounded-full h-1 dark:bg-slate-800">
-                                  <div className="bg-blue-500 h-1 rounded-full" style={{ width: `${(activeTopic.completed / activeTopic.total) * 100}%` }}></div>
+
+                                {blockCount > 1 ? (
+                                  <div className="flex flex-col gap-2">
+                                    {/* Barra de Meta e Contagem de Aulas */}
+                                    <div className="flex items-center justify-between gap-1.5 bg-slate-100/90 dark:bg-slate-800/60 p-2 rounded-lg border border-slate-200/80 dark:border-slate-700/60">
+                                      <div className="flex items-center gap-1.5 min-w-0">
+                                        <span className="text-xs font-black text-slate-800 dark:text-slate-100 whitespace-nowrap">
+                                          📚 {blockCount} Aulas
+                                        </span>
+                                        <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border border-slate-200/80 dark:border-slate-800 whitespace-nowrap">
+                                          {currentCompleted + 1} a {currentCompleted + blockCount}
+                                        </span>
+                                      </div>
+                                      {goalMin > 0 && (
+                                        <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/70 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 shrink-0 whitespace-nowrap" title={`Meta do bloco: ${goalMin} min`}>
+                                          <Target className="w-2.5 h-2.5 text-emerald-500" /> {formatMinutesToFriendly(goalMin)}
+                                        </span>
+                                      )}
+                                    </div>
+
+                                    {/* Lista das Aulas no Bloco */}
+                                    <div className="space-y-1.5 max-h-28 overflow-y-auto pr-1 custom-scrollbar">
+                                      {plannedLessons.map((pl, plIdx) => (
+                                        <div key={plIdx} className="flex items-center justify-between gap-2 text-[11px] bg-slate-50 dark:bg-slate-950/80 px-2 py-1.5 rounded-lg border border-slate-200/70 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
+                                          <span className="truncate flex-1 font-medium text-slate-700 dark:text-slate-200 text-left" title={pl.name}>
+                                            {pl.name}
+                                          </span>
+                                          <span className="font-mono font-bold text-blue-600 dark:text-blue-400 shrink-0 text-[10px] bg-blue-50 dark:bg-blue-950/80 border border-blue-100 dark:border-blue-900/60 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                            ⚡{formatSecondsToClock(pl.accelSec)}
+                                          </span>
+                                        </div>
+                                      ))}
+                                    </div>
+
+                                    {/* Barra de Tempo Total do Bloco */}
+                                    <div className="flex items-center justify-between bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 rounded-lg px-2.5 py-1.5 text-xs">
+                                      <div className="flex items-center gap-1.5 font-black text-blue-700 dark:text-blue-300">
+                                        <Zap className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500 shrink-0" />
+                                        <span>Bloco: {formatSecondsToFriendly(blockAccelSec)}</span>
+                                        <span className="text-[10px] font-bold opacity-75">({spd}x)</span>
+                                      </div>
+                                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 line-through">
+                                        {formatSecondsToFriendly(blockOrigSec)} 1x
+                                      </span>
+                                    </div>
+                                  </div>
+                                ) : (
+                                  <div className="flex flex-col gap-2">
+                                    <div>
+                                      <div className="flex items-center justify-between gap-1 mb-1">
+                                        <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded">
+                                          Aula {currentCompleted + 1}
+                                        </span>
+                                        {goalMin > 0 && (
+                                          <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/70 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 shrink-0">
+                                            <Target className="w-2.5 h-2.5 text-emerald-500" /> {formatMinutesToFriendly(goalMin)}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2" title={activeLessonName}>
+                                        {activeLessonName}
+                                      </p>
+                                    </div>
+
+                                    {activeLessonDuration && activeLessonDuration !== '00:00' && (
+                                      <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs mt-1">
+                                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1">
+                                          <Clock className="w-3.5 h-3.5 text-slate-400" /> {activeLessonDuration} (1x)
+                                        </span>
+                                        {spd > 1 && (
+                                          <span className="font-black text-blue-600 dark:text-blue-400 flex items-center gap-1 bg-blue-50 dark:bg-blue-950/80 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-900">
+                                            <Zap className="w-3 h-3 text-yellow-500 fill-yellow-500" />
+                                            {formatSecondsToClock(blockAccelSec)} ({spd}x)
+                                          </span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                                
+                                <div className="bg-slate-50 p-1.5 sm:p-2 rounded-lg border border-slate-100 dark:bg-slate-950 dark:border-slate-800 mt-0.5">
+                                  <div className="flex items-center justify-between mb-1">
+                                    <span className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase dark:text-slate-400">Teoria Restante</span>
+                                    <span className="text-[8px] sm:text-[10px] font-black text-blue-600">{currentCompleted}/{currentTotal} Aulas</span>
+                                  </div>
+                                  <div className="w-full bg-slate-200 rounded-full h-1 dark:bg-slate-800">
+                                    <div className="bg-blue-500 h-1 rounded-full" style={{ width: `${(currentCompleted / currentTotal) * 100}%` }}></div>
+                                  </div>
                                 </div>
-                              </div>
 
                               {isToday && (
                                 (() => {
@@ -305,17 +714,34 @@ export default function Ciclo() {
                                     );
                                   }
 
-                                  return (
+                                   return (
                                     <button 
-                                      onClick={() => setClassConfirmModal({ subjectId, slotIndex, topicName: activeTopic.name, maxClasses: activeTopic.total - activeTopic.completed })} 
+                                      onClick={() => {
+                                        const remainingLessons = (activeTopic.lessons || []).slice(currentCompleted, activeTopic.total);
+                                        setClassConfirmModal({ 
+                                          subjectId, 
+                                          slotIndex, 
+                                          topicName: activeTopic.name, 
+                                          maxClasses: activeTopic.total - activeTopic.completed,
+                                          lessonDuration: activeLessonDuration,
+                                          allLessonsDurations: remainingLessons.map(l => l.duration || '60:00'),
+                                          suggestedClasses: blockCount,
+                                          timeGoalMinutes: goalMin || null
+                                        });
+                                      }} 
                                       className="mt-1 flex items-center justify-center gap-1 w-full py-2 bg-slate-900 dark:bg-slate-800 hover:bg-orange-600 dark:hover:bg-orange-600 text-white rounded-lg text-[9px] sm:text-xs font-black transition-all shadow-md border border-slate-200 dark:border-slate-600 hover:border-orange-500 dark:hover:border-orange-500 hover:scale-[1.02] active:scale-95 group"
                                     >
                                       <PlayCircle className="w-3.5 h-3.5 group-hover:scale-110 transition-transform text-orange-400 group-hover:text-white shrink-0" />
-                                      <span className="truncate">Queimar Teoria (+1 FSRS)</span>
+                                      <span className="truncate">
+                                        {blockCount > 1 
+                                          ? `Queimar Bloco (${blockCount} Aulas • ${formatSecondsToFriendly(blockAccelSec)})` 
+                                          : 'Queimar Teoria (+1 FSRS)'}
+                                      </span>
                                     </button>
                                   );
                                 })()
                               )}
+
                             </>
                           ) : (
                             <div className="text-center py-2 flex flex-col items-center">
@@ -336,8 +762,9 @@ export default function Ciclo() {
                 </div>
               </div>
             );
-          })}
-        </div>
+          })
+        })()}
+      </div>
       </div>
       {/* Canvas de Confete ao bater a meta */}
       <ConfettiCanvas />

@@ -7,7 +7,7 @@ import { assetUrl } from '../lib/assets';
 import { 
   Activity, Trophy, Clock, AlertTriangle, CheckCircle, Coins, 
   Flame, ShieldCheck, Target, Pencil, Check as CheckIcon,
-  BookOpen, TrendingUp, Zap, X, Lock
+  BookOpen, TrendingUp, Zap, X, Lock, Dog
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -119,12 +119,13 @@ export default function Dashboard() {
     streakData = { currentStreak: 0 },
     reviewStats = { totalDone: 0, correct: 0, streak: 0 },
     xpHistory = [],
-    isSyncing
+    isSyncing,
+    petData
   } = useStore();
 
   useEffect(() => {
-    checkAndResetDailyMissions();
-  }, [checkAndResetDailyMissions]);
+    useStore.getState().checkAndResetDailyMissions();
+  }, []);
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(userStats?.displayName || '');
@@ -450,6 +451,50 @@ export default function Dashboard() {
 
         {/* COLUNA LATERAL */}
         <div className="space-y-8">
+          {/* WIDGET K9 COMPANHEIRO */}
+          <div 
+            onClick={() => navigate('/pet')}
+            className="glass-card rounded-[2rem] p-6 border border-blue-500/20 hover:border-blue-500/50 transition-all cursor-pointer group glow-blue relative overflow-hidden"
+          >
+            <div className="flex items-center justify-between mb-3">
+              <span className="text-[10px] font-black uppercase tracking-widest text-blue-500 flex items-center gap-1.5">
+                <Dog className="w-4 h-4" /> Mascote K9
+              </span>
+              <span className="text-[10px] font-black bg-blue-500/10 text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-500/20 uppercase">
+                Nível {petData?.level || 1}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-4">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-700 flex items-center justify-center text-3xl shadow-lg border border-amber-400/30 group-hover:scale-110 transition-transform shrink-0">
+                🐕
+              </div>
+              <div className="flex-1 min-w-0">
+                <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase truncate">
+                  {petData?.name || 'Recruta K9'}
+                </h4>
+                <p className="text-[10px] text-slate-400 font-bold uppercase mt-0.5 truncate">
+                  {(petData?.hunger || 0) < 35 
+                    ? '⚠️ Com fome, precisa de lanche!' 
+                    : petData?.isSleeping 
+                      ? '😴 Tirando uma soneca tática' 
+                      : '❤️ Motivado e pronto para a ronda!'}
+                </p>
+
+                <div className="flex items-center gap-2 mt-2">
+                  <div className="flex-1 bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                    <div 
+                      className="bg-gradient-to-r from-blue-500 to-emerald-400 h-full rounded-full transition-all" 
+                      style={{ width: `${Math.round(((petData?.hunger || 100) + (petData?.energy || 100) + (petData?.hygiene || 100) + (petData?.fun || 100)) / 4)}%` }} 
+                    />
+                  </div>
+                  <span className="text-[9px] font-black text-slate-400 shrink-0">
+                    {Math.round(((petData?.hunger || 100) + (petData?.energy || 100) + (petData?.hygiene || 100) + (petData?.fun || 100)) / 4)}%
+                  </span>
+                </div>
+              </div>
+            </div>
+          </div>
           <div className="glass-card rounded-[2rem] p-6 sm:p-8 glow-purple">
              <h3 className="font-black text-slate-800 dark:text-white uppercase text-sm mb-6 flex items-center gap-3">
                <ShieldCheck className="w-5 h-5 text-purple-500" /> Vitrine de Honra

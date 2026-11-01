@@ -75,6 +75,60 @@
   @apply bg-slate-300/60 dark:bg-slate-800/70 rounded-full hover:bg-slate-400 dark:hover:bg-slate-700 transition-colors;
 }
 
+/* Custom Horizontal Tactical Scrollbar (Barra de rolagem visível para os dias) */
+.custom-scrollbar-x {
+  scrollbar-width: thin;
+  scrollbar-color: #94a3b8 #f1f5f9;
+}
+
+:where(.dark, .dark *) .custom-scrollbar-x,
+.dark .custom-scrollbar-x {
+  scrollbar-color: #3b82f6 #0f172a;
+}
+
+.custom-scrollbar-x::-webkit-scrollbar {
+  height: 12px;
+}
+
+.custom-scrollbar-x::-webkit-scrollbar-track {
+  background: #f1f5f9;
+  border-radius: 9999px;
+  margin: 0 4px;
+}
+
+:where(.dark, .dark *) .custom-scrollbar-x::-webkit-scrollbar-track,
+.dark .custom-scrollbar-x::-webkit-scrollbar-track {
+  background: #0f172a;
+  border: 1px solid rgba(51, 65, 85, 0.6);
+}
+
+.custom-scrollbar-x::-webkit-scrollbar-thumb {
+  background: #94a3b8;
+  border-radius: 9999px;
+  cursor: grab;
+  transition: background-color 0.2s ease;
+}
+
+.custom-scrollbar-x::-webkit-scrollbar-thumb:hover {
+  background: #3b82f6;
+}
+
+.custom-scrollbar-x::-webkit-scrollbar-thumb:active {
+  cursor: grabbing;
+}
+
+:where(.dark, .dark *) .custom-scrollbar-x::-webkit-scrollbar-thumb,
+.dark .custom-scrollbar-x::-webkit-scrollbar-thumb {
+  background: #3b82f6;
+  border: 2px solid #0f172a;
+}
+
+:where(.dark, .dark *) .custom-scrollbar-x::-webkit-scrollbar-thumb:hover,
+.dark .custom-scrollbar-x::-webkit-scrollbar-thumb:hover {
+  background: #60a5fa;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+}
+
 /* Hidden scrollbars but maintaining functionality */
 .no-scrollbar::-webkit-scrollbar {
   display: none;

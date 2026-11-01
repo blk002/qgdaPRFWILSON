@@ -1,0 +1,51 @@
+{
+  "manifest_version": 3,
+  "name": "QG da PRF — Rastreador Caveira",
+  "version": "1.0.0",
+  "description": "Rastreia e diagnostica cada questão resolvida no Projeto Caveira, sincronizando pontos fortes e fracos no QG da PRF.",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://*.projetocaveira.com.br/*",
+    "*://projetocaveira.com.br/*",
+    "http://localhost:*/*",
+    "https://blk002.github.io/qgdaPRFWILSON/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "QG da PRF — Rastreador Caveira",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": [
+        "*://*.projetocaveira.com.br/*",
+        "*://projetocaveira.com.br/*"
+      ],
+      "js": ["content.js"],
+      "css": ["content.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "http://localhost:*/*",
+        "https://blk002.github.io/qgdaPRFWILSON/*"
+      ],
+      "js": ["qg_bridge.js"],
+      "run_at": "document_idle"
+    }
+  ]
+}

@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 
 export function useConfetti() {
   const [triggerConfetti, setTriggerConfetti] = useState(false);
@@ -76,7 +76,7 @@ export function useConfetti() {
     };
   }, [triggerConfetti]);
 
-  const ConfettiCanvas = () => {
+  const ConfettiCanvas = useCallback(() => {
     if (!triggerConfetti) return null;
     return (
       <canvas 
@@ -84,7 +84,7 @@ export function useConfetti() {
         className="fixed inset-0 pointer-events-none z-50 w-full h-full"
       />
     );
-  };
+  }, [triggerConfetti]);
 
   return { triggerConfetti, setTriggerConfetti, ConfettiCanvas };
 }

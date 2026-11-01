@@ -15,13 +15,29 @@ createRoot(document.getElementById('root')).render(
   </StrictMode>,
 )
 
-// Registrar o Service Worker para suporte offline e PWA
+// Gerenciamento de Service Worker
 if ('serviceWorker' in navigator) {
-  window.addEventListener('load', () => {
-    navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`)
-      .then(reg => console.log('Service Worker registrado com sucesso:', reg.scope))
-      .catch(err => console.error('Erro ao registrar o Service Worker:', err));
-  });
+  if (import.meta.env.DEV) {
+    // Em desenvolvimento local, desregistra Service Worker e limpa caches para nunca travar em código antigo
+    navigator.serviceWorker.getRegistrations().then(registrations => {
+      for (const reg of registrations) {
+        reg.unregister();
+      }
+    });
+    if ('caches' in window) {
+      caches.keys().then(names => {
+        for (const name of names) {
+          caches.delete(name);
+        }
+      });
+    }
+  } else {
+    window.addEventListener('load', () => {
+      navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`)
+        .then(reg => console.log('Service Worker registrado com sucesso:', reg.scope))
+        .catch(err => console.error('Erro ao registrar o Service Worker:', err));
+    });
+  }
 }
 
 

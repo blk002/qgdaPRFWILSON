@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 128 128" width="128" height="128">
+  <defs>
+    <linearGradient id="grad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" stop-color="#0f172a"/>
+      <stop offset="50%" stop-color="#1e293b"/>
+      <stop offset="100%" stop-color="#0284c7"/>
+    </linearGradient>
+  </defs>
+  <rect width="128" height="128" rx="28" fill="url(#grad)" stroke="#38bdf8" stroke-width="3"/>
+  <circle cx="64" cy="64" r="44" fill="none" stroke="#38bdf8" stroke-width="2" stroke-dasharray="6,4" opacity="0.6"/>
+  <line x1="64" y1="12" x2="64" y2="28" stroke="#38bdf8" stroke-width="3" stroke-linecap="round"/>
+  <line x1="64" y1="100" x2="64" y2="116" stroke="#38bdf8" stroke-width="3" stroke-linecap="round"/>
+  <line x1="12" y1="64" x2="28" y2="64" stroke="#38bdf8" stroke-width="3" stroke-linecap="round"/>
+  <line x1="100" y1="64" x2="116" y2="64" stroke="#38bdf8" stroke-width="3" stroke-linecap="round"/>
+  <!-- Caveira Tática -->
+  <path d="M64 34 C46 34 36 48 36 64 C36 75 43 83 49 87 L49 96 L79 96 L79 87 C85 83 92 75 92 64 C92 48 82 34 64 34 Z" fill="#f8fafc"/>
+  <ellipse cx="53" cy="62" rx="7" ry="9" fill="#0f172a"/>
+  <ellipse cx="75" cy="62" rx="7" ry="9" fill="#0f172a"/>
+  <polygon points="64,70 60,79 68,79" fill="#0f172a"/>
+  <line x1="56" y1="90" x2="56" y2="96" stroke="#0f172a" stroke-width="2"/>
+  <line x1="64" y1="90" x2="64" y2="96" stroke="#0f172a" stroke-width="2"/>
+  <line x1="72" y1="90" x2="72" y2="96" stroke="#0f172a" stroke-width="2"/>
+  <!-- Estrela PRF -->
+  <polygon points="64,22 66,27 71,27 67,30 68,35 64,32 60,35 61,30 57,27 62,27" fill="#fbbf24"/>
+</svg>

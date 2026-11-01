@@ -1,28 +1,113 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { Play } from 'lucide-react';
+import { Play, FastForward, Clock, Zap, Target } from 'lucide-react';
+import { parseDurationToSeconds, calculateSpeedComparison, formatSecondsToFriendly, calculateLessonsForGoal } from '../lib/durationHelpers';
 
-export default function ClassCompletionModal({ isOpen, onClose, onConfirm, topicName, maxClasses }) {
-  const [numClasses, setNumClasses] = useState(1);
+export default function ClassCompletionModal({ 
+  isOpen, 
+  onClose, 
+  onConfirm, 
+  topicName, 
+  maxClasses,
+  subjectSpeed = 1,
+  lessonDuration = '',
+  allLessonsDurations = [],
+  suggestedClasses = null,
+  timeGoalMinutes = null
+}) {
+  const initialCount = suggestedClasses ? Math.min(suggestedClasses, maxClasses) : 1;
+  const [numClasses, setNumClasses] = useState(initialCount);
+  const [speed, setSpeed] = useState(Number(subjectSpeed) || 1);
+
+  // Sincroniza velocidade e sugestão quando a matéria mudar ou modal abrir
+  useEffect(() => {
+    if (subjectSpeed) setSpeed(Number(subjectSpeed) || 1);
+    const suggested = suggestedClasses ? Math.min(suggestedClasses, maxClasses) : 1;
+    setNumClasses(suggested);
+  }, [subjectSpeed, isOpen, suggestedClasses, maxClasses]);
+
+  const handleSpeedChange = (newSpeed) => {
+    setSpeed(newSpeed);
+    if (timeGoalMinutes && allLessonsDurations && allLessonsDurations.length > 0) {
+      const recalculated = calculateLessonsForGoal(allLessonsDurations, 0, newSpeed, timeGoalMinutes, maxClasses);
+      if (recalculated?.count) {
+        setNumClasses(Math.min(recalculated.count, maxClasses));
+      }
+    }
+  };
 
   if (!isOpen) return null;
 
-  const currentNum = Number(numClasses) || 0;
+  const currentNum = Math.max(1, Number(numClasses) || 1);
+  const speeds = [1, 1.25, 1.5, 1.75, 2];
+
+  // Cálculo da duração total das aulas selecionadas
+  let totalOriginalSec = 0;
+  if (allLessonsDurations && allLessonsDurations.length > 0) {
+    for (let i = 0; i < currentNum; i++) {
+      const dur = allLessonsDurations[i];
+      const sec = parseDurationToSeconds(dur);
+      totalOriginalSec += sec > 0 ? sec : 3600;
+    }
+  } else if (lessonDuration) {
+    const sec = parseDurationToSeconds(lessonDuration);
+    totalOriginalSec = (sec > 0 ? sec : 3600) * currentNum;
+  } else {
+    totalOriginalSec = 3600 * currentNum;
+  }
+
+  const comparison = calculateSpeedComparison(totalOriginalSec, speed);
+  const goalSec = timeGoalMinutes ? timeGoalMinutes * 60 : 0;
+  const overGoal = goalSec > 0 && comparison.acceleratedSeconds > goalSec;
+  const underGoal = goalSec > 0 && comparison.acceleratedSeconds < goalSec * 0.9;
 
   return createPortal(
     <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[110] p-4 fade-in font-sans">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-sm w-full p-8 text-center border border-slate-200 dark:border-slate-800 relative overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-sm w-full p-6 sm:p-8 text-center border border-slate-200 dark:border-slate-800 relative overflow-hidden">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-emerald-500 to-blue-500 opacity-50"></div>
         
-        <div className="w-16 h-16 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full mx-auto mb-4 flex items-center justify-center">
-          <Play className="w-8 h-8 fill-current" />
+        <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full mx-auto mb-3 flex items-center justify-center shadow-inner">
+          <Play className="w-7 h-7 fill-current ml-0.5" />
         </div>
         
         <h3 className="text-xl font-black mb-1 text-slate-800 dark:text-slate-100 tracking-tight uppercase">Queimar Teoria?</h3>
-        <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-6">Matéria: {topicName}</p>
+        <p className="text-[10px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest mb-4 truncate px-2" title={topicName}>
+          Matéria: {topicName}
+        </p>
 
-        <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 mb-6">
-          <div className="flex justify-between items-center mb-4">
+        {/* Banner de Meta por Bloco */}
+        {timeGoalMinutes && suggestedClasses && (
+          <div className={`mb-4 p-3 rounded-xl border text-left flex items-start gap-2.5 ${
+            overGoal
+              ? 'bg-amber-50 dark:bg-amber-950/30 border-amber-200 dark:border-amber-800'
+              : 'bg-emerald-50 dark:bg-emerald-950/30 border-emerald-200 dark:border-emerald-800'
+          }`}>
+            <Target className={`w-4 h-4 mt-0.5 shrink-0 ${overGoal ? 'text-amber-500' : 'text-emerald-500'}`} />
+            <div className="flex-1">
+              <p className={`text-[10px] font-black uppercase tracking-wider mb-0.5 ${overGoal ? 'text-amber-700 dark:text-amber-400' : 'text-emerald-700 dark:text-emerald-400'}`}>
+                Meta por Bloco: {timeGoalMinutes >= 60 ? `${Math.floor(timeGoalMinutes/60)}h${timeGoalMinutes%60>0?` ${timeGoalMinutes%60}m`:''}` : `${timeGoalMinutes}m`}
+              </p>
+              <p className="text-[10px] text-slate-600 dark:text-slate-400 font-medium leading-snug">
+                {overGoal
+                  ? `⚠️ ${currentNum} aula${currentNum>1?'s':''} ultrapassa a meta. Sugestão: ${suggestedClasses} aula${suggestedClasses>1?'s':''}.`
+                  : `✅ ${suggestedClasses} aula${suggestedClasses>1?'s':''} cabem perfeitamente na sua meta de tempo.`
+                }
+              </p>
+            </div>
+            {currentNum !== suggestedClasses && (
+              <button
+                onClick={() => setNumClasses(Math.min(suggestedClasses, maxClasses))}
+                className="shrink-0 text-[9px] font-black text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/40 border border-blue-200 dark:border-blue-800 px-2 py-1 rounded-lg hover:bg-blue-200 dark:hover:bg-blue-900 transition-colors uppercase"
+              >
+                Usar {suggestedClasses}
+              </button>
+            )}
+          </div>
+        )}
+
+        {/* Quantidade de Aulas */}
+        <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 mb-4">
+          <div className="flex justify-between items-center mb-3">
             <span className="text-[10px] font-black text-slate-500 uppercase">Quantidade de Aulas</span>
             <input 
               type="number" 
@@ -51,12 +136,12 @@ export default function ClassCompletionModal({ isOpen, onClose, onConfirm, topic
             type="range" 
             min="1" 
             max={maxClasses} 
-            value={Number(numClasses) || 1}
-            onChange={(e) => setNumClasses(parseInt(e.target.value))}
-            className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full appearance-none cursor-pointer accent-blue-600 mb-6"
+            value={currentNum}
+            onChange={(e) => setNumClasses(parseInt(e.target.value) || 1)}
+            className="w-full h-2 bg-slate-200 dark:bg-slate-800 rounded-full appearance-none cursor-pointer accent-blue-600 mb-4"
           />
 
-          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-slate-800">
+          <div className="grid grid-cols-2 gap-3 pt-2 border-t border-slate-200 dark:border-slate-800 text-center">
             <div className="flex flex-col items-center">
               <span className="text-[8px] font-black text-slate-400 uppercase">Ganho Total XP</span>
               <span className="text-sm font-black text-emerald-600">+{currentNum * 100}</span>
@@ -68,13 +153,87 @@ export default function ClassCompletionModal({ isOpen, onClose, onConfirm, topic
           </div>
         </div>
 
-        <div className="flex flex-col gap-3">
+        {/* Velocidade de Reprodução */}
+        <div className="bg-slate-50 dark:bg-slate-950 p-4 rounded-2xl border border-slate-100 dark:border-slate-800 mb-5">
+          <div className="flex items-center justify-between mb-2.5">
+            <div className="flex items-center gap-1.5">
+              <FastForward className="w-4 h-4 text-blue-500" />
+              <span className="text-[10px] font-black text-slate-500 uppercase">Velocidade do Vídeo</span>
+            </div>
+            <span className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/40 px-2 py-0.5 rounded-full">
+              {speed}x
+            </span>
+          </div>
+
+          <div className="flex justify-center gap-1.5 mb-3">
+            {speeds.map(s => (
+              <button
+                key={s}
+                type="button"
+                onClick={() => handleSpeedChange(s)}
+                className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all ${
+                  speed === s 
+                    ? 'bg-blue-600 text-white shadow-md shadow-blue-500/30 ring-2 ring-blue-400' 
+                    : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-500 dark:text-slate-400 hover:border-slate-400'
+                }`}
+              >
+                {s}x
+              </button>
+            ))}
+          </div>
+
+          {/* Comparativo de Tempo com e sem Aceleração */}
+          <div className="bg-white dark:bg-slate-900 p-2.5 rounded-xl border border-slate-200/80 dark:border-slate-800 text-left">
+            <div className="flex items-center justify-between text-[11px] mb-1">
+              <span className="text-slate-500 font-bold flex items-center gap-1">
+                <Clock className="w-3 h-3 text-slate-400" /> Sem Aceleração (1x):
+              </span>
+              <span className="font-mono font-bold text-slate-700 dark:text-slate-300">
+                {comparison.originalFriendly}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between text-[11px] pt-1 border-t border-slate-100 dark:border-slate-800/80">
+              <span className="text-blue-600 dark:text-blue-400 font-black flex items-center gap-1">
+                <Zap className="w-3 h-3 text-yellow-500 fill-yellow-500" /> Com Aceleração ({speed}x):
+              </span>
+              <span className="font-mono font-black text-blue-600 dark:text-blue-400">
+                {comparison.acceleratedFriendly}
+              </span>
+            </div>
+
+            {/* Indicador visual se ultrapassou a meta */}
+            {goalSec > 0 && (
+              <div className={`mt-1.5 pt-1 border-t border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-between text-[10px]`}>
+                <span className={`font-extrabold uppercase tracking-tight ${overGoal ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                  {overGoal ? '⚠️ Acima da meta:' : '🎯 Meta do bloco:'}
+                </span>
+                <span className={`font-black ${overGoal ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                  {formatSecondsToFriendly(goalSec)} {overGoal ? `(+${formatSecondsToFriendly(comparison.acceleratedSeconds - goalSec)})` : '✓'}
+                </span>
+              </div>
+            )}
+
+            {speed > 1 && (
+              <div className="mt-1.5 pt-1 border-t border-dashed border-slate-200 dark:border-slate-800 flex items-center justify-between text-[10px]">
+                <span className="text-emerald-600 dark:text-emerald-400 font-extrabold uppercase tracking-tight">
+                  🚀 Economia Real:
+                </span>
+                <span className="font-black text-emerald-600 dark:text-emerald-400">
+                  -{comparison.savedFriendly} ({comparison.percentSaved}%)
+                </span>
+              </div>
+            )}
+          </div>
+        </div>
+
+        <div className="flex flex-col gap-2.5">
           <button 
-            onClick={() => onConfirm(currentNum || 1)}
+            onClick={() => onConfirm(currentNum, speed)}
             disabled={!numClasses}
-            className="w-full py-4 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all transform active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2"
+            className="w-full py-3.5 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all transform active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 text-xs uppercase tracking-wider"
           >
-            CONFIRMAR {currentNum || 1} AULAS
+            CONFIRMAR {currentNum} {currentNum === 1 ? 'AULA' : 'AULAS'} ({comparison.acceleratedFriendly})
           </button>
           <button 
             onClick={onClose}

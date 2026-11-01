@@ -17,8 +17,9 @@ const Revisoes = React.lazy(() => import('./pages/Revisoes'));
 const Ciclo = React.lazy(() => import('./pages/Ciclo'));
 const Calendario = React.lazy(() => import('./pages/Calendario'));
 const Config = React.lazy(() => import('./pages/Config'));
-const PortuguesSintaxe = React.lazy(() => import('./pages/PortuguesSintaxe'));
-const Hoje = React.lazy(() => import('./pages/Hoje'));
+const Pet = React.lazy(() => import('./pages/Pet'));
+const RaioXCaveira = React.lazy(() => import('./pages/RaioXCaveira'));
+
 import { Routes, Route, Link, NavLink, useLocation } from 'react-router-dom';
 import { Toaster, toast } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
@@ -26,7 +27,7 @@ import {
   Search, Library, Clock, Calendar as CalendarIcon, Repeat, Dumbbell, 
   Target as TargetIcon, BarChart2, Store, Settings, Award, BrainCircuit, 
   X, Check, ArrowRight, ShieldCheck, Trophy, Sun, Moon, Coins, 
-  AlertTriangle, Info, LogOut, Shield, RefreshCw 
+  AlertTriangle, Info, LogOut, Shield, RefreshCw, Dog, Skull 
 } from 'lucide-react';
 import { PATENTES } from './hooks/useGamification';
 
@@ -100,9 +101,9 @@ export default function App() {
   // Sincronizar o tema de cores ativo
   useEffect(() => {
     if (activeTheme) {
-      applyTheme(activeTheme);
+      useStore.getState().applyTheme(activeTheme);
     }
-  }, [activeTheme, applyTheme]);
+  }, [activeTheme]);
 
   // --- PUSH NOTIFICATIONS (Local Simulation) ---
   useEffect(() => {
@@ -184,7 +185,9 @@ export default function App() {
 
   // --- MONITOR DE PROMOÇÃO ---
   useEffect(() => {
-    const currentP = getCurrentPatente();
+    const currentP = useStore.getState().getCurrentPatente();
+    if (!currentP) return;
+
     if (!lastPatenteId.current) {
       lastPatenteId.current = currentP.id;
       return;
@@ -196,11 +199,11 @@ export default function App() {
       
       if (newIdx > oldIdx) {
         setPromotionModal(currentP);
-        playSound('levelUp');
+        useStore.getState().playSound('levelUp');
       }
       lastPatenteId.current = currentP.id;
     }
-  }, [userStats.xp, getCurrentPatente, playSound]);
+  }, [userStats?.xp]);
 
   if (!session) {
     return <Login />;
@@ -211,14 +214,16 @@ export default function App() {
 
   const tabs = [
     { id: '/', label: 'Carreira', icon: Award },
-    { id: '/hoje', label: 'Hoje', icon: ShieldCheck },
+
     { id: '/revisoes', label: 'Revisões', icon: BrainCircuit, count: allDueToday.length },
-    { id: '/sintaxe', label: 'Sintaxe (PT)', icon: Library },
+
     { id: '/ciclo', label: 'Ciclo', icon: Repeat },
     { id: '/calendario', label: 'Calendário', icon: CalendarIcon },
     { id: '/taf', label: 'Treino TAF', icon: Dumbbell },
     { id: '/simulados', label: 'Simulados', icon: TargetIcon },
     { id: '/estatisticas', label: 'Estatísticas', icon: BarChart2 },
+    { id: '/caveira', label: 'Raio-X Caveira', icon: Skull },
+    { id: '/pet', label: 'Mascote K9', icon: Dog },
     { id: '/loja', label: 'Loja', icon: Store },
     { id: '/config', label: 'Ajustes', icon: Settings },
   ];
@@ -337,14 +342,16 @@ export default function App() {
             }>
               <Routes location={location}>
                 <Route path="/" element={<Dashboard />} />
-                <Route path="/hoje" element={<Hoje />} />
+
                 <Route path="/revisoes" element={<Revisoes />} />
-                <Route path="/sintaxe" element={<PortuguesSintaxe />} />
+
                 <Route path="/ciclo" element={<Ciclo />} />
                 <Route path="/calendario" element={<Calendario />} />
                 <Route path="/taf" element={<TreinoTAF />} />
                 <Route path="/simulados" element={<Simulados />} />
                 <Route path="/estatisticas" element={<Estatisticas />} />
+                <Route path="/caveira" element={<RaioXCaveira />} />
+                <Route path="/pet" element={<Pet />} />
                 <Route path="/loja" element={<Loja />} />
                 <Route path="/config" element={<Config availableColors={availableColors} />} />
               </Routes>
@@ -472,9 +479,14 @@ export default function App() {
         isOpen={Boolean(classConfirmModal)}
         topicName={classConfirmModal?.topicName}
         maxClasses={classConfirmModal?.maxClasses}
+        subjectSpeed={subjects[classConfirmModal?.subjectId]?.speed || 1}
+        lessonDuration={classConfirmModal?.lessonDuration}
+        allLessonsDurations={classConfirmModal?.allLessonsDurations}
+        suggestedClasses={classConfirmModal?.suggestedClasses || null}
+        timeGoalMinutes={classConfirmModal?.timeGoalMinutes || null}
         onClose={() => setClassConfirmModal(null)}
-        onConfirm={(amount) => {
-          watchClass(classConfirmModal.subjectId, classConfirmModal.slotIndex, amount);
+        onConfirm={(amount, speed) => {
+          watchClass(classConfirmModal.subjectId, classConfirmModal.slotIndex, amount, speed);
           setClassConfirmModal(null);
         }}
       />

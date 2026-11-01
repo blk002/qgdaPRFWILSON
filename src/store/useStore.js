@@ -2,6 +2,7 @@ import { create } from 'zustand';
 import { supabase } from '../lib/supabaseClient';
 import { toast } from 'sonner';
 import { PATENTES, MEDALHAS } from '../hooks/useGamification';
+import { PET_FOODS, PET_LEVELS } from '../data/petConstants';
 
 export const THEME_DEFINITIONS = {
   blue: {
@@ -142,7 +143,35 @@ export const getCleanInitialState = () => ({
   unlockedThemes: ['blue'],
   dailyGoalMinutes: 240,
   subjectGoals: {},
+  subjectTimeGoal: {},
   pushSettings: { enabled: false, streakWarning: true, reviewsPending: true },
+  cycleScheduleType: 'weekly',
+  cycleWeekStart: 'sunday',
+  cycleDayNames: [],
+  petData: {
+    name: 'Recruta K9',
+    hunger: 85,
+    energy: 90,
+    hygiene: 85,
+    fun: 80,
+    level: 1,
+    xp: 0,
+    isSleeping: false,
+    skin: 'caramel',
+    hat: 'none',
+    outfit: 'none',
+    unlockedItems: ['skin:caramel', 'hat:none', 'outfit:none'],
+    foodInventory: {
+      coffee: 3,
+      pao_de_queijo: 4,
+      energy_drink: 2,
+      steak_k9: 2,
+      donut: 3
+    },
+    totalCareCount: 0,
+    lastTick: Date.now()
+  },
+  caveiraQuestions: [],
 });
 
 // Fonte única de verdade das chaves persistidas (nuvem, backup local,
@@ -156,7 +185,8 @@ export const PERSISTED_KEYS = [
   'seasonalData', 'weeklyMissions', 'studyHistory',
   'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate', 'pushEnabled', 'pushTime',
   'enableSounds', 'activeBoosts', 'dailyReviewStats', 'syntaxLevel',
-  'activeTheme', 'unlockedThemes', 'dailyGoalMinutes', 'subjectGoals', 'pushSettings'
+  'activeTheme', 'unlockedThemes', 'dailyGoalMinutes', 'subjectGoals', 'subjectTimeGoal', 'pushSettings',
+  'cycleScheduleType', 'cycleWeekStart', 'cycleDayNames', 'petData', 'caveiraQuestions'
 ];
 
 export const useStore = create(
@@ -266,6 +296,12 @@ export const useStore = create(
             if (!cleanData.pushSettings) {
               cleanData.pushSettings = { enabled: false, streakWarning: true, reviewsPending: true };
             }
+            if (!cleanData.petData) {
+              cleanData.petData = getCleanInitialState().petData;
+            }
+            if (!cleanData.caveiraQuestions) {
+              cleanData.caveiraQuestions = [];
+            }
             
             set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false, lastSyncedAt: remoteUpdatedAt });
             get().checkAndResetWeekly();
@@ -294,6 +330,12 @@ export const useStore = create(
                 const cleanData = latestBackup.data;
                 if (cleanData.calendarDate) cleanData.calendarDate = new Date(cleanData.calendarDate);
                 if (cleanData.reviewCalendarDate) cleanData.reviewCalendarDate = new Date(cleanData.reviewCalendarDate);
+                if (!cleanData.petData) {
+                  cleanData.petData = getCleanInitialState().petData;
+                }
+                if (!cleanData.caveiraQuestions) {
+                  cleanData.caveiraQuestions = [];
+                }
                 
                 set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false });
                 get().checkAndResetWeekly();
@@ -403,7 +445,65 @@ export const useStore = create(
 
       // --- SETTERS BÁSICOS ---
       setSubjects: (subjects) => set((state) => ({ subjects: typeof subjects === 'function' ? subjects(state.subjects) : subjects })),
+      setSubjectSpeed: (subjectId, speed) => set((state) => {
+        const sub = state.subjects[subjectId];
+        if (!sub) return state;
+        return {
+          subjects: {
+            ...state.subjects,
+            [subjectId]: {
+              ...sub,
+              speed: Number(speed) || 1
+            }
+          }
+        };
+      }),
       setCycle: (cycle) => set((state) => ({ cycle: typeof cycle === 'function' ? cycle(state.cycle) : cycle })),
+      setCycleScheduleType: (cycleScheduleType) => set({ cycleScheduleType }),
+      setCycleWeekStart: (cycleWeekStart) => set({ cycleWeekStart }),
+      setCycleDayNames: (cycleDayNames) => set((state) => ({ 
+        cycleDayNames: typeof cycleDayNames === 'function' ? cycleDayNames(state.cycleDayNames || []) : cycleDayNames 
+      })),
+      fillFullWeekCycle: (weekStart = null) => {
+        const state = get();
+        const start = weekStart || state.cycleWeekStart || 'sunday';
+        const current = [...(state.cycle || [])];
+        const newCycle = [];
+        for (let i = 0; i < 7; i++) {
+          newCycle.push(current[i] || []);
+        }
+        set({
+          cycle: newCycle,
+          cycleScheduleType: 'weekly',
+          cycleWeekStart: start
+        });
+      },
+      getWeekdayName: (dayIndex) => {
+        const { cycleWeekStart, cycleDayNames } = get();
+        if (cycleDayNames && cycleDayNames[dayIndex]) {
+          return cycleDayNames[dayIndex];
+        }
+        const fullNamesSunday = [
+          'Domingo',
+          'Segunda-feira',
+          'Terça-feira',
+          'Quarta-feira',
+          'Quinta-feira',
+          'Sexta-feira',
+          'Sábado'
+        ];
+        const fullNamesMonday = [
+          'Segunda-feira',
+          'Terça-feira',
+          'Quarta-feira',
+          'Quinta-feira',
+          'Sexta-feira',
+          'Sábado',
+          'Domingo'
+        ];
+        const list = cycleWeekStart === 'monday' ? fullNamesMonday : fullNamesSunday;
+        return list[dayIndex % 7] || `Dia ${dayIndex + 1}`;
+      },
       setCoins: (coins) => set((state) => ({ coins: typeof coins === 'function' ? coins(state.coins) : coins })),
       setUserStats: (userStats) => set((state) => ({ userStats: typeof userStats === 'function' ? userStats(state.userStats) : userStats })),
       setStreakData: (streakData) => set((state) => ({ streakData: typeof streakData === 'function' ? streakData(state.streakData) : streakData })),
@@ -520,6 +620,334 @@ export const useStore = create(
         }
       },
 
+      // --- SISTEMA MASCOTE K9 / POU TÁTICO ---
+      feedPet: (foodId) => {
+        const food = PET_FOODS.find(f => f.id === foodId);
+        if (!food) return false;
+
+        const { petData, playSound } = get();
+        const currentInv = petData?.foodInventory?.[foodId] || 0;
+        
+        let newInv = { ...(petData?.foodInventory || {}) };
+        if (currentInv > 0) {
+          newInv[foodId] = currentInv - 1;
+        }
+
+        const newHunger = Math.min(100, (petData?.hunger || 0) + food.hunger);
+        const newEnergy = Math.min(100, (petData?.energy || 0) + food.energy);
+        const newXp = (petData?.xp || 0) + 15;
+        
+        let newLevel = petData?.level || 1;
+        const nextLvl = PET_LEVELS.find(l => l.level === newLevel + 1);
+        if (nextLvl && newXp >= nextLvl.minXp) {
+          newLevel += 1;
+          playSound('levelUp');
+          toast.success(`🎉 O ${petData?.name || 'Mascote'} subiu para a patente: ${nextLvl.name}!`);
+        } else {
+          playSound('click');
+        }
+
+        set({
+          petData: {
+            ...petData,
+            hunger: newHunger,
+            energy: newEnergy,
+            xp: newXp,
+            level: newLevel,
+            foodInventory: newInv,
+            totalCareCount: (petData?.totalCareCount || 0) + 1
+          }
+        });
+        return true;
+      },
+
+      buyPetFood: (foodId, count = 1) => {
+        const food = PET_FOODS.find(f => f.id === foodId);
+        if (!food) return false;
+        const totalCost = food.cost * count;
+        const { coins, petData, setCoins, playSound } = get();
+        if (coins < totalCost) return false;
+
+        setCoins(c => c - totalCost);
+        playSound('coin');
+
+        const currentInv = petData?.foodInventory?.[foodId] || 0;
+        const newInv = {
+          ...(petData?.foodInventory || {}),
+          [foodId]: currentInv + count
+        };
+
+        set({
+          petData: {
+            ...petData,
+            foodInventory: newInv
+          }
+        });
+        return true;
+      },
+
+      washPet: () => {
+        const { petData, playSound } = get();
+        playSound('click');
+        const newXp = (petData?.xp || 0) + 10;
+        let newLevel = petData?.level || 1;
+        const nextLvl = PET_LEVELS.find(l => l.level === newLevel + 1);
+        if (nextLvl && newXp >= nextLvl.minXp) {
+          newLevel += 1;
+          playSound('levelUp');
+          toast.success(`🎉 O ${petData?.name || 'Mascote'} subiu para a patente: ${nextLvl.name}!`);
+        }
+
+        set({
+          petData: {
+            ...petData,
+            hygiene: 100,
+            xp: newXp,
+            level: newLevel,
+            totalCareCount: (petData?.totalCareCount || 0) + 1
+          }
+        });
+      },
+
+      togglePetSleep: () => {
+        const { petData, playSound } = get();
+        playSound('click');
+        const willSleep = !petData?.isSleeping;
+        set({
+          petData: {
+            ...petData,
+            isSleeping: willSleep,
+            energy: willSleep ? Math.min(100, (petData?.energy || 0) + 35) : petData?.energy
+          }
+        });
+      },
+
+      petThePet: () => {
+        const { petData, playSound } = get();
+        playSound('click');
+        const newFun = Math.min(100, (petData?.fun || 0) + 8);
+        const newXp = (petData?.xp || 0) + 5;
+        let newLevel = petData?.level || 1;
+        const nextLvl = PET_LEVELS.find(l => l.level === newLevel + 1);
+        if (nextLvl && newXp >= nextLvl.minXp) {
+          newLevel += 1;
+          playSound('levelUp');
+          toast.success(`🎉 O ${petData?.name || 'Mascote'} subiu para a patente: ${nextLvl.name}!`);
+        }
+
+        set({
+          petData: {
+            ...petData,
+            fun: newFun,
+            xp: newXp,
+            level: newLevel,
+            totalCareCount: (petData?.totalCareCount || 0) + 1
+          }
+        });
+      },
+
+      playWithPet: (score = 100, coinsEarned = 0) => {
+        const { petData, setCoins, playSound } = get();
+        if (coinsEarned > 0) {
+          setCoins(c => c + coinsEarned);
+          playSound('coin');
+        }
+
+        const xpEarned = Math.max(15, Math.floor(score / 20));
+        const newXp = (petData?.xp || 0) + xpEarned;
+        let newLevel = petData?.level || 1;
+        const nextLvl = PET_LEVELS.find(l => l.level === newLevel + 1);
+        if (nextLvl && newXp >= nextLvl.minXp) {
+          newLevel += 1;
+          playSound('levelUp');
+          toast.success(`🎉 O ${petData?.name || 'Mascote'} subiu para a patente: ${nextLvl.name}!`);
+        }
+
+        set({
+          petData: {
+            ...petData,
+            fun: 100,
+            energy: Math.max(10, (petData?.energy || 100) - 15),
+            xp: newXp,
+            level: newLevel
+          }
+        });
+      },
+
+      equipPetItem: (category, itemId) => {
+        const { petData, playSound } = get();
+        playSound('click');
+        set({
+          petData: {
+            ...petData,
+            [category]: itemId
+          }
+        });
+      },
+
+      buyPetAccessory: (item) => {
+        const { coins, petData, setCoins, playSound } = get();
+        if (coins < item.cost) return false;
+        
+        setCoins(c => c - item.cost);
+        playSound('coin');
+
+        const unlocked = [...(petData?.unlockedItems || [])];
+        if (!unlocked.includes(item.id)) {
+          unlocked.push(item.id);
+        }
+
+        set({
+          petData: {
+            ...petData,
+            unlockedItems: unlocked,
+            [item.type]: item.id.replace(`${item.type}:`, '')
+          }
+        });
+        toast.success(`🎉 ${item.name} adquirido e equipado no K9!`);
+        return true;
+      },
+
+      renamePet: (name) => {
+        const { petData } = get();
+        set({
+          petData: {
+            ...petData,
+            name: name
+          }
+        });
+      },
+
+      boostPetWithStudy: (studyType = 'class') => {
+        const { petData } = get();
+        if (!petData) return;
+        const xpBoost = studyType === 'class' ? 25 : studyType === 'review' ? 15 : 20;
+        const newFun = Math.min(100, (petData?.fun || 0) + 15);
+        const newXp = (petData?.xp || 0) + xpBoost;
+        let newLevel = petData?.level || 1;
+        const nextLvl = PET_LEVELS.find(l => l.level === newLevel + 1);
+        if (nextLvl && newXp >= nextLvl.minXp) {
+          newLevel += 1;
+        }
+
+        set({
+          petData: {
+            ...petData,
+            fun: newFun,
+            xp: newXp,
+            level: newLevel
+          }
+        });
+      },
+
+      // --- SISTEMA RAIO-X PROJETO CAVEIRA ---
+      addCaveiraQuestion: (question) => {
+        const { caveiraQuestions = [], addXP, setCoins, playSound, boostPetWithStudy } = get();
+        const existingIdx = caveiraQuestions.findIndex(q => q.id === question.id);
+        
+        let updatedList = [...caveiraQuestions];
+        const isNew = existingIdx === -1;
+
+        if (isNew) {
+          updatedList.unshift(question);
+          // Recompensa em XP e Moedas
+          if (question.hit) {
+            addXP(25, `Questão Caveira ${question.id} Acertada`);
+            setCoins(c => c + 3);
+            playSound('coin');
+          } else {
+            addXP(10, `Questão Caveira ${question.id} Analisada`);
+          }
+          boostPetWithStudy('review');
+        } else {
+          updatedList[existingIdx] = { ...updatedList[existingIdx], ...question };
+        }
+
+        set({ caveiraQuestions: updatedList });
+        return true;
+      },
+
+      importCaveiraQuestions: (questionsList, silent = true) => {
+        if (!Array.isArray(questionsList) || questionsList.length === 0) return 0;
+        const { caveiraQuestions = [], addXP, setCoins, playSound } = get();
+        
+        const map = new Map();
+        // Preserva existentes
+        caveiraQuestions.forEach(q => map.set(q.id, q));
+        
+        let newCount = 0;
+        questionsList.forEach(q => {
+          if (!map.has(q.id)) newCount++;
+          map.set(q.id, { ...(map.get(q.id) || {}), ...q });
+        });
+
+        if (newCount === 0 && map.size === caveiraQuestions.length) {
+          // Nenhum dado novo, não muta o estado para evitar re-renders desnecessários
+          if (!silent) toast.info('As questões já estavam atualizadas no QG.');
+          return 0;
+        }
+
+        const merged = Array.from(map.values()).sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+        
+        if (newCount > 0) {
+          addXP(newCount * 15, `${newCount} Questões Caveira Sincronizadas`);
+          setCoins(c => c + Math.min(100, newCount * 2));
+          playSound('coin');
+          toast.success(`🎯 ${newCount} novas questões do Projeto Caveira sincronizadas com sucesso!`);
+        } else if (!silent) {
+          toast.info('As questões já estavam atualizadas no QG.');
+        }
+
+        set({ caveiraQuestions: merged });
+        return newCount;
+      },
+
+      deleteCaveiraQuestion: (id) => {
+        const { caveiraQuestions = [] } = get();
+        set({ caveiraQuestions: caveiraQuestions.filter(q => q.id !== id) });
+        toast.success('Questão removida do histórico.');
+      },
+
+      clearCaveiraQuestions: () => {
+        set({ caveiraQuestions: [] });
+        toast.info('Histórico do Raio-X Caveira limpo.');
+      },
+
+      createFsrsCardFromCaveira: (question) => {
+        const { reviews = [], getLocalDateStr, subjects, playSound } = get();
+        
+        // Tenta associar com uma matéria do edital se o nome bater
+        let matchedSubjectId = Object.keys(subjects)[0] || 'sub_transito';
+        for (const [subId, sub] of Object.entries(subjects)) {
+          if (question.subject.toLowerCase().includes(sub.name.toLowerCase()) || 
+              sub.name.toLowerCase().includes(question.subject.toLowerCase())) {
+            matchedSubjectId = subId;
+            break;
+          }
+        }
+
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const tomorrowStr = getLocalDateStr(tomorrow);
+
+        const newReview = {
+          id: 'rev_caveira_' + question.id + '_' + Date.now(),
+          subjectId: matchedSubjectId,
+          topicName: `[Caveira ${question.id}] ${question.topic || question.subject}`,
+          notes: `Enunciado: ${question.content || ''}\nGabarito: ${question.correctChoice} (Você marcou: ${question.userChoice})\nMotivo do erro: ${question.errorReason || 'Conteúdo'}`,
+          nextDateStr: tomorrowStr,
+          interval: 0,
+          stability: 0,
+          difficulty: 0,
+          lastReviewDate: null,
+          lastPerformance: 0.5
+        };
+
+        set({ reviews: [newReview, ...reviews] });
+        playSound('coin');
+        toast.success(`🃏 Flashcard criado no FSRS para revisão amanhã: ${question.id}`);
+      },
+
       // --- AÇÕES LÓGICAS ---
 
       addXP: (amount, message = "") => {
@@ -576,6 +1004,7 @@ export const useStore = create(
         setTafTrainingStatus({ lastDoneDate: today });
         updateMissionProgress('taf', 1);
         get().updateDailyMissionProgress('taf', 1);
+        get().boostPetWithStudy('taf');
         return true; 
       },
 
@@ -664,6 +1093,7 @@ export const useStore = create(
           updateMissionProgress('review', 1);
           get().updateDailyMissionProgress('review', 1);
         }
+        get().boostPetWithStudy('review');
       },
 
       handleReplaceSubject: (dayIndex, slotIndex, oldSubjectId, newSubjectId) => {
@@ -706,10 +1136,14 @@ export const useStore = create(
         get().updateDailyMissionProgress('minutes', minutes);
       },
 
-      watchClass: (subjectId, slotIndex, amountWatched = 1) => {
+      watchClass: (subjectId, slotIndex, amountWatched = 1, speed = null) => {
         const { subjects, getActiveTopic, addXP, setUserStats, setWeeklySprint, setReviews, setCoins, setCompletedToday, getLocalDateStr } = get();
         const activeTopic = getActiveTopic(subjectId);
         if (!activeTopic) return;
+
+        const effectiveSpeed = (speed !== null && speed !== undefined && !isNaN(speed)) 
+          ? Number(speed) 
+          : (Number(subjects[subjectId]?.speed) || 1);
 
         const newSubjects = { ...subjects };
         const subject = { ...newSubjects[subjectId] };
@@ -722,7 +1156,30 @@ export const useStore = create(
           const newCompleted = Math.min(total, currentCompleted + amountWatched);
           
           if (newCompleted > currentCompleted) {
-            const addedMinutes = 60 * (newCompleted - currentCompleted);
+            // Calcular minutos reais: usa duração da aula se disponível (lessons[]), senão 60min por aula
+            const topicLessonsArr = topics[topicIndex].lessons || [];
+            let addedMinutes = 0;
+            for (let i = currentCompleted; i < newCompleted; i++) {
+              const lesson = topicLessonsArr[i];
+              if (lesson?.duration) {
+                // Parse MM:SS or HH:MM:SS -> minutos
+                const parts = lesson.duration.split(':').map(Number);
+                let mins = 0;
+                if (parts.length === 3) {
+                  mins = parts[0] * 60 + parts[1] + parts[2] / 60;
+                } else if (parts.length === 2) {
+                  mins = parts[0] + parts[1] / 60;
+                } else {
+                  mins = 60;
+                }
+                addedMinutes += (mins / effectiveSpeed);
+              } else {
+                addedMinutes += (60 / effectiveSpeed); // fallback: 60min por aula
+              }
+            }
+            addedMinutes = Math.round(addedMinutes);
+            if (addedMinutes === 0 && (newCompleted - currentCompleted) > 0) addedMinutes = Math.round((60 * (newCompleted - currentCompleted)) / effectiveSpeed);
+            
             addXP(100 * (newCompleted - currentCompleted), "Progresso em disciplina");
             setUserStats(prev => ({ ...prev, totalStudyMinutes: prev.totalStudyMinutes + addedMinutes }));
             setWeeklySprint(prev => ({ ...prev, currentMinutes: prev.currentMinutes + addedMinutes }));
@@ -735,25 +1192,36 @@ export const useStore = create(
               }
             }));
             get().updateDailyMissionProgress('minutes', addedMinutes);
+
+            // Adicionar CADA aula concluída à fila de revisão
+            const tomorrow = get().getTodayDate(); 
+            tomorrow.setDate(tomorrow.getDate() + 1);
+            const tomorrowStr = getLocalDateStr(tomorrow);
+            
+            const newReviews = [];
+            const topicLessons = topics[topicIndex].lessons || [];
+            for (let i = currentCompleted + 1; i <= newCompleted; i++) {
+              // Usa o nome real da aula se estiver cadastrado, senão gera nome genérico
+              const lessonEntry = topicLessons[i - 1]; // lessons são 0-indexed
+              let rName = lessonEntry?.name
+                ? lessonEntry.name
+                : (total > 1 ? `${topics[topicIndex].name} (Aula ${i})` : topics[topicIndex].name);
+              newReviews.push({
+                id: 'rev_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substr(2, 5),
+                subjectId: subjectId,
+                topicName: rName,
+                nextDateStr: tomorrowStr, 
+                interval: 0,
+                stability: 0,
+                difficulty: 0,
+                lastReviewDate: null,
+                lastPerformance: 0.75 
+              });
+            }
+            setReviews(rPrev => [...rPrev, ...newReviews]);
           }
 
           topics[topicIndex] = { ...topics[topicIndex], completed: newCompleted };
-          
-          if (newCompleted === total && currentCompleted < total) {
-            const tomorrow = get().getTodayDate(); 
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            setReviews(rPrev => [...rPrev, {
-              id: 'rev_' + Date.now(),
-              subjectId: subjectId,
-              topicName: topics[topicIndex].name,
-              nextDateStr: getLocalDateStr(tomorrow), 
-              interval: 0,
-              stability: 0,
-              difficulty: 0,
-              lastReviewDate: null,
-              lastPerformance: 0.75 
-            }]);
-          }
         }
         subject.topics = topics;
         newSubjects[subjectId] = subject;
@@ -763,6 +1231,7 @@ export const useStore = create(
         setCompletedToday(prev => !prev.includes(slotIndex) ? [...prev, slotIndex] : prev);
         get().updateMissionProgress('study', amountWatched);
         get().updateDailyMissionProgress('study', amountWatched);
+        get().boostPetWithStudy('class');
       },
 
       advanceDay: () => {
@@ -1075,38 +1544,128 @@ export const useStore = create(
       },
 
       getRelativeDateInfo: (idx) => {
-        const { currentDayIndex, cycle } = get();
+        const { currentDayIndex, cycle, cycleScheduleType, cycleWeekStart, cycleDayNames } = get();
         const today = new Date();
+        const diasSemana = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+        const nomesCompletosSemana = [
+          'DOMINGO',
+          'SEGUNDA-FEIRA',
+          'TERÇA-FEIRA',
+          'QUARTA-FEIRA',
+          'QUINTA-FEIRA',
+          'SEXTA-FEIRA',
+          'SÁBADO'
+        ];
+
+        if (cycleScheduleType === 'weekly') {
+          const currentRealDOW = today.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
+          const currentWeekIndex = (cycleWeekStart === 'monday') ? (currentRealDOW + 6) % 7 : currentRealDOW;
+          const dayDiff = idx - currentWeekIndex;
+          
+          const targetDate = new Date(today);
+          targetDate.setDate(today.getDate() + dayDiff);
+          const targetDOW = targetDate.getDay();
+          
+          const isToday = dayDiff === 0;
+          const isPast = dayDiff < 0;
+          const isFuture = dayDiff > 0;
+          const customName = cycleDayNames && cycleDayNames[idx];
+          
+          return {
+            title: isToday ? 'HOJE' : diasSemana[targetDOW],
+            dateStr: `${targetDate.getDate().toString().padStart(2, '0')}/${(targetDate.getMonth() + 1).toString().padStart(2, '0')}`,
+            fullDateStr: get().getLocalDateStr(targetDate),
+            isToday,
+            isPast,
+            isFuture,
+            dayDiff,
+            weekDayName: customName || nomesCompletosSemana[targetDOW],
+            shortName: diasSemana[targetDOW]
+          };
+        }
+
         let offset = idx - currentDayIndex;
-        if (offset < 0) offset += cycle.length; 
+        if (cycle.length > 0 && offset < 0) offset += cycle.length; 
         const targetDate = new Date(today);
         targetDate.setDate(today.getDate() + offset);
-        const diasSemana = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
         return { 
           title: offset === 0 ? 'HOJE' : diasSemana[targetDate.getDay()], 
           dateStr: `${targetDate.getDate().toString().padStart(2, '0')}/${(targetDate.getMonth() + 1).toString().padStart(2, '0')}`, 
-          isToday: offset === 0 
+          fullDateStr: get().getLocalDateStr(targetDate),
+          isToday: offset === 0,
+          isPast: false,
+          isFuture: offset > 0,
+          dayDiff: offset,
+          weekDayName: `DIA ${idx + 1}`,
+          shortName: `D${idx + 1}`
         };
       },
 
       getSubjectEstimates: () => {
-        const { subjects, cycle, currentDayIndex, completedToday } = get();
+        const { subjects, cycle, currentDayIndex, completedToday, subjectTimeGoal } = get();
         const estimates = [];
         const remainingClasses = {};
+        const remainingMinutesDict = {};
+        const remainingAccelMinutesDict = {};
+        const remainingLessonsQueue = {};
+        const classesPerBlockDict = {};
 
         Object.values(subjects).forEach(subject => {
           let remaining = 0;
-          (subject.topics || []).forEach(t => remaining += (t.total - (t.completed || 0)));
+          let remainingMinutes = 0;
+          let remainingAccelMinutes = 0;
+          const spd = Math.max(0.5, Number(subject.speed) || 1);
+          const goalMin = Number(subject.timeGoalMinutes || subjectTimeGoal?.[subject.id]) || 0;
+          const queue = [];
+
+          (subject.topics || []).forEach(t => {
+            const completed = t.completed || 0;
+            remaining += Math.max(0, t.total - completed);
+            const topicLessonsArr = t.lessons || [];
+            for (let i = completed; i < t.total; i++) {
+              const lesson = topicLessonsArr[i];
+              let mins = 60;
+              if (lesson?.duration) {
+                const parts = String(lesson.duration).split(':').map(Number);
+                if (parts.length === 3 && !parts.some(isNaN)) mins = parts[0] * 60 + parts[1] + parts[2] / 60;
+                else if (parts.length === 2 && !parts.some(isNaN)) mins = parts[0] + parts[1] / 60;
+              }
+              const accelMins = mins / spd;
+              remainingMinutes += mins;
+              remainingAccelMinutes += accelMins;
+              queue.push({ durationMins: mins, accelMins });
+            }
+          });
+
           remainingClasses[subject.id] = remaining;
+          remainingMinutesDict[subject.id] = Math.round(remainingMinutes);
+          remainingAccelMinutesDict[subject.id] = Math.round(remainingAccelMinutes);
+          remainingLessonsQueue[subject.id] = queue;
+
+          // Estimativa de aulas por bloco
+          if (goalMin > 0 && queue.length > 0) {
+            const avgAccel = remainingAccelMinutes / queue.length;
+            classesPerBlockDict[subject.id] = Math.max(1, Math.round(goalMin / Math.max(1, avgAccel)));
+          } else {
+            classesPerBlockDict[subject.id] = 1;
+          }
 
           if (remaining === 0) {
-            estimates.push({ ...subject, remaining: 0, dateStr: 'Concluído', dateObj: new Date(0) });
+            estimates.push({ 
+              ...subject, 
+              remaining: 0, 
+              remainingMinutes: 0, 
+              remainingAcceleratedMinutes: 0,
+              speed: spd,
+              timeGoalMinutes: goalMin,
+              classesPerBlock: 1,
+              dateStr: 'Concluído', 
+              dateObj: new Date(0) 
+            });
           }
         });
 
         const endDaysOffset = {};
-        const simulatedRemaining = { ...remainingClasses };
-        
         let dayOffset = 0;
         let allDone = false;
         const maxSimulationDays = 1500; 
@@ -1121,16 +1680,46 @@ export const useStore = create(
             daySubjects.forEach((subId, slotIdx) => {
               if (dayOffset === 0 && completedToday.includes(slotIdx)) return; 
               
-              if (simulatedRemaining[subId] > 0) {
-                simulatedRemaining[subId] -= 1;
-                if (simulatedRemaining[subId] === 0 && endDaysOffset[subId] === undefined) {
+              const q = remainingLessonsQueue[subId];
+              if (q && q.length > 0) {
+                const sub = subjects[subId];
+                const goalMin = Number(sub?.timeGoalMinutes || subjectTimeGoal?.[subId]) || 0;
+                
+                let slotCount = 0;
+                let slotAccelMins = 0;
+
+                while (q.length > 0) {
+                  const nextLesson = q[0];
+                  if (slotCount === 0) {
+                    slotCount++;
+                    slotAccelMins += nextLesson.accelMins;
+                    q.shift();
+                    if (goalMin === 0) break;
+                    continue;
+                  }
+
+                  // Limite inteligente para evitar estouro desproporcional
+                  if (slotAccelMins >= goalMin * 0.85 && ((slotAccelMins + nextLesson.accelMins - goalMin) / goalMin) > 0.20) {
+                    break;
+                  }
+
+                  if (slotAccelMins < goalMin) {
+                    slotCount++;
+                    slotAccelMins += nextLesson.accelMins;
+                    q.shift();
+                  } else {
+                    break;
+                  }
+                }
+
+                if (q.length === 0 && endDaysOffset[subId] === undefined) {
                   endDaysOffset[subId] = dayOffset;
                 }
               }
             });
 
-            allDone = Object.keys(simulatedRemaining).every(subId => 
-                simulatedRemaining[subId] === 0 || !subjectsInCycle.has(subId)
+            allDone = Object.keys(remainingLessonsQueue).every(subId => 
+              remainingLessonsQueue[subId].length === 0 || !subjectsInCycle.has(subId)
             );
             if (!allDone) dayOffset++;
           }
@@ -1149,10 +1738,15 @@ export const useStore = create(
             const dia = String(completionDate.getDate()).padStart(2, '0');
             const ano = completionDate.getFullYear();
 
-            if(!estimates.some(e => e.id === sub.id)) {
+            if (!estimates.some(e => e.id === sub.id)) {
                estimates.push({
                  ...sub,
+                 speed: Number(sub.speed) || 1,
+                 timeGoalMinutes: Number(sub.timeGoalMinutes || subjectTimeGoal?.[sub.id]) || 0,
+                 classesPerBlock: classesPerBlockDict[sub.id] || 1,
                  remaining: remainingClasses[sub.id],
+                 remainingMinutes: remainingMinutesDict[sub.id],
+                 remainingAcceleratedMinutes: remainingAccelMinutesDict[sub.id],
                  dateStr: `${dia}/${mesesNomesShort[completionDate.getMonth()]}/${ano}`,
                  dateObj: completionDate
                });
@@ -1346,7 +1940,9 @@ export const useStore = create(
         Object.keys(theme.colors).forEach(shade => {
           root.style.setProperty(`--theme-blue-${shade}`, theme.colors[shade]);
         });
-        set({ activeTheme: themeId });
+        if (get().activeTheme !== themeId) {
+          set({ activeTheme: themeId });
+        }
       },
 
       unlockTheme: (themeId, cost) => {
@@ -1386,6 +1982,20 @@ export const useStore = create(
           ...state.subjectGoals,
           [subjectId]: minutes
         }
+      })),
+
+      setSubjectTimeGoal: (subjectId, minutes) => set(state => ({
+        subjectTimeGoal: {
+          ...state.subjectTimeGoal,
+          [subjectId]: minutes
+        },
+        subjects: state.subjects[subjectId] ? {
+          ...state.subjects,
+          [subjectId]: {
+            ...state.subjects[subjectId],
+            timeGoalMinutes: minutes
+          }
+        } : state.subjects
       })),
 
       setPushSettings: (pushSettings) => set({ pushSettings }),

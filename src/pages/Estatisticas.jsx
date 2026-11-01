@@ -7,7 +7,7 @@ import {
 import { PieChart, Activity, FastForward, Info, X, StickyNote, Save, BarChart2, ChevronDown, ChevronUp, ChevronLeft, ChevronRight, Printer } from 'lucide-react';
 
 export default function Estatisticas() {
-  const { subjects, setSubjects, weeklySprint, userStats, studyHistory = {}, getLocalDateStr, isSyncing, isDarkMode } = useStore();
+  const { subjects, setSubjects, weeklySprint, userStats, studyHistory = {}, getLocalDateStr, isSyncing, isDarkMode, reviews = [] } = useStore();
   const [expandedSubject, setExpandedSubject] = useState(null);
   const [editingNotes, setEditingNotes] = useState(null);
   const [chartDays, setChartDays] = useState(15);
@@ -58,6 +58,81 @@ export default function Estatisticas() {
     
     return { days, weeks };
   }, []);
+
+  const fsrsAuditData = useMemo(() => {
+    const result = [];
+    
+    Object.values(subjects || {}).forEach(sub => {
+      const subReviews = reviews.filter(r => r.subjectId === sub.id);
+      if (subReviews.length === 0) return;
+
+      const topicsData = [];
+      let subTotal = 0;
+      let subNovos = 0;
+      let subBom = 0;
+      let subDificil = 0;
+      let subSumStability = 0;
+      let subSumPerformance = 0;
+      let subReviewedCount = 0;
+
+      (sub.topics || []).forEach(topic => {
+        const topicReviews = subReviews.filter(r => {
+          const cleanName = r.topicName.replace(/\s*\(Aula\s+\d+\)\s*$/, '').trim().toUpperCase();
+          return cleanName === topic.name.trim().toUpperCase() || r.topicName.trim().toUpperCase().startsWith(topic.name.trim().toUpperCase());
+        });
+
+        if (topicReviews.length === 0) return;
+
+        const total = topicReviews.length;
+        const novos = topicReviews.filter(r => r.lastReviewDate === null).length;
+        const bom = topicReviews.filter(r => r.lastReviewDate !== null && r.lastPerformance >= 0.75).length;
+        const dificil = topicReviews.filter(r => r.lastReviewDate !== null && r.lastPerformance < 0.75).length;
+        
+        const reviewedCount = total - novos;
+        const accuracy = reviewedCount > 0 ? Math.round((bom / reviewedCount) * 100) : 0;
+        const avgStability = total > 0 ? parseFloat((topicReviews.reduce((acc, r) => acc + (r.stability || 0), 0) / total).toFixed(1)) : 0;
+
+        topicsData.push({
+          id: topic.id,
+          name: topic.name,
+          total,
+          novos,
+          bom,
+          dificil,
+          accuracy,
+          avgStability
+        });
+
+        subTotal += total;
+        subNovos += novos;
+        subBom += bom;
+        subDificil += dificil;
+        subSumStability += topicReviews.reduce((acc, r) => acc + (r.stability || 0), 0);
+        subSumPerformance += topicReviews.reduce((acc, r) => acc + (r.lastPerformance || 0), 0);
+        subReviewedCount += reviewedCount;
+      });
+
+      if (subTotal > 0) {
+        const subAccuracy = subReviewedCount > 0 ? Math.round((subBom / subReviewedCount) * 100) : 0;
+        const subAvgStability = parseFloat((subSumStability / subTotal).toFixed(1));
+
+        result.push({
+          id: sub.id,
+          name: sub.name,
+          color: sub.color,
+          total: subTotal,
+          novos: subNovos,
+          bom: subBom,
+          dificil: subDificil,
+          accuracy: subAccuracy,
+          avgStability: subAvgStability,
+          topics: topicsData
+        });
+      }
+    });
+
+    return result;
+  }, [subjects, reviews]);
 
   let totalEdital = 0;
   let completedEdital = 0;
@@ -231,7 +306,7 @@ export default function Estatisticas() {
           <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 dark:text-slate-100">Equilíbrio Operacional</h3>
           {stats.length > 0 ? (
             <div className="w-full h-[300px]">
-              <ResponsiveContainer width="100%" height="100%">
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
                 <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
                   <PolarGrid stroke="#e2e8f0" />
                   <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} />
@@ -353,7 +428,7 @@ export default function Estatisticas() {
         </div>
 
         <div className="w-full h-[250px] sm:h-[300px]">
-          <ResponsiveContainer width="100%" height="100%">
+          <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="chartMinutesGrad" x1="0" y1="0" x2="0" y2="1">
@@ -535,6 +610,114 @@ export default function Estatisticas() {
           <div className="w-3.5 h-3.5 rounded-[3px] bg-gradient-to-br from-blue-400 to-indigo-500 shadow-[0_0_8px_rgba(59,130,246,0.3)]"></div>
           <span>Mais</span>
         </div>
+      </div>
+
+      {/* Tabela de Auditoria FSRS */}
+      <div className="bg-slate-900 border border-slate-800 rounded-3xl shadow-xl p-4 sm:p-6 mb-6 text-white">
+        <div className="flex justify-between items-center mb-6 pb-4 border-b border-slate-800">
+          <div>
+            <h3 className="text-sm font-black text-white uppercase tracking-widest flex items-center gap-2">
+              <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></span>
+              Auditoria de Memorização FSRS (Questões)
+            </h3>
+            <p className="text-slate-400 text-[10px] sm:text-xs mt-1 font-bold uppercase tracking-wide">
+              Análise detalhada de retenção, estabilidade de memória e novos cards por assunto
+            </p>
+          </div>
+        </div>
+
+        {fsrsAuditData.length > 0 ? (
+          <div className="overflow-x-auto custom-scrollbar -mx-4 sm:mx-0">
+            <div className="inline-block min-w-full align-middle p-4 sm:p-0">
+              <table className="min-w-full text-left border-collapse">
+                <thead>
+                  <tr className="border-b border-slate-800 text-[9px] sm:text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                    <th className="py-3 pr-4">Disciplina / Assunto</th>
+                    <th className="py-3 px-4 text-center">Total</th>
+                    <th className="py-3 px-4 text-center">Desempenho (Bom / Difícil / Novo)</th>
+                    <th className="py-3 px-4 text-center w-28 sm:w-36">Distribuição</th>
+                    <th className="py-3 px-4 text-right">Taxa de Acerto / Estabilidade</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-850">
+                  {fsrsAuditData.map(sub => {
+                    const bomPercent = sub.total > 0 ? Math.round((sub.bom / sub.total) * 100) : 0;
+                    const dificilPercent = sub.total > 0 ? Math.round((sub.dificil / sub.total) * 100) : 0;
+                    const novosPercent = sub.total > 0 ? Math.round((sub.novos / sub.total) * 100) : 0;
+
+                    return (
+                      <React.Fragment key={sub.id}>
+                        {/* Linha da Disciplina Principal */}
+                        <tr className="bg-slate-800/40 hover:bg-slate-800/60 transition-colors font-bold text-xs text-white">
+                          <td className="py-3.5 pr-4 pl-2 flex items-center gap-2">
+                            <span className={`w-2 h-2 rounded-full ${sub.color?.split(' ')[0] || 'bg-slate-500'}`} />
+                            <span className="font-black uppercase tracking-tight">{sub.name}</span>
+                          </td>
+                          <td className="py-3.5 px-4 text-center font-black text-slate-300">{sub.total}</td>
+                          <td className="py-3.5 px-4 text-center text-[10px] text-slate-400 font-bold">
+                            <span className="text-blue-400">{sub.bom}</span> <span className="opacity-40">({bomPercent}%)</span> <span className="opacity-30">/</span>{' '}
+                            <span className="text-red-400">{sub.dificil}</span> <span className="opacity-40">({dificilPercent}%)</span> <span className="opacity-30">/</span>{' '}
+                            <span className="text-slate-500">{sub.novos}</span> <span className="opacity-40">({novosPercent}%)</span>
+                          </td>
+                          <td className="py-3.5 px-4">
+                            <div className="w-full bg-slate-800 h-2.5 rounded-full overflow-hidden flex">
+                              {sub.bom > 0 && <div className="bg-gradient-to-r from-blue-400 to-indigo-500 h-full" style={{ width: `${bomPercent}%` }} title={`Bom: ${bomPercent}%`} />}
+                              {sub.dificil > 0 && <div className="bg-red-500 h-full" style={{ width: `${dificilPercent}%` }} title={`Difícil: ${dificilPercent}%`} />}
+                              {sub.novos > 0 && <div className="bg-slate-650 h-full" style={{ width: `${novosPercent}%` }} title={`Novo: ${novosPercent}%`} />}
+                            </div>
+                          </td>
+                          <td className="py-3.5 px-4 text-right font-black">
+                            <span className="text-emerald-400">{sub.accuracy}%</span>{' '}
+                            <span className="text-slate-600 font-bold">/</span>{' '}
+                            <span className="text-blue-300">{sub.avgStability}d</span>
+                          </td>
+                        </tr>
+
+                        {/* Linhas dos Assuntos */}
+                        {sub.topics.map(topic => {
+                          const tBomPercent = topic.total > 0 ? Math.round((topic.bom / topic.total) * 100) : 0;
+                          const tDificilPercent = topic.total > 0 ? Math.round((topic.dificil / topic.total) * 100) : 0;
+                          const tNovosPercent = topic.total > 0 ? Math.round((topic.novos / topic.total) * 100) : 0;
+
+                          return (
+                            <tr key={topic.id} className="hover:bg-slate-800/20 transition-colors text-[10px] sm:text-[11px] text-slate-300 border-t border-slate-800/30">
+                              <td className="py-3 pl-6 sm:pl-8 pr-4 font-semibold text-slate-400 italic">
+                                ↳ <span className="text-slate-300 not-italic font-bold">{topic.name}</span>
+                              </td>
+                              <td className="py-3 px-4 text-center font-bold text-slate-400">{topic.total}</td>
+                              <td className="py-3 px-4 text-center text-[10px] text-slate-500 font-semibold">
+                                <span className="text-blue-400/90">{topic.bom}</span> <span className="opacity-40">({tBomPercent}%)</span> <span className="opacity-30">/</span>{' '}
+                                <span className="text-red-400/90">{topic.dificil}</span> <span className="opacity-40">({tDificilPercent}%)</span> <span className="opacity-30">/</span>{' '}
+                                <span className="text-slate-500/90">{topic.novos}</span> <span className="opacity-40">({tNovosPercent}%)</span>
+                              </td>
+                              <td className="py-3 px-4">
+                                <div className="w-full bg-slate-900 h-2 rounded-full overflow-hidden flex border border-slate-800">
+                                  {topic.bom > 0 && <div className="bg-blue-500 h-full" style={{ width: `${tBomPercent}%` }} />}
+                                  {topic.dificil > 0 && <div className="bg-red-500 h-full" style={{ width: `${tDificilPercent}%` }} />}
+                                  {topic.novos > 0 && <div className="bg-slate-700 h-full" style={{ width: `${tNovosPercent}%` }} />}
+                                </div>
+                              </td>
+                              <td className="py-3 px-4 text-right font-bold text-slate-400">
+                                <span className="text-emerald-500">{topic.accuracy}%</span>{' '}
+                                <span className="text-slate-600">/</span>{' '}
+                                <span className="text-blue-400">{topic.avgStability}d</span>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </React.Fragment>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        ) : (
+          <div className="text-center py-10 border border-dashed border-slate-800 rounded-2xl bg-slate-950/20">
+            <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Sem revisões ou questões geradas no FSRS ainda.</p>
+            <p className="text-[10px] text-slate-600 font-semibold mt-1">Conclua aulas no painel "Ciclo" clicando em "Queimar Teoria" para inicializar seus dados de memorização.</p>
+          </div>
+        )}
       </div>
 
       <div className="space-y-4">
