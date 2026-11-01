@@ -1,11 +1,12 @@
-// QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (Versão Estável & Silenciosa)
+// QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3 Strict — Somente Cliques Reais)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v3 ativo em:', window.location.href);
 
   const QG_WEB_URL = 'https://blk002.github.io/qgdaPRFWILSON/#/caveira';
   const STORAGE_KEY = 'qg_caveira_questions';
   const SESSION_KEY = 'qg_caveira_session';
+  const SCHEMA_KEY = 'qg_caveira_schema_v3';
 
   let currentQuestionId = null;
   let timerSeconds = 0;
@@ -16,8 +17,12 @@
   let activeQuestionData = null;
   let scanDebounceTimer = null;
 
-  // Rastreia questões já processadas nesta aba para garantir ZERO loops
+  // Rastreia questões que já estavam respondidas quando a página carregou (não devem ser contadas de novo)
+  const preAnsweredOnLoad = new Set();
+  // Rastreia questões já contabilizadas nesta sessão da página
   const processedInSession = new Set();
+  // Rastreia questões nas quais o usuário REALMENTE clicou em "Responder"
+  const pendingAnswerQIds = new Set();
 
   // Estado da Sessão no HUD
   let sessionStats = {
@@ -26,55 +31,24 @@
     errors: 0
   };
 
-  // Remove duplicatas ou entradas falsas geradas por sub-elementos do DOM
-  function cleanQuestionsList(list) {
-    if (!Array.isArray(list)) return [];
-    const byId = new Map();
-    const realContentSet = new Set();
-
-    // Primeiro registra todos os conteúdos que possuem disciplina real identificada
-    list.forEach(q => {
-      if (q && q.content && q.subject && q.subject !== 'Geral') {
-        realContentSet.add(q.content.slice(0, 80));
-      }
-    });
-
-    list.forEach(q => {
-      if (!q || !q.id) return;
-      // Descarta fragmento órfão de seção se for 'Geral' sem tópico real
-      if (q.subject === 'Geral' && q.topic === 'Geral') {
-        const snippet = (q.content || '').slice(0, 80);
-        if (!snippet || realContentSet.has(snippet)) return;
-      }
-      if (!byId.has(q.id)) {
-        byId.set(q.id, q);
-      }
-    });
-
-    return Array.from(byId.values());
-  }
-
-  // Sincroniza estado inicial direto do chrome.storage.local
+  // Inicialização e limpeza automática de dados corrompidos de versões anteriores
   function loadInitialState() {
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
-        const rawQuestions = res[STORAGE_KEY] || [];
-        const questions = cleanQuestionsList(rawQuestions);
-        let session = res[SESSION_KEY] || { hits: 0, errors: 0, total: 0 };
-
-        // Se a lista tinha lixo de sub-seções, salva a lista limpa
-        if (questions.length !== rawQuestions.length) {
-          chrome.storage.local.set({ [STORAGE_KEY]: questions });
+      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY], (res) => {
+        // Migração v3: limpa as 115 questões fantasmas geradas pelo bug anterior da barra de progresso
+        if (res[SCHEMA_KEY] !== 'v3_strict_clean') {
+          const cleanSession = { total: 0, hits: 0, errors: 0 };
+          chrome.storage.local.set({
+            [STORAGE_KEY]: [],
+            [SESSION_KEY]: cleanSession,
+            [SCHEMA_KEY]: 'v3_strict_clean'
+          });
+          sessionStats = cleanSession;
+          updateHudStats();
+          return;
         }
 
-        // Se há questões salvas e a sessão está zerada sem ter sido resetada manualmente, sincroniza com o histórico
-        if (session.total === 0 && questions.length > 0 && !session.wasExplicitlyReset) {
-          const hits = questions.filter(q => q.hit).length;
-          const errors = questions.length - hits;
-          session = { total: questions.length, hits, errors, wasExplicitlyReset: false };
-          chrome.storage.local.set({ [SESSION_KEY]: session });
-        }
-
+        const session = res[SESSION_KEY] || { hits: 0, errors: 0, total: 0 };
         sessionStats = {
           total: Number(session.total) || 0,
           hits: Number(session.hits) || 0,
@@ -87,7 +61,7 @@
 
   loadInitialState();
 
-  // Escuta mudanças no storage (ex: se o usuário clicar em "Zerar Sessão" no popup da extensão)
+  // Escuta mudanças no storage (ex: botão "Zerar Sessão" no popup)
   if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
     chrome.storage.onChanged.addListener((changes, area) => {
       if (area === 'local' && changes[SESSION_KEY]) {
@@ -213,7 +187,7 @@
           activeQuestionData.confidence = btn.dataset.confidence;
           saveQuestion(activeQuestionData, true);
           if (activeQuestionData.hit) {
-            setTimeout(dismissPrompt, 600);
+            setTimeout(dismissPrompt, 500);
           }
         }
       });
@@ -228,7 +202,7 @@
         if (activeQuestionData) {
           activeQuestionData.errorReason = btn.dataset.reason;
           saveQuestion(activeQuestionData, true);
-          setTimeout(dismissPrompt, 600);
+          setTimeout(dismissPrompt, 500);
         }
       });
     });
@@ -236,7 +210,7 @@
     startTimerInterval();
   }
 
-  // --- 2. CRONÔMETRO DE QUESTÃO COM PAUSA AUTOMÁTICA ---
+  // --- 2. CRONÔMETRO DE QUESTÃO ---
   function startTimerInterval() {
     if (timerInterval) return;
     timerInterval = setInterval(() => {
@@ -260,10 +234,8 @@
   }
 
   function resetAndStartTimerForQuestion(newQId) {
-    if (!newQId) return;
-    if (currentQuestionId === newQId) return;
+    if (!newQId || currentQuestionId === newQId) return;
 
-    console.log(`💀 [QG da PRF] Foco na questão: ${newQId}. Cronômetro iniciado.`);
     currentQuestionId = newQId;
     timerSeconds = 0;
     isTimerRunning = true;
@@ -295,15 +267,12 @@
     elNet.className = `qg-hud-stat-value ${net > 0 ? 'green' : net < 0 ? 'red' : 'gold'}`;
   }
 
-  // --- 4. SELEÇÃO ESTRITA DE CARDS DE QUESTÃO RAIZ ---
-  // Importante: usa apenas '.q-card' real (nunca [class*="q-card"] que pegava .q-card__section!)
+  // --- 4. SELEÇÃO E VERIFICAÇÃO ESTRITA DE QUESTÃO ---
   function getQuestionCards() {
     const allCards = document.querySelectorAll('.q-card');
     return Array.from(allCards).filter(card => {
       if (card.closest('#qg-caveira-hud')) return false;
-      // Garante que não é um card aninhado dentro de outro .q-card
       if (card.parentElement && card.parentElement.closest('.q-card')) return false;
-      // Tem que possuir número da questão e alternativas
       const hasNumber = Boolean(card.querySelector('.number'));
       const hasAlternatives = Boolean(card.querySelector('.question-alternatives, .alternative'));
       return hasNumber && hasAlternatives;
@@ -320,21 +289,20 @@
     return null;
   }
 
+  // IMPORTANTE: No Caveira, barras de progresso (.q-linear-progress) já possuem .error-percentage e .bg-incorrect-2
+  // mesmo ANTES de responder! O único indicador real de questão respondida é a existência da .stats-box ("PARABÉNS!" / "ERROU")!
   function isCardAnswered(card) {
     if (!card) return false;
-
-    if (card.querySelector('.stats-box')) return true;
-    if (card.querySelector('.alternative-letter.bg-correct-2, .alternative-letter.bg-incorrect-2, .bg-correct-1, .bg-incorrect-1')) {
-      return true;
-    }
-    if (card.querySelector('.error-percentage')) return true;
-
-    const text = card.textContent || '';
-    if (text.includes('PARABÉNS!') || text.includes('Você acertou!') || text.includes('Você errou!')) {
-      return true;
-    }
-
-    return false;
+    const statsBox = card.querySelector('.stats-box');
+    if (!statsBox) return false;
+    const text = statsBox.textContent || '';
+    return (
+      Boolean(statsBox.querySelector('.bg-correct-1, .bg-incorrect-1, .title-stats')) ||
+      text.includes('PARABÉNS') ||
+      text.includes('ERROU') ||
+      text.includes('acertou') ||
+      text.includes('Resposta correta')
+    );
   }
 
   function extractQuestionData(card, qId) {
@@ -364,58 +332,44 @@
     // Enunciado
     const content = card.querySelector('.content')?.innerText?.trim() || '';
 
-    // Análise de Acerto / Erro
+    // Análise estrita da .stats-box oficial
     const statsBox = card.querySelector('.stats-box');
-    const cardText = card.textContent || '';
-    
-    const isSuccessBanner = (statsBox && (statsBox.querySelector('.bg-correct-1') || statsBox.textContent.includes('PARABÉNS') || statsBox.textContent.includes('acertou'))) ||
-                            cardText.includes('PARABÉNS!') || cardText.includes('Você acertou!');
-                            
-    const isErrorBanner = (statsBox && (statsBox.querySelector('.bg-incorrect-1') || statsBox.textContent.includes('ERROU') || statsBox.textContent.includes('Resposta correta'))) ||
-                          cardText.includes('Você errou!') || cardText.includes('QUE PENA');
+    const statsText = statsBox ? statsBox.textContent : '';
 
-    let detectedCorrectLetter = null;
-    let detectedIncorrectLetter = null;
+    const isCorrect = Boolean(statsBox?.querySelector('.bg-correct-1')) ||
+                      statsText.includes('PARABÉNS') ||
+                      statsText.includes('acertou');
 
-    // Alternativas
-    const altContainers = card.querySelectorAll('.alternative');
-    altContainers.forEach(alt => {
-      const letterEl = alt.querySelector('.alternative-letter');
-      const letter = letterEl ? letterEl.textContent.trim() : null;
+    // Verifica APENAS a letra da alternativa (.alternative-letter), NUNCA a barra de progresso (.q-linear-progress)
+    let markedLetter = null;
+    const letterEls = card.querySelectorAll('.alternative-letter');
+    letterEls.forEach(letterEl => {
+      const letter = letterEl.textContent.trim();
       if (!letter || letter.length > 2) return;
-
-      const isGreen = alt.querySelector('.bg-correct-2, .bg-correct-1') || (letterEl && (letterEl.classList.contains('bg-correct-2') || letterEl.classList.contains('bg-correct-1')));
-      const isRed = alt.querySelector('.bg-incorrect-2, .bg-incorrect-1') || (letterEl && (letterEl.classList.contains('bg-incorrect-2') || letterEl.classList.contains('bg-incorrect-1')));
-
-      if (isGreen) detectedCorrectLetter = letter;
-      if (isRed) detectedIncorrectLetter = letter;
+      if (
+        letterEl.classList.contains('bg-correct-2') ||
+        letterEl.classList.contains('bg-correct-1') ||
+        letterEl.classList.contains('bg-incorrect-2') ||
+        letterEl.classList.contains('bg-incorrect-1')
+      ) {
+        markedLetter = letter;
+      }
     });
 
-    let isCorrect = false;
-    let userChoice = 'C';
-    let correctChoice = 'C';
+    const userChoice = markedLetter || lastUserClickedChoice || 'C';
+    let correctChoice = userChoice;
 
-    if (isSuccessBanner) {
-      isCorrect = true;
-      userChoice = detectedCorrectLetter || lastUserClickedChoice || 'C';
-      correctChoice = userChoice;
-    } else if (isErrorBanner) {
-      isCorrect = false;
-      userChoice = detectedIncorrectLetter || lastUserClickedChoice || (detectedCorrectLetter === 'C' ? 'E' : 'C');
-      correctChoice = detectedCorrectLetter || (userChoice === 'C' ? 'E' : 'C');
-    } else {
-      if (detectedIncorrectLetter) {
-        isCorrect = false;
-        userChoice = detectedIncorrectLetter;
-        correctChoice = detectedCorrectLetter || (userChoice === 'C' ? 'E' : 'C');
-      } else if (detectedCorrectLetter) {
-        isCorrect = true;
-        userChoice = detectedCorrectLetter;
-        correctChoice = detectedCorrectLetter;
+    if (!isCorrect) {
+      // No Caveira, quando erra, a .subtitle-stats diz "Resposta correta: C"
+      const ansMatch = statsText.match(/Resposta correta:\s*([A-E])/i);
+      if (ansMatch) {
+        correctChoice = ansMatch[1].toUpperCase();
+      } else {
+        correctChoice = userChoice === 'C' ? 'E' : 'C';
       }
     }
 
-    const durationSeconds = Math.max(3, timerSeconds || 12);
+    const durationSeconds = Math.max(3, timerSeconds || 10);
 
     return {
       id: qId,
@@ -435,11 +389,8 @@
     };
   }
 
-  // --- 5. SALVAR QUESTÃO DIRETO NO STORAGE E ATUALIZAR HUD + POPUP ---
+  // --- 5. SALVAR QUESTÃO DIRETO NO STORAGE ---
   function saveQuestion(question, isMetadataUpdateOnly = false) {
-    console.log('💀 [QG da PRF] Salvando questão:', question.id, question.hit ? 'ACERTO' : 'ERRO', isMetadataUpdateOnly ? '(atualizando tag)' : '(nova resposta)');
-
-    // 1. Se não for apenas atualização de tag de confiança, incrementa imediatamente no HUD local
     if (!isMetadataUpdateOnly) {
       sessionStats.total += 1;
       if (question.hit) sessionStats.hits += 1;
@@ -447,10 +398,9 @@
       updateHudStats();
     }
 
-    // 2. Grava diretamente no chrome.storage.local (para o Popup e o QG Bridge lerem na hora)
     if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
-        const questions = cleanQuestionsList(res[STORAGE_KEY] || []);
+      chrome.storage.local.get([STORAGE_KEY], (res) => {
+        const questions = Array.isArray(res[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
         const existingIdx = questions.findIndex(q => q.id === question.id);
 
         if (existingIdx >= 0) {
@@ -462,15 +412,13 @@
         const updatedSession = {
           total: sessionStats.total,
           hits: sessionStats.hits,
-          errors: sessionStats.errors,
-          wasExplicitlyReset: false
+          errors: sessionStats.errors
         };
 
         chrome.storage.local.set({
           [STORAGE_KEY]: questions,
           [SESSION_KEY]: updatedSession
         }, () => {
-          // Notifica background apenas para atualizar o badge do ícone da extensão
           if (chrome.runtime && chrome.runtime.sendMessage) {
             chrome.runtime.sendMessage({
               type: 'UPDATE_BADGE_ONLY',
@@ -514,13 +462,14 @@
     promptBox.querySelectorAll('.qg-btn-tag').forEach(b => b.classList.remove('active'));
     promptBox.style.display = 'block';
 
-    // Fecha automaticamente após 10s se o usuário não clicar
     promptDismissTimer = setTimeout(() => {
       dismissPrompt();
     }, 10000);
   }
 
-  // --- 7. VARREDURA DE CARDS (SEM REPETIÇÃO E SEM SOM) ---
+  // --- 7. VARREDURA DE CARDS ---
+  let isInitialScan = true;
+
   function scanCards() {
     createHud();
 
@@ -535,21 +484,30 @@
 
       const answered = isCardAnswered(card);
 
+      // No primeiro scan ao abrir a página, qualquer questão que JÁ esteja respondida na tela
+      // é marcada como antiga para não ser contabilizada sem o usuário ter respondido agora
+      if (isInitialScan && answered) {
+        preAnsweredOnLoad.add(qId);
+        processedInSession.add(qId);
+        return;
+      }
+
       if (!answered) {
         if (!firstUnansweredQId) {
           firstUnansweredQId = qId;
         }
-        // Se o card na tela está não-respondido (ex: usuário clicou em refazer), libera para quando responder
-        if (processedInSession.has(qId)) {
-          processedInSession.delete(qId);
-        }
+        // Se a questão está não-respondida na tela, libera caso estivesse em preAnsweredOnLoad
+        preAnsweredOnLoad.delete(qId);
+        processedInSession.delete(qId);
       } else {
-        // O card está respondido! Se ainda não foi processado nesta sessão:
-        if (!processedInSession.has(qId)) {
-          processedInSession.add(qId);
-          console.log(`💀 [QG da PRF] Questão resolvida detectada: ${qId}!`);
+        // Só contabiliza se a questão está respondida, ainda não foi processada nesta sessão,
+        // E o usuário realmente clicou em "Responder" nela (ou ela estava ativa no cronômetro como não-respondida)
+        const wasSolvedNow = pendingAnswerQIds.has(qId) || (currentQuestionId === qId && !preAnsweredOnLoad.has(qId));
 
-          // Pausa o cronômetro no tempo exato da resolução
+        if (wasSolvedNow && !processedInSession.has(qId)) {
+          processedInSession.add(qId);
+          pendingAnswerQIds.delete(qId);
+
           pauseTimer();
 
           const currentQEl = document.getElementById('qg-current-q-id');
@@ -567,7 +525,8 @@
       }
     });
 
-    // Quando avançar para uma nova questão não respondida, reinicia o cronômetro para ela
+    isInitialScan = false;
+
     if (firstUnansweredQId && firstUnansweredQId !== currentQuestionId) {
       resetAndStartTimerForQuestion(firstUnansweredQId);
     }
@@ -584,11 +543,11 @@
       if (e.target.closest('#qg-caveira-hud')) return;
 
       const card = e.target.closest('.q-card');
-      if (card && !card.parentElement?.closest('.q-card')) {
-        const cardQId = extractQuestionId(card);
-        if (cardQId && cardQId !== currentQuestionId && !isCardAnswered(card)) {
-          resetAndStartTimerForQuestion(cardQId);
-        }
+      const rootCard = (card && card.parentElement?.closest('.q-card')) ? card.parentElement.closest('.q-card') : card;
+      const clickedCardQId = rootCard ? extractQuestionId(rootCard) : null;
+
+      if (rootCard && clickedCardQId && clickedCardQId !== currentQuestionId && !isCardAnswered(rootCard)) {
+        resetAndStartTimerForQuestion(clickedCardQId);
       }
 
       const alt = e.target.closest('.alternative');
@@ -603,6 +562,10 @@
       if (btn) {
         const text = btn.textContent || '';
         if (text.includes('Responder') || btn.classList.contains('light-mode-answer-btn')) {
+          const targetQId = clickedCardQId || currentQuestionId;
+          if (targetQId) {
+            pendingAnswerQIds.add(targetQId);
+          }
           setTimeout(scanCards, 40);
           setTimeout(scanCards, 120);
           setTimeout(scanCards, 250);
@@ -612,8 +575,8 @@
         }
 
         if (
-          text.includes('Próxima') || 
-          text.includes('Avançar') || 
+          text.includes('Próxima') ||
+          text.includes('Avançar') ||
           btn.querySelector('.material-icons')?.textContent?.includes('chevron_right') ||
           btn.querySelector('.material-icons')?.textContent?.includes('navigate_next')
         ) {
@@ -624,7 +587,12 @@
     }, true);
 
     document.addEventListener('keydown', (e) => {
-      if (e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === 'Enter') {
+      if (e.key === 'Enter' && currentQuestionId) {
+        pendingAnswerQIds.add(currentQuestionId);
+        setTimeout(scanCards, 80);
+        setTimeout(scanCards, 350);
+      }
+      if (e.key === 'ArrowRight' || e.key === 'PageDown') {
         setTimeout(scanCards, 80);
         setTimeout(scanCards, 350);
       }

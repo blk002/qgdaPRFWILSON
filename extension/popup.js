@@ -1,44 +1,12 @@
-// Popup Script — QG da PRF Rastreador Caveira
+// Popup Script — QG da PRF Rastreador Caveira (v3 Strict)
 
 const STORAGE_KEY = 'qg_caveira_questions';
 const SESSION_KEY = 'qg_caveira_session';
-
-function cleanQuestionsList(list) {
-  if (!Array.isArray(list)) return [];
-  const byId = new Map();
-  const realContentSet = new Set();
-
-  list.forEach(q => {
-    if (q && q.content && q.subject && q.subject !== 'Geral') {
-      realContentSet.add(q.content.slice(0, 80));
-    }
-  });
-
-  list.forEach(q => {
-    if (!q || !q.id) return;
-    if (q.subject === 'Geral' && q.topic === 'Geral') {
-      const snippet = (q.content || '').slice(0, 80);
-      if (!snippet || realContentSet.has(snippet)) return;
-    }
-    if (!byId.has(q.id)) {
-      byId.set(q.id, q);
-    }
-  });
-
-  return Array.from(byId.values());
-}
+const SCHEMA_KEY = 'qg_caveira_schema_v3';
 
 function renderPopupStats(questions, session) {
-  let hits = Number(session?.hits) || 0;
-  let errors = Number(session?.errors) || 0;
-  let total = Number(session?.total) || 0;
-
-  // Se existem questões salvas e a sessão não foi zerada manualmente, reflete o total real
-  if (total === 0 && questions.length > 0 && !session?.wasExplicitlyReset) {
-    hits = questions.filter(q => q.hit).length;
-    errors = questions.length - hits;
-    total = questions.length;
-  }
+  const hits = Number(session?.hits) || 0;
+  const errors = Number(session?.errors) || 0;
 
   document.getElementById('stat-hits').textContent = hits;
   document.getElementById('stat-errors').textContent = errors;
@@ -51,15 +19,21 @@ function renderPopupStats(questions, session) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
-    const rawQuestions = res[STORAGE_KEY] || [];
-    const questions = cleanQuestionsList(rawQuestions);
-    const session = res[SESSION_KEY] || { hits: 0, errors: 0, total: 0 };
-
-    if (questions.length !== rawQuestions.length) {
-      chrome.storage.local.set({ [STORAGE_KEY]: questions });
+  chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY], (res) => {
+    if (res[SCHEMA_KEY] !== 'v3_strict_clean') {
+      const cleanSession = { total: 0, hits: 0, errors: 0 };
+      chrome.storage.local.set({
+        [STORAGE_KEY]: [],
+        [SESSION_KEY]: cleanSession,
+        [SCHEMA_KEY]: 'v3_strict_clean'
+      }, () => {
+        renderPopupStats([], cleanSession);
+      });
+      return;
     }
 
+    const questions = Array.isArray(res[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
+    const session = res[SESSION_KEY] || { hits: 0, errors: 0, total: 0 };
     renderPopupStats(questions, session);
   });
 
@@ -67,7 +41,7 @@ document.addEventListener('DOMContentLoaded', () => {
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local') {
       chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
-        const questions = cleanQuestionsList(res[STORAGE_KEY] || []);
+        const questions = Array.isArray(res[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
         const session = res[SESSION_KEY] || { hits: 0, errors: 0, total: 0 };
         renderPopupStats(questions, session);
       });
@@ -83,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
   // Botão Copiar JSON
   document.getElementById('btn-copy-json').addEventListener('click', () => {
     chrome.storage.local.get([STORAGE_KEY], (res) => {
-      const questions = cleanQuestionsList(res[STORAGE_KEY] || []);
+      const questions = Array.isArray(res[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
       navigator.clipboard.writeText(JSON.stringify(questions, null, 2)).then(() => {
         const btn = document.getElementById('btn-copy-json');
         const orig = btn.innerHTML;
@@ -95,7 +69,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Botão Zerar Sessão
   document.getElementById('btn-reset-session').addEventListener('click', () => {
-    const resetSession = { hits: 0, errors: 0, total: 0, wasExplicitlyReset: true };
+    const resetSession = { hits: 0, errors: 0, total: 0 };
     chrome.storage.local.set({ [SESSION_KEY]: resetSession }, () => {
       chrome.runtime.sendMessage({ type: 'CLEAR_CAVEIRA_SESSION' }).catch(() => {});
       document.getElementById('stat-hits').textContent = '0';

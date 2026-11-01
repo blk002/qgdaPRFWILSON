@@ -41,6 +41,10 @@ export default function RaioXCaveira() {
         if (event.data.type === 'EXTENSION_DETECTED') {
           setExtensionDetected(true);
         }
+        if (event.data.type === 'RESET_CORRUPTED_DATA') {
+          setExtensionDetected(true);
+          useStore.getState().clearCaveiraQuestions();
+        }
         if (event.data.type === 'SYNC_UPDATE' && event.data.payload) {
           setExtensionDetected(true);
           const { newQuestion, questions } = event.data.payload;

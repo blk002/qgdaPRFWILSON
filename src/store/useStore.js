@@ -173,6 +173,11 @@ export const getCleanInitialState = () => ({
   },
   caveiraQuestions: (() => {
     try {
+      if (localStorage.getItem('prf_caveira_schema') !== 'v3_strict_clean') {
+        localStorage.removeItem('prf_caveira_questions');
+        localStorage.setItem('prf_caveira_schema', 'v3_strict_clean');
+        return [];
+      }
       const saved = localStorage.getItem('prf_caveira_questions');
       return saved ? JSON.parse(saved) : [];
     } catch (_) {
@@ -306,9 +311,13 @@ export const useStore = create(
             if (!cleanData.petData) {
               cleanData.petData = getCleanInitialState().petData;
             }
-            // Preserva e mescla questões do Caveira sincronizadas
+            // Preserva e mescla questões do Caveira sincronizadas (limpando lote pré-v3 corrompido uma única vez)
+            const isCloudCleanedV3 = localStorage.getItem('prf_caveira_cloud_v3_cleaned') === 'true';
             const currentCaveira = get().caveiraQuestions || [];
-            const remoteCaveira = cleanData.caveiraQuestions || [];
+            const remoteCaveira = isCloudCleanedV3 ? (cleanData.caveiraQuestions || []) : [];
+            if (!isCloudCleanedV3) {
+              try { localStorage.setItem('prf_caveira_cloud_v3_cleaned', 'true'); } catch (_) {}
+            }
             const mergedMap = new Map();
             currentCaveira.forEach(q => mergedMap.set(q.id, q));
             remoteCaveira.forEach(q => mergedMap.set(q.id, { ...(mergedMap.get(q.id) || {}), ...q }));
@@ -345,8 +354,12 @@ export const useStore = create(
                   cleanData.petData = getCleanInitialState().petData;
                 }
                 // Preserva e mescla questões do Caveira sincronizadas
+                const isCloudCleanedV3 = localStorage.getItem('prf_caveira_cloud_v3_cleaned') === 'true';
                 const currentCaveira = get().caveiraQuestions || [];
-                const backupCaveira = cleanData.caveiraQuestions || [];
+                const backupCaveira = isCloudCleanedV3 ? (cleanData.caveiraQuestions || []) : [];
+                if (!isCloudCleanedV3) {
+                  try { localStorage.setItem('prf_caveira_cloud_v3_cleaned', 'true'); } catch (_) {}
+                }
                 const mergedMap = new Map();
                 currentCaveira.forEach(q => mergedMap.set(q.id, q));
                 backupCaveira.forEach(q => mergedMap.set(q.id, { ...(mergedMap.get(q.id) || {}), ...q }));
@@ -957,6 +970,7 @@ export const useStore = create(
       clearCaveiraQuestions: () => {
         set({ caveiraQuestions: [] });
         try { localStorage.removeItem('prf_caveira_questions'); } catch (_) {}
+        try { window.postMessage({ source: 'QG_WEB_APP', type: 'CLEAR_SESSION' }, '*'); } catch (_) {}
         toast.info('Histórico do Raio-X Caveira limpo.');
       },
 
