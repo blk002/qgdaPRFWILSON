@@ -3,13 +3,27 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: 'Inter', sans-serif;
-  --font-display: 'Plus Jakarta Sans', sans-serif;
+  --font-sans: 'Saira', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-display: 'Saira', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
   
-  /* Curated Tactical Palette */
-  --color-tactical-blue: #0f1e36;
-  --color-tactical-slate: #1e293b;
-  --color-tactical-dark: #070c14;
+  /* Paleta True Dark / Carvão Tático do Projeto Caveira (Zero azul) */
+  --color-slate-950: #08080a; /* Fundo absoluto ultra-escuro (Deep Pitch Black) */
+  --color-slate-900: #101014; /* Superfície de cards e painéis */
+  --color-slate-850: #15151a; 
+  --color-slate-800: #1c1d22; /* Bordas e divisores escuros neutros */
+  --color-slate-700: #272832; /* Bordas hover e seleções secundárias */
+  --color-slate-600: #424350;
+  --color-slate-500: #6a6b7d;
+  --color-slate-400: #9da0b3; /* Texto secundário com nitidez e contraste */
+  --color-slate-300: #cbcedd;
+  --color-slate-200: #e2e4ed;
+  --color-slate-100: #f1f2f6;
+  --color-slate-50: #f8f9fb;
+
+  /* Paleta Tática Neutra */
+  --color-tactical-blue: #121318;
+  --color-tactical-slate: #181920;
+  --color-tactical-dark: #060608;
 
   --color-blue-50: var(--theme-blue-50, #eff6ff);
   --color-blue-100: var(--theme-blue-100, #dbeafe);
@@ -27,13 +41,14 @@
 @layer base {
   body {
     @apply transition-colors duration-300 font-sans;
-    font-family: 'Inter', sans-serif;
+    font-family: 'Saira', sans-serif;
+    letter-spacing: 0.01em;
   }
   
   h1, h2, h3, h4, h5, h6, .font-title {
-    font-family: 'Plus Jakarta Sans', sans-serif;
-    font-weight: 750;
-    letter-spacing: -0.02em;
+    font-family: 'Saira', sans-serif;
+    font-weight: 800;
+    letter-spacing: -0.01em;
   }
 }
 
@@ -48,17 +63,17 @@
 .dark .tactical-grid {
   background-size: 40px 40px;
   background-image: 
-    linear-gradient(to right, rgba(59, 130, 246, 0.03) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(59, 130, 246, 0.03) 1px, transparent 1px);
+    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
 }
 
 /* Glassmorphism Styles */
 .glass-card {
-  @apply bg-white/70 dark:bg-slate-900/65 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/60 shadow-lg shadow-slate-100/50 dark:shadow-none transition-all duration-300;
+  @apply bg-white/70 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/80 shadow-lg shadow-slate-100/50 dark:shadow-2xl dark:shadow-black/50 transition-all duration-300;
 }
 
 .glass-card-hover {
-  @apply hover:bg-white/80 dark:hover:bg-slate-900/80 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xl hover:-translate-y-0.5;
+  @apply hover:bg-white/80 dark:hover:bg-slate-900/95 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xl hover:-translate-y-0.5;
 }
 
 /* Custom Tactical Scrollbar */
@@ -83,7 +98,7 @@
 
 :where(.dark, .dark *) .custom-scrollbar-x,
 .dark .custom-scrollbar-x {
-  scrollbar-color: #3b82f6 #0f172a;
+  scrollbar-color: #52525b #08080a;
 }
 
 .custom-scrollbar-x::-webkit-scrollbar {
@@ -98,8 +113,8 @@
 
 :where(.dark, .dark *) .custom-scrollbar-x::-webkit-scrollbar-track,
 .dark .custom-scrollbar-x::-webkit-scrollbar-track {
-  background: #0f172a;
-  border: 1px solid rgba(51, 65, 85, 0.6);
+  background: #08080a;
+  border: 1px solid rgba(255, 255, 255, 0.08);
 }
 
 .custom-scrollbar-x::-webkit-scrollbar-thumb {
@@ -119,14 +134,14 @@
 
 :where(.dark, .dark *) .custom-scrollbar-x::-webkit-scrollbar-thumb,
 .dark .custom-scrollbar-x::-webkit-scrollbar-thumb {
-  background: #3b82f6;
-  border: 2px solid #0f172a;
+  background: #3f3f46;
+  border: 2px solid #08080a;
 }
 
 :where(.dark, .dark *) .custom-scrollbar-x::-webkit-scrollbar-thumb:hover,
 .dark .custom-scrollbar-x::-webkit-scrollbar-thumb:hover {
-  background: #60a5fa;
-  box-shadow: 0 0 10px rgba(59, 130, 246, 0.5);
+  background: #52525b;
+  box-shadow: 0 0 10px rgba(255, 255, 255, 0.15);
 }
 
 /* Hidden scrollbars but maintaining functionality */

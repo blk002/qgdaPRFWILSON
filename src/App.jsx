@@ -240,7 +240,7 @@ export default function App() {
       {/* Tactical background gradient and grid */}
       <div className="absolute inset-0 tactical-grid pointer-events-none -z-20"></div>
       {isDarkMode && (
-        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-blue-500/5 rounded-full blur-[120px] pointer-events-none -z-10 pulse-bg-glow"></div>
+        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-white/[0.01] rounded-full blur-[140px] pointer-events-none -z-10 pulse-bg-glow"></div>
       )}
       <Toaster position="top-right" richColors closeButton />
       
