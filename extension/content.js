@@ -1,4 +1,4 @@
-// QG DA PRF — Rastreador Tático de Questões do Projeto Caveira
+// QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (Otimizado e Seguro)
 
 (function() {
   console.log('💀 [QG da PRF] Rastreador Caveira ativado em:', window.location.href);
@@ -8,9 +8,12 @@
   let currentQuestionId = null;
   let questionStartTime = Date.now();
   let timerInterval = null;
-  let lastCapturedQuestionId = null;
   let lastUserClickedChoice = null;
   let activeQuestionData = null;
+  let scanDebounceTimer = null;
+
+  // Conjunto de questões já processadas nesta aba para evitar reprocessamento ou loop
+  const processedQuestions = new Set();
 
   // Estado da Sessão no HUD
   let sessionStats = {
@@ -22,9 +25,16 @@
   // Carregar sessão salva da extensão
   if (typeof chrome !== 'undefined' && chrome.runtime) {
     chrome.runtime.sendMessage({ type: 'GET_CAVEIRA_QUESTIONS' }, (res) => {
-      if (res && res.session) {
-        sessionStats = res.session;
-        updateHudStats();
+      if (res) {
+        if (res.session) {
+          sessionStats = res.session;
+          updateHudStats();
+        }
+        if (Array.isArray(res.questions)) {
+          res.questions.forEach(q => {
+            if (q.id) processedQuestions.add(q.id);
+          });
+        }
       }
     });
   }
@@ -50,19 +60,19 @@
         <div class="qg-hud-stats-grid">
           <div class="qg-hud-stat-box">
             <span class="qg-hud-stat-label">Feitas</span>
-            <span class="qg-hud-stat-value blue" id="qg-stat-total">0</span>
+            <span class="qg-hud-stat-value blue" id="qg-stat-total">${sessionStats.total}</span>
           </div>
           <div class="qg-hud-stat-box">
             <span class="qg-hud-stat-label">Certas</span>
-            <span class="qg-hud-stat-value green" id="qg-stat-hits">0</span>
+            <span class="qg-hud-stat-value green" id="qg-stat-hits">${sessionStats.hits}</span>
           </div>
           <div class="qg-hud-stat-box">
             <span class="qg-hud-stat-label">Erradas</span>
-            <span class="qg-hud-stat-value red" id="qg-stat-errors">0</span>
+            <span class="qg-hud-stat-value red" id="qg-stat-errors">${sessionStats.errors}</span>
           </div>
           <div class="qg-hud-stat-box">
             <span class="qg-hud-stat-label">Líquida</span>
-            <span class="qg-hud-stat-value gold" id="qg-stat-net">0</span>
+            <span class="qg-hud-stat-value gold" id="qg-stat-net">${sessionStats.hits - sessionStats.errors}</span>
           </div>
         </div>
 
@@ -120,7 +130,7 @@
       }
     });
 
-    // Botoes de confianca e motivo
+    // Botões de confiança e motivo do erro
     hud.querySelectorAll('[data-confidence]').forEach(btn => {
       btn.addEventListener('click', () => {
         hud.querySelectorAll('[data-confidence]').forEach(b => b.classList.remove('active'));
@@ -148,7 +158,7 @@
 
   // --- 2. CRONÔMETRO DE QUESTÃO ---
   function startTimer() {
-    if (timerInterval) clearInterval(timerInterval);
+    if (timerInterval) return; // Evita múltiplos intervals
     timerInterval = setInterval(() => {
       const timerEl = document.getElementById('qg-timer');
       if (!timerEl) return;
@@ -179,7 +189,7 @@
     elNet.className = `qg-hud-stat-value ${net > 0 ? 'green' : net < 0 ? 'red' : 'gold'}`;
   }
 
-  // --- 4. EXTRAÇÃO INTELIGENTE DA QUESTÃO DO PROJETO CAVEIRA ---
+  // --- 4. EXTRAÇÃO INTELIGENTE DA QUESTÃO ---
   function extractQuestionData(card) {
     if (!card) return null;
 
@@ -210,7 +220,7 @@
     const ano = anoMatch ? anoMatch[1].trim() : '2026';
     const difficulty = diffMatch ? diffMatch[1].trim() : 'Média';
 
-    // 4. Enunciado
+    // 4. Enunciado (limitado a 500 caracteres)
     const content = card.querySelector('.content, [class*="content"]')?.innerText?.trim() || '';
 
     // 5. Análise de Acerto / Erro e Alternativas
@@ -257,7 +267,6 @@
       userChoice = detectedIncorrectLetter || lastUserClickedChoice || (detectedCorrectLetter === 'C' ? 'E' : 'C');
       correctChoice = detectedCorrectLetter || (userChoice === 'C' ? 'E' : 'C');
     } else {
-      // Fallback
       if (detectedIncorrectLetter) {
         isCorrect = false;
         userChoice = detectedIncorrectLetter;
@@ -333,10 +342,15 @@
     }, 15000);
   }
 
-  // --- 7. VARREDURA DE QUESTÕES RESPONDIDAS ---
+  // --- 7. VARREDURA SEGURA E DEBOUNCED DE QUESTÕES ---
   function scanCards() {
     createHud();
+
     const cards = document.querySelectorAll('.q-card, [class*="q-card"]');
+    if (cards.length === 0) return;
+
+    // Atualiza a questão ativa no HUD baseada no último clique ou na primeira da lista
+    let activeCard = null;
     cards.forEach(card => {
       const idEl = card.querySelector('.number span, .number, [class*="number"]');
       const idText = idEl ? idEl.textContent.trim() : '';
@@ -344,23 +358,23 @@
       if (!matchId) return;
       const qId = matchId[0].toUpperCase();
 
-      // Atualizar questão ativa no HUD
-      const currentQEl = document.getElementById('qg-current-q-id');
-      if (currentQEl && currentQuestionId !== qId) {
-        currentQuestionId = qId;
-        currentQEl.textContent = qId;
-        resetTimer();
-      }
+      if (!activeCard) activeCard = qId;
 
-      // Checar se a questão já foi respondida
+      // Se a questão já foi processada nesta sessão, não repete
+      if (processedQuestions.has(qId)) return;
+
+      // Checa se tem banner ou classe de resultado
       const statsBox = card.querySelector('.stats-box, [class*="stats-box"]');
       const hasCorrectBanner = card.querySelector('.bg-correct-1, .bg-correct-2');
       const hasIncorrectBanner = card.querySelector('.bg-incorrect-1, .bg-incorrect-2');
-      const hasResult = statsBox || hasCorrectBanner || hasIncorrectBanner || card.textContent.includes('PARABÉNS') || card.textContent.includes('acertou!') || card.textContent.includes('Você errou');
+      const hasResult = statsBox || hasCorrectBanner || hasIncorrectBanner || 
+                        card.textContent.includes('PARABÉNS') || 
+                        card.textContent.includes('acertou!') || 
+                        card.textContent.includes('Você errou');
 
-      if (hasResult && lastCapturedQuestionId !== qId) {
-        lastCapturedQuestionId = qId;
-        console.log(`💀 [QG da PRF] Questão ${qId} detectada com resultado! Processando...`);
+      if (hasResult) {
+        processedQuestions.add(qId);
+        console.log(`💀 [QG da PRF] Questão ${qId} finalizada! Processando...`);
 
         const questionData = extractQuestionData(card);
         if (questionData) {
@@ -371,12 +385,31 @@
         }
       }
     });
+
+    // Atualiza a label do HUD apenas se mudou (sem forçar mutação contínua)
+    if (activeCard && activeCard !== currentQuestionId) {
+      currentQuestionId = activeCard;
+      const currentQEl = document.getElementById('qg-current-q-id');
+      if (currentQEl && currentQEl.textContent !== activeCard) {
+        currentQEl.textContent = activeCard;
+        resetTimer();
+      }
+    }
+  }
+
+  // Debounce para evitar sobrecarga de chamadas
+  function scheduleScan(delay = 250) {
+    if (scanDebounceTimer) clearTimeout(scanDebounceTimer);
+    scanDebounceTimer = setTimeout(scanCards, delay);
   }
 
   // --- 8. CONFIGURAÇÃO DOS GATILHOS E EVENTOS ---
   function setupObserver() {
-    // 1. Monitorar cliques do usuário nas alternativas
+    // 1. Cliques do usuário nas alternativas
     document.addEventListener('click', (e) => {
+      // Ignora cliques que acontecem dentro do nosso HUD
+      if (e.target.closest('#qg-caveira-hud')) return;
+
       const alt = e.target.closest('.alternative, [class*="alternative"]');
       if (alt) {
         const letter = alt.querySelector('.alternative-letter, [class*="alternative-letter"]')?.textContent?.trim();
@@ -389,31 +422,31 @@
       // Clique no botão "Responder"
       const btn = e.target.closest('button, .q-btn');
       if (btn && (btn.textContent.includes('Responder') || btn.classList.contains('light-mode-answer-btn'))) {
-        console.log('💀 [QG da PRF] Botão Responder acionado. Agendando varredura...');
-        setTimeout(scanCards, 200);
-        setTimeout(scanCards, 500);
-        setTimeout(scanCards, 1000);
-        setTimeout(scanCards, 2000);
+        console.log('💀 [QG da PRF] Botão Responder acionado.');
+        scheduleScan(300);
+        scheduleScan(800);
+        scheduleScan(1500);
       }
     }, true);
 
-    // 2. MutationObserver no DOM
-    const observer = new MutationObserver(() => {
-      scanCards();
+    // 2. MutationObserver no DOM com filtro anti-loop
+    const observer = new MutationObserver((mutations) => {
+      // Se TODAS as mutações forem do nosso próprio HUD, ignora completamente!
+      const isInternal = mutations.every(m => m.target.closest && m.target.closest('#qg-caveira-hud'));
+      if (isInternal) return;
+
+      // Agendar varredura debounced (evita loop e acúmulo de memória)
+      scheduleScan(300);
     });
 
     observer.observe(document.body, {
       childList: true,
       subtree: true,
-      attributes: true,
-      attributeFilter: ['class', 'style', 'disabled']
+      attributes: false // Não precisa observar atributos no body inteiro (evita milhares de eventos)
     });
 
-    // 3. Polling de contingência a cada 1.2s
-    setInterval(scanCards, 1200);
-
-    // Executa varredura inicial imediata
-    scanCards();
+    // 3. Varredura inicial suave
+    scheduleScan(500);
   }
 
   // Feedback de áudio Web Audio API
@@ -443,7 +476,7 @@
     } catch (_) {}
   }
 
-  // Inicialização
+  // Inicialização após o DOM carregar
   if (document.readyState === 'loading') {
     document.addEventListener('DOMContentLoaded', () => {
       createHud();
