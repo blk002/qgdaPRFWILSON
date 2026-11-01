@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "QG da PRF — Rastreador Caveira",
-  "version": "1.0.1",
+  "version": "1.0.2",
   "description": "Rastreia e diagnostica cada questão resolvida no Projeto Caveira, sincronizando pontos fortes e fracos no QG da PRF.",
   "icons": {
     "16": "icons/icon16.png",

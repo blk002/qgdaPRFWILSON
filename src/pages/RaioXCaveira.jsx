@@ -2,36 +2,132 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import { 
   Target, AlertTriangle, ShieldCheck, TrendingUp, Clock, 
-  HelpCircle, RefreshCw, Download, Upload, Trash2, CheckCircle2, 
-  XCircle, Zap, BookOpen, ChevronDown, ChevronUp, Copy, Check,
-  ExternalLink, Sparkles, Filter, Award, BrainCircuit, Skull
+  RefreshCw, Download, Upload, Trash2, CheckCircle2, 
+  Zap, BookOpen, ChevronDown, ChevronUp, Copy, Check,
+  BrainCircuit, Skull, Search, Filter, Layers, MessageSquarePlus, Save
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 
+// Classificador Inteligente para a Estrutura Oficial do Edital PRF (Cebraspe)
+export function classifyPRFCategory(subject, topic, content) {
+  const full = `${subject || ''} ${topic || ''} ${content || ''}`.toLowerCase();
+
+  // BLOCO II — Legislação de Trânsito (30 questões na PRF)
+  if (
+    full.includes('trânsito') || full.includes('transito') || full.includes('ctb') ||
+    full.includes('9.503') || full.includes('contran') || full.includes('resolução') ||
+    full.includes('sinalização') || full.includes('habilitação') || full.includes('sinistro')
+  ) {
+    const subCat = (full.includes('contran') || full.includes('resolução'))
+      ? 'Resoluções do CONTRAN'
+      : 'Legislação de Trânsito (CTB)';
+    return { bloco: 'Bloco II', canonicalSubject: subCat };
+  }
+
+  // BLOCO III — Direito e Conhecimentos Específicos (35 questões na PRF)
+  if (full.includes('constitucional') || full.includes('constituição') || full.includes('art. 5') || full.includes('art. 144')) {
+    return { bloco: 'Bloco III', canonicalSubject: 'Direito Constitucional' };
+  }
+  if (full.includes('administrativo') || full.includes('8.112') || full.includes('improbidade') || full.includes('8.429') || full.includes('14.133') || full.includes('licitaç') || full.includes('atos administrativos') || full.includes('poderes administrativos')) {
+    return { bloco: 'Bloco III', canonicalSubject: 'Direito Administrativo' };
+  }
+  if (full.includes('processual penal') || full.includes('processo penal') || full.includes('inquérito') || full.includes('prisão em flagrante') || full.includes('ação penal')) {
+    return { bloco: 'Bloco III', canonicalSubject: 'Direito Processual Penal' };
+  }
+  if (
+    full.includes('legislação especial') || full.includes('leis especiais') || full.includes('11.343') ||
+    full.includes('drogas') || full.includes('10.826') || full.includes('desarmamento') || full.includes('armas') ||
+    full.includes('13.869') || full.includes('abuso de autoridade') || full.includes('9.455') || full.includes('tortura') ||
+    full.includes('8.072') || full.includes('hediondos') || full.includes('12.850') || full.includes('organizações criminosas') ||
+    full.includes('9.099') || full.includes('maria da penha') || full.includes('9.605') || full.includes('meio ambiente') ||
+    full.includes('estatuto da criança') || full.includes('eca')
+  ) {
+    return { bloco: 'Bloco III', canonicalSubject: 'Legislação Penal Especial' };
+  }
+  if (full.includes('direitos humanos') || full.includes('pacto de san josé') || full.includes('declaração universal')) {
+    return { bloco: 'Bloco III', canonicalSubject: 'Direitos Humanos' };
+  }
+  if (full.includes('direito penal') || full.includes('código penal') || full.includes('teoria do crime') || full.includes('crimes contra') || full.includes('peculato') || full.includes('homicídio')) {
+    return { bloco: 'Bloco III', canonicalSubject: 'Direito Penal' };
+  }
+
+  // BLOCO I — Conhecimentos Básicos (55 questões na PRF)
+  if (full.includes('português') || full.includes('portuguesa') || full.includes('gramática') || full.includes('redação oficial') || full.includes('sintaxe') || full.includes('crase') || full.includes('pontuação') || full.includes('concordância') || full.includes('regência')) {
+    return { bloco: 'Bloco I', canonicalSubject: 'Língua Portuguesa' };
+  }
+  if (full.includes('raciocínio lógico') || full.includes('rlm') || full.includes('matemática') || full.includes('probabilidade') || full.includes('estatística') || full.includes('combinatória') || full.includes('proposiç')) {
+    return { bloco: 'Bloco I', canonicalSubject: 'Raciocínio Lógico-Matemático' };
+  }
+  if (full.includes('informática') || full.includes('redes de computadores') || full.includes('segurança da informação') || full.includes('windows') || full.includes('linux') || full.includes('internet') || full.includes('malware')) {
+    return { bloco: 'Bloco I', canonicalSubject: 'Informática' };
+  }
+  if (full.includes('física') || full.includes('cinemática') || full.includes('dinâmica') || full.includes('energia mecânica') || full.includes('colisões') || full.includes('quantidade de movimento')) {
+    return { bloco: 'Bloco I', canonicalSubject: 'Física' };
+  }
+  if (full.includes('ética') || full.includes('1.171') || full.includes('cidadania')) {
+    return { bloco: 'Bloco I', canonicalSubject: 'Ética e Cidadania' };
+  }
+  if (full.includes('geopolítica') || full.includes('geografia')) {
+    return { bloco: 'Bloco I', canonicalSubject: 'Geopolítica' };
+  }
+  if (full.includes('inglês') || full.includes('espanhol') || full.includes('língua estrangeira')) {
+    return { bloco: 'Bloco I', canonicalSubject: 'Língua Estrangeira' };
+  }
+
+  return { bloco: 'Bloco I', canonicalSubject: subject || 'Outras Disciplinas' };
+}
+
+const BLOCO_METADATA = {
+  'Bloco I': {
+    title: 'Bloco I • Básicas',
+    subtitle: 'Português, RLM, Informática, Física, Ética, Geopolítica e Inglês/Espanhol',
+    examWeight: '55 itens na PRF',
+    badgeClass: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
+    accentBorder: 'border-sky-500/40'
+  },
+  'Bloco II': {
+    title: 'Bloco II • Trânsito',
+    subtitle: 'Código de Trânsito Brasileiro (CTB) e Resoluções do CONTRAN',
+    examWeight: '30 itens na PRF (Peso Crítico)',
+    badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+    accentBorder: 'border-amber-500/40'
+  },
+  'Bloco III': {
+    title: 'Bloco III • Direito',
+    subtitle: 'Penal, Processo Penal, Leg. Especial, Constitucional, Administrativo e DH',
+    examWeight: '35 itens na PRF',
+    badgeClass: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+    accentBorder: 'border-purple-500/40'
+  }
+};
+
 export default function RaioXCaveira() {
   const {
     caveiraQuestions = [],
-    addCaveiraQuestion,
     importCaveiraQuestions,
+    updateCaveiraQuestion,
     deleteCaveiraQuestion,
     clearCaveiraQuestions,
-    createFsrsCardFromCaveira,
-    isDarkMode
+    createFsrsCardFromCaveira
   } = useStore();
 
   const [extensionDetected, setExtensionDetected] = useState(false);
-  const [filterType, setFilterType] = useState('all'); // 'all' | 'errors' | 'guesses' | 'hits'
+  const [selectedBloco, setSelectedBloco] = useState('all'); // 'all' | 'Bloco I' | 'Bloco II' | 'Bloco III'
   const [selectedSubject, setSelectedSubject] = useState('all');
+  const [selectedTopic, setSelectedTopic] = useState('all');
+  const [filterType, setFilterType] = useState('all'); // 'all' | 'errors' | 'blindspot' | 'guesses' | 'attention' | 'theory' | 'hits'
+  const [searchQuery, setSearchQuery] = useState('');
   const [expandedSubject, setExpandedSubject] = useState(null);
+  const [editingNoteId, setEditingNoteId] = useState(null);
+  const [noteDraft, setNoteDraft] = useState('');
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importJsonText, setImportJsonText] = useState('');
   const [copiedExtensionPath, setCopiedExtensionPath] = useState(false);
 
-  // Escuta detecção e sincronização da extensão via bridge (apenas 1 vez no mount)
+  // Escuta detecção e sincronização da extensão via bridge
   useEffect(() => {
-    // Checa atributo inserido pelo bridge
     if (document.documentElement.getAttribute('data-qg-caveira-extension-installed') === 'true') {
       setExtensionDetected(true);
     }
@@ -64,146 +160,243 @@ export default function RaioXCaveira() {
     };
 
     window.addEventListener('message', handleMessage);
-
-    // Solicita dados para a extensão se estiver ativa
     window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA' }, '*');
 
     return () => window.removeEventListener('message', handleMessage);
   }, []);
 
-  // Estatísticas Globais
+  // Enriquecimento automático de cada questão com Bloco PRF e Disciplina Padronizada
+  const enrichedQuestions = useMemo(() => {
+    return caveiraQuestions.map(q => {
+      const classified = classifyPRFCategory(q.subject, q.topic, q.content);
+      return {
+        ...q,
+        bloco: q.bloco || classified.bloco,
+        canonicalSubject: q.canonicalSubject || classified.canonicalSubject
+      };
+    });
+  }, [caveiraQuestions]);
+
+  // Questões filtradas pelo Bloco selecionado (para alimentar os painéis analíticos)
+  const blockScopedQuestions = useMemo(() => {
+    if (selectedBloco === 'all') return enrichedQuestions;
+    return enrichedQuestions.filter(q => q.bloco === selectedBloco);
+  }, [enrichedQuestions, selectedBloco]);
+
+  // Estatísticas Globais e Diagnóstico Tático Profundo
   const stats = useMemo(() => {
-    const total = caveiraQuestions.length;
+    const list = blockScopedQuestions;
+    const total = list.length;
     if (total === 0) {
       return {
         total: 0, hits: 0, errors: 0, netScore: 0, grossRate: 0, netRate: 0,
-        avgTimeSec: 0, guessesTotal: 0, guessesNet: 0, errorReasons: {}
+        avgTimeSec: 0, avgHitTimeSec: 0, avgErrorTimeSec: 0,
+        rushedErrors: 0, slowErrors: 0,
+        guessesTotal: 0, guessHits: 0, guessErrors: 0, guessesNet: 0,
+        solidMastery: 0, blindSpots: 0, insecureHits: 0, insecureErrors: 0,
+        errorReasons: { conteudo: 0, atencao: 0, interpretacao: 0 }
       };
     }
 
-    const hits = caveiraQuestions.filter(q => q.hit).length;
-    const errors = total - hits;
+    const hitList = list.filter(q => q.hit);
+    const errorList = list.filter(q => !q.hit);
+    const hits = hitList.length;
+    const errors = errorList.length;
     const netScore = hits - errors; // Modelo Cebraspe: 1 errada anula 1 certa
     const grossRate = Math.round((hits / total) * 100);
     const netRate = Math.max(0, Math.round((netScore / total) * 100));
 
-    const totalSeconds = caveiraQuestions.reduce((acc, q) => acc + (q.durationSeconds || 0), 0);
+    const totalSeconds = list.reduce((acc, q) => acc + (q.durationSeconds || 0), 0);
     const avgTimeSec = Math.round(totalSeconds / total);
 
-    // Chutes
-    const guesses = caveiraQuestions.filter(q => q.confidence === 'chute');
+    const avgHitTimeSec = hits > 0
+      ? Math.round(hitList.reduce((acc, q) => acc + (q.durationSeconds || 0), 0) / hits)
+      : 0;
+    const avgErrorTimeSec = errors > 0
+      ? Math.round(errorList.reduce((acc, q) => acc + (q.durationSeconds || 0), 0) / errors)
+      : 0;
+
+    // Erros por precipitação (< 15s) vs travamento (> 90s)
+    const rushedErrors = errorList.filter(q => (q.durationSeconds || 0) < 15).length;
+    const slowErrors = errorList.filter(q => (q.durationSeconds || 0) > 90).length;
+
+    // Quadrantes de Confiança vs Resultado
+    const solidMastery = list.filter(q => q.hit && (q.confidence === 'sabia' || !q.confidence)).length;
+    const blindSpots = list.filter(q => !q.hit && q.confidence === 'sabia').length; // Sabia e Errou!
+    const insecureHits = list.filter(q => q.hit && q.confidence === 'duvida').length;
+    const insecureErrors = list.filter(q => !q.hit && (q.confidence === 'duvida' || !q.confidence)).length;
+
+    // Auditoria de Chutes
+    const guesses = list.filter(q => q.confidence === 'chute');
     const guessHits = guesses.filter(q => q.hit).length;
     const guessErrors = guesses.length - guessHits;
     const guessesNet = guessHits - guessErrors;
 
-    // Motivos de Erro
+    // Causa Raiz dos Erros
     const errorReasons = {
-      conteudo: caveiraQuestions.filter(q => !q.hit && q.errorReason === 'conteudo').length,
-      atencao: caveiraQuestions.filter(q => !q.hit && q.errorReason === 'atencao').length,
-      interpretacao: caveiraQuestions.filter(q => !q.hit && q.errorReason === 'interpretacao').length,
-      nao_especificado: caveiraQuestions.filter(q => !q.hit && !q.errorReason).length
+      conteudo: errorList.filter(q => !q.errorReason || q.errorReason === 'conteudo').length,
+      atencao: errorList.filter(q => q.errorReason === 'atencao').length,
+      interpretacao: errorList.filter(q => q.errorReason === 'interpretacao').length
     };
 
     return {
       total, hits, errors, netScore, grossRate, netRate,
-      avgTimeSec, guessesTotal: guesses.length, guessesNet, errorReasons
+      avgTimeSec, avgHitTimeSec, avgErrorTimeSec,
+      rushedErrors, slowErrors,
+      guessesTotal: guesses.length, guessHits, guessErrors, guessesNet,
+      solidMastery, blindSpots, insecureHits, insecureErrors,
+      errorReasons
     };
-  }, [caveiraQuestions]);
+  }, [blockScopedQuestions]);
 
-  // Agrupamento por Disciplina e Assunto
+  // Estatísticas por Bloco do Edital PRF (I, II, III)
+  const blocoStats = useMemo(() => {
+    return ['Bloco I', 'Bloco II', 'Bloco III'].map(blocoKey => {
+      const qList = enrichedQuestions.filter(q => q.bloco === blocoKey);
+      const total = qList.length;
+      const hits = qList.filter(q => q.hit).length;
+      const errors = total - hits;
+      const net = hits - errors;
+      const netRate = total > 0 ? Math.max(0, Math.round((net / total) * 100)) : 0;
+      const grossRate = total > 0 ? Math.round((hits / total) * 100) : 0;
+      const avgTime = total > 0 ? Math.round(qList.reduce((a, q) => a + (q.durationSeconds || 0), 0) / total) : 0;
+      return {
+        blocoKey,
+        ...BLOCO_METADATA[blocoKey],
+        total,
+        hits,
+        errors,
+        net,
+        netRate,
+        grossRate,
+        avgTime
+      };
+    });
+  }, [enrichedQuestions]);
+
+  // Agrupamento Hierárquico por Disciplina Padronizada e Tópico
   const subjectGroups = useMemo(() => {
     const groups = {};
 
-    caveiraQuestions.forEach(q => {
-      const subName = q.subject || 'Outras';
+    blockScopedQuestions.forEach(q => {
+      const subName = q.canonicalSubject || q.subject || 'Outras';
       if (!groups[subName]) {
         groups[subName] = {
           name: subName,
+          bloco: q.bloco || 'Bloco I',
           total: 0,
           hits: 0,
           errors: 0,
+          blindSpots: 0,
+          totalTime: 0,
           topics: {}
         };
       }
 
       groups[subName].total += 1;
+      groups[subName].totalTime += (q.durationSeconds || 0);
       if (q.hit) groups[subName].hits += 1;
-      else groups[subName].errors += 1;
+      else {
+        groups[subName].errors += 1;
+        if (q.confidence === 'sabia') groups[subName].blindSpots += 1;
+      }
 
-      // Agrupamento por tópico
-      const topicName = q.topic || 'Geral';
-      if (!groups[subName].topics[topicName]) {
-        groups[subName].topics[topicName] = {
-          name: topicName,
+      const topicLabel = (q.topic && q.topic !== q.subject)
+        ? `${q.subject} ➔ ${q.topic}`
+        : (q.topic || q.subject || 'Geral');
+
+      if (!groups[subName].topics[topicLabel]) {
+        groups[subName].topics[topicLabel] = {
+          name: topicLabel,
+          shortTopic: q.topic || 'Geral',
+          rawSubject: q.subject || 'Geral',
           total: 0,
           hits: 0,
           errors: 0,
+          blindSpots: 0,
           questions: []
         };
       }
-      groups[subName].topics[topicName].total += 1;
-      if (q.hit) groups[subName].topics[topicName].hits += 1;
-      else groups[subName].topics[topicName].errors += 1;
-      groups[subName].topics[topicName].questions.push(q);
+
+      const t = groups[subName].topics[topicLabel];
+      t.total += 1;
+      if (q.hit) t.hits += 1;
+      else {
+        t.errors += 1;
+        if (q.confidence === 'sabia') t.blindSpots += 1;
+      }
+      t.questions.push(q);
     });
 
-    // Calcular notas e status
     return Object.values(groups).map(g => {
       const net = g.hits - g.errors;
       const netPercent = g.total > 0 ? Math.round((net / g.total) * 100) : 0;
       const grossPercent = g.total > 0 ? Math.round((g.hits / g.total) * 100) : 0;
+      const avgTime = g.total > 0 ? Math.round(g.totalTime / g.total) : 0;
 
-      // Status Tático:
-      // Blindagem: > 70% líquida com >= 5 questões
-      // Vulnerabilidade: < 50% líquida
-      // Em disputa: meio termo
       let status = 'disputa';
-      if (g.total >= 5 && netPercent >= 70) status = 'blindagem';
-      else if (netPercent < 50) status = 'vulnerabilidade';
+      if (g.total >= 3 && netPercent >= 70) status = 'blindagem';
+      else if (netPercent < 50 || net < 0) status = 'vulnerabilidade';
 
       const topicsList = Object.values(g.topics).map(t => {
         const tNet = t.hits - t.errors;
         const tNetPct = t.total > 0 ? Math.round((tNet / t.total) * 100) : 0;
         return { ...t, net: tNet, netPercent: tNetPct };
-      }).sort((a, b) => a.netPercent - b.netPercent); // Piores tópicos primeiro!
+      }).sort((a, b) => a.net - b.net || a.netPercent - b.netPercent);
 
       return {
         ...g,
         net,
         netPercent,
         grossPercent,
+        avgTime,
         status,
         topicsList
       };
-    }).sort((a, b) => a.netPercent - b.netPercent); // Matérias com maior sangria primeiro!
-  }, [caveiraQuestions]);
+    }).sort((a, b) => a.net - b.net || a.netPercent - b.netPercent);
+  }, [blockScopedQuestions]);
 
-  // Lista de Questões Filtrada
+  // Lista de Questões Filtrada para o Caderno Tático
   const filteredQuestions = useMemo(() => {
-    return caveiraQuestions.filter(q => {
+    const query = searchQuery.trim().toLowerCase();
+    return blockScopedQuestions.filter(q => {
+      if (selectedSubject !== 'all' && q.canonicalSubject !== selectedSubject) return false;
+      if (selectedTopic !== 'all') {
+        const topicLabel = (q.topic && q.topic !== q.subject)
+          ? `${q.subject} ➔ ${q.topic}`
+          : (q.topic || q.subject || 'Geral');
+        if (topicLabel !== selectedTopic) return false;
+      }
+
       if (filterType === 'errors' && q.hit) return false;
       if (filterType === 'hits' && !q.hit) return false;
+      if (filterType === 'blindspot' && (q.hit || q.confidence !== 'sabia')) return false;
       if (filterType === 'guesses' && q.confidence !== 'chute') return false;
-      if (selectedSubject !== 'all' && q.subject !== selectedSubject) return false;
+      if (filterType === 'attention' && (q.hit || q.errorReason !== 'atencao')) return false;
+      if (filterType === 'theory' && (q.hit || (q.errorReason && q.errorReason !== 'conteudo'))) return false;
+
+      if (query) {
+        const hay = `${q.id} ${q.canonicalSubject} ${q.subject} ${q.topic} ${q.content} ${q.userNote || ''}`.toLowerCase();
+        if (!hay.includes(query)) return false;
+      }
+
       return true;
     });
-  }, [caveiraQuestions, filterType, selectedSubject]);
+  }, [blockScopedQuestions, selectedSubject, selectedTopic, filterType, searchQuery]);
 
-  // Sincronizar via Bridge
   const handleRequestSync = () => {
     window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA' }, '*');
-    toast.info('Solicitando questões atualizadas para a extensão...');
+    toast.info('Sincronizando questões com a extensão...');
   };
 
-  // Importar JSON manual
   const handleImportJson = () => {
     try {
       const parsed = JSON.parse(importJsonText);
       const list = Array.isArray(parsed) ? parsed : [parsed];
-      const count = importCaveiraQuestions(list, false);
+      importCaveiraQuestions(list, false);
       setShowImportModal(false);
       setImportJsonText('');
-    } catch (e) {
+    } catch (_) {
       toast.error('JSON inválido! Verifique a formatação.');
     }
   };
@@ -216,9 +409,16 @@ export default function RaioXCaveira() {
       importCaveiraQuestions(list, false);
       setShowImportModal(false);
       setImportJsonText('');
-    } catch (e) {
+    } catch (_) {
       toast.error('Não foi possível ler JSON válido da área de transferência.');
     }
+  };
+
+  const handleSaveNote = (qId) => {
+    updateCaveiraQuestion(qId, { userNote: noteDraft.trim() });
+    setEditingNoteId(null);
+    setNoteDraft('');
+    toast.success('Bizu tático salvo na questão!');
   };
 
   return (
@@ -234,7 +434,7 @@ export default function RaioXCaveira() {
               💀
             </div>
             <div>
-              <div className="flex items-center gap-3">
+              <div className="flex items-center gap-3 flex-wrap">
                 <h1 className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white uppercase tracking-tight">
                   Raio-X Projeto Caveira
                 </h1>
@@ -248,12 +448,11 @@ export default function RaioXCaveira() {
                 </span>
               </div>
               <p className="text-xs font-bold text-slate-400 uppercase mt-1">
-                Auditoria questão por questão com pontuação líquida Cebraspe e diagnóstico de sangria de pontos.
+                Categorização automática nos 3 Blocos do Edital PRF, matriz de confiança e diagnóstico de sangria Cebraspe.
               </p>
             </div>
           </div>
 
-          {/* BOTÕES DE CONTROLE */}
           <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
             {extensionDetected ? (
               <button
@@ -296,12 +495,74 @@ export default function RaioXCaveira() {
         </div>
       </div>
 
-      {/* KPI CARDS (MODELO CEBRASPE REAL) */}
+      {/* PAINEL 1: RADAR DOS 3 BLOCOS DO EDITAL PRF */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        {blocoStats.map(b => {
+          const isSelected = selectedBloco === b.blocoKey;
+          return (
+            <div
+              key={b.blocoKey}
+              onClick={() => {
+                setSelectedBloco(isSelected ? 'all' : b.blocoKey);
+                setSelectedSubject('all');
+                setSelectedTopic('all');
+              }}
+              className={`glass-card rounded-2xl p-5 border transition-all cursor-pointer relative overflow-hidden ${
+                isSelected
+                  ? `${b.accentBorder} bg-blue-500/5 ring-2 ring-blue-500/30`
+                  : 'border-slate-200 dark:border-slate-800/80 hover:border-slate-700'
+              }`}
+            >
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${b.badgeClass}`}>
+                  {b.title}
+                </span>
+                <span className="text-[10px] font-bold text-slate-400 uppercase">
+                  {b.examWeight}
+                </span>
+              </div>
+
+              <p className="text-[10px] text-slate-400 font-semibold line-clamp-1 mb-3">
+                {b.subtitle}
+              </p>
+
+              <div className="flex items-end justify-between">
+                <div>
+                  <span className="text-[10px] font-black uppercase text-slate-400 block">Saldo Líquido</span>
+                  <div className="flex items-baseline gap-1.5">
+                    <span className={`text-2xl font-black ${b.net >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                      {b.net > 0 ? `+${b.net}` : b.net}
+                    </span>
+                    <span className="text-xs font-bold text-slate-400">pts ({b.netRate}%)</span>
+                  </div>
+                </div>
+
+                <div className="text-right text-[10px] font-bold text-slate-400 uppercase space-y-0.5">
+                  <div>{b.total} feitas ({b.hits}C • {b.errors}E)</div>
+                  <div className="text-slate-500">⏱️ Média: {b.avgTime}s</div>
+                </div>
+              </div>
+
+              <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all ${
+                    b.netRate >= 70 ? 'bg-emerald-500' : b.netRate >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                  }`}
+                  style={{ width: `${b.total > 0 ? Math.max(6, Math.min(100, b.netRate)) : 0}%` }}
+                />
+              </div>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* KPI CARDS GERAIS */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        {/* Total e Tempo Médio */}
         <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
           <div className="flex justify-between items-center text-slate-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">Questões Auditadas</span>
+            <span className="text-[10px] font-black uppercase tracking-wider">
+              Questões ({selectedBloco === 'all' ? 'Geral' : selectedBloco})
+            </span>
             <Target className="w-4 h-4 text-blue-500" />
           </div>
           <div className="my-2">
@@ -314,7 +575,6 @@ export default function RaioXCaveira() {
           </span>
         </div>
 
-        {/* Nota Líquida Cebraspe */}
         <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
           <div className="flex justify-between items-center text-slate-400">
             <span className="text-[10px] font-black uppercase tracking-wider">Líquida Cebraspe</span>
@@ -331,7 +591,6 @@ export default function RaioXCaveira() {
           </span>
         </div>
 
-        {/* Bruto vs Líquido */}
         <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
           <div className="flex justify-between items-center text-slate-400">
             <span className="text-[10px] font-black uppercase tracking-wider">Aproveitamento</span>
@@ -342,11 +601,10 @@ export default function RaioXCaveira() {
             <span className="text-xs font-bold text-slate-400">líquido</span>
           </div>
           <span className="text-[10px] text-slate-500 font-bold uppercase">
-            Bruto: {stats.grossRate}% (Perda de {Math.max(0, stats.grossRate - stats.netRate)}%)
+            Bruto: {stats.grossRate}% (Penalidade: -{Math.max(0, stats.grossRate - stats.netRate)}%)
           </span>
         </div>
 
-        {/* Eficiência do Chute */}
         <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
           <div className="flex justify-between items-center text-slate-400">
             <span className="text-[10px] font-black uppercase tracking-wider">Saldo dos Chutes</span>
@@ -359,26 +617,198 @@ export default function RaioXCaveira() {
             <span className="text-xs font-bold text-slate-400">pts</span>
           </div>
           <span className="text-[10px] text-slate-500 font-bold uppercase">
-            {stats.guessesTotal} chutes • {stats.guessesNet < 0 ? '⚠️ Deixar em branco renderia mais!' : '✓ Chutes com saldo positivo'}
+            {stats.guessesTotal} chutes ({stats.guessHits}C / {stats.guessErrors}E)
           </span>
         </div>
       </div>
 
-      {/* MATRIZ DE PONTOS FORTES E VULNERABILIDADES */}
+      {/* PAINEL 2: MATRIZ DE CONFIANÇA VS RESULTADO & ANÁLISE DE CAUSA RAIZ */}
+      {stats.total > 0 && (
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+          {/* Matriz Psicológica de Confiança */}
+          <div className="glass-card rounded-[2rem] p-6 border border-slate-200 dark:border-slate-800 space-y-4">
+            <div>
+              <h3 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
+                <Layers className="w-4 h-4 text-blue-500" /> Matriz de Domínio vs. Ilusão de Competência
+              </h3>
+              <p className="text-[11px] font-bold text-slate-400 uppercase mt-0.5">
+                Clique em qualquer quadrante para filtrar as questões correspondentes no caderno.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-2 gap-3">
+              {/* Quadrante 1: Domínio Real */}
+              <div
+                onClick={() => setFilterType(filterType === 'hits' ? 'all' : 'hits')}
+                className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                  filterType === 'hits'
+                    ? 'border-emerald-500 bg-emerald-500/15'
+                    : 'border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/40'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase text-emerald-400">🎯 Domínio Sólido</span>
+                  <span className="text-xs font-black text-emerald-400">
+                    {stats.total > 0 ? Math.round((stats.solidMastery / stats.total) * 100) : 0}%
+                  </span>
+                </div>
+                <div className="text-2xl font-black text-white my-1">{stats.solidMastery}</div>
+                <p className="text-[10px] font-bold text-slate-400">
+                  Marcou "Sabia" e acertou. Conteúdo blindado.
+                </p>
+              </div>
+
+              {/* Quadrante 2: Ponto Cego (Sabia + Errou) */}
+              <div
+                onClick={() => setFilterType(filterType === 'blindspot' ? 'all' : 'blindspot')}
+                className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                  filterType === 'blindspot'
+                    ? 'border-red-500 bg-red-500/20'
+                    : 'border-red-500/30 bg-red-500/10 hover:border-red-500/50'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase text-red-400">🚨 Ponto Cego (Perigo)</span>
+                  <span className="text-xs font-black text-red-400">-{stats.blindSpots * 2} pts</span>
+                </div>
+                <div className="text-2xl font-black text-white my-1">{stats.blindSpots}</div>
+                <p className="text-[10px] font-bold text-slate-300">
+                  Achava que sabia, mas errou! Prioridade #1 de revisão.
+                </p>
+              </div>
+
+              {/* Quadrante 3: Dúvida */}
+              <div
+                onClick={() => setFilterType('all')}
+                className="p-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 hover:border-amber-500/40 cursor-pointer transition-all"
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase text-amber-400">🤔 Zona de Dúvida</span>
+                  <span className="text-xs font-black text-amber-400">
+                    {stats.insecureHits}C / {stats.insecureErrors}E
+                  </span>
+                </div>
+                <div className="text-2xl font-black text-white my-1">
+                  {stats.insecureHits + stats.insecureErrors}
+                </div>
+                <p className="text-[10px] font-bold text-slate-400">
+                  Teoria instável. Exige fixação de lei seca/FSRS.
+                </p>
+              </div>
+
+              {/* Quadrante 4: Chutes */}
+              <div
+                onClick={() => setFilterType(filterType === 'guesses' ? 'all' : 'guesses')}
+                className={`p-4 rounded-2xl border cursor-pointer transition-all ${
+                  filterType === 'guesses'
+                    ? 'border-purple-500 bg-purple-500/20'
+                    : 'border-purple-500/20 bg-purple-500/5 hover:border-purple-500/40'
+                }`}
+              >
+                <div className="flex items-center justify-between">
+                  <span className="text-[10px] font-black uppercase text-purple-400">🎲 Risco de Chute</span>
+                  <span className={`text-xs font-black ${stats.guessesNet >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
+                    Saldo: {stats.guessesNet > 0 ? `+${stats.guessesNet}` : stats.guessesNet}
+                  </span>
+                </div>
+                <div className="text-2xl font-black text-white my-1">{stats.guessesTotal}</div>
+                <p className="text-[10px] font-bold text-slate-400">
+                  {stats.guessesNet < 0 ? 'Deixar em branco teria poupado pontos!' : 'Chutes conscientes com saldo positivo.'}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          {/* Diagnóstico da Causa Raiz dos Erros & Ritmo de Prova */}
+          <div className="glass-card rounded-[2rem] p-6 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-4">
+            <div>
+              <h3 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4 text-rose-500" /> Causa Raiz dos Erros & Ritmo Operacional
+              </h3>
+              <p className="text-[11px] font-bold text-slate-400 uppercase mt-0.5">
+                Por que você está perdendo pontos e como o tempo afeta sua precisão.
+              </p>
+            </div>
+
+            <div className="space-y-3">
+              {[
+                {
+                  key: 'conteudo',
+                  filter: 'theory',
+                  label: '📚 Lacuna de Teoria / Lei Seca',
+                  count: stats.errorReasons.conteudo,
+                  color: 'bg-red-500',
+                  textColor: 'text-red-400'
+                },
+                {
+                  key: 'atencao',
+                  filter: 'attention',
+                  label: '⚠️ Falta de Atenção / Leitura Rápida',
+                  count: stats.errorReasons.atencao,
+                  color: 'bg-amber-500',
+                  textColor: 'text-amber-400'
+                },
+                {
+                  key: 'interpretacao',
+                  filter: 'errors',
+                  label: '🔍 Interpretação / Pegadinha do Enunciado',
+                  count: stats.errorReasons.interpretacao,
+                  color: 'bg-purple-500',
+                  textColor: 'text-purple-400'
+                }
+              ].map(item => {
+                const pct = stats.errors > 0 ? Math.round((item.count / stats.errors) * 100) : 0;
+                return (
+                  <div
+                    key={item.key}
+                    onClick={() => setFilterType(filterType === item.filter ? 'all' : item.filter)}
+                    className="cursor-pointer group"
+                  >
+                    <div className="flex justify-between text-xs font-black uppercase mb-1">
+                      <span className={`${item.textColor} group-hover:underline`}>{item.label}</span>
+                      <span className="text-slate-300">{item.count} erros ({pct}%)</span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
+                      <div className={`${item.color} h-full rounded-full transition-all`} style={{ width: `${pct}%` }} />
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200 dark:border-slate-800/80 text-center">
+              <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/70">
+                <span className="text-[9px] font-black uppercase text-slate-400 block">Tempo nos Acertos</span>
+                <span className="text-sm font-black text-emerald-400">{stats.avgHitTimeSec}s</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/70">
+                <span className="text-[9px] font-black uppercase text-slate-400 block">Tempo nos Erros</span>
+                <span className="text-sm font-black text-red-400">{stats.avgErrorTimeSec}s</span>
+              </div>
+              <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/70">
+                <span className="text-[9px] font-black uppercase text-slate-400 block">Erros &lt; 15s (Pressa)</span>
+                <span className="text-sm font-black text-amber-400">{stats.rushedErrors}</span>
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* PAINEL 3: MATRIZ DE COMBATE POR DISCIPLINA E TÓPICOS */}
       <div className="glass-card rounded-[2rem] p-6 sm:p-8 border border-slate-200 dark:border-slate-800">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h2 className="text-base sm:text-lg font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-blue-500" /> Matriz de Combate por Disciplina
+              <ShieldCheck className="w-5 h-5 text-blue-500" /> Categorização por Disciplina & Tópicos do Edital
             </h2>
             <p className="text-xs font-bold text-slate-400 uppercase mt-0.5">
-              Disciplinas ranqueadas pela necessidade de resgate urgente.
+              Clique em uma disciplina para abrir os capítulos/assuntos e clique em um assunto para filtrar as questões abaixo.
             </p>
           </div>
 
           <div className="flex items-center gap-3 text-xs font-black uppercase">
             <span className="flex items-center gap-1.5 text-emerald-500">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Blindagem
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Blindagem (&ge;70%)
             </span>
             <span className="flex items-center gap-1.5 text-amber-500">
               <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Disputa
@@ -392,17 +822,18 @@ export default function RaioXCaveira() {
         {subjectGroups.length === 0 ? (
           <div className="text-center py-12 text-slate-400">
             <Skull className="w-12 h-12 mx-auto text-slate-600 mb-3" />
-            <p className="font-black text-sm uppercase">Nenhuma questão registrada ainda</p>
+            <p className="font-black text-sm uppercase">Nenhuma questão registrada neste filtro</p>
             <p className="text-xs font-bold mt-1 text-slate-500">
-              Abra o Projeto Caveira com a extensão ativada para iniciar o rastreamento automático.
+              Resolva questões no Projeto Caveira para alimentar a árvore de disciplinas e tópicos automaticamente.
             </p>
           </div>
         ) : (
           <div className="space-y-4">
             {subjectGroups.map(sub => {
               const isExpanded = expandedSubject === sub.name;
+              const blocoMeta = BLOCO_METADATA[sub.bloco] || BLOCO_METADATA['Bloco I'];
               return (
-                <div 
+                <div
                   key={sub.name}
                   className={`rounded-2xl border transition-all overflow-hidden ${
                     sub.status === 'vulnerabilidade'
@@ -412,12 +843,15 @@ export default function RaioXCaveira() {
                         : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40'
                   }`}
                 >
-                  <div 
+                  <div
                     onClick={() => setExpandedSubject(isExpanded ? null : sub.name)}
                     className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:bg-slate-100/40 dark:hover:bg-slate-800/40 transition-colors"
                   >
                     <div className="flex-1">
-                      <div className="flex items-center gap-2.5 flex-wrap">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${blocoMeta.badgeClass}`}>
+                          {sub.bloco}
+                        </span>
                         <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
                           sub.status === 'vulnerabilidade'
                             ? 'bg-red-500 text-white'
@@ -427,17 +861,38 @@ export default function RaioXCaveira() {
                         }`}>
                           {sub.status === 'vulnerabilidade' ? 'Sangria de Pontos' : sub.status === 'blindagem' ? 'Blindado' : 'Em Disputa'}
                         </span>
+                        {sub.blindSpots > 0 && (
+                          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30">
+                            🚨 {sub.blindSpots} Ponto(s) Cego(s)
+                          </span>
+                        )}
                         <h3 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase">
                           {sub.name}
                         </h3>
                       </div>
                       <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
-                        {sub.total} questões • {sub.hits} acertos • {sub.errors} erros
+                        {sub.total} questões • {sub.hits} certas • {sub.errors} erradas • Bruto: {sub.grossPercent}% • ⏱️ Média: {sub.avgTime}s
                       </p>
                     </div>
 
-                    <div className="flex items-center gap-6">
-                      <div className="text-right">
+                    <div className="flex items-center gap-4">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          setSelectedSubject(selectedSubject === sub.name ? 'all' : sub.name);
+                          setSelectedTopic('all');
+                        }}
+                        className={`text-[10px] font-black uppercase px-3 py-1.5 rounded-xl border transition-all cursor-pointer ${
+                          selectedSubject === sub.name
+                            ? 'bg-blue-600 text-white border-blue-500'
+                            : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:text-white'
+                        }`}
+                      >
+                        {selectedSubject === sub.name ? '✓ Filtrado' : 'Filtrar Matéria'}
+                      </button>
+
+                      <div className="text-right min-w-[90px]">
                         <span className="text-[10px] font-black text-slate-400 uppercase block">Saldo Cebraspe</span>
                         <span className={`text-xl font-black ${sub.net >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
                           {sub.net > 0 ? `+${sub.net}` : sub.net} pts ({sub.netPercent}%)
@@ -459,43 +914,66 @@ export default function RaioXCaveira() {
                         exit={{ height: 0, opacity: 0 }}
                         className="border-t border-slate-200 dark:border-slate-800/80 p-4 sm:p-5 bg-white/40 dark:bg-slate-950/40 space-y-3"
                       >
-                        <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">
-                          Diagnóstico por Tópico no Caveira:
-                        </h4>
+                        <div className="flex items-center justify-between">
+                          <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">
+                            Assuntos e Capítulos Mapeados ({sub.topicsList.length}):
+                          </h4>
+                          {selectedTopic !== 'all' && (
+                            <button
+                              onClick={() => setSelectedTopic('all')}
+                              className="text-[10px] font-black uppercase text-blue-400 hover:underline"
+                            >
+                              Limpar filtro de tópico
+                            </button>
+                          )}
+                        </div>
 
                         <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                          {sub.topicsList.map(topic => (
-                            <div 
-                              key={topic.name}
-                              className="p-3.5 rounded-xl bg-slate-100 dark:bg-slate-900 border border-slate-200/60 dark:border-slate-800 flex flex-col justify-between"
-                            >
-                              <div>
-                                <div className="flex justify-between items-start gap-2">
-                                  <h5 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase line-clamp-2">
-                                    {topic.name}
-                                  </h5>
-                                  <span className={`text-[10px] font-black shrink-0 ${topic.net >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                    {topic.net > 0 ? `+${topic.net}` : topic.net} pts
-                                  </span>
+                          {sub.topicsList.map(topic => {
+                            const isTopicActive = selectedTopic === topic.name;
+                            return (
+                              <div
+                                key={topic.name}
+                                onClick={() => {
+                                  setSelectedSubject(sub.name);
+                                  setSelectedTopic(isTopicActive ? 'all' : topic.name);
+                                }}
+                                className={`p-3.5 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
+                                  isTopicActive
+                                    ? 'bg-blue-500/10 border-blue-500 ring-1 ring-blue-500/40'
+                                    : 'bg-slate-100 dark:bg-slate-900 border-slate-200/60 dark:border-slate-800 hover:border-slate-700'
+                                }`}
+                              >
+                                <div>
+                                  <div className="flex justify-between items-start gap-2">
+                                    <h5 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase line-clamp-2">
+                                      {topic.name}
+                                    </h5>
+                                    <span className={`text-[10px] font-black shrink-0 ${topic.net >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
+                                      {topic.net > 0 ? `+${topic.net}` : topic.net} pts ({topic.netPercent}%)
+                                    </span>
+                                  </div>
+                                  <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full ${topic.netPercent >= 70 ? 'bg-emerald-500' : topic.netPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                      style={{ width: `${Math.max(5, Math.min(100, topic.netPercent))}%` }}
+                                    />
+                                  </div>
                                 </div>
-                                <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
-                                  <div 
-                                    className={`h-full rounded-full ${topic.netPercent >= 70 ? 'bg-emerald-500' : topic.netPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
-                                    style={{ width: `${Math.max(5, Math.min(100, topic.netPercent))}%` }}
-                                  />
-                                </div>
-                              </div>
 
-                              <div className="flex justify-between items-center text-[9px] font-bold text-slate-400 uppercase mt-3">
-                                <span>{topic.total} questões ({topic.hits}C / {topic.errors}E)</span>
-                                {topic.errors > 0 && (
-                                  <span className="text-red-400">
-                                    ⚠️ {topic.errors} erros a resgatar
-                                  </span>
-                                )}
+                                <div className="flex justify-between items-center text-[9px] font-bold text-slate-400 uppercase mt-3">
+                                  <span>{topic.total} questões ({topic.hits}C / {topic.errors}E)</span>
+                                  {topic.errors > 0 ? (
+                                    <span className="text-red-400">
+                                      ⚠️ {topic.errors} erro(s) • Clique p/ auditar
+                                    </span>
+                                  ) : (
+                                    <span className="text-emerald-400">✓ 100% Invicto</span>
+                                  )}
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </motion.div>
                     )}
@@ -507,117 +985,245 @@ export default function RaioXCaveira() {
         )}
       </div>
 
-      {/* CADERNO DE ERROS E HISTÓRICO DE QUESTÕES */}
-      <div className="glass-card rounded-[2rem] p-6 sm:p-8 border border-slate-200 dark:border-slate-800">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      {/* PAINEL 4: CADERNO TÁTICO INTERATIVO DE QUESTÕES & ERROS */}
+      <div className="glass-card rounded-[2rem] p-6 sm:p-8 border border-slate-200 dark:border-slate-800 space-y-5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h2 className="text-base sm:text-lg font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-purple-500" /> Caderno Tático de Questões & Erros
+              <BookOpen className="w-5 h-5 text-purple-500" /> Caderno Tático de Questões Auditadas ({filteredQuestions.length})
             </h2>
             <p className="text-xs font-bold text-slate-400 uppercase mt-0.5">
-              Crie flashcards de revisão no FSRS diretamente a partir de questões erradas.
+              Reclassifique a confiança, aponte o motivo do erro, anote bizus e envie direto para o FSRS.
             </p>
           </div>
 
-          {/* FILTROS */}
-          <div className="flex flex-wrap gap-2">
-            {[
-              { id: 'all', label: 'Todas' },
-              { id: 'errors', label: 'Apenas Erros' },
-              { id: 'guesses', label: 'Chutes' },
-              { id: 'hits', label: 'Acertos' }
-            ].map(f => (
+          {/* BUSCA RÁPIDA E SELETOR DE MATÉRIA */}
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative flex-1 sm:w-64">
+              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
+              <input
+                type="text"
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                placeholder="Buscar Q112415, assunto ou texto..."
+                className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl pl-8 pr-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-purple-500"
+              />
+            </div>
+
+            {(selectedBloco !== 'all' || selectedSubject !== 'all' || selectedTopic !== 'all' || filterType !== 'all' || searchQuery) && (
               <button
-                key={f.id}
-                onClick={() => setFilterType(f.id)}
-                className={`px-3 py-1.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all cursor-pointer ${
-                  filterType === f.id
-                    ? 'bg-purple-600 text-white shadow-md'
-                    : 'bg-slate-100 dark:bg-slate-800 text-slate-500 hover:text-white'
-                }`}
+                onClick={() => {
+                  setSelectedBloco('all');
+                  setSelectedSubject('all');
+                  setSelectedTopic('all');
+                  setFilterType('all');
+                  setSearchQuery('');
+                }}
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-black uppercase text-amber-400 cursor-pointer"
               >
-                {f.label}
+                Limpar Filtros ✕
               </button>
-            ))}
+            )}
           </div>
+        </div>
+
+        {/* CHIPS DE FILTRO TÁTICO */}
+        <div className="flex flex-wrap gap-2">
+          {[
+            { id: 'all', label: 'Todas' },
+            { id: 'errors', label: '✗ Apenas Erros' },
+            { id: 'blindspot', label: '🚨 Ponto Cego (Sabia e Errou)' },
+            { id: 'guesses', label: '🎲 Chutes' },
+            { id: 'attention', label: '⚠️ Falta de Atenção' },
+            { id: 'theory', label: '📚 Lacuna de Teoria' },
+            { id: 'hits', label: '✓ Acertos' }
+          ].map(f => (
+            <button
+              key={f.id}
+              onClick={() => setFilterType(f.id)}
+              className={`px-3 py-1.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all cursor-pointer ${
+                filterType === f.id
+                  ? 'bg-purple-600 text-white shadow-md'
+                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-white'
+              }`}
+            >
+              {f.label}
+            </button>
+          ))}
         </div>
 
         {filteredQuestions.length === 0 ? (
           <div className="text-center py-10 text-slate-400">
             <CheckCircle2 className="w-10 h-10 mx-auto text-slate-600 mb-2" />
-            <p className="font-bold text-xs uppercase">Nenhuma questão com os filtros selecionados</p>
+            <p className="font-bold text-xs uppercase">Nenhuma questão encontrada para os filtros selecionados</p>
           </div>
         ) : (
           <div className="space-y-3">
-            {filteredQuestions.slice(0, 50).map(q => (
-              <div
-                key={q.id + q.timestamp}
-                className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-900/60 flex flex-col md:flex-row items-start md:items-center justify-between gap-4"
-              >
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap mb-1">
-                    <span className="font-mono text-xs font-black text-blue-500 bg-blue-500/10 px-2 py-0.5 rounded">
-                      {q.id}
-                    </span>
-                    <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
-                      q.hit ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500'
-                    }`}>
-                      {q.hit ? 'Acertou' : 'Errou'}
-                    </span>
-                    <span className="text-[10px] font-bold text-slate-400 bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded uppercase">
-                      {q.banca} • {q.ano}
-                    </span>
-                    {q.confidence === 'chute' && (
-                      <span className="text-[10px] font-black text-purple-400 bg-purple-500/10 px-2 py-0.5 rounded uppercase">
-                        🎲 Chute
+            {filteredQuestions.slice(0, 80).map(q => {
+              const blocoMeta = BLOCO_METADATA[q.bloco] || BLOCO_METADATA['Bloco I'];
+              const isEditingThisNote = editingNoteId === q.id;
+              return (
+                <div
+                  key={q.id + (q.timestamp || '')}
+                  className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col gap-3 ${
+                    !q.hit && q.confidence === 'sabia'
+                      ? 'border-red-500/40 bg-red-500/5'
+                      : 'border-slate-200 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-900/60'
+                  }`}
+                >
+                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono text-xs font-black text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded">
+                        {q.id}
                       </span>
-                    )}
-                    {q.errorReason && (
-                      <span className="text-[10px] font-black text-rose-400 bg-rose-500/10 px-2 py-0.5 rounded uppercase">
-                        Motivo: {q.errorReason}
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${blocoMeta.badgeClass}`}>
+                        {q.bloco} • {q.canonicalSubject}
                       </span>
-                    )}
+                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
+                        q.hit ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
+                      }`}>
+                        {q.hit ? '✓ Acertou' : '✗ Errou'}
+                      </span>
+                      <span className="text-[10px] font-bold text-slate-400 bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded uppercase">
+                        {q.banca} • {q.ano}
+                      </span>
+                      <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded">
+                        ⏱️ {q.durationSeconds}s
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-2 self-end md:self-auto">
+                      <span className="text-[10px] font-bold text-slate-400 uppercase mr-1">
+                        Marcou: <strong className={q.hit ? 'text-emerald-400' : 'text-red-400'}>{q.userChoice}</strong> | Gabarito: <strong className="text-emerald-400">{q.correctChoice}</strong>
+                      </span>
+
+                      <button
+                        onClick={() => {
+                          setEditingNoteId(isEditingThisNote ? null : q.id);
+                          setNoteDraft(q.userNote || '');
+                        }}
+                        className="p-2 text-slate-400 hover:text-amber-400 rounded-lg hover:bg-amber-500/10 transition-colors cursor-pointer"
+                        title="Adicionar/Editar Bizu ou Anotação na Questão"
+                      >
+                        <MessageSquarePlus className="w-4 h-4" />
+                      </button>
+
+                      <button
+                        onClick={() => createFsrsCardFromCaveira(q)}
+                        className={`${
+                          q.fsrsCreated
+                            ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
+                            : 'bg-purple-600 hover:bg-purple-500 text-white'
+                        } font-black text-[10px] uppercase px-3 py-1.5 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1`}
+                        title="Criar Flashcard de Revisão no FSRS"
+                      >
+                        <BrainCircuit className="w-3.5 h-3.5" /> {q.fsrsCreated ? 'No FSRS ✓' : '+ FSRS'}
+                      </button>
+
+                      <button
+                        onClick={() => deleteCaveiraQuestion(q.id)}
+                        className="p-2 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
+                        title="Excluir questão do histórico"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
                   </div>
 
-                  <p className="text-xs font-bold text-slate-500 dark:text-slate-400 uppercase truncate">
-                    {q.subject} ➔ {q.topic}
+                  {/* Trilha Hierárquica do Assunto/Tópico */}
+                  <p className="text-xs font-bold text-slate-400 uppercase">
+                    📂 {q.subject} {q.topic && q.topic !== q.subject ? `➔ ${q.topic}` : ''}
                   </p>
 
-                  <p className="text-xs text-slate-700 dark:text-slate-300 mt-1 line-clamp-2 italic">
+                  {/* Enunciado */}
+                  <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed bg-slate-100/80 dark:bg-slate-950/60 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800/60">
                     "{q.content}"
                   </p>
-                </div>
 
-                <div className="flex items-center gap-3 shrink-0 w-full md:w-auto justify-between md:justify-end border-t md:border-t-0 pt-2 md:pt-0 border-slate-200 dark:border-slate-800">
-                  <div className="text-right">
-                    <div className="text-[10px] font-bold text-slate-400 uppercase">
-                      Marcou: <strong className="text-white">{q.userChoice}</strong> | Gabarito: <strong className="text-emerald-400">{q.correctChoice}</strong>
+                  {/* Anotação Tática / Bizu Salvo */}
+                  {q.userNote && !isEditingThisNote && (
+                    <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-300 font-semibold flex items-center justify-between">
+                      <span>💡 <strong>Bizu Tático:</strong> {q.userNote}</span>
+                      <button
+                        onClick={() => {
+                          setEditingNoteId(q.id);
+                          setNoteDraft(q.userNote || '');
+                        }}
+                        className="text-[10px] font-black uppercase text-amber-400 hover:underline ml-3"
+                      >
+                        Editar
+                      </button>
                     </div>
-                    <div className="text-[9px] text-slate-500 font-mono">
-                      ⏱️ {q.durationSeconds}s
-                    </div>
-                  </div>
-
-                  {!q.hit && (
-                    <button
-                      onClick={() => createFsrsCardFromCaveira(q)}
-                      className="bg-purple-600 hover:bg-purple-500 text-white font-black text-[10px] uppercase px-3 py-2 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1"
-                      title="Criar Flashcard no FSRS"
-                    >
-                      <BrainCircuit className="w-3.5 h-3.5" /> FSRS
-                    </button>
                   )}
 
-                  <button
-                    onClick={() => deleteCaveiraQuestion(q.id)}
-                    className="p-2 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors"
-                    title="Excluir questão do histórico"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" />
-                  </button>
+                  {/* Campo de Edição de Nota */}
+                  {isEditingThisNote && (
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={noteDraft}
+                        onChange={(e) => setNoteDraft(e.target.value)}
+                        placeholder="Digite a pegadinha da questão, artigo da lei ou bizu de revisão..."
+                        className="flex-1 bg-slate-950 border border-amber-500/40 rounded-xl px-3 py-2 text-xs text-white outline-none"
+                      />
+                      <button
+                        onClick={() => handleSaveNote(q.id)}
+                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase px-3.5 py-2 rounded-xl flex items-center gap-1 cursor-pointer"
+                      >
+                        <Save className="w-3.5 h-3.5" /> Salvar
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Barra Interativa de Reclassificação Tática (Confiança e Motivo do Erro) */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-200/60 dark:border-slate-800/60">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span className="text-[10px] font-black uppercase text-slate-400 mr-1">Confiança:</span>
+                      {[
+                        { id: 'sabia', label: '🎯 Sabia' },
+                        { id: 'duvida', label: '🤔 Dúvida' },
+                        { id: 'chute', label: '🎲 Chute' }
+                      ].map(c => (
+                        <button
+                          key={c.id}
+                          onClick={() => updateCaveiraQuestion(q.id, { confidence: c.id })}
+                          className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all cursor-pointer ${
+                            q.confidence === c.id
+                              ? 'bg-sky-500 text-slate-950 shadow-sm'
+                              : 'bg-slate-200 dark:bg-slate-800 text-slate-400 hover:text-white'
+                          }`}
+                        >
+                          {c.label}
+                        </button>
+                      ))}
+                    </div>
+
+                    {!q.hit && (
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        <span className="text-[10px] font-black uppercase text-rose-400 mr-1">Causa do Erro:</span>
+                        {[
+                          { id: 'conteudo', label: '📚 Teoria / Lei' },
+                          { id: 'atencao', label: '⚠️ Atenção' },
+                          { id: 'interpretacao', label: '🔍 Interpretação' }
+                        ].map(r => (
+                          <button
+                            key={r.id}
+                            onClick={() => updateCaveiraQuestion(q.id, { errorReason: r.id })}
+                            className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all cursor-pointer ${
+                              (q.errorReason || 'conteudo') === r.id
+                                ? 'bg-rose-500 text-white shadow-sm'
+                                : 'bg-slate-200 dark:bg-slate-800 text-slate-400 hover:text-white'
+                            }`}
+                          >
+                            {r.label}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>
@@ -664,7 +1270,7 @@ export default function RaioXCaveira() {
                   <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] shrink-0 font-black">3</span>
                   <div>
                     <p className="text-white font-black uppercase mb-0.5">Clique em "Carregar sem compactação"</p>
-                    <p className="text-slate-400 mb-1">Selecione a pasta raiz da extensão (NÃO entre na pasta icons):</p>
+                    <p className="text-slate-400 mb-1">Selecione a pasta raiz da extensão:</p>
                     <div className="flex items-center gap-1.5 mb-2">
                       <code className="text-amber-400 bg-slate-900 px-2 py-1 rounded text-[10px] truncate block font-mono flex-1">
                         C:\Users\wilso\Downloads\teste\extension
@@ -681,9 +1287,6 @@ export default function RaioXCaveira() {
                         {copiedExtensionPath ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
                     </div>
-                    <p className="text-[10px] text-amber-400/90 font-semibold bg-amber-500/10 p-2 rounded-lg border border-amber-500/20">
-                      💡 Dica: Na janela de escolha de pasta, apenas clique uma vez sobre a pasta "extension" e clique em "Selecionar Pasta".
-                    </p>
                   </div>
                 </div>
               </div>

@@ -959,6 +959,13 @@ export const useStore = create(
         return newCount;
       },
 
+      updateCaveiraQuestion: (id, updates) => {
+        const { caveiraQuestions = [] } = get();
+        const updated = caveiraQuestions.map(q => q.id === id ? { ...q, ...updates } : q);
+        set({ caveiraQuestions: updated });
+        try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updated)); } catch (_) {}
+      },
+
       deleteCaveiraQuestion: (id) => {
         const { caveiraQuestions = [] } = get();
         const updated = caveiraQuestions.filter(q => q.id !== id);
@@ -975,13 +982,14 @@ export const useStore = create(
       },
 
       createFsrsCardFromCaveira: (question) => {
-        const { reviews = [], getLocalDateStr, subjects, playSound } = get();
+        const { reviews = [], caveiraQuestions = [], getLocalDateStr, subjects, playSound } = get();
         
         // Tenta associar com uma matéria do edital se o nome bater
         let matchedSubjectId = Object.keys(subjects)[0] || 'sub_transito';
+        const qSubLower = (question.canonicalSubject || question.subject || '').toLowerCase();
         for (const [subId, sub] of Object.entries(subjects)) {
-          if (question.subject.toLowerCase().includes(sub.name.toLowerCase()) || 
-              sub.name.toLowerCase().includes(question.subject.toLowerCase())) {
+          const sNameLower = (sub.name || '').toLowerCase();
+          if (qSubLower.includes(sNameLower) || sNameLower.includes(qSubLower)) {
             matchedSubjectId = subId;
             break;
           }
@@ -991,11 +999,12 @@ export const useStore = create(
         tomorrow.setDate(tomorrow.getDate() + 1);
         const tomorrowStr = getLocalDateStr(tomorrow);
 
+        const noteLine = question.userNote ? `\nBizu / Anotação Tática: ${question.userNote}` : '';
         const newReview = {
           id: 'rev_caveira_' + question.id + '_' + Date.now(),
           subjectId: matchedSubjectId,
           topicName: `[Caveira ${question.id}] ${question.topic || question.subject}`,
-          notes: `Enunciado: ${question.content || ''}\nGabarito: ${question.correctChoice} (Você marcou: ${question.userChoice})\nMotivo do erro: ${question.errorReason || 'Conteúdo'}`,
+          notes: `Enunciado: ${question.content || ''}\nGabarito: ${question.correctChoice} (Você marcou: ${question.userChoice})\nMotivo do erro: ${question.errorReason || 'Conteúdo'}${noteLine}`,
           nextDateStr: tomorrowStr,
           interval: 0,
           stability: 0,
@@ -1004,7 +1013,9 @@ export const useStore = create(
           lastPerformance: 0.5
         };
 
-        set({ reviews: [newReview, ...reviews] });
+        const updatedQuestions = caveiraQuestions.map(q => q.id === question.id ? { ...q, fsrsCreated: true } : q);
+        set({ reviews: [newReview, ...reviews], caveiraQuestions: updatedQuestions });
+        try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updatedQuestions)); } catch (_) {}
         playSound('coin');
         toast.success(`🃏 Flashcard criado no FSRS para revisão amanhã: ${question.id}`);
       },

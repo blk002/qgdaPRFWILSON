@@ -345,6 +345,74 @@
     );
   }
 
+  function classifyPRFCategory(subject, topic, content) {
+    const full = `${subject || ''} ${topic || ''} ${content || ''}`.toLowerCase();
+
+    // BLOCO II — Legislação de Trânsito
+    if (
+      full.includes('trânsito') || full.includes('transito') || full.includes('ctb') ||
+      full.includes('9.503') || full.includes('contran') || full.includes('resolução') ||
+      full.includes('sinalização') || full.includes('habilitação') || full.includes('sinistro')
+    ) {
+      const subCat = (full.includes('contran') || full.includes('resolução'))
+        ? 'Resoluções do CONTRAN'
+        : 'Legislação de Trânsito (CTB)';
+      return { bloco: 'Bloco II', canonicalSubject: subCat };
+    }
+
+    // BLOCO III — Direito e Conhecimentos Específicos
+    if (full.includes('constitucional') || full.includes('constituição') || full.includes('art. 5') || full.includes('art. 144')) {
+      return { bloco: 'Bloco III', canonicalSubject: 'Direito Constitucional' };
+    }
+    if (full.includes('administrativo') || full.includes('8.112') || full.includes('improbidade') || full.includes('8.429') || full.includes('14.133') || full.includes('licitaç') || full.includes('atos administrativos') || full.includes('poderes administrativos')) {
+      return { bloco: 'Bloco III', canonicalSubject: 'Direito Administrativo' };
+    }
+    if (full.includes('processual penal') || full.includes('processo penal') || full.includes('inquérito') || full.includes('prisão em flagrante') || full.includes('ação penal')) {
+      return { bloco: 'Bloco III', canonicalSubject: 'Direito Processual Penal' };
+    }
+    if (
+      full.includes('legislação especial') || full.includes('leis especiais') || full.includes('11.343') ||
+      full.includes('drogas') || full.includes('10.826') || full.includes('desarmamento') || full.includes('armas') ||
+      full.includes('13.869') || full.includes('abuso de autoridade') || full.includes('9.455') || full.includes('tortura') ||
+      full.includes('8.072') || full.includes('hediondos') || full.includes('12.850') || full.includes('organizações criminosas') ||
+      full.includes('9.099') || full.includes('maria da penha') || full.includes('9.605') || full.includes('meio ambiente') ||
+      full.includes('estatuto da criança') || full.includes('eca')
+    ) {
+      return { bloco: 'Bloco III', canonicalSubject: 'Legislação Penal Especial' };
+    }
+    if (full.includes('direitos humanos') || full.includes('pacto de san josé') || full.includes('declaração universal')) {
+      return { bloco: 'Bloco III', canonicalSubject: 'Direitos Humanos' };
+    }
+    if (full.includes('direito penal') || full.includes('código penal') || full.includes('teoria do crime') || full.includes('crimes contra') || full.includes('peculato') || full.includes('homicídio')) {
+      return { bloco: 'Bloco III', canonicalSubject: 'Direito Penal' };
+    }
+
+    // BLOCO I — Conhecimentos Básicos
+    if (full.includes('português') || full.includes('portuguesa') || full.includes('gramática') || full.includes('redação oficial') || full.includes('sintaxe') || full.includes('crase') || full.includes('pontuação') || full.includes('concordância') || full.includes('regência')) {
+      return { bloco: 'Bloco I', canonicalSubject: 'Língua Portuguesa' };
+    }
+    if (full.includes('raciocínio lógico') || full.includes('rlm') || full.includes('matemática') || full.includes('probabilidade') || full.includes('estatística') || full.includes('combinatória') || full.includes('proposiç')) {
+      return { bloco: 'Bloco I', canonicalSubject: 'Raciocínio Lógico-Matemático' };
+    }
+    if (full.includes('informática') || full.includes('redes de computadores') || full.includes('segurança da informação') || full.includes('windows') || full.includes('linux') || full.includes('internet') || full.includes('malware')) {
+      return { bloco: 'Bloco I', canonicalSubject: 'Informática' };
+    }
+    if (full.includes('física') || full.includes('cinemática') || full.includes('dinâmica') || full.includes('energia mecânica') || full.includes('colisões') || full.includes('quantidade de movimento')) {
+      return { bloco: 'Bloco I', canonicalSubject: 'Física' };
+    }
+    if (full.includes('ética') || full.includes('1.171') || full.includes('cidadania')) {
+      return { bloco: 'Bloco I', canonicalSubject: 'Ética e Cidadania' };
+    }
+    if (full.includes('geopolítica') || full.includes('geografia')) {
+      return { bloco: 'Bloco I', canonicalSubject: 'Geopolítica' };
+    }
+    if (full.includes('inglês') || full.includes('espanhol') || full.includes('língua estrangeira')) {
+      return { bloco: 'Bloco I', canonicalSubject: 'Língua Estrangeira' };
+    }
+
+    return { bloco: 'Bloco I', canonicalSubject: subject || 'Geral' };
+  }
+
   function extractQuestionData(card, qId) {
     if (!card) return null;
 
@@ -353,9 +421,9 @@
     let topic = 'Geral';
     if (subjectEl) {
       const text = subjectEl.textContent.trim();
-      const parts = text.split('->');
-      subject = parts[0]?.trim() || 'Geral';
-      topic = parts.slice(1).join('->').trim() || subject;
+      const parts = text.split('->').map(s => s.trim()).filter(Boolean);
+      subject = parts[0] || 'Geral';
+      topic = parts.slice(1).join(' ➔ ') || subject;
     }
 
     const infoText = card.querySelector('.question-info')?.textContent || '';
@@ -368,6 +436,7 @@
     const difficulty = diffMatch ? diffMatch[1].trim() : 'Média';
 
     const content = card.querySelector('.content')?.innerText?.trim() || '';
+    const { bloco, canonicalSubject } = classifyPRFCategory(subject, topic, content);
 
     const statsBox = card.querySelector('.stats-box');
     const statsText = statsBox ? statsBox.textContent : '';
@@ -408,6 +477,8 @@
 
     return {
       id: qId,
+      bloco,
+      canonicalSubject,
       subject,
       topic,
       banca,
