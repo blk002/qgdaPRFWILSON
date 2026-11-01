@@ -417,60 +417,58 @@ export default function RaioXCaveira() {
   };
 
   return (
-    <div className="fade-in w-full pb-14 font-sans space-y-6">
+    <div className="fade-in w-full pb-12 font-sans space-y-4">
 
       {/* HEADER DA SEÇÃO */}
-      <div className="glass-card rounded-[2.2rem] p-6 sm:p-8 border border-slate-200 dark:border-slate-800/80 shadow-xl relative overflow-hidden">
-        <div className="absolute top-0 right-0 w-80 h-80 bg-red-600/10 rounded-full blur-3xl pointer-events-none -z-10" />
-
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-6">
-          <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-slate-900 to-red-950 border-2 border-red-500/40 flex items-center justify-center text-3xl shadow-lg shadow-red-500/20 shrink-0">
+      <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800/80 shadow-xl relative overflow-hidden">
+        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
+          <div className="flex items-center gap-3.5">
+            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-slate-900 to-red-950 border border-red-500/40 flex items-center justify-center text-2xl shadow-md shrink-0">
               💀
             </div>
             <div>
-              <div className="flex items-center gap-3 flex-wrap">
-                <h1 className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white uppercase tracking-tight">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tight">
                   Raio-X Projeto Caveira
                 </h1>
-                <span className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-full border flex items-center gap-1.5 ${
+                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border flex items-center gap-1.5 ${
                   extensionDetected
                     ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
                     : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
                 }`}>
-                  <span className={`w-2 h-2 rounded-full ${extensionDetected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                  {extensionDetected ? 'Extensão Conectada' : 'Extensão Pendente'}
+                  <span className={`w-1.5 h-1.5 rounded-full ${extensionDetected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                  {extensionDetected ? 'Conectada' : 'Pendente'}
                 </span>
               </div>
-              <p className="text-xs font-medium text-slate-400 mt-1">
-                Acompanhamento objetivo de questões e taxa de acerto por bloco e disciplina do edital da PRF.
+              <p className="text-xs font-medium text-slate-400 mt-0.5">
+                Acompanhamento objetivo de questões por bloco e disciplina da PRF.
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2.5 w-full md:w-auto">
+          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
             {extensionDetected ? (
               <button
                 onClick={handleRequestSync}
-                className="flex items-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase px-4 py-2.5 rounded-xl shadow-lg shadow-blue-500/20 transition-all cursor-pointer"
+                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase px-3.5 py-2 rounded-xl shadow-md transition-all cursor-pointer"
               >
-                <RefreshCw className="w-4 h-4" /> Sincronizar
+                <RefreshCw className="w-3.5 h-3.5" /> Sincronizar
               </button>
             ) : (
               <button
                 onClick={() => setShowInstallModal(true)}
-                className="flex items-center gap-2 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs uppercase px-4 py-2.5 rounded-xl shadow-lg shadow-red-500/25 transition-all cursor-pointer"
+                className="flex items-center gap-1.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs uppercase px-3.5 py-2 rounded-xl shadow-md transition-all cursor-pointer"
               >
-                <Download className="w-4 h-4" /> Ativar Extensão
+                <Download className="w-3.5 h-3.5" /> Ativar Extensão
               </button>
             )}
 
             <button
               onClick={() => setShowImportModal(true)}
-              className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-black text-xs uppercase px-3.5 py-2.5 rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-black text-xs uppercase px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
               title="Importar questões via JSON"
             >
-              <Upload className="w-4 h-4" /> Importar
+              <Upload className="w-3.5 h-3.5" /> Importar
             </button>
 
             {caveiraQuestions.length > 0 && (
@@ -480,7 +478,7 @@ export default function RaioXCaveira() {
                     clearCaveiraQuestions();
                   }
                 }}
-                className="p-2.5 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl border border-red-500/20 transition-all cursor-pointer"
+                className="p-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl border border-red-500/20 transition-all cursor-pointer"
                 title="Limpar histórico do Caveira"
               >
                 <Trash2 className="w-4 h-4" />
@@ -490,8 +488,73 @@ export default function RaioXCaveira() {
         </div>
       </div>
 
-      {/* PAINEL 1: RADAR DOS 3 BLOCOS DO EDITAL PRF */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+      {/* KPI CARDS GERAIS (COMPACTOS E HORIZONTAIS — SEM ESPAÇO VAZIO) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800/80 flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+            <Target className="w-5 h-5 text-blue-500" />
+          </div>
+          <div className="min-w-0">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block truncate">
+              Resolvidas ({selectedBloco === 'all' ? 'Geral' : selectedBloco})
+            </span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black text-slate-800 dark:text-white leading-tight">{stats.total}</span>
+              <span className="text-[11px] text-slate-400 font-medium truncate">⏱️ {stats.avgTimeSec}s/q</span>
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800/80 flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+          </div>
+          <div className="min-w-0">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Acertos</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black text-emerald-500 leading-tight">{stats.hits}</span>
+              <span className="text-[11px] text-slate-400 font-medium truncate">
+                ({stats.total > 0 ? Math.round((stats.hits / stats.total) * 100) : 0}%)
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800/80 flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
+            <XCircle className="w-5 h-5 text-red-500" />
+          </div>
+          <div className="min-w-0">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Erros</span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black text-red-500 leading-tight">{stats.errors}</span>
+              <span className="text-[11px] text-slate-400 font-medium truncate">
+                ({stats.total > 0 ? Math.round((stats.errors / stats.total) * 100) : 0}%)
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800/80 flex items-center gap-3.5">
+          <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+            <TrendingUp className="w-5 h-5 text-amber-500" />
+          </div>
+          <div className="min-w-0">
+            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Aproveitamento</span>
+            <div className="flex items-baseline gap-2">
+              <span className={`text-2xl font-black leading-tight ${stats.grossRate >= 75 ? 'text-emerald-500' : stats.grossRate >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                {stats.grossRate}%
+              </span>
+              <span className="text-[11px] text-slate-400 font-medium truncate">
+                {stats.hits}C / {stats.errors}E
+              </span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* PAINEL 1: RADAR DOS 3 BLOCOS DO EDITAL PRF (COMPACTO) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {blocoStats.map(b => {
           const isSelected = selectedBloco === b.blocoKey;
           return (
@@ -502,37 +565,27 @@ export default function RaioXCaveira() {
                 setSelectedSubject('all');
                 setSelectedTopic('all');
               }}
-              className={`glass-card rounded-2xl p-4 sm:p-5 border transition-all cursor-pointer relative overflow-hidden ${
+              className={`glass-card rounded-2xl p-3.5 border transition-all cursor-pointer ${
                 isSelected
                   ? `${b.accentBorder} bg-blue-500/10 ring-2 ring-blue-500/30`
                   : 'border-slate-200 dark:border-slate-800/80 hover:border-slate-700'
               }`}
             >
-              <div className="flex items-center justify-between gap-2 mb-3">
-                <span className={`text-[11px] font-black uppercase px-2.5 py-0.5 rounded-full border ${b.badgeClass}`}>
-                  {b.title}
-                </span>
-                <span className="text-[11px] font-bold text-slate-400">
-                  {b.examWeight}
+              <div className="flex items-center justify-between gap-2 mb-2">
+                <div className="flex items-center gap-2">
+                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${b.badgeClass}`}>
+                    {b.title}
+                  </span>
+                  <span className="text-[11px] font-bold text-slate-400">
+                    {b.total} feitas ({b.hits}C • {b.errors}E)
+                  </span>
+                </div>
+                <span className={`text-lg font-black ${b.total === 0 ? 'text-slate-400' : b.grossRate >= 75 ? 'text-emerald-500' : b.grossRate >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                  {b.grossRate}%
                 </span>
               </div>
 
-              <div className="flex items-end justify-between">
-                <div>
-                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Acerto</span>
-                  <div className="flex items-baseline gap-1.5">
-                    <span className={`text-2xl font-black ${b.total === 0 ? 'text-slate-400' : b.grossRate >= 75 ? 'text-emerald-500' : b.grossRate >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-                      {b.grossRate}%
-                    </span>
-                  </div>
-                </div>
-
-                <div className="text-right text-xs font-bold text-slate-300">
-                  <div>{b.total} feitas ({b.hits}C • {b.errors}E)</div>
-                </div>
-              </div>
-
-              <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
+              <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${
                     b.grossRate >= 75 ? 'bg-emerald-500' : b.grossRate >= 50 ? 'bg-amber-500' : 'bg-red-500'
@@ -545,178 +598,125 @@ export default function RaioXCaveira() {
         })}
       </div>
 
-      {/* KPI CARDS GERAIS (OBJETIVOS E DIRETOS) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
-          <div className="flex justify-between items-center text-slate-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider">
-              Resolvidas ({selectedBloco === 'all' ? 'Geral' : selectedBloco})
-            </span>
-            <Target className="w-4 h-4 text-blue-500" />
-          </div>
-          <div className="my-2">
-            <span className="text-3xl font-black text-slate-800 dark:text-white">
-              {stats.total}
-            </span>
-          </div>
-          <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
-            <Clock className="w-3.5 h-3.5" /> Média de {stats.avgTimeSec}s por questão
-          </span>
-        </div>
-
-        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
-          <div className="flex justify-between items-center text-slate-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Acertos</span>
-            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
-          </div>
-          <div className="my-2 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-emerald-500">
-              {stats.hits}
-            </span>
-            <span className="text-xs text-slate-400">certas</span>
-          </div>
-          <span className="text-[11px] text-slate-400 font-medium">
-            {stats.total > 0 ? Math.round((stats.hits / stats.total) * 100) : 0}% do total
-          </span>
-        </div>
-
-        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
-          <div className="flex justify-between items-center text-slate-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Erros</span>
-            <XCircle className="w-4 h-4 text-red-500" />
-          </div>
-          <div className="my-2 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-red-500">{stats.errors}</span>
-            <span className="text-xs text-slate-400">erradas</span>
-          </div>
-          <span className="text-[11px] text-slate-400 font-medium">
-            {stats.total > 0 ? Math.round((stats.errors / stats.total) * 100) : 0}% do total
-          </span>
-        </div>
-
-        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
-          <div className="flex justify-between items-center text-slate-400">
-            <span className="text-[11px] font-bold uppercase tracking-wider">Aproveitamento</span>
-            <TrendingUp className="w-4 h-4 text-amber-500" />
-          </div>
-          <div className="my-2 flex items-baseline gap-2">
-            <span className={`text-3xl font-black ${stats.grossRate >= 75 ? 'text-emerald-500' : stats.grossRate >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-              {stats.grossRate}%
-            </span>
-          </div>
-          <span className="text-[11px] text-slate-400 font-medium">
-            {stats.hits} certas de {stats.total} questões
-          </span>
-        </div>
-      </div>
-
-      {/* PAINEL 3: MATRIZ DE COMBATE POR DISCIPLINA E TÓPICOS */}
-      <div className="glass-card rounded-[2rem] p-6 sm:p-8 border border-slate-200 dark:border-slate-800">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
+      {/* PAINEL 2: DESEMPENHO POR DISCIPLINA (EM GRID DE CARDS COMPACTOS) */}
+      <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
           <div>
-            <h2 className="text-base sm:text-lg font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-blue-500" /> Desempenho por Disciplina ({subjectGroups.length})
+            <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
+              <ShieldCheck className="w-4 h-4 text-blue-500" /> Desempenho por Disciplina ({subjectGroups.length})
             </h2>
-            <p className="text-xs font-medium text-slate-400 mt-0.5">
-              Clique em uma matéria para ver o rendimento por assunto.
+            <p className="text-xs font-medium text-slate-400">
+              Clique em uma matéria para expandir os assuntos ou filtrar questões.
             </p>
           </div>
 
-          <div className="flex items-center gap-3 text-xs font-black uppercase">
-            <span className="flex items-center gap-1.5 text-emerald-500">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Blindagem (&ge;75%)
+          <div className="flex items-center gap-3 text-[11px] font-bold uppercase">
+            <span className="flex items-center gap-1 text-emerald-500">
+              <span className="w-2 h-2 rounded-full bg-emerald-500" /> &ge;75%
             </span>
-            <span className="flex items-center gap-1.5 text-amber-500">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Em Evolução
+            <span className="flex items-center gap-1 text-amber-500">
+              <span className="w-2 h-2 rounded-full bg-amber-500" /> 50–74%
             </span>
-            <span className="flex items-center gap-1.5 text-red-500">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Reforço (&lt;50%)
+            <span className="flex items-center gap-1 text-red-500">
+              <span className="w-2 h-2 rounded-full bg-red-500" /> &lt;50%
             </span>
           </div>
         </div>
 
         {subjectGroups.length === 0 ? (
-          <div className="text-center py-12 text-slate-400">
-            <Skull className="w-12 h-12 mx-auto text-slate-600 mb-3" />
-            <p className="font-black text-sm uppercase">Nenhuma questão registrada neste filtro</p>
-            <p className="text-xs font-bold mt-1 text-slate-500">
-              Resolva questões no Projeto Caveira para alimentar a árvore de disciplinas e tópicos automaticamente.
+          <div className="text-center py-8 text-slate-400">
+            <Skull className="w-10 h-10 mx-auto text-slate-600 mb-2" />
+            <p className="font-black text-xs uppercase">Nenhuma questão registrada neste filtro</p>
+            <p className="text-xs mt-1 text-slate-500">
+              Resolva questões no Projeto Caveira para alimentar as disciplinas automaticamente.
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
             {subjectGroups.map(sub => {
               const isExpanded = expandedSubject === sub.name;
               const blocoMeta = BLOCO_METADATA[sub.bloco] || BLOCO_METADATA['Bloco I'];
               return (
                 <div
                   key={sub.name}
-                  className={`rounded-2xl border transition-all overflow-hidden ${
+                  className={`rounded-xl border transition-all flex flex-col justify-between overflow-hidden ${
+                    isExpanded ? 'md:col-span-2 lg:col-span-3' : ''
+                  } ${
                     sub.status === 'vulnerabilidade'
                       ? 'border-red-500/30 bg-red-500/5'
                       : sub.status === 'blindagem'
                         ? 'border-emerald-500/30 bg-emerald-500/5'
-                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/40'
+                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50'
                   }`}
                 >
                   <div
                     onClick={() => setExpandedSubject(isExpanded ? null : sub.name)}
-                    className="p-4 sm:p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4 cursor-pointer hover:bg-slate-100/40 dark:hover:bg-slate-800/40 transition-colors"
+                    className="p-3.5 cursor-pointer hover:bg-slate-100/40 dark:hover:bg-slate-800/40 transition-colors flex flex-col gap-2.5"
                   >
-                    <div className="flex-1">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded border ${blocoMeta.badgeClass}`}>
-                          {sub.bloco}
-                        </span>
-                        <span className={`text-[9px] font-black uppercase px-2 py-0.5 rounded-md ${
-                          sub.status === 'vulnerabilidade'
-                            ? 'bg-red-500 text-white'
-                            : sub.status === 'blindagem'
-                              ? 'bg-emerald-500 text-white'
-                              : 'bg-amber-500 text-slate-950'
-                        }`}>
-                          {sub.status === 'vulnerabilidade' ? 'Prioridade de Revisão' : sub.status === 'blindagem' ? 'Blindado' : 'Em Evolução'}
-                        </span>
-                        {sub.blindSpots > 0 && (
-                          <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30">
-                            🚨 {sub.blindSpots} Ponto(s) Cego(s)
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                          <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${blocoMeta.badgeClass}`}>
+                            {sub.bloco}
                           </span>
-                        )}
-                        <h3 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase">
+                          <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
+                            sub.status === 'vulnerabilidade'
+                              ? 'bg-red-500 text-white'
+                              : sub.status === 'blindagem'
+                                ? 'bg-emerald-500 text-white'
+                                : 'bg-amber-500 text-slate-950'
+                          }`}>
+                            {sub.status === 'vulnerabilidade' ? 'Reforço' : sub.status === 'blindagem' ? 'Blindado' : 'Evolução'}
+                          </span>
+                        </div>
+                        <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase truncate" title={sub.name}>
                           {sub.name}
                         </h3>
                       </div>
-                      <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
-                        {sub.total} questões • {sub.hits} certas • {sub.errors} erradas • ⏱️ Média: {sub.avgTime}s
-                      </p>
-                    </div>
 
-                    <div className="flex items-center gap-4">
-                      <button
-                        type="button"
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          setSelectedSubject(selectedSubject === sub.name ? 'all' : sub.name);
-                          setSelectedTopic('all');
-                        }}
-                        className={`text-[10px] font-black uppercase px-3 py-1.5 rounded-xl border transition-all cursor-pointer ${
-                          selectedSubject === sub.name
-                            ? 'bg-blue-600 text-white border-blue-500'
-                            : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:text-white'
-                        }`}
-                      >
-                        {selectedSubject === sub.name ? '✓ Filtrado' : 'Filtrar Matéria'}
-                      </button>
-
-                      <div className="text-right min-w-[90px]">
-                        <span className="text-[10px] font-black text-slate-400 uppercase block">Aproveitamento</span>
-                        <span className={`text-xl font-black ${sub.grossPercent >= 75 ? 'text-emerald-500' : sub.grossPercent >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-                          {sub.grossPercent}% ({sub.hits}C/{sub.errors}E)
+                      <div className="text-right shrink-0">
+                        <span className={`text-lg font-black leading-none block ${sub.grossPercent >= 75 ? 'text-emerald-500' : sub.grossPercent >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                          {sub.grossPercent}%
+                        </span>
+                        <span className="text-[10px] font-bold text-slate-400">
+                          {sub.hits}C / {sub.errors}E
                         </span>
                       </div>
+                    </div>
 
-                      <div className="w-6 h-6 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-500">
-                        {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                    <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          sub.grossPercent >= 75 ? 'bg-emerald-500' : sub.grossPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                        }`}
+                        style={{ width: `${Math.max(5, Math.min(100, sub.grossPercent))}%` }}
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between pt-1">
+                      <span className="text-[10px] text-slate-400 font-bold">
+                        {sub.total} {sub.total === 1 ? 'questão' : 'questões'} • ⏱️ {sub.avgTime}s
+                      </span>
+
+                      <div className="flex items-center gap-1.5">
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            setSelectedSubject(selectedSubject === sub.name ? 'all' : sub.name);
+                            setSelectedTopic('all');
+                          }}
+                          className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                            selectedSubject === sub.name
+                              ? 'bg-blue-600 text-white border-blue-500'
+                              : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:text-white'
+                          }`}
+                        >
+                          {selectedSubject === sub.name ? '✓ Filtrado' : 'Filtrar'}
+                        </button>
+                        <div className="w-6 h-6 rounded-lg bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                          {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -728,11 +728,11 @@ export default function RaioXCaveira() {
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        className="border-t border-slate-200 dark:border-slate-800/80 p-4 sm:p-5 bg-white/40 dark:bg-slate-950/40 space-y-3"
+                        className="border-t border-slate-200 dark:border-slate-800/80 p-3.5 bg-white/40 dark:bg-slate-950/40 space-y-2.5"
                       >
                         <div className="flex items-center justify-between">
-                          <h4 className="text-xs font-black uppercase text-slate-400 tracking-wider">
-                            Assuntos e Capítulos Mapeados ({sub.topicsList.length}):
+                          <h4 className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
+                            Assuntos Mapeados ({sub.topicsList.length}):
                           </h4>
                           {selectedTopic !== 'all' && (
                             <button
@@ -744,7 +744,7 @@ export default function RaioXCaveira() {
                           )}
                         </div>
 
-                        <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
                           {sub.topicsList.map(topic => {
                             const isTopicActive = selectedTopic === topic.name;
                             return (
@@ -754,7 +754,7 @@ export default function RaioXCaveira() {
                                   setSelectedSubject(sub.name);
                                   setSelectedTopic(isTopicActive ? 'all' : topic.name);
                                 }}
-                                className={`p-3.5 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
+                                className={`p-3 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
                                   isTopicActive
                                     ? 'bg-blue-500/10 border-blue-500 ring-1 ring-blue-500/40'
                                     : 'bg-slate-100 dark:bg-slate-900 border-slate-200/60 dark:border-slate-800 hover:border-slate-700'
@@ -762,14 +762,14 @@ export default function RaioXCaveira() {
                               >
                                 <div>
                                   <div className="flex justify-between items-start gap-2">
-                                    <h5 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase line-clamp-2">
+                                    <h5 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase line-clamp-1">
                                       {topic.name}
                                     </h5>
                                     <span className={`text-[10px] font-black shrink-0 ${topic.grossPercent >= 75 ? 'text-emerald-500' : topic.grossPercent >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-                                      {topic.grossPercent}% de acerto
+                                      {topic.grossPercent}%
                                     </span>
                                   </div>
-                                  <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
+                                  <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full mt-1.5 overflow-hidden">
                                     <div
                                       className={`h-full rounded-full ${topic.grossPercent >= 75 ? 'bg-emerald-500' : topic.grossPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
                                       style={{ width: `${Math.max(5, Math.min(100, topic.grossPercent))}%` }}
@@ -777,14 +777,12 @@ export default function RaioXCaveira() {
                                   </div>
                                 </div>
 
-                                <div className="flex justify-between items-center text-[9px] font-bold text-slate-400 uppercase mt-3">
-                                  <span>{topic.total} questões ({topic.hits}C / {topic.errors}E)</span>
+                                <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 mt-2">
+                                  <span>{topic.total}q ({topic.hits}C / {topic.errors}E)</span>
                                   {topic.errors > 0 ? (
-                                    <span className="text-red-400">
-                                      ⚠️ {topic.errors} erro(s) • Clique p/ auditar
-                                    </span>
+                                    <span className="text-red-400">⚠️ {topic.errors} erro(s)</span>
                                   ) : (
-                                    <span className="text-emerald-400">✓ 100% Invicto</span>
+                                    <span className="text-emerald-400">✓ 100%</span>
                                   )}
                                 </div>
                               </div>
@@ -801,14 +799,14 @@ export default function RaioXCaveira() {
         )}
       </div>
 
-      {/* PAINEL 4: CADERNO TÁTICO INTERATIVO DE QUESTÕES & ERROS */}
-      <div className="glass-card rounded-[2rem] p-6 sm:p-8 border border-slate-200 dark:border-slate-800 space-y-5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
+      {/* PAINEL 3: CADERNO DE QUESTÕES (EM GRID 2 COLUNAS NO DESKTOP) */}
+      <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
-            <h2 className="text-base sm:text-lg font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-purple-500" /> Caderno de Questões ({filteredQuestions.length})
+            <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-purple-500" /> Caderno de Questões ({filteredQuestions.length})
             </h2>
-            <p className="text-xs font-medium text-slate-400 mt-0.5">
+            <p className="text-xs font-medium text-slate-400">
               Histórico rastreado do Projeto Caveira com filtros rápidos e anotações.
             </p>
           </div>
@@ -866,19 +864,19 @@ export default function RaioXCaveira() {
         </div>
 
         {filteredQuestions.length === 0 ? (
-          <div className="text-center py-10 text-slate-400">
-            <CheckCircle2 className="w-10 h-10 mx-auto text-slate-600 mb-2" />
+          <div className="text-center py-8 text-slate-400">
+            <CheckCircle2 className="w-8 h-8 mx-auto text-slate-600 mb-2" />
             <p className="font-bold text-xs uppercase">Nenhuma questão encontrada para os filtros selecionados</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
             {filteredQuestions.slice(0, 80).map(q => {
               const blocoMeta = BLOCO_METADATA[q.bloco] || BLOCO_METADATA['Bloco I'];
               const isEditingThisNote = editingNoteId === q.id;
               return (
                 <div
                   key={q.id + (q.timestamp || '')}
-                  className={`p-4 sm:p-5 rounded-2xl border transition-all flex flex-col gap-3 ${
+                  className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-2.5 ${
                     !q.hit && q.confidence === 'sabia'
                       ? 'border-red-500/40 bg-red-500/5'
                       : 'border-slate-200 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-900/60'

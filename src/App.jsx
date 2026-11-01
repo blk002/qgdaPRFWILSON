@@ -244,9 +244,9 @@ export default function App() {
       )}
       <Toaster position="top-right" richColors closeButton />
       
-      <header className="sticky top-4 z-50 mx-auto max-w-[1600px] px-4 sm:px-6 w-full pt-2">
-        <div className={`glass-card rounded-[1.8rem] ${isDarkMode ? 'bg-slate-900/75 border-slate-800/80 shadow-2xl' : 'bg-white/80 border-slate-200/50 shadow-lg shadow-slate-100/30'} overflow-hidden`}>
-          <div className="px-4 py-3 sm:px-6 flex justify-between items-center">
+      <header className="sticky top-3 z-50 mx-auto max-w-6xl px-3 sm:px-5 w-full pt-1">
+        <div className={`glass-card rounded-2xl ${isDarkMode ? 'bg-slate-900/90 border-slate-800/80 shadow-2xl' : 'bg-white/80 border-slate-200/50 shadow-lg shadow-slate-100/30'} overflow-hidden`}>
+          <div className="px-4 py-2.5 sm:px-5 flex justify-between items-center">
             <Link to="/" className="flex items-center gap-3">
               <div className="p-2 bg-blue-600/10 dark:bg-blue-500/15 rounded-xl border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.15)]">
                 <Award className="text-blue-600 dark:text-blue-400 w-5 h-5 sm:w-6 sm:h-6" />
@@ -322,7 +322,7 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6">
+      <main className="max-w-6xl mx-auto px-3 sm:px-5 py-4 sm:py-5">
         <AnimatePresence mode="wait">
           <motion.div
             key={location.pathname}

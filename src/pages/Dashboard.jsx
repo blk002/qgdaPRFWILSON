@@ -207,9 +207,9 @@ export default function Dashboard() {
     <div className="fade-in w-full pb-10">
       
       {/* CABEÇALHO */}
-      <section className="relative mb-8 mt-6">
+      <section className="relative mb-5 mt-2">
         <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20 blur-3xl rounded-3xl -z-10"></div>
-        <div className="glass-card rounded-[2rem] p-6 sm:p-8 flex flex-col md:flex-row items-center gap-8 glow-blue">
+        <div className="glass-card rounded-2xl p-5 sm:p-6 flex flex-col md:flex-row items-center gap-6">
                   <div className="relative group cursor-pointer" onClick={() => setIsAvatarModalOpen(true)}>
             <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)] relative z-10 bg-slate-800 transition-all duration-300 group-hover:scale-105 group-hover:border-purple-500">
                {userStats.avatar ? (
@@ -296,7 +296,7 @@ export default function Dashboard() {
       </section>
 
       {/* KPI CARDS */}
-      <motion.div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8"
+      <motion.div className="grid grid-cols-2 lg:grid-cols-4 gap-3 mb-5"
         variants={stagger} initial="hidden" animate="visible">
         {kpis.map((kpi) => {
           const Icon = kpi.icon;
@@ -327,10 +327,10 @@ export default function Dashboard() {
         <XpSparkline xpHistory={xpHistory} />
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-3 gap-8">
+      <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
         
         {/* COLUNA CENTRAL */}
-        <div className="lg:col-span-2 space-y-8">
+        <div className="lg:col-span-2 space-y-5">
           <div className="glass-card rounded-[2rem] p-6 sm:p-8 overflow-hidden glow-purple">
             <h3 className="font-black text-slate-800 dark:text-white uppercase text-base mb-8 flex items-center gap-3">
               <Trophy className="w-6 h-6 text-yellow-500" /> Jornada de Promoções
