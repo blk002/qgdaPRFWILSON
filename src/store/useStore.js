@@ -857,7 +857,8 @@ export const useStore = create(
 
       // --- SISTEMA RAIO-X PROJETO CAVEIRA ---
       addCaveiraQuestion: (question) => {
-        const { caveiraQuestions = [], addXP, setCoins, playSound, boostPetWithStudy } = get();
+        if (!question || !question.id) return false;
+        const { caveiraQuestions = [], addXP, setCoins, boostPetWithStudy } = get();
         const existingIdx = caveiraQuestions.findIndex(q => q.id === question.id);
         
         let updatedList = [...caveiraQuestions];
@@ -865,11 +866,10 @@ export const useStore = create(
 
         if (isNew) {
           updatedList.unshift(question);
-          // Recompensa em XP e Moedas
+          // Recompensa silenciosa em XP e Moedas (sem som na aba em segundo plano)
           if (question.hit) {
             addXP(25, `Questão Caveira ${question.id} Acertada`);
             setCoins(c => c + 3);
-            playSound('coin');
           } else {
             addXP(10, `Questão Caveira ${question.id} Analisada`);
           }
@@ -885,20 +885,48 @@ export const useStore = create(
 
       importCaveiraQuestions: (questionsList, silent = true) => {
         if (!Array.isArray(questionsList) || questionsList.length === 0) return 0;
-        const { caveiraQuestions = [], addXP, setCoins, playSound } = get();
+        const { caveiraQuestions = [], addXP, setCoins } = get();
         
         const map = new Map();
-        // Preserva existentes
-        caveiraQuestions.forEach(q => map.set(q.id, q));
-        
-        let newCount = 0;
-        questionsList.forEach(q => {
-          if (!map.has(q.id)) newCount++;
-          map.set(q.id, { ...(map.get(q.id) || {}), ...q });
+        const realContentSet = new Set();
+
+        // Identifica conteúdos que possuem disciplina real (para remover duplicatas órfãs de sub-seções)
+        [...caveiraQuestions, ...questionsList].forEach(q => {
+          if (q && q.content && q.subject && q.subject !== 'Geral') {
+            realContentSet.add(q.content.slice(0, 80));
+          }
         });
 
-        if (newCount === 0 && map.size === caveiraQuestions.length) {
-          // Nenhum dado novo, não muta o estado para evitar re-renders desnecessários
+        // Preserva existentes válidos
+        caveiraQuestions.forEach(q => {
+          if (!q || !q.id) return;
+          if (q.subject === 'Geral' && q.topic === 'Geral' && realContentSet.has((q.content || '').slice(0, 80))) {
+            return;
+          }
+          map.set(q.id, q);
+        });
+        
+        let newCount = 0;
+        let updatedExisting = false;
+
+        questionsList.forEach(q => {
+          if (!q || !q.id) return;
+          if (q.subject === 'Geral' && q.topic === 'Geral' && realContentSet.has((q.content || '').slice(0, 80))) {
+            return;
+          }
+          const prev = map.get(q.id);
+          if (!prev) {
+            newCount++;
+            map.set(q.id, q);
+          } else {
+            if (prev.confidence !== q.confidence || prev.errorReason !== q.errorReason || prev.hit !== q.hit) {
+              updatedExisting = true;
+            }
+            map.set(q.id, { ...prev, ...q });
+          }
+        });
+
+        if (newCount === 0 && !updatedExisting && map.size === caveiraQuestions.length) {
           if (!silent) toast.info('As questões já estavam atualizadas no QG.');
           return 0;
         }
@@ -908,9 +936,8 @@ export const useStore = create(
         if (newCount > 0) {
           addXP(newCount * 15, `${newCount} Questões Caveira Sincronizadas`);
           setCoins(c => c + Math.min(100, newCount * 2));
-          playSound('coin');
-          toast.success(`🎯 ${newCount} novas questões do Projeto Caveira sincronizadas com sucesso!`);
-        } else if (!silent) {
+          toast.success(`🎯 ${newCount} novas questões do Projeto Caveira sincronizadas!`);
+        } else if (!silent && !updatedExisting) {
           toast.info('As questões já estavam atualizadas no QG.');
         }
 
