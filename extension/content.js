@@ -80,13 +80,17 @@
   function createHud() {
     if (document.getElementById('qg-caveira-hud')) return;
 
+    const extVersion = (typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest)
+      ? chrome.runtime.getManifest().version
+      : '1.0.1';
+
     const hud = document.createElement('div');
     hud.id = 'qg-caveira-hud';
     hud.innerHTML = `
       <div class="qg-hud-header">
         <div class="qg-hud-title">
           <span class="qg-hud-pulse"></span>
-          <span>💀 QG PRF • CAVEIRA</span>
+          <span>💀 QG PRF • CAVEIRA <small style="opacity:0.65;font-size:9px;margin-left:3px;">v${extVersion}</small></span>
         </div>
         <div class="qg-hud-controls">
           <button class="qg-hud-btn-icon" id="qg-btn-min" title="Minimizar / Expandir">_</button>

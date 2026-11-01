@@ -19,6 +19,11 @@ function renderPopupStats(questions, session) {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
+  const versionEl = document.getElementById('ext-version');
+  if (versionEl && typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.getManifest) {
+    versionEl.textContent = `v${chrome.runtime.getManifest().version}`;
+  }
+
   chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY], (res) => {
     if (res[SCHEMA_KEY] !== 'v3_strict_clean') {
       const cleanSession = { total: 0, hits: 0, errors: 0 };
