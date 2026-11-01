@@ -47,13 +47,13 @@ export default function RaioXCaveira() {
           if (newQuestion) {
             useStore.getState().addCaveiraQuestion(newQuestion);
           } else if (questions) {
-            useStore.getState().importCaveiraQuestions(questions, true);
+            useStore.getState().importCaveiraQuestions(questions, false);
           }
         }
         if (event.data.type === 'CAVEIRA_DATA_RESPONSE' && event.data.payload) {
           setExtensionDetected(true);
-          if (event.data.payload.questions) {
-            useStore.getState().importCaveiraQuestions(event.data.payload.questions, true);
+          if (event.data.payload.questions && event.data.payload.questions.length > 0) {
+            useStore.getState().importCaveiraQuestions(event.data.payload.questions, false);
           }
         }
       }
@@ -196,11 +196,24 @@ export default function RaioXCaveira() {
     try {
       const parsed = JSON.parse(importJsonText);
       const list = Array.isArray(parsed) ? parsed : [parsed];
-      const count = importCaveiraQuestions(list);
+      const count = importCaveiraQuestions(list, false);
       setShowImportModal(false);
       setImportJsonText('');
     } catch (e) {
       toast.error('JSON inválido! Verifique a formatação.');
+    }
+  };
+
+  const handlePasteClipboard = async () => {
+    try {
+      const text = await navigator.clipboard.readText();
+      const parsed = JSON.parse(text);
+      const list = Array.isArray(parsed) ? parsed : [parsed];
+      importCaveiraQuestions(list, false);
+      setShowImportModal(false);
+      setImportJsonText('');
+    } catch (e) {
+      toast.error('Não foi possível ler JSON válido da área de transferência.');
     }
   };
 
@@ -707,19 +720,28 @@ export default function RaioXCaveira() {
                 className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-xs text-slate-200 outline-none focus:border-blue-500"
               />
 
-              <div className="flex justify-end gap-2 mt-4">
+              <div className="flex flex-wrap items-center justify-between gap-2 mt-4">
                 <button
-                  onClick={() => setShowImportModal(false)}
-                  className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-black text-xs uppercase px-4 py-2 rounded-xl"
+                  type="button"
+                  onClick={handlePasteClipboard}
+                  className="bg-slate-800 hover:bg-slate-700 text-amber-400 font-black text-xs uppercase px-3 py-2 rounded-xl border border-amber-500/30 flex items-center gap-1.5"
                 >
-                  Cancelar
+                  <Copy className="w-3.5 h-3.5" /> Colar do Clipboard
                 </button>
-                <button
-                  onClick={handleImportJson}
-                  className="bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase px-6 py-2 rounded-xl shadow-lg"
-                >
-                  Importar
-                </button>
+                <div className="flex gap-2">
+                  <button
+                    onClick={() => setShowImportModal(false)}
+                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-black text-xs uppercase px-4 py-2 rounded-xl"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    onClick={handleImportJson}
+                    className="bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase px-6 py-2 rounded-xl shadow-lg"
+                  >
+                    Importar
+                  </button>
+                </div>
               </div>
             </motion.div>
           </div>

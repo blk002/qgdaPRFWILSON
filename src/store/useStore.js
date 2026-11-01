@@ -171,7 +171,14 @@ export const getCleanInitialState = () => ({
     totalCareCount: 0,
     lastTick: Date.now()
   },
-  caveiraQuestions: [],
+  caveiraQuestions: (() => {
+    try {
+      const saved = localStorage.getItem('prf_caveira_questions');
+      return saved ? JSON.parse(saved) : [];
+    } catch (_) {
+      return [];
+    }
+  })(),
 });
 
 // Fonte única de verdade das chaves persistidas (nuvem, backup local,
@@ -299,9 +306,13 @@ export const useStore = create(
             if (!cleanData.petData) {
               cleanData.petData = getCleanInitialState().petData;
             }
-            if (!cleanData.caveiraQuestions) {
-              cleanData.caveiraQuestions = [];
-            }
+            // Preserva e mescla questões do Caveira sincronizadas
+            const currentCaveira = get().caveiraQuestions || [];
+            const remoteCaveira = cleanData.caveiraQuestions || [];
+            const mergedMap = new Map();
+            currentCaveira.forEach(q => mergedMap.set(q.id, q));
+            remoteCaveira.forEach(q => mergedMap.set(q.id, { ...(mergedMap.get(q.id) || {}), ...q }));
+            cleanData.caveiraQuestions = Array.from(mergedMap.values());
             
             set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false, lastSyncedAt: remoteUpdatedAt });
             get().checkAndResetWeekly();
@@ -333,9 +344,13 @@ export const useStore = create(
                 if (!cleanData.petData) {
                   cleanData.petData = getCleanInitialState().petData;
                 }
-                if (!cleanData.caveiraQuestions) {
-                  cleanData.caveiraQuestions = [];
-                }
+                // Preserva e mescla questões do Caveira sincronizadas
+                const currentCaveira = get().caveiraQuestions || [];
+                const backupCaveira = cleanData.caveiraQuestions || [];
+                const mergedMap = new Map();
+                currentCaveira.forEach(q => mergedMap.set(q.id, q));
+                backupCaveira.forEach(q => mergedMap.set(q.id, { ...(mergedMap.get(q.id) || {}), ...q }));
+                cleanData.caveiraQuestions = Array.from(mergedMap.values());
                 
                 set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false });
                 get().checkAndResetWeekly();
@@ -864,6 +879,7 @@ export const useStore = create(
         }
 
         set({ caveiraQuestions: updatedList });
+        try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updatedList)); } catch (_) {}
         return true;
       },
 
@@ -899,17 +915,21 @@ export const useStore = create(
         }
 
         set({ caveiraQuestions: merged });
+        try { localStorage.setItem('prf_caveira_questions', JSON.stringify(merged)); } catch (_) {}
         return newCount;
       },
 
       deleteCaveiraQuestion: (id) => {
         const { caveiraQuestions = [] } = get();
-        set({ caveiraQuestions: caveiraQuestions.filter(q => q.id !== id) });
+        const updated = caveiraQuestions.filter(q => q.id !== id);
+        set({ caveiraQuestions: updated });
+        try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updated)); } catch (_) {}
         toast.success('Questão removida do histórico.');
       },
 
       clearCaveiraQuestions: () => {
         set({ caveiraQuestions: [] });
+        try { localStorage.removeItem('prf_caveira_questions'); } catch (_) {}
         toast.info('Histórico do Raio-X Caveira limpo.');
       },
 
