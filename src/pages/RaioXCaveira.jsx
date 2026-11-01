@@ -442,8 +442,8 @@ export default function RaioXCaveira() {
                   {extensionDetected ? 'Extensão Conectada' : 'Extensão Pendente'}
                 </span>
               </div>
-              <p className="text-xs font-bold text-slate-400 uppercase mt-1">
-                Categorização automática nos 3 Blocos do Edital PRF, matriz de confiança e diagnóstico de desempenho.
+              <p className="text-xs font-medium text-slate-400 mt-1">
+                Acompanhamento objetivo de questões e taxa de acerto por bloco e disciplina do edital da PRF.
               </p>
             </div>
           </div>
@@ -502,39 +502,33 @@ export default function RaioXCaveira() {
                 setSelectedSubject('all');
                 setSelectedTopic('all');
               }}
-              className={`glass-card rounded-2xl p-5 border transition-all cursor-pointer relative overflow-hidden ${
+              className={`glass-card rounded-2xl p-4 sm:p-5 border transition-all cursor-pointer relative overflow-hidden ${
                 isSelected
-                  ? `${b.accentBorder} bg-blue-500/5 ring-2 ring-blue-500/30`
+                  ? `${b.accentBorder} bg-blue-500/10 ring-2 ring-blue-500/30`
                   : 'border-slate-200 dark:border-slate-800/80 hover:border-slate-700'
               }`}
             >
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <span className={`text-[10px] font-black uppercase px-2.5 py-0.5 rounded-full border ${b.badgeClass}`}>
+              <div className="flex items-center justify-between gap-2 mb-3">
+                <span className={`text-[11px] font-black uppercase px-2.5 py-0.5 rounded-full border ${b.badgeClass}`}>
                   {b.title}
                 </span>
-                <span className="text-[10px] font-bold text-slate-400 uppercase">
+                <span className="text-[11px] font-bold text-slate-400">
                   {b.examWeight}
                 </span>
               </div>
 
-              <p className="text-[10px] text-slate-400 font-semibold line-clamp-1 mb-3">
-                {b.subtitle}
-              </p>
-
               <div className="flex items-end justify-between">
                 <div>
-                  <span className="text-[10px] font-black uppercase text-slate-400 block">Aproveitamento</span>
+                  <span className="text-[10px] font-bold uppercase text-slate-400 block">Acerto</span>
                   <div className="flex items-baseline gap-1.5">
                     <span className={`text-2xl font-black ${b.total === 0 ? 'text-slate-400' : b.grossRate >= 75 ? 'text-emerald-500' : b.grossRate >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
                       {b.grossRate}%
                     </span>
-                    <span className="text-xs font-bold text-slate-400">de acerto</span>
                   </div>
                 </div>
 
-                <div className="text-right text-[10px] font-bold text-slate-400 uppercase space-y-0.5">
+                <div className="text-right text-xs font-bold text-slate-300">
                   <div>{b.total} feitas ({b.hits}C • {b.errors}E)</div>
-                  <div className="text-slate-500">⏱️ Média: {b.avgTime}s</div>
                 </div>
               </div>
 
@@ -551,12 +545,12 @@ export default function RaioXCaveira() {
         })}
       </div>
 
-      {/* KPI CARDS GERAIS */}
+      {/* KPI CARDS GERAIS (OBJETIVOS E DIRETOS) */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
+        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
           <div className="flex justify-between items-center text-slate-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">
-              Questões ({selectedBloco === 'all' ? 'Geral' : selectedBloco})
+            <span className="text-[11px] font-bold uppercase tracking-wider">
+              Resolvidas ({selectedBloco === 'all' ? 'Geral' : selectedBloco})
             </span>
             <Target className="w-4 h-4 text-blue-500" />
           </div>
@@ -565,241 +559,66 @@ export default function RaioXCaveira() {
               {stats.total}
             </span>
           </div>
-          <span className="text-[10px] text-slate-500 font-bold uppercase flex items-center gap-1">
-            <Clock className="w-3 h-3" /> Média: {Math.floor(stats.avgTimeSec / 60)}m {stats.avgTimeSec % 60}s / questão
+          <span className="text-[11px] text-slate-400 font-medium flex items-center gap-1">
+            <Clock className="w-3.5 h-3.5" /> Média de {stats.avgTimeSec}s por questão
           </span>
         </div>
 
-        <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
+        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
           <div className="flex justify-between items-center text-slate-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">Total de Acertos</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">Acertos</span>
             <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="my-2 flex items-baseline gap-2">
             <span className="text-3xl font-black text-emerald-500">
               {stats.hits}
             </span>
-            <span className="text-xs font-bold text-slate-400">certas</span>
+            <span className="text-xs text-slate-400">certas</span>
           </div>
-          <span className="text-[10px] text-slate-500 font-bold uppercase">
-            ⏱️ Média nos acertos: {stats.avgHitTimeSec}s
+          <span className="text-[11px] text-slate-400 font-medium">
+            {stats.total > 0 ? Math.round((stats.hits / stats.total) * 100) : 0}% do total
           </span>
         </div>
 
-        <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
+        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
           <div className="flex justify-between items-center text-slate-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">Total de Erros</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">Erros</span>
             <XCircle className="w-4 h-4 text-red-500" />
           </div>
           <div className="my-2 flex items-baseline gap-2">
             <span className="text-3xl font-black text-red-500">{stats.errors}</span>
-            <span className="text-xs font-bold text-slate-400">erradas</span>
+            <span className="text-xs text-slate-400">erradas</span>
           </div>
-          <span className="text-[10px] text-slate-500 font-bold uppercase">
-            ⚠️ {stats.rushedErrors} erro(s) por pressa (&lt;15s)
+          <span className="text-[11px] text-slate-400 font-medium">
+            {stats.total > 0 ? Math.round((stats.errors / stats.total) * 100) : 0}% do total
           </span>
         </div>
 
-        <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
+        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
           <div className="flex justify-between items-center text-slate-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">Taxa de Acerto</span>
+            <span className="text-[11px] font-bold uppercase tracking-wider">Aproveitamento</span>
             <TrendingUp className="w-4 h-4 text-amber-500" />
           </div>
           <div className="my-2 flex items-baseline gap-2">
             <span className={`text-3xl font-black ${stats.grossRate >= 75 ? 'text-emerald-500' : stats.grossRate >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
               {stats.grossRate}%
             </span>
-            <span className="text-xs font-bold text-slate-400">aproveitamento</span>
           </div>
-          <span className="text-[10px] text-slate-500 font-bold uppercase">
-            🎲 Chutes: {stats.guessesTotal} ({stats.guessHits}C / {stats.guessErrors}E)
+          <span className="text-[11px] text-slate-400 font-medium">
+            {stats.hits} certas de {stats.total} questões
           </span>
         </div>
       </div>
-
-      {/* PAINEL 2: MATRIZ DE CONFIANÇA VS RESULTADO & ANÁLISE DE CAUSA RAIZ */}
-      {stats.total > 0 && (
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-          {/* Matriz Psicológica de Confiança */}
-          <div className="glass-card rounded-[2rem] p-6 border border-slate-200 dark:border-slate-800 space-y-4">
-            <div>
-              <h3 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
-                <Layers className="w-4 h-4 text-blue-500" /> Matriz de Domínio vs. Ilusão de Competência
-              </h3>
-              <p className="text-[11px] font-bold text-slate-400 uppercase mt-0.5">
-                Clique em qualquer quadrante para filtrar as questões correspondentes no caderno.
-              </p>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              {/* Quadrante 1: Domínio Real */}
-              <div
-                onClick={() => setFilterType(filterType === 'hits' ? 'all' : 'hits')}
-                className={`p-4 rounded-2xl border cursor-pointer transition-all ${
-                  filterType === 'hits'
-                    ? 'border-emerald-500 bg-emerald-500/15'
-                    : 'border-emerald-500/20 bg-emerald-500/5 hover:border-emerald-500/40'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black uppercase text-emerald-400">🎯 Domínio Sólido</span>
-                  <span className="text-xs font-black text-emerald-400">
-                    {stats.total > 0 ? Math.round((stats.solidMastery / stats.total) * 100) : 0}%
-                  </span>
-                </div>
-                <div className="text-2xl font-black text-white my-1">{stats.solidMastery}</div>
-                <p className="text-[10px] font-bold text-slate-400">
-                  Marcou "Sabia" e acertou. Conteúdo blindado.
-                </p>
-              </div>
-
-              {/* Quadrante 2: Ponto Cego (Sabia + Errou) */}
-              <div
-                onClick={() => setFilterType(filterType === 'blindspot' ? 'all' : 'blindspot')}
-                className={`p-4 rounded-2xl border cursor-pointer transition-all ${
-                  filterType === 'blindspot'
-                    ? 'border-red-500 bg-red-500/20'
-                    : 'border-red-500/30 bg-red-500/10 hover:border-red-500/50'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black uppercase text-red-400">🚨 Ponto Cego (Perigo)</span>
-                  <span className="text-xs font-black text-red-400">{stats.blindSpots} erro(s)</span>
-                </div>
-                <div className="text-2xl font-black text-white my-1">{stats.blindSpots}</div>
-                <p className="text-[10px] font-bold text-slate-300">
-                  Achava que sabia, mas errou! Prioridade #1 de revisão.
-                </p>
-              </div>
-
-              {/* Quadrante 3: Dúvida */}
-              <div
-                onClick={() => setFilterType('all')}
-                className="p-4 rounded-2xl border border-amber-500/20 bg-amber-500/5 hover:border-amber-500/40 cursor-pointer transition-all"
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black uppercase text-amber-400">🤔 Zona de Dúvida</span>
-                  <span className="text-xs font-black text-amber-400">
-                    {stats.insecureHits}C / {stats.insecureErrors}E
-                  </span>
-                </div>
-                <div className="text-2xl font-black text-white my-1">
-                  {stats.insecureHits + stats.insecureErrors}
-                </div>
-                <p className="text-[10px] font-bold text-slate-400">
-                  Teoria instável. Exige fixação de lei seca/FSRS.
-                </p>
-              </div>
-
-              {/* Quadrante 4: Chutes */}
-              <div
-                onClick={() => setFilterType(filterType === 'guesses' ? 'all' : 'guesses')}
-                className={`p-4 rounded-2xl border cursor-pointer transition-all ${
-                  filterType === 'guesses'
-                    ? 'border-purple-500 bg-purple-500/20'
-                    : 'border-purple-500/20 bg-purple-500/5 hover:border-purple-500/40'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black uppercase text-purple-400">🎲 Questões no Chute</span>
-                  <span className="text-xs font-black text-purple-400">
-                    {stats.guessHits}C / {stats.guessErrors}E
-                  </span>
-                </div>
-                <div className="text-2xl font-black text-white my-1">{stats.guessesTotal}</div>
-                <p className="text-[10px] font-bold text-slate-400">
-                  {stats.guessesTotal > 0
-                    ? `Taxa de acerto nos chutes: ${Math.round((stats.guessHits / stats.guessesTotal) * 100)}%.`
-                    : 'Nenhuma questão respondida no chute.'}
-                </p>
-              </div>
-            </div>
-          </div>
-
-          {/* Diagnóstico da Causa Raiz dos Erros & Ritmo de Prova */}
-          <div className="glass-card rounded-[2rem] p-6 border border-slate-200 dark:border-slate-800 flex flex-col justify-between space-y-4">
-            <div>
-              <h3 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
-                <AlertTriangle className="w-4 h-4 text-rose-500" /> Causa Raiz dos Erros & Ritmo Operacional
-              </h3>
-              <p className="text-[11px] font-bold text-slate-400 uppercase mt-0.5">
-                Por que você está perdendo pontos e como o tempo afeta sua precisão.
-              </p>
-            </div>
-
-            <div className="space-y-3">
-              {[
-                {
-                  key: 'conteudo',
-                  filter: 'theory',
-                  label: '📚 Lacuna de Teoria / Lei Seca',
-                  count: stats.errorReasons.conteudo,
-                  color: 'bg-red-500',
-                  textColor: 'text-red-400'
-                },
-                {
-                  key: 'atencao',
-                  filter: 'attention',
-                  label: '⚠️ Falta de Atenção / Leitura Rápida',
-                  count: stats.errorReasons.atencao,
-                  color: 'bg-amber-500',
-                  textColor: 'text-amber-400'
-                },
-                {
-                  key: 'interpretacao',
-                  filter: 'errors',
-                  label: '🔍 Interpretação / Pegadinha do Enunciado',
-                  count: stats.errorReasons.interpretacao,
-                  color: 'bg-purple-500',
-                  textColor: 'text-purple-400'
-                }
-              ].map(item => {
-                const pct = stats.errors > 0 ? Math.round((item.count / stats.errors) * 100) : 0;
-                return (
-                  <div
-                    key={item.key}
-                    onClick={() => setFilterType(filterType === item.filter ? 'all' : item.filter)}
-                    className="cursor-pointer group"
-                  >
-                    <div className="flex justify-between text-xs font-black uppercase mb-1">
-                      <span className={`${item.textColor} group-hover:underline`}>{item.label}</span>
-                      <span className="text-slate-300">{item.count} erros ({pct}%)</span>
-                    </div>
-                    <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                      <div className={`${item.color} h-full rounded-full transition-all`} style={{ width: `${pct}%` }} />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-
-            <div className="grid grid-cols-3 gap-2 pt-2 border-t border-slate-200 dark:border-slate-800/80 text-center">
-              <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/70">
-                <span className="text-[9px] font-black uppercase text-slate-400 block">Tempo nos Acertos</span>
-                <span className="text-sm font-black text-emerald-400">{stats.avgHitTimeSec}s</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/70">
-                <span className="text-[9px] font-black uppercase text-slate-400 block">Tempo nos Erros</span>
-                <span className="text-sm font-black text-red-400">{stats.avgErrorTimeSec}s</span>
-              </div>
-              <div className="p-2.5 rounded-xl bg-slate-100 dark:bg-slate-900/70">
-                <span className="text-[9px] font-black uppercase text-slate-400 block">Erros &lt; 15s (Pressa)</span>
-                <span className="text-sm font-black text-amber-400">{stats.rushedErrors}</span>
-              </div>
-            </div>
-          </div>
-        </div>
-      )}
 
       {/* PAINEL 3: MATRIZ DE COMBATE POR DISCIPLINA E TÓPICOS */}
       <div className="glass-card rounded-[2rem] p-6 sm:p-8 border border-slate-200 dark:border-slate-800">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-6">
           <div>
             <h2 className="text-base sm:text-lg font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
-              <ShieldCheck className="w-5 h-5 text-blue-500" /> Categorização por Disciplina & Tópicos do Edital
+              <ShieldCheck className="w-5 h-5 text-blue-500" /> Desempenho por Disciplina ({subjectGroups.length})
             </h2>
-            <p className="text-xs font-bold text-slate-400 uppercase mt-0.5">
-              Clique em uma disciplina para abrir os capítulos/assuntos e clique em um assunto para filtrar as questões abaixo.
+            <p className="text-xs font-medium text-slate-400 mt-0.5">
+              Clique em uma matéria para ver o rendimento por assunto.
             </p>
           </div>
 
@@ -987,10 +806,10 @@ export default function RaioXCaveira() {
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
           <div>
             <h2 className="text-base sm:text-lg font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
-              <BookOpen className="w-5 h-5 text-purple-500" /> Caderno Tático de Questões Auditadas ({filteredQuestions.length})
+              <BookOpen className="w-5 h-5 text-purple-500" /> Caderno de Questões ({filteredQuestions.length})
             </h2>
-            <p className="text-xs font-bold text-slate-400 uppercase mt-0.5">
-              Reclassifique a confiança, aponte o motivo do erro, anote bizus e envie direto para o FSRS.
+            <p className="text-xs font-medium text-slate-400 mt-0.5">
+              Histórico rastreado do Projeto Caveira com filtros rápidos e anotações.
             </p>
           </div>
 
@@ -1024,21 +843,18 @@ export default function RaioXCaveira() {
           </div>
         </div>
 
-        {/* CHIPS DE FILTRO TÁTICO */}
+        {/* CHIPS DE FILTRO OBJETIVOS */}
         <div className="flex flex-wrap gap-2">
           {[
             { id: 'all', label: 'Todas' },
-            { id: 'errors', label: '✗ Apenas Erros' },
-            { id: 'blindspot', label: '🚨 Ponto Cego (Sabia e Errou)' },
-            { id: 'guesses', label: '🎲 Chutes' },
-            { id: 'attention', label: '⚠️ Falta de Atenção' },
-            { id: 'theory', label: '📚 Lacuna de Teoria' },
-            { id: 'hits', label: '✓ Acertos' }
+            { id: 'errors', label: '✗ Erros' },
+            { id: 'hits', label: '✓ Acertos' },
+            { id: 'guesses', label: '🎲 Chutes' }
           ].map(f => (
             <button
               key={f.id}
               onClick={() => setFilterType(f.id)}
-              className={`px-3 py-1.5 rounded-xl font-black text-xs uppercase tracking-tight transition-all cursor-pointer ${
+              className={`px-3 py-1.5 rounded-xl font-bold text-xs uppercase tracking-tight transition-all cursor-pointer ${
                 filterType === f.id
                   ? 'bg-purple-600 text-white shadow-md'
                   : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-white'
