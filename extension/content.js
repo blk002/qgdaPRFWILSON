@@ -112,8 +112,8 @@
             <span class="qg-hud-stat-value red" id="qg-stat-errors">${sessionStats.errors}</span>
           </div>
           <div class="qg-hud-stat-box">
-            <span class="qg-hud-stat-label">Líquida</span>
-            <span class="qg-hud-stat-value gold" id="qg-stat-net">${sessionStats.hits - sessionStats.errors}</span>
+            <span class="qg-hud-stat-label">Acerto</span>
+            <span class="qg-hud-stat-value gold" id="qg-stat-net">${sessionStats.total > 0 ? Math.round((sessionStats.hits / sessionStats.total) * 100) : 0}%</span>
           </div>
         </div>
 
@@ -270,9 +270,9 @@
     elTotal.textContent = sessionStats.total;
     elHits.textContent = sessionStats.hits;
     elErrors.textContent = sessionStats.errors;
-    const net = sessionStats.hits - sessionStats.errors;
-    elNet.textContent = (net > 0 ? `+${net}` : `${net}`);
-    elNet.className = `qg-hud-stat-value ${net > 0 ? 'green' : net < 0 ? 'red' : 'gold'}`;
+    const rate = sessionStats.total > 0 ? Math.round((sessionStats.hits / sessionStats.total) * 100) : 0;
+    elNet.textContent = `${rate}%`;
+    elNet.className = `qg-hud-stat-value ${rate >= 70 ? 'green' : rate >= 50 ? 'gold' : sessionStats.total === 0 ? 'gold' : 'red'}`;
   }
 
   // --- 4. SELEÇÃO DE CARDS E DETECÇÃO POR VIEWPORT (SCROLL) ---

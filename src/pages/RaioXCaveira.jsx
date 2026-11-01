@@ -329,31 +329,26 @@ export default function RaioXCaveira() {
     });
 
     return Object.values(groups).map(g => {
-      const net = g.hits - g.errors;
-      const netPercent = g.total > 0 ? Math.round((net / g.total) * 100) : 0;
       const grossPercent = g.total > 0 ? Math.round((g.hits / g.total) * 100) : 0;
       const avgTime = g.total > 0 ? Math.round(g.totalTime / g.total) : 0;
 
       let status = 'disputa';
-      if (g.total >= 3 && netPercent >= 70) status = 'blindagem';
-      else if (netPercent < 50 || net < 0) status = 'vulnerabilidade';
+      if (g.total >= 2 && grossPercent >= 75) status = 'blindagem';
+      else if (grossPercent < 50) status = 'vulnerabilidade';
 
       const topicsList = Object.values(g.topics).map(t => {
-        const tNet = t.hits - t.errors;
-        const tNetPct = t.total > 0 ? Math.round((tNet / t.total) * 100) : 0;
-        return { ...t, net: tNet, netPercent: tNetPct };
-      }).sort((a, b) => a.net - b.net || a.netPercent - b.netPercent);
+        const tGrossPct = t.total > 0 ? Math.round((t.hits / t.total) * 100) : 0;
+        return { ...t, grossPercent: tGrossPct };
+      }).sort((a, b) => a.grossPercent - b.grossPercent || b.errors - a.errors);
 
       return {
         ...g,
-        net,
-        netPercent,
         grossPercent,
         avgTime,
         status,
         topicsList
       };
-    }).sort((a, b) => a.net - b.net || a.netPercent - b.netPercent);
+    }).sort((a, b) => a.grossPercent - b.grossPercent || b.errors - a.errors);
   }, [blockScopedQuestions]);
 
   // Lista de Questões Filtrada para o Caderno Tático
@@ -448,7 +443,7 @@ export default function RaioXCaveira() {
                 </span>
               </div>
               <p className="text-xs font-bold text-slate-400 uppercase mt-1">
-                Categorização automática nos 3 Blocos do Edital PRF, matriz de confiança e diagnóstico de sangria Cebraspe.
+                Categorização automática nos 3 Blocos do Edital PRF, matriz de confiança e diagnóstico de desempenho.
               </p>
             </div>
           </div>
@@ -528,12 +523,12 @@ export default function RaioXCaveira() {
 
               <div className="flex items-end justify-between">
                 <div>
-                  <span className="text-[10px] font-black uppercase text-slate-400 block">Saldo Líquido</span>
+                  <span className="text-[10px] font-black uppercase text-slate-400 block">Aproveitamento</span>
                   <div className="flex items-baseline gap-1.5">
-                    <span className={`text-2xl font-black ${b.net >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                      {b.net > 0 ? `+${b.net}` : b.net}
+                    <span className={`text-2xl font-black ${b.total === 0 ? 'text-slate-400' : b.grossRate >= 75 ? 'text-emerald-500' : b.grossRate >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                      {b.grossRate}%
                     </span>
-                    <span className="text-xs font-bold text-slate-400">pts ({b.netRate}%)</span>
+                    <span className="text-xs font-bold text-slate-400">de acerto</span>
                   </div>
                 </div>
 
@@ -546,9 +541,9 @@ export default function RaioXCaveira() {
               <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full mt-3 overflow-hidden">
                 <div
                   className={`h-full rounded-full transition-all ${
-                    b.netRate >= 70 ? 'bg-emerald-500' : b.netRate >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                    b.grossRate >= 75 ? 'bg-emerald-500' : b.grossRate >= 50 ? 'bg-amber-500' : 'bg-red-500'
                   }`}
-                  style={{ width: `${b.total > 0 ? Math.max(6, Math.min(100, b.netRate)) : 0}%` }}
+                  style={{ width: `${b.total > 0 ? Math.max(6, Math.min(100, b.grossRate)) : 0}%` }}
                 />
               </div>
             </div>
@@ -577,47 +572,47 @@ export default function RaioXCaveira() {
 
         <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
           <div className="flex justify-between items-center text-slate-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">Líquida Cebraspe</span>
-            <Skull className="w-4 h-4 text-red-500" />
+            <span className="text-[10px] font-black uppercase tracking-wider">Total de Acertos</span>
+            <CheckCircle2 className="w-4 h-4 text-emerald-500" />
           </div>
           <div className="my-2 flex items-baseline gap-2">
-            <span className={`text-3xl font-black ${stats.netScore >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-              {stats.netScore > 0 ? `+${stats.netScore}` : stats.netScore}
+            <span className="text-3xl font-black text-emerald-500">
+              {stats.hits}
             </span>
-            <span className="text-xs font-bold text-slate-400">pts</span>
+            <span className="text-xs font-bold text-slate-400">certas</span>
           </div>
           <span className="text-[10px] text-slate-500 font-bold uppercase">
-            {stats.hits} certas - {stats.errors} erradas
+            ⏱️ Média nos acertos: {stats.avgHitTimeSec}s
           </span>
         </div>
 
         <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
           <div className="flex justify-between items-center text-slate-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">Aproveitamento</span>
+            <span className="text-[10px] font-black uppercase tracking-wider">Total de Erros</span>
+            <XCircle className="w-4 h-4 text-red-500" />
+          </div>
+          <div className="my-2 flex items-baseline gap-2">
+            <span className="text-3xl font-black text-red-500">{stats.errors}</span>
+            <span className="text-xs font-bold text-slate-400">erradas</span>
+          </div>
+          <span className="text-[10px] text-slate-500 font-bold uppercase">
+            ⚠️ {stats.rushedErrors} erro(s) por pressa (&lt;15s)
+          </span>
+        </div>
+
+        <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
+          <div className="flex justify-between items-center text-slate-400">
+            <span className="text-[10px] font-black uppercase tracking-wider">Taxa de Acerto</span>
             <TrendingUp className="w-4 h-4 text-amber-500" />
           </div>
           <div className="my-2 flex items-baseline gap-2">
-            <span className="text-3xl font-black text-amber-500">{stats.netRate}%</span>
-            <span className="text-xs font-bold text-slate-400">líquido</span>
-          </div>
-          <span className="text-[10px] text-slate-500 font-bold uppercase">
-            Bruto: {stats.grossRate}% (Penalidade: -{Math.max(0, stats.grossRate - stats.netRate)}%)
-          </span>
-        </div>
-
-        <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800/80 flex flex-col justify-between">
-          <div className="flex justify-between items-center text-slate-400">
-            <span className="text-[10px] font-black uppercase tracking-wider">Saldo dos Chutes</span>
-            <Zap className="w-4 h-4 text-purple-500" />
-          </div>
-          <div className="my-2 flex items-baseline gap-2">
-            <span className={`text-3xl font-black ${stats.guessesNet >= 0 ? 'text-purple-400' : 'text-red-400'}`}>
-              {stats.guessesNet > 0 ? `+${stats.guessesNet}` : stats.guessesNet}
+            <span className={`text-3xl font-black ${stats.grossRate >= 75 ? 'text-emerald-500' : stats.grossRate >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+              {stats.grossRate}%
             </span>
-            <span className="text-xs font-bold text-slate-400">pts</span>
+            <span className="text-xs font-bold text-slate-400">aproveitamento</span>
           </div>
           <span className="text-[10px] text-slate-500 font-bold uppercase">
-            {stats.guessesTotal} chutes ({stats.guessHits}C / {stats.guessErrors}E)
+            🎲 Chutes: {stats.guessesTotal} ({stats.guessHits}C / {stats.guessErrors}E)
           </span>
         </div>
       </div>
@@ -669,7 +664,7 @@ export default function RaioXCaveira() {
               >
                 <div className="flex items-center justify-between">
                   <span className="text-[10px] font-black uppercase text-red-400">🚨 Ponto Cego (Perigo)</span>
-                  <span className="text-xs font-black text-red-400">-{stats.blindSpots * 2} pts</span>
+                  <span className="text-xs font-black text-red-400">{stats.blindSpots} erro(s)</span>
                 </div>
                 <div className="text-2xl font-black text-white my-1">{stats.blindSpots}</div>
                 <p className="text-[10px] font-bold text-slate-300">
@@ -706,14 +701,16 @@ export default function RaioXCaveira() {
                 }`}
               >
                 <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-black uppercase text-purple-400">🎲 Risco de Chute</span>
-                  <span className={`text-xs font-black ${stats.guessesNet >= 0 ? 'text-emerald-400' : 'text-red-400'}`}>
-                    Saldo: {stats.guessesNet > 0 ? `+${stats.guessesNet}` : stats.guessesNet}
+                  <span className="text-[10px] font-black uppercase text-purple-400">🎲 Questões no Chute</span>
+                  <span className="text-xs font-black text-purple-400">
+                    {stats.guessHits}C / {stats.guessErrors}E
                   </span>
                 </div>
                 <div className="text-2xl font-black text-white my-1">{stats.guessesTotal}</div>
                 <p className="text-[10px] font-bold text-slate-400">
-                  {stats.guessesNet < 0 ? 'Deixar em branco teria poupado pontos!' : 'Chutes conscientes com saldo positivo.'}
+                  {stats.guessesTotal > 0
+                    ? `Taxa de acerto nos chutes: ${Math.round((stats.guessHits / stats.guessesTotal) * 100)}%.`
+                    : 'Nenhuma questão respondida no chute.'}
                 </p>
               </div>
             </div>
@@ -808,13 +805,13 @@ export default function RaioXCaveira() {
 
           <div className="flex items-center gap-3 text-xs font-black uppercase">
             <span className="flex items-center gap-1.5 text-emerald-500">
-              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Blindagem (&ge;70%)
+              <span className="w-2.5 h-2.5 rounded-full bg-emerald-500" /> Blindagem (&ge;75%)
             </span>
             <span className="flex items-center gap-1.5 text-amber-500">
-              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Disputa
+              <span className="w-2.5 h-2.5 rounded-full bg-amber-500" /> Em Evolução
             </span>
             <span className="flex items-center gap-1.5 text-red-500">
-              <span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Vulnerabilidade
+              <span className="w-2.5 h-2.5 rounded-full bg-red-500" /> Reforço (&lt;50%)
             </span>
           </div>
         </div>
@@ -859,7 +856,7 @@ export default function RaioXCaveira() {
                               ? 'bg-emerald-500 text-white'
                               : 'bg-amber-500 text-slate-950'
                         }`}>
-                          {sub.status === 'vulnerabilidade' ? 'Sangria de Pontos' : sub.status === 'blindagem' ? 'Blindado' : 'Em Disputa'}
+                          {sub.status === 'vulnerabilidade' ? 'Prioridade de Revisão' : sub.status === 'blindagem' ? 'Blindado' : 'Em Evolução'}
                         </span>
                         {sub.blindSpots > 0 && (
                           <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-rose-500/20 text-rose-400 border border-rose-500/30">
@@ -871,7 +868,7 @@ export default function RaioXCaveira() {
                         </h3>
                       </div>
                       <p className="text-[10px] text-slate-400 font-bold uppercase mt-1">
-                        {sub.total} questões • {sub.hits} certas • {sub.errors} erradas • Bruto: {sub.grossPercent}% • ⏱️ Média: {sub.avgTime}s
+                        {sub.total} questões • {sub.hits} certas • {sub.errors} erradas • ⏱️ Média: {sub.avgTime}s
                       </p>
                     </div>
 
@@ -893,9 +890,9 @@ export default function RaioXCaveira() {
                       </button>
 
                       <div className="text-right min-w-[90px]">
-                        <span className="text-[10px] font-black text-slate-400 uppercase block">Saldo Cebraspe</span>
-                        <span className={`text-xl font-black ${sub.net >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                          {sub.net > 0 ? `+${sub.net}` : sub.net} pts ({sub.netPercent}%)
+                        <span className="text-[10px] font-black text-slate-400 uppercase block">Aproveitamento</span>
+                        <span className={`text-xl font-black ${sub.grossPercent >= 75 ? 'text-emerald-500' : sub.grossPercent >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                          {sub.grossPercent}% ({sub.hits}C/{sub.errors}E)
                         </span>
                       </div>
 
@@ -949,14 +946,14 @@ export default function RaioXCaveira() {
                                     <h5 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase line-clamp-2">
                                       {topic.name}
                                     </h5>
-                                    <span className={`text-[10px] font-black shrink-0 ${topic.net >= 0 ? 'text-emerald-500' : 'text-red-500'}`}>
-                                      {topic.net > 0 ? `+${topic.net}` : topic.net} pts ({topic.netPercent}%)
+                                    <span className={`text-[10px] font-black shrink-0 ${topic.grossPercent >= 75 ? 'text-emerald-500' : topic.grossPercent >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                                      {topic.grossPercent}% de acerto
                                     </span>
                                   </div>
                                   <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full mt-2 overflow-hidden">
                                     <div
-                                      className={`h-full rounded-full ${topic.netPercent >= 70 ? 'bg-emerald-500' : topic.netPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
-                                      style={{ width: `${Math.max(5, Math.min(100, topic.netPercent))}%` }}
+                                      className={`h-full rounded-full ${topic.grossPercent >= 75 ? 'bg-emerald-500' : topic.grossPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                      style={{ width: `${Math.max(5, Math.min(100, topic.grossPercent))}%` }}
                                     />
                                   </div>
                                 </div>

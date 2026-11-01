@@ -7,13 +7,14 @@ const SCHEMA_KEY = 'qg_caveira_schema_v3';
 function renderPopupStats(questions, session) {
   const hits = Number(session?.hits) || 0;
   const errors = Number(session?.errors) || 0;
+  const total = hits + errors;
+  const rate = total > 0 ? Math.round((hits / total) * 100) : 0;
 
   document.getElementById('stat-hits').textContent = hits;
   document.getElementById('stat-errors').textContent = errors;
-  const net = hits - errors;
   const elNet = document.getElementById('stat-net');
-  elNet.textContent = net > 0 ? `+${net}` : `${net}`;
-  elNet.className = `stat-value ${net > 0 ? 'green' : net < 0 ? 'red' : 'gold'}`;
+  elNet.textContent = `${rate}%`;
+  elNet.className = `stat-value ${rate >= 70 ? 'green' : rate >= 50 ? 'gold' : total === 0 ? 'gold' : 'red'}`;
 
   document.getElementById('txt-total-saved').textContent = `${questions.length} salvas no total`;
 }
@@ -79,7 +80,7 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.runtime.sendMessage({ type: 'CLEAR_CAVEIRA_SESSION' }).catch(() => {});
       document.getElementById('stat-hits').textContent = '0';
       document.getElementById('stat-errors').textContent = '0';
-      document.getElementById('stat-net').textContent = '0';
+      document.getElementById('stat-net').textContent = '0%';
       document.getElementById('stat-net').className = 'stat-value gold';
     });
   });
