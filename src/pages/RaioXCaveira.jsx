@@ -2,7 +2,7 @@ import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import { 
   Target, AlertTriangle, ShieldCheck, TrendingUp, Clock, 
-  RefreshCw, Download, Upload, Trash2, CheckCircle2, 
+  RefreshCw, Download, Upload, Trash2, CheckCircle2, XCircle,
   Zap, BookOpen, ChevronDown, ChevronUp, Copy, Check,
   BrainCircuit, Skull, Search, Filter, Layers, MessageSquarePlus, Save
 } from 'lucide-react';
