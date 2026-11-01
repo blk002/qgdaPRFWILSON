@@ -37,8 +37,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     const question = message.payload;
 
     chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
-      const questions = res[STORAGE_KEY] || [];
-      const session = res[SESSION_KEY] || { hits: 0, errors: 0, total: 0 };
+      const questions = Array.isArray(res[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
+      const rawSession = res[SESSION_KEY] || {};
+      const session = {
+        hits: Number(rawSession.hits) || 0,
+        errors: Number(rawSession.errors) || 0,
+        total: Number(rawSession.total) || 0
+      };
+
+      console.log('💀 [Background] Recebida questão respondida:', question.id, question.hit ? 'ACERTO' : 'ERRO');
 
       // Evitar duplicatas do mesmo ID na mesma sessão recente (em até 30s)
       const existingIdx = questions.findIndex(q => q.id === question.id && Math.abs(new Date(q.timestamp) - new Date(question.timestamp)) < 30000);
