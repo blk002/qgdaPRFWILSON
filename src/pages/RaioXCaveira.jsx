@@ -869,17 +869,17 @@ export default function RaioXCaveira() {
             <p className="font-semibold text-xs uppercase tracking-[0.03em]">Nenhuma questão encontrada para os filtros selecionados</p>
           </div>
         ) : (
-          <div className="space-y-3.5">
+          <div className="space-y-6">
             {filteredQuestions.slice(0, 80).map(q => {
               const blocoMeta = BLOCO_METADATA[q.bloco] || BLOCO_METADATA['Bloco I'];
               const isEditingThisNote = editingNoteId === q.id;
               return (
                 <div
                   key={q.id + (q.timestamp || '')}
-                  className={`p-4 sm:p-5 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
+                  className={`p-5 sm:p-6 rounded-2xl border shadow-lg transition-all flex flex-col justify-between gap-3.5 ${
                     !q.hit && q.confidence === 'sabia'
-                      ? 'border-red-500/40 bg-red-500/5 dark:bg-[#1E2022]'
-                      : 'border-slate-200 dark:border-[#32363A] bg-white dark:bg-[#1E2022]'
+                      ? 'border-red-500/40 bg-red-500/5 dark:bg-[#1E2022] shadow-red-950/20'
+                      : 'border-slate-200 dark:border-[#383D43] bg-white dark:bg-[#1E2022] shadow-black/40'
                   }`}
                 >
                   <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
