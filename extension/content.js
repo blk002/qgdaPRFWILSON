@@ -352,15 +352,32 @@
   function isCardAnswered(card) {
     if (!card) return false;
     const statsBox = card.querySelector('.stats-box');
-    if (!statsBox) return false;
-    const text = statsBox.textContent || '';
-    return (
-      Boolean(statsBox.querySelector('.bg-correct-1, .bg-incorrect-1, .title-stats')) ||
-      text.includes('PARABÉNS') ||
-      text.includes('ERROU') ||
-      text.includes('acertou') ||
-      text.includes('Resposta correta')
+    if (statsBox) {
+      const text = statsBox.textContent || '';
+      if (
+        Boolean(statsBox.querySelector('.bg-correct-1, .bg-incorrect-1, .title-stats')) ||
+        text.includes('PARABÉNS') ||
+        text.includes('ERROU') ||
+        text.includes('acertou') ||
+        text.includes('Resposta correta')
+      ) {
+        return true;
+      }
+    }
+
+    // Fallback: se qualquer alternativa já estiver pintada de verde ou vermelho no DOM
+    const hasColoredAlternative = Boolean(
+      card.querySelector('.bg-correct-1, .bg-correct-2, .bg-incorrect-1, .bg-incorrect-2')
     );
+    if (hasColoredAlternative) return true;
+
+    // Fallback: botão "Responder" ausente ou desabilitado com estatísticas já renderizadas
+    const answerBtn = card.querySelector('button.light-mode-answer-btn, .q-btn');
+    if (answerBtn && answerBtn.disabled && (card.textContent.includes('Comentários') || card.textContent.includes('Estatísticas'))) {
+      return true;
+    }
+
+    return false;
   }
 
   function classifyPRFCategory(subject, topic, content) {
@@ -619,7 +636,12 @@
         preAnsweredOnLoad.delete(qId);
         processedInSession.delete(qId);
       } else {
-        const wasSolvedNow = pendingAnswerQIds.has(qId) || (currentQuestionId === qId && !preAnsweredOnLoad.has(qId));
+        // Se a questão está respondida e ainda não foi processada nesta sessão:
+        // Pode ter sido disparada por clique em Responder, ou é a questão onde o usuário estava focado,
+        // ou qualquer questão que deixou de ser não-respondida após o carregamento inicial.
+        const wasSolvedNow = pendingAnswerQIds.has(qId) || 
+                             (currentQuestionId === qId && !preAnsweredOnLoad.has(qId)) ||
+                             (!preAnsweredOnLoad.has(qId) && !isInitialScan);
 
         if (wasSolvedNow && !processedInSession.has(qId)) {
           processedInSession.add(qId);
@@ -711,18 +733,14 @@
 
       const btn = e.target.closest('button, .q-btn, a');
       if (btn) {
-        const text = btn.textContent || '';
-        if (text.includes('Responder') || btn.classList.contains('light-mode-answer-btn')) {
+        const text = (btn.textContent || '').trim();
+        if (text.includes('Responder') || btn.classList.contains('light-mode-answer-btn') || btn.classList.contains('bg-primary') || btn.getAttribute('aria-label')?.includes('Responder')) {
           const targetQId = clickedCardQId || currentQuestionId;
           if (targetQId) {
             pendingAnswerQIds.add(targetQId);
           }
-          setTimeout(scanCards, 40);
-          setTimeout(scanCards, 120);
-          setTimeout(scanCards, 250);
-          setTimeout(scanCards, 500);
-          setTimeout(scanCards, 1000);
-          setTimeout(scanCards, 2000);
+          // Varreduras rápidas e estendidas para cobrir qualquer atraso de rede da API do Caveira
+          [40, 100, 200, 400, 800, 1500, 2500, 4000].forEach(delay => setTimeout(scanCards, delay));
         }
 
         if (
