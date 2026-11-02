@@ -3,27 +3,27 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: 'Saira', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-  --font-display: 'Saira', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  --font-sans: 'Inter', 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Inter', 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   
-  /* Paleta True Dark / Carvão Tático do Projeto Caveira (Zero azul) */
-  --color-slate-950: #08080a; /* Fundo absoluto ultra-escuro (Deep Pitch Black) */
-  --color-slate-900: #101014; /* Superfície de cards e painéis */
-  --color-slate-850: #15151a; 
-  --color-slate-800: #1c1d22; /* Bordas e divisores escuros neutros */
-  --color-slate-700: #272832; /* Bordas hover e seleções secundárias */
-  --color-slate-600: #424350;
-  --color-slate-500: #6a6b7d;
-  --color-slate-400: #9da0b3; /* Texto secundário com nitidez e contraste */
-  --color-slate-300: #cbcedd;
-  --color-slate-200: #e2e4ed;
-  --color-slate-100: #f1f2f6;
-  --color-slate-50: #f8f9fb;
+  /* Paleta Cinza Chumbo Suave (inspirada na tela de resolução para zero fadiga ocular / halation) */
+  --color-slate-950: #141618; /* Fundo principal em cinza chumbo escuro suave */
+  --color-slate-900: #1E2022; /* Superfície de cards principais (#1E2022) */
+  --color-slate-850: #26292C; /* Superfície interna / caixa de enunciado (#26292C) */
+  --color-slate-800: #2E3236; /* Bordas e divisores suaves */
+  --color-slate-700: #3B4045; /* Bordas hover e seleções secundárias */
+  --color-slate-600: #525860;
+  --color-slate-500: #78828C;
+  --color-slate-400: #A0AAB2; /* Texto secundário / trilha de assunto (#A0AAB2) */
+  --color-slate-300: #CBD5E1;
+  --color-slate-200: #E2E8F0;
+  --color-slate-100: #F1F5F9; /* Branco suave (#F1F5F9) */
+  --color-slate-50: #F8FAFC;
 
   /* Paleta Tática Neutra */
-  --color-tactical-blue: #121318;
-  --color-tactical-slate: #181920;
-  --color-tactical-dark: #060608;
+  --color-tactical-blue: #1E2022;
+  --color-tactical-slate: #26292C;
+  --color-tactical-dark: #141618;
 
   --color-blue-50: var(--theme-blue-50, #eff6ff);
   --color-blue-100: var(--theme-blue-100, #dbeafe);
@@ -40,14 +40,14 @@
 
 @layer base {
   body {
-    @apply transition-colors duration-300 font-sans;
-    font-family: 'Saira', sans-serif;
+    @apply transition-colors duration-300 font-sans antialiased;
+    font-family: 'Inter', 'Roboto', system-ui, -apple-system, sans-serif;
     letter-spacing: 0.01em;
   }
   
   h1, h2, h3, h4, h5, h6, .font-title {
-    font-family: 'Saira', sans-serif;
-    font-weight: 800;
+    font-family: 'Inter', 'Roboto', system-ui, -apple-system, sans-serif;
+    font-weight: 700;
     letter-spacing: -0.01em;
   }
 }

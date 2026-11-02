@@ -643,23 +643,23 @@ export default function RaioXCaveira() {
                     isExpanded ? 'md:col-span-2 lg:col-span-3' : ''
                   } ${
                     sub.status === 'vulnerabilidade'
-                      ? 'border-red-500/30 bg-red-500/5'
+                      ? 'border-red-500/30 bg-red-500/5 dark:bg-[#1E2022]'
                       : sub.status === 'blindagem'
-                        ? 'border-emerald-500/30 bg-emerald-500/5'
-                        : 'border-slate-200 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-900/50'
+                        ? 'border-emerald-500/30 bg-emerald-500/5 dark:bg-[#1E2022]'
+                        : 'border-slate-200 dark:border-[#32363A] bg-white dark:bg-[#1E2022]'
                   }`}
                 >
                   <div
                     onClick={() => setExpandedSubject(isExpanded ? null : sub.name)}
-                    className="p-3.5 cursor-pointer hover:bg-slate-100/40 dark:hover:bg-slate-800/40 transition-colors flex flex-col gap-2.5"
+                    className="p-3.5 cursor-pointer hover:bg-slate-100/40 dark:hover:bg-[#26292C]/60 transition-colors flex flex-col gap-2.5"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                          <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded border ${blocoMeta.badgeClass}`}>
+                          <span className={`text-[10px] font-semibold uppercase tracking-[0.03em] px-2 py-0.5 rounded border ${blocoMeta.badgeClass}`}>
                             {sub.bloco}
                           </span>
-                          <span className={`text-[9px] font-black uppercase px-1.5 py-0.5 rounded ${
+                          <span className={`text-[10px] font-semibold uppercase tracking-[0.03em] px-2 py-0.5 rounded ${
                             sub.status === 'vulnerabilidade'
                               ? 'bg-red-500 text-white'
                               : sub.status === 'blindagem'
@@ -669,22 +669,22 @@ export default function RaioXCaveira() {
                             {sub.status === 'vulnerabilidade' ? 'Reforço' : sub.status === 'blindagem' ? 'Blindado' : 'Evolução'}
                           </span>
                         </div>
-                        <h3 className="text-sm font-black text-slate-800 dark:text-white uppercase truncate" title={sub.name}>
+                        <h3 className="text-sm font-bold text-slate-800 dark:text-[#F1F5F9] truncate" title={sub.name}>
                           {sub.name}
                         </h3>
                       </div>
 
                       <div className="text-right shrink-0">
-                        <span className={`text-lg font-black leading-none block ${sub.grossPercent >= 75 ? 'text-emerald-500' : sub.grossPercent >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                        <span className={`text-lg font-bold leading-none block ${sub.grossPercent >= 75 ? 'text-emerald-500' : sub.grossPercent >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
                           {sub.grossPercent}%
                         </span>
-                        <span className="text-[10px] font-bold text-slate-400">
+                        <span className="text-[11px] font-medium text-slate-400">
                           {sub.hits}C / {sub.errors}E
                         </span>
                       </div>
                     </div>
 
-                    <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                    <div className="w-full bg-slate-200 dark:bg-[#26292C] h-1.5 rounded-full overflow-hidden">
                       <div
                         className={`h-full rounded-full transition-all ${
                           sub.grossPercent >= 75 ? 'bg-emerald-500' : sub.grossPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'
@@ -694,7 +694,7 @@ export default function RaioXCaveira() {
                     </div>
 
                     <div className="flex items-center justify-between pt-1">
-                      <span className="text-[10px] text-slate-400 font-bold">
+                      <span className="text-xs text-slate-500 dark:text-[#A0AAB2] font-medium">
                         {sub.total} {sub.total === 1 ? 'questão' : 'questões'} • ⏱️ {sub.avgTime}s
                       </span>
 
@@ -706,7 +706,7 @@ export default function RaioXCaveira() {
                             setSelectedSubject(selectedSubject === sub.name ? 'all' : sub.name);
                             setSelectedTopic('all');
                           }}
-                          className={`text-[10px] font-black uppercase px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                          className={`text-[10px] font-semibold uppercase tracking-[0.03em] px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
                             selectedSubject === sub.name
                               ? 'bg-blue-600 text-white border-blue-500'
                               : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:text-white'
@@ -714,7 +714,7 @@ export default function RaioXCaveira() {
                         >
                           {selectedSubject === sub.name ? '✓ Filtrado' : 'Filtrar'}
                         </button>
-                        <div className="w-6 h-6 rounded-lg bg-slate-200 dark:bg-slate-800 flex items-center justify-center text-slate-400">
+                        <div className="w-6 h-6 rounded-lg bg-slate-200 dark:bg-[#26292C] flex items-center justify-center text-slate-400">
                           {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                         </div>
                       </div>
@@ -728,16 +728,16 @@ export default function RaioXCaveira() {
                         initial={{ height: 0, opacity: 0 }}
                         animate={{ height: 'auto', opacity: 1 }}
                         exit={{ height: 0, opacity: 0 }}
-                        className="border-t border-slate-200 dark:border-slate-800/80 p-3.5 bg-white/40 dark:bg-slate-950/40 space-y-2.5"
+                        className="border-t border-slate-200 dark:border-[#2E3236] p-3.5 bg-white/40 dark:bg-[#181A1C] space-y-2.5"
                       >
                         <div className="flex items-center justify-between">
-                          <h4 className="text-[11px] font-black uppercase text-slate-400 tracking-wider">
+                          <h4 className="text-xs font-semibold uppercase tracking-[0.03em] text-slate-400">
                             Assuntos Mapeados ({sub.topicsList.length}):
                           </h4>
                           {selectedTopic !== 'all' && (
                             <button
                               onClick={() => setSelectedTopic('all')}
-                              className="text-[10px] font-black uppercase text-blue-400 hover:underline"
+                              className="text-xs font-semibold uppercase tracking-[0.03em] text-blue-400 hover:underline"
                             >
                               Limpar filtro de tópico
                             </button>
@@ -757,19 +757,19 @@ export default function RaioXCaveira() {
                                 className={`p-3 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
                                   isTopicActive
                                     ? 'bg-blue-500/10 border-blue-500 ring-1 ring-blue-500/40'
-                                    : 'bg-slate-100 dark:bg-slate-900 border-slate-200/60 dark:border-slate-800 hover:border-slate-700'
+                                    : 'bg-slate-100 dark:bg-[#1E2022] border-slate-200/60 dark:border-[#32363A] hover:border-slate-600'
                                 }`}
                               >
                                 <div>
                                   <div className="flex justify-between items-start gap-2">
-                                    <h5 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase line-clamp-1">
+                                    <h5 className="text-xs font-medium text-slate-800 dark:text-[#F1F5F9] normal-case line-clamp-2 leading-snug">
                                       {topic.name}
                                     </h5>
-                                    <span className={`text-[10px] font-black shrink-0 ${topic.grossPercent >= 75 ? 'text-emerald-500' : topic.grossPercent >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                                    <span className={`text-xs font-bold shrink-0 ${topic.grossPercent >= 75 ? 'text-emerald-500' : topic.grossPercent >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
                                       {topic.grossPercent}%
                                     </span>
                                   </div>
-                                  <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full mt-1.5 overflow-hidden">
+                                  <div className="w-full bg-slate-200 dark:bg-[#26292C] h-1.5 rounded-full mt-2 overflow-hidden">
                                     <div
                                       className={`h-full rounded-full ${topic.grossPercent >= 75 ? 'bg-emerald-500' : topic.grossPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
                                       style={{ width: `${Math.max(5, Math.min(100, topic.grossPercent))}%` }}
@@ -777,7 +777,7 @@ export default function RaioXCaveira() {
                                   </div>
                                 </div>
 
-                                <div className="flex justify-between items-center text-[10px] font-bold text-slate-400 mt-2">
+                                <div className="flex justify-between items-center text-[11px] font-medium text-slate-500 dark:text-[#A0AAB2] mt-2">
                                   <span>{topic.total}q ({topic.hits}C / {topic.errors}E)</span>
                                   {topic.errors > 0 ? (
                                     <span className="text-red-400">⚠️ {topic.errors} erro(s)</span>
@@ -799,14 +799,14 @@ export default function RaioXCaveira() {
         )}
       </div>
 
-      {/* PAINEL 3: CADERNO DE QUESTÕES (EM GRID 2 COLUNAS NO DESKTOP) */}
-      <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 space-y-4">
+      {/* PAINEL 3: CADERNO DE QUESTÕES */}
+      <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           <div>
-            <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
+            <h2 className="text-sm sm:text-base font-bold text-slate-800 dark:text-[#F1F5F9] uppercase tracking-[0.03em] flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-purple-500" /> Caderno de Questões ({filteredQuestions.length})
             </h2>
-            <p className="text-xs font-medium text-slate-400">
+            <p className="text-xs font-normal text-slate-500 dark:text-[#A0AAB2]">
               Histórico rastreado do Projeto Caveira com filtros rápidos e anotações.
             </p>
           </div>
@@ -820,7 +820,7 @@ export default function RaioXCaveira() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar Q112415, assunto ou texto..."
-                className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl pl-8 pr-3 py-2 text-xs font-bold text-slate-800 dark:text-slate-200 outline-none focus:border-purple-500"
+                className="w-full bg-slate-100 dark:bg-[#1E2022] border border-slate-200 dark:border-[#32363A] rounded-xl pl-8 pr-3 py-2 text-xs font-medium text-slate-800 dark:text-[#F1F5F9] outline-none focus:border-purple-500"
               />
             </div>
 
@@ -833,7 +833,7 @@ export default function RaioXCaveira() {
                   setFilterType('all');
                   setSearchQuery('');
                 }}
-                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-black uppercase text-amber-400 cursor-pointer"
+                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold uppercase tracking-[0.03em] text-amber-400 cursor-pointer"
               >
                 Limpar Filtros ✕
               </button>
@@ -852,10 +852,10 @@ export default function RaioXCaveira() {
             <button
               key={f.id}
               onClick={() => setFilterType(f.id)}
-              className={`px-3 py-1.5 rounded-xl font-bold text-xs uppercase tracking-tight transition-all cursor-pointer ${
+              className={`px-3.5 py-1.5 rounded-xl font-semibold text-xs uppercase tracking-[0.03em] transition-all cursor-pointer ${
                 filterType === f.id
                   ? 'bg-purple-600 text-white shadow-md'
-                  : 'bg-slate-100 dark:bg-slate-800 text-slate-400 hover:text-white'
+                  : 'bg-slate-100 dark:bg-[#26292C] text-slate-500 dark:text-[#A0AAB2] hover:text-white'
               }`}
             >
               {f.label}
@@ -866,45 +866,45 @@ export default function RaioXCaveira() {
         {filteredQuestions.length === 0 ? (
           <div className="text-center py-8 text-slate-400">
             <CheckCircle2 className="w-8 h-8 mx-auto text-slate-600 mb-2" />
-            <p className="font-bold text-xs uppercase">Nenhuma questão encontrada para os filtros selecionados</p>
+            <p className="font-semibold text-xs uppercase tracking-[0.03em]">Nenhuma questão encontrada para os filtros selecionados</p>
           </div>
         ) : (
-          <div className="space-y-3">
+          <div className="space-y-3.5">
             {filteredQuestions.slice(0, 80).map(q => {
               const blocoMeta = BLOCO_METADATA[q.bloco] || BLOCO_METADATA['Bloco I'];
               const isEditingThisNote = editingNoteId === q.id;
               return (
                 <div
                   key={q.id + (q.timestamp || '')}
-                  className={`p-3.5 rounded-xl border transition-all flex flex-col justify-between gap-2.5 ${
+                  className={`p-4 sm:p-5 rounded-xl border transition-all flex flex-col justify-between gap-3 ${
                     !q.hit && q.confidence === 'sabia'
-                      ? 'border-red-500/40 bg-red-500/5'
-                      : 'border-slate-200 dark:border-slate-800/80 bg-slate-50/70 dark:bg-slate-900/60'
+                      ? 'border-red-500/40 bg-red-500/5 dark:bg-[#1E2022]'
+                      : 'border-slate-200 dark:border-[#32363A] bg-white dark:bg-[#1E2022]'
                   }`}
                 >
                   <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono text-xs font-black text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2 py-0.5 rounded">
+                      <span className="font-sans text-xs font-bold tracking-[0.03em] text-white bg-slate-800 dark:bg-[#26292C] border border-slate-700 dark:border-[#383C42] px-2.5 py-1 rounded-md">
                         {q.id}
                       </span>
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border ${blocoMeta.badgeClass}`}>
+                      <span className={`text-[11px] font-semibold uppercase tracking-[0.03em] px-2.5 py-1 rounded-md border ${blocoMeta.badgeClass}`}>
                         {q.bloco} • {q.canonicalSubject}
                       </span>
-                      <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded ${
+                      <span className={`text-[11px] font-semibold uppercase tracking-[0.03em] px-2.5 py-1 rounded-md ${
                         q.hit ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
                       }`}>
                         {q.hit ? '✓ Acertou' : '✗ Errou'}
                       </span>
-                      <span className="text-[10px] font-bold text-slate-400 bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded uppercase">
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-slate-600 dark:text-[#A0AAB2] bg-slate-100 dark:bg-[#26292C] px-2.5 py-1 rounded-md">
                         {q.banca} • {q.ano}
                       </span>
-                      <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-200 dark:bg-slate-800 px-2 py-0.5 rounded">
+                      <span className="text-[11px] font-semibold tracking-[0.03em] text-slate-600 dark:text-[#A0AAB2] bg-slate-100 dark:bg-[#26292C] px-2.5 py-1 rounded-md">
                         ⏱️ {q.durationSeconds}s
                       </span>
                     </div>
 
                     <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
-                      <span className="text-[11px] font-bold text-slate-400 uppercase mr-1 whitespace-nowrap">
+                      <span className="text-xs font-semibold uppercase tracking-[0.03em] text-slate-500 dark:text-[#A0AAB2] mr-1 whitespace-nowrap">
                         Marcou: <strong className={q.hit ? 'text-emerald-400' : 'text-red-400'}>{q.userChoice}</strong> | Gabarito: <strong className="text-emerald-400">{q.correctChoice}</strong>
                       </span>
 
@@ -925,7 +925,7 @@ export default function RaioXCaveira() {
                           q.fsrsCreated
                             ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
                             : 'bg-purple-600 hover:bg-purple-500 text-white'
-                        } font-black text-[10px] uppercase px-3 py-1.5 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0`}
+                        } font-semibold text-[11px] uppercase tracking-[0.03em] px-3 py-1.5 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0`}
                         title="Criar Flashcard de Revisão no FSRS"
                       >
                         <BrainCircuit className="w-3.5 h-3.5" /> {q.fsrsCreated ? 'No FSRS ✓' : '+ FSRS'}
@@ -941,26 +941,26 @@ export default function RaioXCaveira() {
                     </div>
                   </div>
 
-                  {/* Trilha Hierárquica do Assunto/Tópico */}
-                  <p className="text-xs font-bold text-slate-400 uppercase">
+                  {/* Trilha Hierárquica do Assunto/Tópico (Caixa mista, peso 400, #A0AAB2, 14px) */}
+                  <p className="text-sm font-normal normal-case text-slate-600 dark:text-[#A0AAB2] leading-snug">
                     📂 {q.subject} {q.topic && q.topic !== q.subject ? `➔ ${q.topic}` : ''}
                   </p>
 
-                  {/* Enunciado */}
-                  <p className="text-xs text-slate-700 dark:text-slate-200 leading-relaxed bg-slate-100/80 dark:bg-slate-950/60 p-3 rounded-xl border border-slate-200/60 dark:border-slate-800/60">
-                    "{q.content}"
+                  {/* Enunciado (16px/16.5px, peso 500, line-height 1.6, #F1F5F9, fundo #26292C, sem aspas) */}
+                  <p className="text-[16px] font-medium text-slate-800 dark:text-[#F1F5F9] leading-[1.6] bg-slate-100 dark:bg-[#26292C] p-4 rounded-xl border border-slate-200/70 dark:border-[#34383D]">
+                    {q.content}
                   </p>
 
                   {/* Anotação Tática / Bizu Salvo */}
                   {q.userNote && !isEditingThisNote && (
-                    <div className="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-300 font-semibold flex items-center justify-between">
+                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-sm text-amber-200 font-medium flex items-center justify-between">
                       <span>💡 <strong>Bizu Tático:</strong> {q.userNote}</span>
                       <button
                         onClick={() => {
                           setEditingNoteId(q.id);
                           setNoteDraft(q.userNote || '');
                         }}
-                        className="text-[10px] font-black uppercase text-amber-400 hover:underline ml-3"
+                        className="text-xs font-semibold uppercase tracking-[0.03em] text-amber-400 hover:underline ml-3"
                       >
                         Editar
                       </button>
@@ -975,11 +975,11 @@ export default function RaioXCaveira() {
                         value={noteDraft}
                         onChange={(e) => setNoteDraft(e.target.value)}
                         placeholder="Digite a pegadinha da questão, artigo da lei ou bizu de revisão..."
-                        className="flex-1 bg-slate-950 border border-amber-500/40 rounded-xl px-3 py-2 text-xs text-white outline-none"
+                        className="flex-1 bg-[#26292C] border border-amber-500/40 rounded-xl px-3.5 py-2 text-sm text-[#F1F5F9] outline-none"
                       />
                       <button
                         onClick={() => handleSaveNote(q.id)}
-                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase px-3.5 py-2 rounded-xl flex items-center gap-1 cursor-pointer"
+                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs uppercase tracking-[0.03em] px-4 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer"
                       >
                         <Save className="w-3.5 h-3.5" /> Salvar
                       </button>
@@ -987,9 +987,9 @@ export default function RaioXCaveira() {
                   )}
 
                   {/* Barra Interativa de Reclassificação Tática (Confiança e Motivo do Erro) */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-200/60 dark:border-slate-800/60">
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-slate-200/60 dark:border-[#2E3236]">
                     <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[10px] font-black uppercase text-slate-400 mr-1">Confiança:</span>
+                      <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-slate-500 dark:text-[#A0AAB2] mr-1">Confiança:</span>
                       {[
                         { id: 'sabia', label: '🎯 Sabia' },
                         { id: 'duvida', label: '🤔 Dúvida' },
@@ -998,10 +998,10 @@ export default function RaioXCaveira() {
                         <button
                           key={c.id}
                           onClick={() => updateCaveiraQuestion(q.id, { confidence: c.id })}
-                          className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all cursor-pointer ${
+                          className={`px-3 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-[0.03em] transition-all cursor-pointer ${
                             q.confidence === c.id
                               ? 'bg-sky-500 text-slate-950 shadow-sm'
-                              : 'bg-slate-200 dark:bg-slate-800 text-slate-400 hover:text-white'
+                              : 'bg-slate-100 dark:bg-[#26292C] text-slate-500 dark:text-[#A0AAB2] hover:text-white'
                           }`}
                         >
                           {c.label}
@@ -1011,7 +1011,7 @@ export default function RaioXCaveira() {
 
                     {!q.hit && (
                       <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[10px] font-black uppercase text-rose-400 mr-1">Causa do Erro:</span>
+                        <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-rose-400 mr-1">Causa do Erro:</span>
                         {[
                           { id: 'conteudo', label: '📚 Teoria / Lei' },
                           { id: 'atencao', label: '⚠️ Atenção' },
@@ -1020,10 +1020,10 @@ export default function RaioXCaveira() {
                           <button
                             key={r.id}
                             onClick={() => updateCaveiraQuestion(q.id, { errorReason: r.id })}
-                            className={`px-2.5 py-1 rounded-lg text-[10px] font-black uppercase transition-all cursor-pointer ${
+                            className={`px-3 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-[0.03em] transition-all cursor-pointer ${
                               (q.errorReason || 'conteudo') === r.id
                                 ? 'bg-rose-500 text-white shadow-sm'
-                                : 'bg-slate-200 dark:bg-slate-800 text-slate-400 hover:text-white'
+                                : 'bg-slate-100 dark:bg-[#26292C] text-slate-500 dark:text-[#A0AAB2] hover:text-white'
                             }`}
                           >
                             {r.label}
