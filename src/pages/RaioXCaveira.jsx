@@ -869,7 +869,7 @@ export default function RaioXCaveira() {
             <p className="font-bold text-xs uppercase">Nenhuma questão encontrada para os filtros selecionados</p>
           </div>
         ) : (
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
+          <div className="space-y-3">
             {filteredQuestions.slice(0, 80).map(q => {
               const blocoMeta = BLOCO_METADATA[q.bloco] || BLOCO_METADATA['Bloco I'];
               const isEditingThisNote = editingNoteId === q.id;
@@ -903,8 +903,8 @@ export default function RaioXCaveira() {
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-2 self-end md:self-auto">
-                      <span className="text-[10px] font-bold text-slate-400 uppercase mr-1">
+                    <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
+                      <span className="text-[11px] font-bold text-slate-400 uppercase mr-1 whitespace-nowrap">
                         Marcou: <strong className={q.hit ? 'text-emerald-400' : 'text-red-400'}>{q.userChoice}</strong> | Gabarito: <strong className="text-emerald-400">{q.correctChoice}</strong>
                       </span>
 
@@ -925,7 +925,7 @@ export default function RaioXCaveira() {
                           q.fsrsCreated
                             ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
                             : 'bg-purple-600 hover:bg-purple-500 text-white'
-                        } font-black text-[10px] uppercase px-3 py-1.5 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1`}
+                        } font-black text-[10px] uppercase px-3 py-1.5 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1 whitespace-nowrap shrink-0`}
                         title="Criar Flashcard de Revisão no FSRS"
                       >
                         <BrainCircuit className="w-3.5 h-3.5" /> {q.fsrsCreated ? 'No FSRS ✓' : '+ FSRS'}
