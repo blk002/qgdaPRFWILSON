@@ -214,7 +214,8 @@
   function startTimerInterval() {
     if (timerInterval) return;
     timerInterval = setInterval(() => {
-      if (isTimerRunning && currentQuestionId) {
+      // Só cronometra se a aba estiver visível, o timer estiver ativo e houver questão ativa na tela
+      if (document.visibilityState === 'visible' && isTimerRunning && currentQuestionId) {
         timerSeconds = (questionTimers.get(currentQuestionId) || 0) + 1;
         questionTimers.set(currentQuestionId, timerSeconds);
         renderTimerDisplay();
@@ -232,6 +233,19 @@
 
   function pauseTimer() {
     isTimerRunning = false;
+  }
+
+  function clearActiveQuestionState() {
+    if (!currentQuestionId && !isTimerRunning) return;
+    isTimerRunning = false;
+    currentQuestionId = null;
+    timerSeconds = 0;
+    dismissPrompt();
+    renderTimerDisplay();
+    const currentQEl = document.getElementById('qg-current-q-id');
+    if (currentQEl) {
+      currentQEl.textContent = 'Aguardando questão...';
+    }
   }
 
   function switchActiveQuestion(newQId, isAlreadyAnswered = false) {
@@ -281,6 +295,10 @@
     return Array.from(allCards).filter(card => {
       if (card.closest('#qg-caveira-hud')) return false;
       if (card.parentElement && card.parentElement.closest('.q-card')) return false;
+      // Garante que o card está realmente visível na tela atual (ignora abas/rotas em cache ou ocultas)
+      if (card.offsetParent === null) return false;
+      const rect = card.getBoundingClientRect();
+      if (rect.width === 0 || rect.height === 0) return false;
       const hasNumber = Boolean(card.querySelector('.number'));
       const hasAlternatives = Boolean(card.querySelector('.question-alternatives, .alternative'));
       return hasNumber && hasAlternatives;
@@ -580,7 +598,10 @@
     createHud();
 
     const cards = getQuestionCards();
-    if (!cards || cards.length === 0) return;
+    if (!cards || cards.length === 0) {
+      clearActiveQuestionState();
+      return;
+    }
 
     cards.forEach(card => {
       const qId = extractQuestionId(card);
@@ -645,7 +666,10 @@
     scrollRafId = requestAnimationFrame(() => {
       scrollRafId = null;
       const cards = getQuestionCards();
-      if (!cards || cards.length === 0) return;
+      if (!cards || cards.length === 0) {
+        clearActiveQuestionState();
+        return;
+      }
       const focusedCard = findCardInViewport(cards);
       if (focusedCard) {
         const focusedQId = extractQuestionId(focusedCard);
@@ -659,9 +683,11 @@
 
   // --- 8. GATILHOS DE INTERAÇÃO E ROLAGEM (SCROLL) ---
   function setupTriggers() {
-    // 1. Detecção em tempo real ao rolar a página (captura tanto scroll da janela quanto de containers internos do Quasar)
+    // 1. Detecção em tempo real ao rolar a página e ao trocar de rota na SPA
     window.addEventListener('scroll', handleScrollUpdate, { capture: true, passive: true });
     window.addEventListener('wheel', handleScrollUpdate, { passive: true });
+    window.addEventListener('popstate', () => scheduleScan(50));
+    window.addEventListener('hashchange', () => scheduleScan(50));
 
     // 2. Cliques do usuário
     document.addEventListener('click', (e) => {
