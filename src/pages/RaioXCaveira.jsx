@@ -522,66 +522,143 @@ export default function RaioXCaveira() {
         </div>
       </div>
 
-      {/* KPI CARDS GERAIS (COMPACTOS E HORIZONTAIS — SEM ESPAÇO VAZIO) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800/80 flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
-            <Target className="w-5 h-5 text-blue-500" />
+      {/* KPI CARDS GERAIS — GLASSMORPHISM & NEON PERFORMANCE */}
+      <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+        {/* CARD 1: RESOLVIDAS (Tema Azul/Ciano) */}
+        <div className="relative overflow-hidden rounded-2xl bg-[#11141C]/90 backdrop-blur-md p-5 flex items-center gap-4 transition-all duration-300 border border-blue-500/40 shadow-[0_0_20px_-5px_rgba(59,130,246,0.25),inset_0_0_15px_rgba(59,130,246,0.1)] before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_25%_50%,rgba(59,130,246,0.35),transparent_70%)] before:opacity-15 before:pointer-events-none">
+          <div className="w-14 h-16 rounded-xl bg-blue-950/50 border border-blue-400/30 flex items-center justify-center shrink-0 shadow-[inset_0_0_10px_rgba(59,130,246,0.2)]">
+            <Target className="text-blue-400 w-7 h-7 drop-shadow-[0_0_6px_rgba(96,165,250,0.8)]" />
           </div>
-          <div className="min-w-0">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block truncate">
-              Resolvidas ({selectedBloco === 'all' ? 'Geral' : selectedBloco})
+
+          <div className="min-w-0 z-10">
+            <span className="text-xs font-semibold tracking-wider text-slate-300 uppercase block truncate">
+              RESOLVIDAS ({selectedBloco === 'all' ? 'GERAL' : selectedBloco.toUpperCase()})
             </span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-slate-800 dark:text-white leading-tight">{stats.total}</span>
-              <span className="text-[11px] text-slate-400 font-medium truncate">⏱️ {stats.avgTimeSec}s/q</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800/80 flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Acertos</span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-emerald-500 leading-tight">{stats.hits}</span>
-              <span className="text-[11px] text-slate-400 font-medium truncate">
-                ({stats.total > 0 ? Math.round((stats.hits / stats.total) * 100) : 0}%)
+            <div className="flex items-center gap-2.5 mt-1">
+              <span className="text-4xl font-extrabold text-white tracking-tight tabular-nums">
+                {stats.total}
+              </span>
+              <span className="inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full bg-slate-800/90 border border-slate-600/50 text-xs font-medium text-slate-200 tabular-nums whitespace-nowrap">
+                <Skull className="w-3.5 h-3.5 text-pink-400 shrink-0" />
+                {stats.avgTimeSec}s/q
               </span>
             </div>
           </div>
+
+          <svg className="ml-auto w-24 h-12 shrink-0 overflow-visible" viewBox="0 0 100 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="blueGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#3B82F6" stopOpacity="0.45" />
+                <stop offset="100%" stopColor="#3B82F6" stopOpacity="0.0" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M0 36 C12 36, 16 28, 26 30 C36 32, 42 12, 52 14 C62 16, 68 28, 78 22 C88 16, 92 26, 100 24 L100 48 L0 48 Z"
+              fill="url(#blueGradient)"
+            />
+            <path
+              d="M0 36 C12 36, 16 28, 26 30 C36 32, 42 12, 52 14 C62 16, 68 28, 78 22 C88 16, 92 26, 100 24"
+              stroke="#3B82F6"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
         </div>
 
-        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800/80 flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
-            <XCircle className="w-5 h-5 text-red-500" />
+        {/* CARD 2: ACERTOS (Tema Verde Esmeralda) */}
+        <div className="relative overflow-hidden rounded-2xl bg-[#11141C]/90 backdrop-blur-md p-5 flex items-center gap-4 transition-all duration-300 border border-emerald-500/40 shadow-[0_0_20px_-5px_rgba(16,185,129,0.25),inset_0_0_15px_rgba(16,185,129,0.1)] before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_75%_50%,rgba(16,185,129,0.35),transparent_70%)] before:opacity-15 before:pointer-events-none">
+          <div className="w-14 h-16 rounded-xl bg-emerald-950/50 border border-emerald-400/30 flex items-center justify-center shrink-0 shadow-[inset_0_0_10px_rgba(16,185,129,0.2)]">
+            <CheckCircle2 className="text-emerald-400 w-7 h-7 drop-shadow-[0_0_6px_rgba(52,211,153,0.8)]" />
           </div>
-          <div className="min-w-0">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Erros</span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-red-500 leading-tight">{stats.errors}</span>
-              <span className="text-[11px] text-slate-400 font-medium truncate">
-                ({stats.total > 0 ? Math.round((stats.errors / stats.total) * 100) : 0}%)
-              </span>
-            </div>
+
+          <div className="min-w-0 z-10">
+            <span className="text-xs font-semibold tracking-wider text-slate-300 uppercase block">
+              ACERTOS
+            </span>
+            <span className="text-4xl font-extrabold text-white tabular-nums mt-1 block drop-shadow-[0_0_10px_rgba(52,211,153,0.3)]">
+              {stats.hits}
+            </span>
+          </div>
+
+          <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-emerald-950/90 border border-emerald-500/40 text-[11px] font-semibold text-emerald-300 shadow-[0_0_10px_rgba(16,185,129,0.2)] tabular-nums whitespace-nowrap z-20">
+            +{stats.total > 0 ? Math.round((stats.hits / stats.total) * 100) : 0}% de taxa
+          </div>
+
+          <div className="ml-auto flex items-end gap-1.5 h-12 shrink-0 z-10">
+            <div className="w-2.5 h-4 rounded-t-sm bg-gradient-to-t from-emerald-900/40 to-emerald-400/70" />
+            <div className="w-2.5 h-6 rounded-t-sm bg-gradient-to-t from-emerald-900/40 to-emerald-400/80" />
+            <div className="w-2.5 h-9 rounded-t-sm bg-gradient-to-t from-emerald-900/40 to-emerald-400/90" />
+            <div className="w-2.5 h-12 rounded-t-sm bg-gradient-to-t from-emerald-900/40 to-emerald-400 shadow-[0_0_10px_#34d399]" />
           </div>
         </div>
 
-        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800/80 flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-            <TrendingUp className="w-5 h-5 text-amber-500" />
+        {/* CARD 3: ERROS (Tema Vermelho/Rosa) */}
+        <div className="relative overflow-hidden rounded-2xl bg-[#11141C]/90 backdrop-blur-md p-5 flex items-center gap-4 transition-all duration-300 border border-rose-500/40 shadow-[0_0_20px_-5px_rgba(244,63,94,0.25),inset_0_0_15px_rgba(244,63,94,0.1)] before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_60%_50%,rgba(244,63,94,0.35),transparent_70%)] before:opacity-15 before:pointer-events-none">
+          <div className="w-14 h-16 rounded-xl bg-rose-950/50 border border-rose-400/30 flex items-center justify-center shrink-0 shadow-[inset_0_0_10px_rgba(244,63,94,0.2)]">
+            <XCircle className="text-rose-400 w-7 h-7 drop-shadow-[0_0_6px_rgba(251,113,133,0.8)]" />
           </div>
-          <div className="min-w-0">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Aproveitamento</span>
-            <div className="flex items-baseline gap-2">
-              <span className={`text-2xl font-black leading-tight ${stats.grossRate >= 75 ? 'text-emerald-500' : stats.grossRate >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+
+          <div className="min-w-0 z-10">
+            <span className="text-xs font-semibold tracking-wider text-slate-300 uppercase block">
+              ERROS
+            </span>
+            <span className="text-4xl font-extrabold text-white tabular-nums mt-1 block">
+              {stats.errors}
+            </span>
+          </div>
+
+          <div className="absolute bottom-1.5 left-1/2 -translate-x-1/2 px-3 py-0.5 rounded-full bg-rose-950/90 border border-rose-500/40 text-[11px] font-semibold text-rose-300 shadow-[0_0_10px_rgba(244,63,94,0.2)] tabular-nums whitespace-nowrap z-20">
+            {stats.total > 0 ? Math.round((stats.errors / stats.total) * 100) : 0}% do total
+          </div>
+
+          <svg className="ml-auto w-28 h-12 shrink-0 overflow-visible" viewBox="0 0 112 48" fill="none" xmlns="http://www.w3.org/2000/svg">
+            <defs>
+              <linearGradient id="roseGradient" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#F43F5E" stopOpacity="0.45" />
+                <stop offset="100%" stopColor="#F43F5E" stopOpacity="0.0" />
+              </linearGradient>
+            </defs>
+            <path
+              d="M0 8 C10 10, 14 20, 24 18 C34 16, 40 26, 50 24 C60 22, 66 34, 76 32 C86 30, 92 40, 102 38 C107 37, 110 42, 112 44 L112 48 L0 48 Z"
+              fill="url(#roseGradient)"
+            />
+            <path
+              d="M0 8 C10 10, 14 20, 24 18 C34 16, 40 26, 50 24 C60 22, 66 34, 76 32 C86 30, 92 40, 102 38 C107 37, 110 42, 112 44"
+              stroke="#F43F5E"
+              strokeWidth="2"
+              strokeLinecap="round"
+            />
+          </svg>
+        </div>
+
+        {/* CARD 4: APROVEITAMENTO (Tema Âmbar/Ouro) */}
+        <div className="relative overflow-hidden rounded-2xl bg-[#11141C]/90 backdrop-blur-md p-5 flex items-center gap-4 transition-all duration-300 border border-amber-500/40 shadow-[0_0_20px_-5px_rgba(245,158,11,0.25),inset_0_0_15px_rgba(245,158,11,0.1)] before:absolute before:inset-0 before:bg-[radial-gradient(circle_at_35%_50%,rgba(245,158,11,0.35),transparent_70%)] before:opacity-15 before:pointer-events-none">
+          <div className="w-14 h-16 rounded-xl bg-amber-950/50 border border-amber-400/30 flex items-center justify-center shrink-0 shadow-[inset_0_0_10px_rgba(245,158,11,0.2)]">
+            <TrendingUp className="text-amber-400 w-7 h-7 drop-shadow-[0_0_6px_rgba(251,191,36,0.8)]" />
+          </div>
+
+          <div className="flex-1 min-w-0 z-10">
+            <span className="text-xs font-semibold tracking-wider text-slate-300 uppercase block">
+              APROVEITAMENTO
+            </span>
+            <div className="flex items-baseline justify-between w-full mt-1 gap-2">
+              <span className="text-4xl font-extrabold text-white tabular-nums drop-shadow-[0_0_10px_rgba(251,191,36,0.3)]">
                 {stats.grossRate}%
               </span>
-              <span className="text-[11px] text-slate-400 font-medium truncate">
+              <span className="text-xs font-semibold text-slate-300 tabular-nums whitespace-nowrap">
                 {stats.hits}C / {stats.errors}E
               </span>
+            </div>
+
+            <div className="mt-2.5 flex items-center gap-1 w-full h-1.5">
+              <div
+                className="h-full rounded-l-full bg-emerald-400 shadow-[0_0_8px_#34d399] transition-all duration-500"
+                style={{ width: `${stats.total > 0 ? stats.grossRate : 50}%` }}
+              />
+              <div
+                className="h-full rounded-r-full bg-rose-500 shadow-[0_0_8px_#f43f5e] transition-all duration-500"
+                style={{ width: `${stats.total > 0 ? Math.max(0, 100 - stats.grossRate) : 50}%` }}
+              />
             </div>
           </div>
         </div>
