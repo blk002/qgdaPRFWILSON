@@ -235,83 +235,143 @@ export default function App() {
   };
 
   return (
-    <div className={`min-h-screen transition-colors duration-300 relative overflow-x-hidden ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
+    <div className={`min-h-screen transition-colors duration-300 relative overflow-x-hidden flex flex-col md:flex-row ${isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'}`}>
       <ConfettiCanvas />
       {/* Tactical background gradient and grid */}
-      <div className="absolute inset-0 tactical-grid pointer-events-none -z-20"></div>
+      <div className="fixed inset-0 tactical-grid pointer-events-none -z-20"></div>
       {isDarkMode && (
-        <div className="absolute top-0 left-1/4 w-[500px] h-[500px] bg-white/[0.01] rounded-full blur-[140px] pointer-events-none -z-10 pulse-bg-glow"></div>
+        <div className="fixed top-0 left-1/3 w-[500px] h-[500px] bg-white/[0.01] rounded-full blur-[140px] pointer-events-none -z-10 pulse-bg-glow"></div>
       )}
       <Toaster position="top-right" richColors closeButton />
-      
-      <header className="sticky top-3 z-50 mx-auto max-w-6xl px-3 sm:px-5 w-full pt-1">
-        <div className={`glass-card rounded-2xl ${isDarkMode ? 'bg-slate-900/90 border-slate-800/80 shadow-2xl' : 'bg-white/80 border-slate-200/50 shadow-lg shadow-slate-100/30'} overflow-hidden`}>
-          <div className="px-4 py-2.5 sm:px-5 flex justify-between items-center">
-            <Link to="/" className="flex items-center gap-3">
-              <div className="p-2 bg-blue-600/10 dark:bg-blue-500/15 rounded-xl border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.15)]">
-                <Award className="text-blue-600 dark:text-blue-400 w-5 h-5 sm:w-6 sm:h-6" />
+
+      {/* MENU LATERAL ESQUERDO (DESKTOP) */}
+      <aside className={`hidden md:flex flex-col fixed inset-y-0 left-0 w-60 z-50 border-r transition-colors ${
+        isDarkMode ? 'bg-slate-900/95 border-slate-800/80' : 'bg-white/95 border-slate-200/80'
+      } backdrop-blur-xl`}>
+        {/* Logo / Topo */}
+        <div className="px-4 py-4 border-b border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-2.5">
+            <div className="p-2 bg-blue-600/10 dark:bg-blue-500/15 rounded-xl border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.15)]">
+              <Award className="text-blue-600 dark:text-blue-400 w-5 h-5" />
+            </div>
+            <div className="flex items-center gap-2">
+              <h1 className="text-base font-black tracking-wider text-slate-800 dark:text-white uppercase leading-none">
+                QG DA PRF
+              </h1>
+              {isSyncing && <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
+            </div>
+          </Link>
+        </div>
+
+        {/* Card Compacto de Patente & Moedas */}
+        <div className="px-3 py-3 border-b border-slate-200/60 dark:border-slate-800/80 space-y-2">
+          <div className={`flex items-center justify-between bg-slate-100 dark:bg-slate-800/70 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 ${getCurrentPatente().color}`}>
+            <div className="flex items-center gap-2 min-w-0">
+              <span className="text-base leading-none shrink-0">{getCurrentPatente().icon}</span>
+              <div className="min-w-0">
+                <span className="text-[10px] font-black uppercase tracking-wider block truncate">{getCurrentPatente().name}</span>
+                <div className="w-20 bg-slate-200 dark:bg-slate-700 rounded-full h-1 mt-1 overflow-hidden">
+                  <div
+                    className="bg-current h-full transition-all duration-1000"
+                    style={{ width: `${Math.min(100, (userStats.xp % 1000) / 10)}%` }}
+                  />
+                </div>
               </div>
-              <div className="flex items-center gap-2">
-                <h1 className="text-base sm:text-lg font-black tracking-wider text-slate-800 dark:text-white uppercase leading-none">QG DA PRF</h1>
-                {isSyncing && (
-                  <RefreshCw className="w-4 h-4 text-blue-500 animate-spin" />
-                )}
+            </div>
+
+            <div className="flex items-center gap-1 bg-yellow-500/10 dark:bg-yellow-500/15 px-2 py-1 rounded-lg border border-yellow-500/20 shrink-0">
+              <Coins className="text-yellow-600 dark:text-yellow-400 w-3.5 h-3.5" />
+              <span className="font-black text-xs text-yellow-600 dark:text-yellow-400">{coins}</span>
+            </div>
+          </div>
+        </div>
+
+        {/* Links de Navegação Vertical */}
+        <nav className="flex-1 overflow-y-auto custom-scrollbar px-3 py-3 space-y-1">
+          {tabs.map(tab => (
+            <NavLink
+              key={tab.id}
+              to={tab.id}
+              className={({ isActive }) => `flex items-center justify-between py-2.5 px-3 rounded-xl transition-all duration-200 text-xs font-black uppercase tracking-tight cursor-pointer ${
+                isActive
+                  ? 'bg-blue-600 dark:bg-blue-500 text-white shadow-md shadow-blue-500/20'
+                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+              }`}
+            >
+              <div className="flex items-center gap-2.5 min-w-0">
+                <tab.icon className="w-4 h-4 shrink-0" />
+                <span className="truncate">{tab.label}</span>
               </div>
+              {tab.count > 0 && (
+                <span className="bg-red-500 text-white text-[10px] min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full font-black shrink-0">
+                  {tab.count}
+                </span>
+              )}
+            </NavLink>
+          ))}
+        </nav>
+
+        {/* Rodapé da Sidebar: Tema & Logout */}
+        <div className="p-3 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center gap-2">
+          <button
+            onClick={() => setIsDarkMode(!isDarkMode)}
+            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition-all text-slate-700 dark:text-white text-xs font-bold uppercase cursor-pointer"
+          >
+            {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+            <span>{isDarkMode ? 'Claro' : 'Escuro'}</span>
+          </button>
+
+          <button
+            onClick={signOut}
+            className="p-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl border border-red-500/20 transition-all cursor-pointer"
+            title="Sair do QG"
+          >
+            <LogOut className="w-4 h-4" />
+          </button>
+        </div>
+      </aside>
+
+      {/* HEADER COMPACTO (APENAS MOBILE) */}
+      <header className="md:hidden sticky top-2 z-50 mx-auto w-full px-3 pt-1">
+        <div className={`glass-card rounded-2xl ${isDarkMode ? 'bg-slate-900/90 border-slate-800/80 shadow-2xl' : 'bg-white/80 border-slate-200/50 shadow-lg'} overflow-hidden`}>
+          <div className="px-3.5 py-2.5 flex justify-between items-center">
+            <Link to="/" className="flex items-center gap-2.5">
+              <div className="p-1.5 bg-blue-600/10 dark:bg-blue-500/15 rounded-xl border border-blue-500/20">
+                <Award className="text-blue-600 dark:text-blue-400 w-5 h-5" />
+              </div>
+              <h1 className="text-sm font-black tracking-wider text-slate-800 dark:text-white uppercase leading-none">QG DA PRF</h1>
             </Link>
-            
-            <div className="flex items-center gap-2 sm:gap-4">
-              {/* Patente Badge */}
-              <div className={`hidden lg:flex flex-col items-center gap-1 bg-slate-100 dark:bg-slate-800 px-3 py-1.5 rounded-2xl border border-slate-200 dark:border-slate-800/60 shadow-inner ${getCurrentPatente().color}`}>
-                 <div className="flex items-center gap-2">
-                    <span className="text-lg leading-none">{getCurrentPatente().icon}</span>
-                    <span className="text-[9px] font-black uppercase tracking-widest">{getCurrentPatente().name}</span>
-                 </div>
-                 <div className="w-24 bg-slate-200 dark:bg-slate-700 rounded-full h-1 overflow-hidden">
-                    <div 
-                      className="bg-current h-full transition-all duration-1000 shadow-[0_0_8px_rgba(255,255,255,0.3)]" 
-                      style={{ width: `${Math.min(100, (userStats.xp % 1000) / 10)}%` }}
-                    ></div>
-                 </div>
-              </div>
 
-              {/* Coins */}
-              <div className="flex items-center gap-1.5 bg-yellow-500/10 dark:bg-yellow-500/15 px-3 py-1.5 rounded-full border border-yellow-500/20 shadow-sm">
-                <Coins className="text-yellow-600 dark:text-yellow-400 w-4 h-4 sm:w-5 sm:h-5" />
-                <span className="font-black text-sm sm:text-base text-yellow-600 dark:text-yellow-400">{coins}</span>
+            <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1 bg-yellow-500/10 dark:bg-yellow-500/15 px-2.5 py-1 rounded-full border border-yellow-500/20">
+                <Coins className="text-yellow-600 dark:text-yellow-400 w-3.5 h-3.5" />
+                <span className="font-black text-xs text-yellow-600 dark:text-yellow-400">{coins}</span>
               </div>
-              
-              {/* Logout Button */}
-              <button 
-                onClick={signOut}
-                className="p-2 bg-red-600/10 hover:bg-red-700 text-red-500 hover:text-white rounded-xl border border-red-500/10 transition-all hover:scale-105 active:scale-95 cursor-pointer"
-                title="Sair do QG"
-              >
-                <LogOut className="w-4 h-4" />
+              <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white">
+                {isDarkMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
               </button>
-
-              {/* Dark Mode Toggle */}
-              <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition-all text-slate-700 dark:text-white hover:scale-105 active:scale-95 cursor-pointer">
-                {isDarkMode ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
+              <button onClick={signOut} className="p-1.5 bg-red-600/10 text-red-500 rounded-xl border border-red-500/10">
+                <LogOut className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
-          <nav className={`px-4 sm:px-6 overflow-x-auto no-scrollbar border-t ${isDarkMode ? 'border-slate-800/80 bg-slate-950/20' : 'border-slate-200/50 bg-slate-50/50'}`}>
-            <div className="flex gap-1.5 py-2.5 min-w-max">
+          <nav className={`px-3 overflow-x-auto no-scrollbar border-t ${isDarkMode ? 'border-slate-800/80 bg-slate-950/20' : 'border-slate-200/50 bg-slate-50/50'}`}>
+            <div className="flex gap-1.5 py-2 min-w-max">
               {tabs.map(tab => (
-                <NavLink 
+                <NavLink
                   key={tab.id}
                   to={tab.id}
-                  className={({ isActive }) => `flex items-center gap-1.5 py-2 px-3 rounded-xl transition-all duration-300 whitespace-nowrap text-xs font-black uppercase tracking-tight cursor-pointer ${
-                    isActive 
-                      ? 'bg-blue-600 dark:bg-blue-500 text-white shadow-md shadow-blue-500/15' 
-                      : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800/40'
+                  className={({ isActive }) => `flex items-center gap-1.5 py-1.5 px-2.5 rounded-xl transition-all whitespace-nowrap text-[11px] font-black uppercase tracking-tight ${
+                    isActive
+                      ? 'bg-blue-600 text-white shadow-sm'
+                      : 'text-slate-500 dark:text-slate-400'
                   }`}
                 >
                   <tab.icon className="w-3.5 h-3.5" />
                   <span>{tab.label}</span>
                   {tab.count > 0 && (
-                    <span className="bg-red-500 text-white text-[9px] w-[18px] h-[18px] flex items-center justify-center rounded-full font-black">
+                    <span className="bg-red-500 text-white text-[9px] w-4 h-4 flex items-center justify-center rounded-full font-black">
                       {tab.count}
                     </span>
                   )}
@@ -322,43 +382,46 @@ export default function App() {
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-3 sm:px-5 py-4 sm:py-5">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={location.pathname}
-            initial="initial"
-            animate="animate"
-            exit="exit"
-            variants={pageVariants}
-            transition={{ duration: 0.2 }}
-          >
-            <Suspense fallback={
-              <div className="flex items-center justify-center py-20">
-                <div className="flex flex-col items-center gap-3">
-                  <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
-                  <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Carregando módulo...</span>
+      {/* ÁREA DE CONTEÚDO PRINCIPAL */}
+      <div className="flex-1 md:pl-60 min-w-0 w-full">
+        <main className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
+          <AnimatePresence mode="wait">
+            <motion.div
+              key={location.pathname}
+              initial="initial"
+              animate="animate"
+              exit="exit"
+              variants={pageVariants}
+              transition={{ duration: 0.2 }}
+            >
+              <Suspense fallback={
+                <div className="flex items-center justify-center py-20">
+                  <div className="flex flex-col items-center gap-3">
+                    <div className="w-8 h-8 border-4 border-blue-500 border-t-transparent rounded-full animate-spin"></div>
+                    <span className="text-xs font-black text-slate-400 uppercase tracking-widest">Carregando módulo...</span>
+                  </div>
                 </div>
-              </div>
-            }>
-              <Routes location={location}>
-                <Route path="/" element={<Dashboard />} />
+              }>
+                <Routes location={location}>
+                  <Route path="/" element={<Dashboard />} />
 
-                <Route path="/revisoes" element={<Revisoes />} />
+                  <Route path="/revisoes" element={<Revisoes />} />
 
-                <Route path="/ciclo" element={<Ciclo />} />
-                <Route path="/calendario" element={<Calendario />} />
-                <Route path="/taf" element={<TreinoTAF />} />
-                <Route path="/simulados" element={<Simulados />} />
-                <Route path="/estatisticas" element={<Estatisticas />} />
-                <Route path="/caveira" element={<RaioXCaveira />} />
-                <Route path="/pet" element={<Pet />} />
-                <Route path="/loja" element={<Loja />} />
-                <Route path="/config" element={<Config availableColors={availableColors} />} />
-              </Routes>
-            </Suspense>
-          </motion.div>
-        </AnimatePresence>
-      </main>
+                  <Route path="/ciclo" element={<Ciclo />} />
+                  <Route path="/calendario" element={<Calendario />} />
+                  <Route path="/taf" element={<TreinoTAF />} />
+                  <Route path="/simulados" element={<Simulados />} />
+                  <Route path="/estatisticas" element={<Estatisticas />} />
+                  <Route path="/caveira" element={<RaioXCaveira />} />
+                  <Route path="/pet" element={<Pet />} />
+                  <Route path="/loja" element={<Loja />} />
+                  <Route path="/config" element={<Config availableColors={availableColors} />} />
+                </Routes>
+              </Suspense>
+            </motion.div>
+          </AnimatePresence>
+        </main>
+      </div>
 
       {/* Modais do Sistema - Renderizados via Portal para garantir z-index absoluto */}
       
