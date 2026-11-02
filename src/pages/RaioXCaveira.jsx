@@ -11,9 +11,43 @@ import { toast } from 'sonner';
 
 // Classificador Inteligente para a Estrutura Oficial do Edital PRF (Cebraspe)
 export function classifyPRFCategory(subject, topic, content) {
-  const full = `${subject || ''} ${topic || ''} ${content || ''}`.toLowerCase();
+  const s = (subject || '').toLowerCase();
+  const t = (topic || '').toLowerCase();
+  const c = (content || '').toLowerCase();
+  const full = `${s} ${t} ${c}`;
 
-  // BLOCO II — Legislação de Trânsito (30 questões na PRF)
+  // REGRA DE OURO 1: Se a matéria informada pelo Caveira já for expressamente uma disciplina do Bloco I
+  if (s.includes('informática') || s.includes('informatica') || t.includes('informática') || t.includes('segurança da informação') || t.includes('redes')) {
+    return { bloco: 'Bloco I', canonicalSubject: 'Informática' };
+  }
+  if (s.includes('português') || s.includes('portuguesa') || s.includes('língua portuguesa')) {
+    return { bloco: 'Bloco I', canonicalSubject: 'Língua Portuguesa' };
+  }
+  if (s.includes('raciocínio lógico') || s.includes('raciocinio logico') || s.includes('rlm') || s.includes('matemática') || s.includes('física') || s.includes('fisica')) {
+    return { bloco: 'Bloco I', canonicalSubject: s.includes('física') || s.includes('fisica') ? 'Física' : 'Raciocínio Lógico-Matemático' };
+  }
+  if (s.includes('ética') || s.includes('etica') || s.includes('geopolítica') || s.includes('geopolitica') || s.includes('inglês') || s.includes('espanhol')) {
+    const canonical = s.includes('ética') || s.includes('etica') ? 'Ética e Cidadania' : s.includes('geopolítica') || s.includes('geopolitica') ? 'Geopolítica' : 'Língua Estrangeira';
+    return { bloco: 'Bloco I', canonicalSubject: canonical };
+  }
+
+  // REGRA DE OURO 2: Se for expressamente Legislação de Trânsito
+  if (s.includes('trânsito') || s.includes('transito') || s.includes('ctb') || s.includes('contran')) {
+    const subCat = (full.includes('contran') || full.includes('resolução'))
+      ? 'Resoluções do CONTRAN'
+      : 'Legislação de Trânsito (CTB)';
+    return { bloco: 'Bloco II', canonicalSubject: subCat };
+  }
+
+  // REGRA DE OURO 3: Se a matéria for Direito específico
+  if (s.includes('constitucional')) return { bloco: 'Bloco III', canonicalSubject: 'Direito Constitucional' };
+  if (s.includes('administrativo')) return { bloco: 'Bloco III', canonicalSubject: 'Direito Administrativo' };
+  if (s.includes('processual penal')) return { bloco: 'Bloco III', canonicalSubject: 'Direito Processual Penal' };
+  if (s.includes('penal especial') || s.includes('legislação especial') || s.includes('leis especiais')) return { bloco: 'Bloco III', canonicalSubject: 'Legislação Penal Especial' };
+  if (s.includes('direitos humanos')) return { bloco: 'Bloco III', canonicalSubject: 'Direitos Humanos' };
+  if (s.includes('direito penal')) return { bloco: 'Bloco III', canonicalSubject: 'Direito Penal' };
+
+  // BLOCO II — Legislação de Trânsito por conteúdo (30 questões na PRF)
   if (
     full.includes('trânsito') || full.includes('transito') || full.includes('ctb') ||
     full.includes('9.503') || full.includes('contran') || full.includes('resolução') ||
@@ -25,7 +59,7 @@ export function classifyPRFCategory(subject, topic, content) {
     return { bloco: 'Bloco II', canonicalSubject: subCat };
   }
 
-  // BLOCO III — Direito e Conhecimentos Específicos (35 questões na PRF)
+  // BLOCO III — Direito e Conhecimentos Específicos por conteúdo (35 questões na PRF)
   if (full.includes('constitucional') || full.includes('constituição') || full.includes('art. 5') || full.includes('art. 144')) {
     return { bloco: 'Bloco III', canonicalSubject: 'Direito Constitucional' };
   }
@@ -52,14 +86,14 @@ export function classifyPRFCategory(subject, topic, content) {
     return { bloco: 'Bloco III', canonicalSubject: 'Direito Penal' };
   }
 
-  // BLOCO I — Conhecimentos Básicos (55 questões na PRF)
+  // BLOCO I — Conhecimentos Básicos por conteúdo (55 questões na PRF)
   if (full.includes('português') || full.includes('portuguesa') || full.includes('gramática') || full.includes('redação oficial') || full.includes('sintaxe') || full.includes('crase') || full.includes('pontuação') || full.includes('concordância') || full.includes('regência')) {
     return { bloco: 'Bloco I', canonicalSubject: 'Língua Portuguesa' };
   }
   if (full.includes('raciocínio lógico') || full.includes('rlm') || full.includes('matemática') || full.includes('probabilidade') || full.includes('estatística') || full.includes('combinatória') || full.includes('proposiç')) {
     return { bloco: 'Bloco I', canonicalSubject: 'Raciocínio Lógico-Matemático' };
   }
-  if (full.includes('informática') || full.includes('redes de computadores') || full.includes('segurança da informação') || full.includes('windows') || full.includes('linux') || full.includes('internet') || full.includes('malware')) {
+  if (full.includes('informática') || full.includes('redes de computadores') || full.includes('segurança da informação') || full.includes('windows') || full.includes('linux') || full.includes('internet') || full.includes('malware') || full.includes('código de verificação') || full.includes('hash')) {
     return { bloco: 'Bloco I', canonicalSubject: 'Informática' };
   }
   if (full.includes('física') || full.includes('cinemática') || full.includes('dinâmica') || full.includes('energia mecânica') || full.includes('colisões') || full.includes('quantidade de movimento')) {
