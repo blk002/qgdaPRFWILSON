@@ -931,6 +931,28 @@ export default function RaioXCaveira() {
                       }`}>
                         {q.hit ? '✓ Acertou' : '✗ Errou'}
                       </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const order = ['sabia', 'duvida', 'chute'];
+                          const curr = q.confidence || 'sabia';
+                          const next = order[(order.indexOf(curr) + 1) % order.length];
+                          updateCaveiraQuestion(q.id, {
+                            confidence: next,
+                            ...(next === 'chute' || next === 'duvida' ? { fsrsRequested: true } : {})
+                          });
+                        }}
+                        title="Clique para alternar a confiança (Dúvida ou Chute envia automaticamente para o FSRS)"
+                        className={`text-[11px] font-semibold uppercase tracking-[0.03em] px-2.5 py-1 rounded-md border transition-colors cursor-pointer ${
+                          q.confidence === 'chute'
+                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
+                            : q.confidence === 'duvida'
+                            ? 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30 hover:bg-yellow-500/25'
+                            : 'bg-slate-100 dark:bg-[#26292C] text-slate-500 dark:text-[#A0AAB2] border-slate-200 dark:border-[#383C42] hover:text-white'
+                        }`}
+                      >
+                        {q.confidence === 'chute' ? '🎲 Chute' : q.confidence === 'duvida' ? '🤔 Dúvida' : '🎯 Sabia'}
+                      </button>
                       <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-slate-600 dark:text-[#A0AAB2] bg-slate-100 dark:bg-[#26292C] px-2.5 py-1 rounded-md">
                         {q.banca} • {q.ano}
                       </span>

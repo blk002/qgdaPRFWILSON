@@ -209,11 +209,11 @@
           <button type="button" id="qg-prompt-close" style="background: none; border: none; color: #94a3b8; font-size: 13px; cursor: pointer; padding: 2px 6px; border-radius: 4px;">✕</button>
         </div>
 
-        <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px; font-weight: 700;">CONFIANÇA:</div>
+        <div style="font-size: 10px; color: #94a3b8; margin-bottom: 4px; font-weight: 700;">CONFIANÇA (Dúvida/Chute vai p/ FSRS):</div>
         <div class="qg-prompt-buttons">
           <button class="qg-btn-tag" data-confidence="sabia">🎯 Sabia</button>
-          <button class="qg-btn-tag" data-confidence="duvida">🤔 Dúvida</button>
-          <button class="qg-btn-tag" data-confidence="chute">🎲 Chute</button>
+          <button class="qg-btn-tag" data-confidence="duvida" title="Envia para a fila de Revisão FSRS mesmo acertando">🤔 Dúvida</button>
+          <button class="qg-btn-tag" data-confidence="chute" title="Envia para a fila de Revisão FSRS mesmo acertando">🎲 Chute</button>
         </div>
 
         <div id="qg-error-reasons" style="display: none;">
@@ -262,10 +262,18 @@
         hud.querySelectorAll('[data-confidence]').forEach(b => b.classList.remove('active'));
         btn.classList.add('active');
         if (activeQuestionData) {
-          activeQuestionData.confidence = btn.dataset.confidence;
+          const conf = btn.dataset.confidence;
+          activeQuestionData.confidence = conf;
+          if (conf === 'chute' || conf === 'duvida') {
+            activeQuestionData.fsrsRequested = true;
+          }
           saveQuestion(activeQuestionData, true);
+          const badge = document.getElementById('qg-prompt-status-badge');
+          if (badge && activeQuestionData.hit && (conf === 'chute' || conf === 'duvida')) {
+            badge.textContent = '🃏 +FSRS AGENDADO';
+          }
           if (activeQuestionData.hit) {
-            setTimeout(dismissPrompt, 500);
+            setTimeout(dismissPrompt, 650);
           }
         }
       });

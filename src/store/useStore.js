@@ -1108,6 +1108,8 @@ export const useStore = create(
           canonicalSubject: customSubjectName,
           banca: question.banca,
           ano: question.ano,
+          hit: Boolean(question.hit),
+          confidence: question.confidence || (question.hit ? 'sabia' : 'duvida'),
           errorReason: question.errorReason || 'conteudo',
           userNote: question.userNote || '',
           teacherComment: question.teacherComment || '',
@@ -1273,6 +1275,8 @@ export const useStore = create(
             canonicalSubject: customSubjectName,
             banca: matchedQ?.banca || rev.questionData?.banca || '',
             ano: matchedQ?.ano || rev.questionData?.ano || '',
+            hit: matchedQ ? Boolean(matchedQ.hit) : Boolean(rev.questionData?.hit),
+            confidence: matchedQ?.confidence || rev.questionData?.confidence || 'sabia',
             errorReason: matchedQ?.errorReason || rev.questionData?.errorReason || 'conteudo',
             userNote: matchedQ?.userNote || rev.questionData?.userNote || '',
             teacherComment: matchedQ?.teacherComment || rev.questionData?.teacherComment || '',
@@ -1299,6 +1303,7 @@ export const useStore = create(
             rev.createdAt !== resolvedTimestamp ||
             !rev.questionData ||
             rev.questionData.content !== mergedQuestionData.content ||
+            rev.questionData.confidence !== mergedQuestionData.confidence ||
             rev.questionData.userNote !== mergedQuestionData.userNote ||
             rev.questionData.teacherComment !== mergedQuestionData.teacherComment ||
             rev.questionData.timestamp !== resolvedTimestamp ||
@@ -1337,7 +1342,9 @@ export const useStore = create(
             questionsChanged = true;
           }
 
-          if (!q.hit && !seenCaveiraIds.has(q.id)) {
+          const needsFsrs = !q.hit || q.confidence === 'chute' || q.confidence === 'duvida' || q.fsrsRequested || q.fsrsCreated;
+
+          if (needsFsrs && !seenCaveiraIds.has(q.id)) {
             seenCaveiraIds.add(q.id);
             reviewsChanged = true;
             questionsChanged = true;
@@ -1347,6 +1354,9 @@ export const useStore = create(
               ? `${customSubjectName} ➔ ${q.topic}`
               : (q.topic || customSubjectName);
             const noteLine = q.userNote ? `\nBizu / Anotação Tática: ${q.userNote}` : '';
+            const reasonLine = q.hit
+              ? `Motivo da revisão: ${q.confidence === 'chute' ? 'Acertou no Chute 🎲' : 'Acertou com Dúvida 🤔'}`
+              : `Motivo do erro: ${q.errorReason || 'Conteúdo'}`;
 
             repairedReviews.push({
               id: 'rev_caveira_' + q.id,
@@ -1367,12 +1377,14 @@ export const useStore = create(
                 canonicalSubject: customSubjectName,
                 banca: q.banca,
                 ano: q.ano,
+                hit: Boolean(q.hit),
+                confidence: q.confidence || (q.hit ? 'sabia' : 'duvida'),
                 errorReason: q.errorReason || 'conteudo',
                 userNote: q.userNote || '',
                 teacherComment: q.teacherComment || '',
                 timestamp: q.timestamp || null
               },
-              notes: `Enunciado: ${q.content || ''}\nGabarito: ${q.correctChoice} (Você marcou: ${q.userChoice})\nMotivo do erro: ${q.errorReason || 'Conteúdo'}${noteLine}`,
+              notes: `Enunciado: ${q.content || ''}\nGabarito: ${q.correctChoice} (Você marcou: ${q.userChoice})\n${reasonLine}${noteLine}`,
               nextDateStr: todayStr,
               interval: 0,
               stability: 0,
@@ -1382,7 +1394,7 @@ export const useStore = create(
             });
             return { ...q, alternatives: sanitizedQAlts, fsrsCreated: true };
           }
-          if (!q.hit && !q.fsrsCreated && seenCaveiraIds.has(q.id)) {
+          if (needsFsrs && !q.fsrsCreated && seenCaveiraIds.has(q.id)) {
             questionsChanged = true;
             return { ...q, alternatives: sanitizedQAlts, fsrsCreated: true };
           }

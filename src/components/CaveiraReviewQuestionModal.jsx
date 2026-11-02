@@ -71,6 +71,8 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
       canonicalSubject: review.customSubjectName || storeMatch?.canonicalSubject || review.questionData?.canonicalSubject || fallbackSub,
       banca: storeMatch?.banca || review.questionData?.banca || '',
       ano: storeMatch?.ano || review.questionData?.ano || '',
+      hit: storeMatch ? Boolean(storeMatch.hit) : Boolean(review.questionData?.hit),
+      confidence: storeMatch?.confidence || review.questionData?.confidence || 'sabia',
       userNote: storeMatch?.userNote || review.questionData?.userNote || '',
       teacherComment: storeMatch?.teacherComment || review.questionData?.teacherComment || ''
     };
@@ -217,6 +219,19 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
             <span className="text-[11px] font-bold text-slate-400 bg-slate-100 dark:bg-[#26292C] px-2.5 py-1 rounded-lg">
               {qData.canonicalSubject || qData.subject || 'PRF'}
             </span>
+            {qData.hit && qData.confidence === 'chute' ? (
+              <span className="text-[11px] font-black uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2.5 py-1 rounded-lg">
+                🎲 Acertou no Chute
+              </span>
+            ) : qData.hit && qData.confidence === 'duvida' ? (
+              <span className="text-[11px] font-black uppercase bg-yellow-500/15 text-yellow-300 border border-yellow-500/30 px-2.5 py-1 rounded-lg">
+                🤔 Acertou com Dúvida
+              </span>
+            ) : (
+              <span className="text-[11px] font-black uppercase bg-red-500/15 text-red-400 border border-red-500/25 px-2.5 py-1 rounded-lg">
+                ✗ Errou no Caveira
+              </span>
+            )}
           </div>
 
           {!inline && onClose && (
