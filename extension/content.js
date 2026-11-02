@@ -26,6 +26,8 @@
   const processedInSession = new Set();
   // Rastreia questões nas quais o usuário REALMENTE clicou em "Responder"
   const pendingAnswerQIds = new Set();
+  // Cache de questões já salvas no storage local do Chrome
+  const savedQuestionIds = new Set();
 
   // Estado da Sessão no HUD
   let sessionStats = {
@@ -48,6 +50,11 @@
           updateHudStats();
           return;
         }
+
+        const questions = Array.isArray(res[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
+        questions.forEach(q => {
+          if (q && q.id) savedQuestionIds.add(q.id);
+        });
 
         const session = res[SESSION_KEY] || { hits: 0, errors: 0, total: 0 };
         sessionStats = {
@@ -556,6 +563,8 @@
           errors: sessionStats.errors
         };
 
+        savedQuestionIds.add(question.id);
+
         chrome.storage.local.set({
           [STORAGE_KEY]: questions,
           [SESSION_KEY]: updatedSession
@@ -636,15 +645,16 @@
         preAnsweredOnLoad.delete(qId);
         processedInSession.delete(qId);
       } else {
-        // Se a questão está respondida e ainda não foi processada nesta sessão:
-        // Pode ter sido disparada por clique em Responder, ou é a questão onde o usuário estava focado,
-        // ou qualquer questão que deixou de ser não-respondida após o carregamento inicial.
+        // A questão está respondida no Caveira.
+        // Se ela ainda não foi salva no storage ou foi marcada por clique/foco, ela DEVE ser capturada!
         const wasSolvedNow = pendingAnswerQIds.has(qId) || 
                              (currentQuestionId === qId && !preAnsweredOnLoad.has(qId)) ||
-                             (!preAnsweredOnLoad.has(qId) && !isInitialScan);
+                             (!preAnsweredOnLoad.has(qId) && !isInitialScan) ||
+                             (!savedQuestionIds.has(qId) && !preAnsweredOnLoad.has(qId));
 
         if (wasSolvedNow && !processedInSession.has(qId)) {
           processedInSession.add(qId);
+          savedQuestionIds.add(qId);
           pendingAnswerQIds.delete(qId);
 
           pauseTimer();
