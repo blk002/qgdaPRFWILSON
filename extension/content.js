@@ -492,12 +492,31 @@
   function extractQuestionData(card, qId) {
     if (!card) return null;
 
-    const subjectEl = card.querySelector('.subject');
+    // Busca disciplina e assunto pelo seletor específico ou vasculha a linha do cabeçalho ao lado do número
     let subject = 'Geral';
     let topic = 'Geral';
-    if (subjectEl) {
-      const text = subjectEl.textContent.trim();
-      const parts = text.split('->').map(s => s.trim()).filter(Boolean);
+
+    const subjectEl = card.querySelector('.subject, [class*="subject"], [class*="disciplina"]');
+    let rawSubjectText = subjectEl ? subjectEl.textContent.trim() : '';
+
+    if (!rawSubjectText) {
+      // Tenta achar na barra superior do card (onde fica o Q112072)
+      const numberEl = card.querySelector('.number');
+      const headerRow = numberEl ? (numberEl.closest('.row, .q-card__section, div') || numberEl.parentElement) : null;
+      if (headerRow) {
+        // Pega todos os textos da linha do cabeçalho que contenham '->'
+        const possibleElements = headerRow.querySelectorAll('div, span, p');
+        for (const el of possibleElements) {
+          if (el.textContent && el.textContent.includes('->')) {
+            rawSubjectText = el.textContent.trim();
+            break;
+          }
+        }
+      }
+    }
+
+    if (rawSubjectText) {
+      const parts = rawSubjectText.split('->').map(s => s.trim()).filter(Boolean);
       subject = parts[0] || 'Geral';
       topic = parts.slice(1).join(' ➔ ') || subject;
     }
