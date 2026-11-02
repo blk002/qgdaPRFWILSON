@@ -20,7 +20,7 @@ const KNOWN_CAVEIRA_ALTERNATIVES = {
   ]
 };
 
-export default function CaveiraReviewQuestionModal({ review, onClose }) {
+export default function CaveiraReviewQuestionModal({ review, onClose, inline = false, onCompleted }) {
   const { handleReviewSubmit, caveiraQuestions = [], updateFsrsCard, getLocalDateStr, getTodayDate } = useStore();
 
   // Resolve dados completos da questão mesmo se o cartão for antigo (pré-migração)
@@ -78,12 +78,14 @@ export default function CaveiraReviewQuestionModal({ review, onClose }) {
 
   const correctChoice = (qData.correctChoice || 'C').toUpperCase();
   const userPrevChoice = (qData.userChoice || '').toUpperCase();
-  const hasFullAlternatives = Array.isArray(qData.alternatives) && qData.alternatives.length > 0;
+  const hasFullAlternatives = Array.isArray(qData.alternatives) && qData.alternatives.length > 2;
+  const bancaUpper = (qData.banca || '').toUpperCase();
+  const isKnownMultipleChoiceBanca = ['FGV', 'FCC', 'VUNESP', 'CESGRANRIO', 'IBFC', 'AOCP', 'IDECAN', 'QUADRIX', 'CONSULPLAN', 'OBJETIVA', 'FUNDATEC'].some(b => bancaUpper.includes(b));
   const isMultipleChoiceLetters =
     hasFullAlternatives ||
     ['A', 'B', 'D'].includes(correctChoice) ||
     ['A', 'B', 'D'].includes(userPrevChoice) ||
-    (qData.banca && !qData.banca.toUpperCase().includes('CEBRASPE') && !qData.banca.toUpperCase().includes('CESPE'));
+    isKnownMultipleChoiceBanca;
   const isCebraspeStyle = !isMultipleChoiceLetters;
   const isHit = selectedChoice === correctChoice;
 
@@ -111,17 +113,19 @@ export default function CaveiraReviewQuestionModal({ review, onClose }) {
     // 1.0 para acerto no FSRS (nota 4 Easy), 0.0 para erro (nota 1 Again)
     const performance = isHit ? 1.0 : 0.0;
     handleReviewSubmit(review.id, performance);
-    onClose();
+    if (onCompleted) onCompleted();
+    if (onClose) onClose();
   };
 
-  return (
-    <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-[130] p-3 sm:p-4 font-sans">
-      <motion.div
-        initial={{ scale: 0.95, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.95, opacity: 0 }}
-        className="bg-white dark:bg-[#1E2022] border border-slate-200 dark:border-[#383D43] rounded-3xl shadow-2xl max-w-2xl w-full p-5 sm:p-7 flex flex-col max-h-[92vh] overflow-y-auto custom-scrollbar"
-      >
+  const cardInner = (
+    <motion.div
+      initial={{ scale: inline ? 0.99 : 0.95, opacity: 0 }}
+      animate={{ scale: 1, opacity: 1 }}
+      exit={{ scale: inline ? 0.99 : 0.95, opacity: 0 }}
+      className={`bg-white dark:bg-[#1E2022] border border-slate-200 dark:border-[#383D43] rounded-3xl shadow-2xl w-full p-5 sm:p-7 flex flex-col font-sans ${
+        inline ? '' : 'max-w-2xl max-h-[92vh] overflow-y-auto custom-scrollbar'
+      }`}
+    >
         {/* Cabeçalho do Card de Revisão */}
         <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-slate-100 dark:border-[#2E3236]">
           <div className="flex items-center gap-2.5 flex-wrap">
@@ -136,12 +140,14 @@ export default function CaveiraReviewQuestionModal({ review, onClose }) {
             </span>
           </div>
 
-          <button
-            onClick={onClose}
-            className="text-slate-400 hover:text-white text-sm p-1 rounded-lg transition-colors cursor-pointer"
-          >
-            ✕
-          </button>
+          {!inline && onClose && (
+            <button
+              onClick={onClose}
+              className="text-slate-400 hover:text-white text-sm p-1 rounded-lg transition-colors cursor-pointer"
+            >
+              ✕
+            </button>
+          )}
         </div>
 
         {/* Trilha do Assunto */}
@@ -342,12 +348,21 @@ export default function CaveiraReviewQuestionModal({ review, onClose }) {
                   : 'bg-red-600 hover:bg-red-500 text-white'
               }`}
             >
-              <span>Concluir Revisão e Agendar FSRS</span>
+              <span>{inline ? 'Concluir Revisão e Ir para a Próxima Questão' : 'Concluir Revisão e Agendar FSRS'}</span>
               <ArrowRight className="w-4 h-4" />
             </button>
           )}
         </div>
-      </motion.div>
+    </motion.div>
+  );
+
+  if (inline) {
+    return cardInner;
+  }
+
+  return (
+    <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-[130] p-3 sm:p-4 font-sans">
+      {cardInner}
     </div>
   );
 }

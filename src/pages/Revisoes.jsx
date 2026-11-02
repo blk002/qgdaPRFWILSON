@@ -1,13 +1,15 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store/useStore';
+import CaveiraReviewQuestionModal from '../components/CaveiraReviewQuestionModal';
 import { 
-  BrainCircuit, AlertTriangle, Target as TargetIcon, Clock, Eye, EyeOff, 
+  BrainCircuit, AlertTriangle, Target as TargetIcon, Clock, 
   ChevronLeft, ChevronRight, CalendarDays, Layers, CheckCircle, 
   TrendingUp, TrendingDown
 } from 'lucide-react';
 
 export default function Revisoes() {
-  const [showBacklog, setShowBacklog] = useState(false);
+  const [currentCardIdx, setCurrentCardIdx] = useState(0);
+  const [selectedSubjectFilter, setSelectedSubjectFilter] = useState('ALL');
   const {
     reviews,
     caveiraQuestions = [],
@@ -25,16 +27,24 @@ export default function Revisoes() {
   useEffect(() => {
     syncAndRepairCaveiraReviews?.();
   }, [reviews.length, caveiraQuestions.length, syncAndRepairCaveiraReviews]);
+
+  const caveiraTimeMap = useMemo(() => {
+    const map = new Map();
+    caveiraQuestions.forEach((q, idx) => {
+      if (q && q.id) {
+        const ts = q.timestamp ? new Date(q.timestamp).getTime() : NaN;
+        // caveiraQuestions é salvo do mais novo (idx 0) para o mais antigo (idx final)
+        map.set(String(q.id).toUpperCase(), {
+          ts: Number.isFinite(ts) ? ts : null,
+          reverseOrder: caveiraQuestions.length - idx
+        });
+      }
+    });
+    return map;
+  }, [caveiraQuestions]);
   
   if (!reviewCalendarDate) return null; // Safety check
   const todayStr = getLocalDateStr();
-  const allDueToday = getPendingReviews()
-    .sort((a, b) => (a.stability || 0) - (b.stability || 0));
-    
-  const pendingReviews = allDueToday.slice(0, 12);
-  const backlogReviews = allDueToday.slice(12);
-  const backlogCount = backlogReviews.length;
-  const isProcrastinating = backlogCount > 5;
 
   const isCaveiraCard = (rev) => Boolean(
     rev.isCaveiraQuestion ||
@@ -63,6 +73,59 @@ export default function Revisoes() {
       isCaveira: false
     };
   };
+
+  // Ordena estritamente dos MAIS ANTIGOS para os MAIS NOVOS
+  const allDueToday = getPendingReviews()
+    .slice()
+    .sort((a, b) => {
+      const dateA = String(a.nextDateStr || '');
+      const dateB = String(b.nextDateStr || '');
+      if (dateA !== dateB) return dateA.localeCompare(dateB);
+
+      const getSortMeta = (rev) => {
+        const idMatch =
+          String(rev.caveiraQuestionId || '').match(/Q(\d+)/i) ||
+          String(rev.questionData?.id || '').match(/Q(\d+)/i) ||
+          String(rev.id || '').match(/Q(\d+)/i) ||
+          String(rev.topicName || '').match(/Q(\d+)/i);
+        const qId = idMatch ? `Q${idMatch[1]}`.toUpperCase() : null;
+        const qNum = idMatch ? parseInt(idMatch[1], 10) : Number.MAX_SAFE_INTEGER;
+        const mapEntry = qId ? caveiraTimeMap.get(qId) : null;
+        const rawTs = rev.createdAt || rev.questionData?.timestamp || rev.lastReviewDate || null;
+        const parsedTs = rawTs ? new Date(rawTs).getTime() : NaN;
+        const ts = Number.isFinite(parsedTs) ? parsedTs : (mapEntry?.ts ?? null);
+        return {
+          ts,
+          reverseOrder: mapEntry?.reverseOrder ?? Number.MAX_SAFE_INTEGER,
+          qNum
+        };
+      };
+
+      const metaA = getSortMeta(a);
+      const metaB = getSortMeta(b);
+
+      if (metaA.ts !== null && metaB.ts !== null && metaA.ts !== metaB.ts) {
+        return metaA.ts - metaB.ts; // Mais antigo primeiro
+      }
+      if (metaA.reverseOrder !== metaB.reverseOrder) {
+        return metaA.reverseOrder - metaB.reverseOrder; // Mais antigo no histórico primeiro
+      }
+      if (metaA.qNum !== metaB.qNum) {
+        return metaA.qNum - metaB.qNum; // Menor ID numérico primeiro
+      }
+      return String(a.id || '').localeCompare(String(b.id || ''));
+    });
+
+  const filteredDueToday = selectedSubjectFilter === 'ALL'
+    ? allDueToday
+    : allDueToday.filter(rev => getReviewSubjectMeta(rev).id === selectedSubjectFilter);
+
+  const safeCardIdx = filteredDueToday.length > 0
+    ? Math.min(currentCardIdx, filteredDueToday.length - 1)
+    : 0;
+  const activeRev = filteredDueToday[safeCardIdx] || null;
+  const backlogCount = Math.max(0, allDueToday.length - 12);
+  const isProcrastinating = backlogCount > 5;
 
   const subjectsDueMap = {};
   allDueToday.forEach(rev => {
@@ -136,124 +199,160 @@ export default function Revisoes() {
         </div>
       )}
 
-      {pendingReviews.length > 0 ? (
+      {allDueToday.length > 0 ? (
         <>
-          <div className="flex justify-between items-end mb-3">
-            <h3 className="text-lg font-bold text-slate-700 flex items-center gap-2 dark:text-slate-200">
-              <TargetIcon className="w-5 h-5 text-red-500"/> Fila Estratégica de Hoje
-            </h3>
-            <span className="text-xs font-bold bg-red-100 text-red-700 px-3 py-1 rounded-full border border-red-200">
+          <div className="flex flex-wrap justify-between items-center gap-3 mb-3">
+            <div>
+              <h3 className="text-lg font-bold text-slate-700 flex items-center gap-2 dark:text-slate-200">
+                <TargetIcon className="w-5 h-5 text-red-500"/> Fila Estratégica de Hoje (1 por 1)
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Exibindo um cartão por vez • Ordem cronológica: <strong>do mais antigo para o mais novo</strong>
+              </p>
+            </div>
+            <span className="text-xs font-bold bg-red-100 text-red-700 px-3 py-1 rounded-full border border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800/60">
               Restam {allDueToday.length} Cartões
             </span>
           </div>
 
           {activeReviewSubjects.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-3 mb-4 snap-x items-center">
-              <div className="flex items-center justify-center px-1 shrink-0" title="Disciplinas na Fila">
+              <div className="flex items-center justify-center px-1 shrink-0" title="Filtrar por Disciplina">
                 <Layers className="w-4 h-4 text-slate-400" />
               </div>
-              {activeReviewSubjects.map(({ subject, count }) => (
-                <div key={subject.id} className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border shadow-sm shrink-0 snap-start transition-transform hover:scale-105 ${subject.color}`}>
-                  <span className="text-[12px] font-black uppercase tracking-wider">{subject.name}</span>
-                  <span className="bg-white/40 px-1.5 py-0.5 rounded text-[11px] font-black backdrop-blur-sm border border-white/20 dark:bg-slate-900">{count}</span>
-                </div>
-              ))}
-            </div>
-          )}
-          
-          <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
-            {pendingReviews.map(rev => {
-              const meta = getReviewSubjectMeta(rev);
-              const thermo = getThermometer(rev.lastPerformance);
-              const qPreview = rev.questionData?.content
-                ? (rev.questionData.content.length > 110 ? rev.questionData.content.slice(0, 110) + '...' : rev.questionData.content)
-                : null;
-              
-              return (
-                <div key={rev.id} className="bg-white p-4 rounded-xl border-2 border-slate-200 shadow-sm flex flex-col justify-between hover:border-purple-400/60 transition-colors dark:bg-slate-900 dark:border-slate-800">
-                  <div>
-                    <div className="flex justify-between items-start gap-2 mb-3">
-                      <span className={`text-[11px] font-black px-2 py-1 rounded uppercase border leading-tight ${meta.color}`}>
-                        {meta.name}
-                      </span>
-                      <div className="flex flex-col items-end gap-1 shrink-0">
-                        <div className={`text-[11px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 ${thermo.color}`} title="Termômetro de Memória">
-                          {thermo.icon} {Math.round(rev.lastPerformance * 100 || 0)}%
-                        </div>
-                        {rev.trend !== 0 && rev.trend !== undefined && (
-                          <div className={`flex items-center gap-0.5 text-[9px] font-black uppercase ${rev.trend > 0 ? 'text-blue-500' : 'text-red-500'}`}>
-                            {rev.trend > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                            {rev.trend > 0 ? 'Melhora' : 'Queda'}
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                    <p className="text-sm font-bold text-slate-800 leading-tight mb-1.5 dark:text-slate-100">{rev.topicName}</p>
-                    {meta.isCaveira && qPreview && (
-                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mb-2.5 leading-snug">
-                        {qPreview}
-                      </p>
-                    )}
-                    
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold bg-slate-50 p-1.5 rounded border border-slate-100 dark:bg-slate-950 dark:border-slate-800">
-                      <div className="flex flex-col gap-0.5">
-                        <span className="flex items-center gap-1 opacity-70"><Clock className="w-3 h-3"/> Agendamento:</span>
-                        <span className="text-blue-600 font-black">{rev.interval} {rev.interval === 1 ? 'dia' : 'dias'}</span>
-                      </div>
-                      <div className="flex flex-col items-end gap-0.5">
-                        <span className="opacity-70 uppercase text-[8px]">Estabilidade</span>
-                        <span className="text-slate-700 dark:text-slate-300 font-black">{rev.stability?.toFixed(1) || 0}d</span>
-                      </div>
-                    </div>
-                  </div>
+              <button
+                onClick={() => { setSelectedSubjectFilter('ALL'); setCurrentCardIdx(0); }}
+                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border shadow-sm shrink-0 snap-start transition-all cursor-pointer ${
+                  selectedSubjectFilter === 'ALL'
+                    ? 'bg-blue-600 text-white border-blue-500 ring-2 ring-blue-500/30'
+                    : 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
+                }`}
+              >
+                <span className="text-[12px] font-black uppercase tracking-wider">Todas</span>
+                <span className="bg-black/20 px-1.5 py-0.5 rounded text-[11px] font-black">{allDueToday.length}</span>
+              </button>
+              {activeReviewSubjects.map(({ subject, count }) => {
+                const isSelected = selectedSubjectFilter === subject.id;
+                return (
                   <button
-                    onClick={() => setReviewModal(rev)}
-                    className={`mt-4 w-full py-2.5 rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer ${
-                      meta.isCaveira
-                        ? 'bg-purple-600/15 hover:bg-purple-600 text-purple-400 hover:text-white border border-purple-500/30'
-                        : 'bg-red-50 hover:bg-red-500 text-red-600 hover:text-white border border-red-200'
+                    key={subject.id}
+                    onClick={() => { setSelectedSubjectFilter(isSelected ? 'ALL' : subject.id); setCurrentCardIdx(0); }}
+                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border shadow-sm shrink-0 snap-start transition-all cursor-pointer ${subject.color} ${
+                      isSelected ? 'ring-2 ring-purple-400 scale-105' : 'opacity-85 hover:opacity-100'
                     }`}
                   >
-                    {meta.isCaveira ? '🃏 Refazer Questão' : 'Fazer Questões'}
+                    <span className="text-[12px] font-black uppercase tracking-wider">{subject.name}</span>
+                    <span className="bg-white/40 px-1.5 py-0.5 rounded text-[11px] font-black backdrop-blur-sm border border-white/20 dark:bg-slate-900">{count}</span>
                   </button>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
+          )}
 
-          {backlogCount > 0 && (
-            <div className="mb-8 border border-orange-200 rounded-xl overflow-hidden shadow-sm">
-              <div 
-                className={`p-3 sm:p-4 flex justify-between items-center cursor-pointer transition-colors ${showBacklog ? 'bg-orange-100' : 'bg-orange-50 hover:bg-orange-100'}`}
-                onClick={() => setShowBacklog(!showBacklog)}
-              >
-                <div className="flex items-center gap-2 text-orange-700">
-                  <AlertTriangle className="w-4 h-4" />
-                  <span className="text-xs sm:text-sm font-bold">
-                    Você possui {backlogCount} assunto(s) atrasado(s) em espera.
-                  </span>
+          {activeRev && (
+            <div className="max-w-3xl mx-auto mb-8">
+              {/* Barra de Progresso e Navegação 1 por 1 */}
+              <div className="bg-white dark:bg-[#1E2022] border border-slate-200 dark:border-[#34383D] rounded-2xl p-3.5 sm:p-4 mb-4 shadow-sm flex flex-col gap-3">
+                <div className="flex flex-wrap items-center justify-between gap-2">
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-400 border border-purple-500/25">
+                      Cartão {safeCardIdx + 1} de {filteredDueToday.length}
+                    </span>
+                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+                      {safeCardIdx === 0 ? '⏳ Mais antigo da fila' : safeCardIdx === filteredDueToday.length - 1 ? '🆕 Mais recente da fila' : 'Ordem: Mais antigo ➔ Mais novo'}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      disabled={safeCardIdx <= 0}
+                      onClick={() => setCurrentCardIdx(Math.max(0, safeCardIdx - 1))}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-[#383D43] bg-slate-50 dark:bg-[#26292C] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#303438] disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      <ChevronLeft className="w-4 h-4" /> Anterior
+                    </button>
+                    <button
+                      disabled={safeCardIdx >= filteredDueToday.length - 1}
+                      onClick={() => setCurrentCardIdx(Math.min(filteredDueToday.length - 1, safeCardIdx + 1))}
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-[#383D43] bg-slate-50 dark:bg-[#26292C] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#303438] disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 cursor-pointer transition-colors"
+                    >
+                      Próximo <ChevronRight className="w-4 h-4" />
+                    </button>
+                  </div>
                 </div>
-                {showBacklog ? <EyeOff className="w-4 h-4 text-orange-600"/> : <Eye className="w-4 h-4 text-orange-600"/>}
+
+                <div className="w-full h-2 bg-slate-100 dark:bg-[#26292C] rounded-full overflow-hidden">
+                  <div
+                    className="h-full bg-gradient-to-r from-purple-600 to-blue-500 transition-all duration-300"
+                    style={{ width: `${Math.round(((safeCardIdx + 1) / filteredDueToday.length) * 100)}%` }}
+                  />
+                </div>
               </div>
-              
-              {showBacklog && (
-                <div className="bg-white p-4 border-t border-orange-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 dark:bg-slate-900">
-                  {backlogReviews.map(rev => {
-                    const meta = getReviewSubjectMeta(rev);
-                    return (
-                      <div key={rev.id} className="p-3 border border-slate-200 rounded-lg flex justify-between items-center bg-slate-50 dark:bg-slate-950 dark:border-slate-800">
-                        <div>
-                          <span className="text-[11px] font-black text-slate-500 block uppercase mb-0.5 dark:text-slate-400">{meta.name}</span>
-                          <span className="text-xs font-bold text-slate-800 line-clamp-1 dark:text-slate-100">{rev.topicName}</span>
+
+              {/* Cartão Único Ativo */}
+              {(() => {
+                const meta = getReviewSubjectMeta(activeRev);
+                if (meta.isCaveira) {
+                  return (
+                    <CaveiraReviewQuestionModal
+                      key={activeRev.id}
+                      review={activeRev}
+                      inline={true}
+                    />
+                  );
+                }
+
+                const thermo = getThermometer(activeRev.lastPerformance);
+                return (
+                  <div key={activeRev.id} className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xl flex flex-col justify-between dark:bg-[#1E2022] dark:border-[#383D43]">
+                    <div>
+                      <div className="flex justify-between items-start gap-2 mb-4">
+                        <span className={`text-xs font-black px-3 py-1 rounded-lg uppercase border leading-tight ${meta.color}`}>
+                          {meta.name}
+                        </span>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <div className={`text-xs font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1 ${thermo.color}`} title="Termômetro de Memória">
+                            {thermo.icon} {Math.round(activeRev.lastPerformance * 100 || 0)}%
+                          </div>
+                          {activeRev.trend !== 0 && activeRev.trend !== undefined && (
+                            <div className={`flex items-center gap-0.5 text-[10px] font-black uppercase ${activeRev.trend > 0 ? 'text-blue-500' : 'text-red-500'}`}>
+                              {activeRev.trend > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
+                              {activeRev.trend > 0 ? 'Melhora' : 'Queda'}
+                            </div>
+                          )}
                         </div>
-                        <button onClick={() => setReviewModal(rev)} className="text-[10px] font-bold bg-orange-100 text-orange-700 hover:bg-orange-500 hover:text-white px-2 py-1.5 rounded transition-colors cursor-pointer">
-                          {meta.isCaveira ? 'Refazer' : 'Revisar'}
-                        </button>
                       </div>
-                    )
-                  })}
-                </div>
-              )}
+
+                      <h4 className="text-base sm:text-lg font-bold text-slate-800 leading-snug mb-4 dark:text-slate-100">
+                        {activeRev.topicName}
+                      </h4>
+
+                      {activeRev.notes && (
+                        <div className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-[#26292C] p-4 rounded-2xl border border-slate-200/80 dark:border-[#34383D] mb-4 whitespace-pre-line">
+                          {activeRev.notes}
+                        </div>
+                      )}
+
+                      <div className="flex items-center justify-between text-xs text-slate-400 font-bold bg-slate-50 p-3 rounded-xl border border-slate-100 dark:bg-[#26292C] dark:border-[#34383D]">
+                        <div className="flex items-center gap-2">
+                          <Clock className="w-4 h-4 text-blue-400" />
+                          <span>Intervalo Atual: <strong className="text-blue-500">{activeRev.interval} {activeRev.interval === 1 ? 'dia' : 'dias'}</strong></span>
+                        </div>
+                        <div>
+                          <span>Estabilidade: <strong className="text-slate-700 dark:text-slate-200">{activeRev.stability?.toFixed(1) || 0}d</strong></span>
+                        </div>
+                      </div>
+                    </div>
+
+                    <button
+                      onClick={() => setReviewModal(activeRev)}
+                      className="mt-5 w-full py-3.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md cursor-pointer bg-red-600 hover:bg-red-500 text-white"
+                    >
+                      Avaliar Retenção FSRS
+                    </button>
+                  </div>
+                );
+              })()}
             </div>
           )}
         </>
@@ -314,13 +413,14 @@ export default function Revisoes() {
                       if (dayRevs.length === 0) return null;
                       const subjectCounts = {};
                       dayRevs.forEach(r => {
-                        subjectCounts[r.subjectId] = (subjectCounts[r.subjectId] || 0) + 1;
+                        const meta = getReviewSubjectMeta(r);
+                        if (!subjectCounts[meta.id]) {
+                          subjectCounts[meta.id] = { name: meta.name, color: meta.color, count: 0 };
+                        }
+                        subjectCounts[meta.id].count += 1;
                       });
                       
-                      const items = Object.entries(subjectCounts).map(([subId, count]) => {
-                        const sub = subjects[subId];
-                        return sub ? { name: sub.name, color: sub.color || 'bg-slate-100 text-slate-600', count } : null;
-                      }).filter(Boolean);
+                      const items = Object.values(subjectCounts);
 
                       return (
                         <>

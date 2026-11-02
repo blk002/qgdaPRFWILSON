@@ -1080,7 +1080,8 @@ export const useStore = create(
           banca: question.banca,
           ano: question.ano,
           errorReason: question.errorReason || 'conteudo',
-          userNote: question.userNote || ''
+          userNote: question.userNote || '',
+          timestamp: question.timestamp || null
         };
 
         const noteLine = question.userNote ? `\nBizu / Anotação Tática: ${question.userNote}` : '';
@@ -1107,6 +1108,7 @@ export const useStore = create(
               isCaveiraQuestion: true,
               customSubjectName,
               subjectId,
+              createdAt: question.timestamp || r.createdAt || null,
               topicName: `[Caveira ${question.id}] ${topicLabel}`,
               questionData: { ...(r.questionData || {}), ...qDataPayload }
             } : r);
@@ -1127,6 +1129,7 @@ export const useStore = create(
           caveiraQuestionId: question.id,
           isCaveiraQuestion: true,
           customSubjectName,
+          createdAt: question.timestamp || new Date().toISOString(),
           questionData: qDataPayload,
           subjectId,
           topicName: `[Caveira ${question.id}] ${topicLabel}`,
@@ -1220,6 +1223,7 @@ export const useStore = create(
           };
 
           const { subjectId, customSubjectName } = resolveCaveiraSubject(sourceQuestion, subjects);
+          const resolvedTimestamp = matchedQ?.timestamp || rev.questionData?.timestamp || rev.createdAt || null;
           const mergedQuestionData = {
             id: qId,
             content: matchedQ?.content || rev.questionData?.content || parsedContent || rawTitleClean,
@@ -1232,7 +1236,8 @@ export const useStore = create(
             banca: matchedQ?.banca || rev.questionData?.banca || '',
             ano: matchedQ?.ano || rev.questionData?.ano || '',
             errorReason: matchedQ?.errorReason || rev.questionData?.errorReason || 'conteudo',
-            userNote: matchedQ?.userNote || rev.questionData?.userNote || ''
+            userNote: matchedQ?.userNote || rev.questionData?.userNote || '',
+            timestamp: resolvedTimestamp
           };
 
           const topicLabel = mergedQuestionData.topic && mergedQuestionData.topic !== mergedQuestionData.subject
@@ -1250,8 +1255,10 @@ export const useStore = create(
             rev.customSubjectName !== customSubjectName ||
             rev.topicName !== expectedTopicName ||
             rev.nextDateStr !== repairedNextDateStr ||
+            rev.createdAt !== resolvedTimestamp ||
             !rev.questionData ||
-            rev.questionData.content !== mergedQuestionData.content
+            rev.questionData.content !== mergedQuestionData.content ||
+            rev.questionData.timestamp !== resolvedTimestamp
           ) {
             reviewsChanged = true;
           }
@@ -1262,6 +1269,7 @@ export const useStore = create(
             isCaveiraQuestion: true,
             subjectId,
             customSubjectName,
+            createdAt: resolvedTimestamp,
             topicName: expectedTopicName,
             nextDateStr: repairedNextDateStr,
             questionData: mergedQuestionData
@@ -1282,11 +1290,12 @@ export const useStore = create(
               : (q.topic || customSubjectName);
             const noteLine = q.userNote ? `\nBizu / Anotação Tática: ${q.userNote}` : '';
 
-            repairedReviews.unshift({
+            repairedReviews.push({
               id: 'rev_caveira_' + q.id,
               caveiraQuestionId: q.id,
               isCaveiraQuestion: true,
               customSubjectName,
+              createdAt: q.timestamp || null,
               subjectId,
               topicName: `[Caveira ${q.id}] ${topicLabel}`,
               questionData: {
@@ -1301,7 +1310,8 @@ export const useStore = create(
                 banca: q.banca,
                 ano: q.ano,
                 errorReason: q.errorReason || 'conteudo',
-                userNote: q.userNote || ''
+                userNote: q.userNote || '',
+                timestamp: q.timestamp || null
               },
               notes: `Enunciado: ${q.content || ''}\nGabarito: ${q.correctChoice} (Você marcou: ${q.userChoice})\nMotivo do erro: ${q.errorReason || 'Conteúdo'}${noteLine}`,
               nextDateStr: todayStr,
