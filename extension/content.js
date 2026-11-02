@@ -650,6 +650,19 @@
       }
     }
 
+    function cleanAlternativeText(rawText, letter) {
+      if (!rawText || typeof rawText !== 'string') return '';
+      let clean = rawText.trim();
+      const letterPrefixRegex = new RegExp(`^\\(?\\s*${letter || '[A-E]'}\\s*[\\).\\-–—:]?\\s+`, 'i');
+      clean = clean.replace(letterPrefixRegex, '').trim();
+      const isOnlyPercentage = /^\d+(?:[.,]\d+)?\s*%\s*$/.test(clean);
+      if (!isOnlyPercentage) {
+        clean = clean.replace(/^\s*\d{1,3}(?:[.,]\d+)?\s*%\s*/, '').trim();
+        clean = clean.replace(/\s*\d{1,3}(?:[.,]\d+)?\s*%\s*$/, '').trim();
+      }
+      return clean || rawText;
+    }
+
     const alternatives = [];
     const seenLetters = new Set();
     const altScopeForText = card.querySelector('.question-alternatives') || card;
@@ -664,12 +677,10 @@
       if (!rowEl) return;
 
       const clone = rowEl.cloneNode(true);
-      clone.querySelectorAll('.alternative-letter, .q-radio__inner, button, .q-icon, i.material-icons').forEach(el => el.remove());
+      clone.querySelectorAll('.alternative-letter, .q-radio__inner, button, .q-icon, i.material-icons, .q-badge, .q-linear-progress, .q-tooltip, [class*="percent"], [class*="badge"], [class*="stat"], [class*="progress"]').forEach(el => el.remove());
       let altText = (clone.innerText || clone.textContent || '').replace(/\s+/g, ' ').trim();
-      // Remove eventual letra solta duplicada no começo (ex: "A Resumo de mensagem")
-      if (altText.toUpperCase().startsWith(rawLetter + ' ') || altText.toUpperCase().startsWith(rawLetter + ')') || altText.toUpperCase().startsWith(rawLetter + '.')) {
-        altText = altText.slice(rawLetter.length + 1).trim();
-      }
+      // Remove eventual letra solta duplicada no começo ou porcentagem de estatística
+      altText = cleanAlternativeText(altText, rawLetter);
 
       if (altText) {
         seenLetters.add(rawLetter);
@@ -685,12 +696,14 @@
       const altEls = altScopeForText.querySelectorAll('.alternative');
       altEls.forEach((altEl, idx) => {
         const defaultLetters = ['A', 'B', 'C', 'D', 'E'];
-        const rawText = (altEl.innerText || altEl.textContent || '').replace(/\s+/g, ' ').trim();
+        const clone = altEl.cloneNode(true);
+        clone.querySelectorAll('.alternative-letter, .q-radio__inner, button, .q-icon, i.material-icons, .q-badge, .q-linear-progress, .q-tooltip, [class*="percent"], [class*="badge"], [class*="stat"], [class*="progress"]').forEach(el => el.remove());
+        const rawText = (clone.innerText || clone.textContent || '').replace(/\s+/g, ' ').trim();
         if (!rawText) return;
         const match = rawText.match(/^([A-E])[\s.)-]+(.*)$/i);
         const letter = match ? match[1].toUpperCase() : (defaultLetters[idx] || String(idx + 1));
-        const text = match ? match[2].trim() : rawText;
-        if (!seenLetters.has(letter)) {
+        const text = cleanAlternativeText(match ? match[2].trim() : rawText, letter);
+        if (!seenLetters.has(letter) && text) {
           seenLetters.add(letter);
           alternatives.push({ letter, text });
         }

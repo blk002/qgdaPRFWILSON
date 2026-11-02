@@ -3,6 +3,26 @@ import { useStore } from '../store/useStore';
 import { BrainCircuit, CheckCircle2, XCircle, ArrowRight, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+export function cleanAlternativeText(rawText, letter) {
+  if (!rawText || typeof rawText !== 'string') return '';
+  let clean = rawText.trim();
+  
+  // 1. Remove letra da alternativa duplicada no início: "A)", "A -", "A.", "(A)", "A "
+  const letterPrefixRegex = new RegExp(`^\\(?\\s*${letter || '[A-E]'}\\s*[\\).\\-–—:]?\\s+`, 'i');
+  clean = clean.replace(letterPrefixRegex, '').trim();
+
+  // 2. Remove porcentagem de estatística grudada no início (ex: "0%3.400 registros.", "0%10.", "0% 3.400", "15% 10.", etc.)
+  // Não remove se a alternativa inteira for APENAS uma porcentagem (ex: "10%" ou "15,5%")
+  const isOnlyPercentage = /^\d+(?:[.,]\d+)?\s*%\s*$/.test(clean);
+  if (!isOnlyPercentage) {
+    clean = clean.replace(/^\s*\d{1,3}(?:[.,]\d+)?\s*%\s*/, '').trim();
+    // Também remove se houver porcentagem de estatística solta no final (ex: "3.400 registros. 0%")
+    clean = clean.replace(/\s*\d{1,3}(?:[.,]\d+)?\s*%\s*$/, '').trim();
+  }
+
+  return clean || rawText;
+}
+
 const KNOWN_CAVEIRA_ALTERNATIVES = {
   Q111903: [
     { letter: 'A', text: 'Integrated Development Environment.' },
@@ -54,7 +74,10 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
 
     const rawAlts = storeMatch?.alternatives || review.questionData?.alternatives || KNOWN_CAVEIRA_ALTERNATIVES[qId] || null;
     const validAlts = Array.isArray(rawAlts) && rawAlts.some(a => a && a.text && a.text.trim() !== '' && a.text.trim().toUpperCase() !== a.letter)
-      ? rawAlts
+      ? rawAlts.map(alt => ({
+          ...alt,
+          text: cleanAlternativeText(alt?.text || alt?.label || '', alt?.letter)
+        }))
       : (KNOWN_CAVEIRA_ALTERNATIVES[qId] || null);
 
     return {
@@ -228,7 +251,7 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
                     <span className="w-6 h-6 rounded-md bg-black/20 shrink-0 flex items-center justify-center font-mono font-bold text-xs mt-0.5">
                       {alt.letter}
                     </span>
-                    <span className="leading-snug">{alt.text || alt.label || alt.letter}</span>
+                    <span className="leading-snug">{cleanAlternativeText(alt.text || alt.label || alt.letter, alt.letter)}</span>
                   </button>
                 );
               })}

@@ -1068,10 +1068,30 @@ export const useStore = create(
         const { reviews = [], caveiraQuestions = [], getLocalDateStr, subjects, playSound, resolveCaveiraSubject } = get();
         const { subjectId, customSubjectName } = resolveCaveiraSubject(question, subjects);
 
+        const cleanAltText = (rawText, letter) => {
+          if (!rawText || typeof rawText !== 'string') return '';
+          let clean = rawText.trim();
+          const letterPrefixRegex = new RegExp(`^\\(?\\s*${letter || '[A-E]'}\\s*[\\).\\-–—:]?\\s+`, 'i');
+          clean = clean.replace(letterPrefixRegex, '').trim();
+          const isOnlyPercentage = /^\d+(?:[.,]\d+)?\s*%\s*$/.test(clean);
+          if (!isOnlyPercentage) {
+            clean = clean.replace(/^\s*\d{1,3}(?:[.,]\d+)?\s*%\s*/, '').trim();
+            clean = clean.replace(/\s*\d{1,3}(?:[.,]\d+)?\s*%\s*$/, '').trim();
+          }
+          return clean || rawText;
+        };
+
+        const sanitizedAlternatives = Array.isArray(question.alternatives)
+          ? question.alternatives.map(a => ({
+              ...a,
+              text: cleanAltText(a?.text || a?.label || '', a?.letter)
+            }))
+          : null;
+
         const qDataPayload = {
           id: question.id,
           content: question.content || '',
-          alternatives: question.alternatives || null,
+          alternatives: sanitizedAlternatives,
           userChoice: question.userChoice,
           correctChoice: question.correctChoice,
           subject: question.subject || customSubjectName,
@@ -1222,12 +1242,33 @@ export const useStore = create(
             topic: fallbackTop
           };
 
+          const cleanAltText = (rawText, letter) => {
+            if (!rawText || typeof rawText !== 'string') return '';
+            let clean = rawText.trim();
+            const letterPrefixRegex = new RegExp(`^\\(?\\s*${letter || '[A-E]'}\\s*[\\).\\-–—:]?\\s+`, 'i');
+            clean = clean.replace(letterPrefixRegex, '').trim();
+            const isOnlyPercentage = /^\d+(?:[.,]\d+)?\s*%\s*$/.test(clean);
+            if (!isOnlyPercentage) {
+              clean = clean.replace(/^\s*\d{1,3}(?:[.,]\d+)?\s*%\s*/, '').trim();
+              clean = clean.replace(/\s*\d{1,3}(?:[.,]\d+)?\s*%\s*$/, '').trim();
+            }
+            return clean || rawText;
+          };
+
+          const rawAlts = matchedQ?.alternatives || rev.questionData?.alternatives || null;
+          const sanitizedAlts = Array.isArray(rawAlts)
+            ? rawAlts.map(a => ({
+                ...a,
+                text: cleanAltText(a?.text || a?.label || '', a?.letter)
+              }))
+            : null;
+
           const { subjectId, customSubjectName } = resolveCaveiraSubject(sourceQuestion, subjects);
           const resolvedTimestamp = matchedQ?.timestamp || rev.questionData?.timestamp || rev.createdAt || null;
           const mergedQuestionData = {
             id: qId,
             content: matchedQ?.content || rev.questionData?.content || parsedContent || rawTitleClean,
-            alternatives: matchedQ?.alternatives || rev.questionData?.alternatives || null,
+            alternatives: sanitizedAlts,
             userChoice: matchedQ?.userChoice || rev.questionData?.userChoice || parsedUser,
             correctChoice: matchedQ?.correctChoice || rev.questionData?.correctChoice || parsedCorrect,
             subject: matchedQ?.subject || rev.questionData?.subject || fallbackSub,
@@ -1248,6 +1289,8 @@ export const useStore = create(
           // Se nunca foi revisado ainda (lastReviewDate === null) e estava agendado para amanhã, traz para hoje
           const repairedNextDateStr = (!rev.lastReviewDate && rev.nextDateStr > todayStr) ? todayStr : rev.nextDateStr;
 
+          const altsMismatch = JSON.stringify(rev.questionData?.alternatives || null) !== JSON.stringify(sanitizedAlts);
+
           if (
             !rev.isCaveiraQuestion ||
             rev.caveiraQuestionId !== qId ||
@@ -1258,7 +1301,8 @@ export const useStore = create(
             rev.createdAt !== resolvedTimestamp ||
             !rev.questionData ||
             rev.questionData.content !== mergedQuestionData.content ||
-            rev.questionData.timestamp !== resolvedTimestamp
+            rev.questionData.timestamp !== resolvedTimestamp ||
+            altsMismatch
           ) {
             reviewsChanged = true;
           }
@@ -1276,9 +1320,23 @@ export const useStore = create(
           });
         }
 
-        // Agora garante que toda questão errada (!q.hit) em caveiraQuestions tenha seu card FSRS
+        // Agora garante que toda questão errada (!q.hit) em caveiraQuestions tenha seu card FSRS e alternativas limpas
         const updatedCaveiraQuestions = caveiraQuestions.map(q => {
           if (!q || !q.id) return q;
+
+          let qAltsChanged = false;
+          let sanitizedQAlts = q.alternatives;
+          if (Array.isArray(q.alternatives)) {
+            sanitizedQAlts = q.alternatives.map(a => {
+              const clean = cleanAltText(a?.text || a?.label || '', a?.letter);
+              if (clean !== a?.text) qAltsChanged = true;
+              return { ...a, text: clean };
+            });
+          }
+          if (qAltsChanged) {
+            questionsChanged = true;
+          }
+
           if (!q.hit && !seenCaveiraIds.has(q.id)) {
             seenCaveiraIds.add(q.id);
             reviewsChanged = true;
@@ -1301,7 +1359,7 @@ export const useStore = create(
               questionData: {
                 id: q.id,
                 content: q.content || '',
-                alternatives: q.alternatives || null,
+                alternatives: sanitizedQAlts || null,
                 userChoice: q.userChoice,
                 correctChoice: q.correctChoice,
                 subject: q.subject || customSubjectName,
@@ -1321,11 +1379,14 @@ export const useStore = create(
               lastReviewDate: null,
               lastPerformance: 0.0
             });
-            return { ...q, fsrsCreated: true };
+            return { ...q, alternatives: sanitizedQAlts, fsrsCreated: true };
           }
           if (!q.hit && !q.fsrsCreated && seenCaveiraIds.has(q.id)) {
             questionsChanged = true;
-            return { ...q, fsrsCreated: true };
+            return { ...q, alternatives: sanitizedQAlts, fsrsCreated: true };
+          }
+          if (qAltsChanged) {
+            return { ...q, alternatives: sanitizedQAlts };
           }
           return q;
         });
