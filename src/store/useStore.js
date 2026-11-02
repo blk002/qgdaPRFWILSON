@@ -4,6 +4,21 @@ import { toast } from 'sonner';
 import { PATENTES, MEDALHAS } from '../hooks/useGamification';
 import { PET_FOODS, PET_LEVELS } from '../data/petConstants';
 
+export function cleanAlternativeText(rawText, letter) {
+  if (!rawText || typeof rawText !== 'string') return '';
+  let clean = rawText.trim();
+  const letterPrefixRegex = new RegExp(`^\\(?\\s*${letter || '[A-E]'}\\s*[\\).\\-–—:]?\\s+`, 'i');
+  clean = clean.replace(letterPrefixRegex, '').trim();
+  const isOnlyPercentage = /^\d+(?:[.,]\d+)?\s*%\s*$/.test(clean);
+  if (!isOnlyPercentage) {
+    clean = clean.replace(/^\s*\d{1,3}(?:[.,]\d+)?\s*%\s*/, '').trim();
+    clean = clean.replace(/\s*\d{1,3}(?:[.,]\d+)?\s*%\s*$/, '').trim();
+  }
+  return clean || rawText;
+}
+
+export const cleanAltText = cleanAlternativeText;
+
 export const THEME_DEFINITIONS = {
   blue: {
     name: 'Dark Blue (Padrão)',
@@ -1068,19 +1083,6 @@ export const useStore = create(
         const { reviews = [], caveiraQuestions = [], getLocalDateStr, subjects, playSound, resolveCaveiraSubject } = get();
         const { subjectId, customSubjectName } = resolveCaveiraSubject(question, subjects);
 
-        const cleanAltText = (rawText, letter) => {
-          if (!rawText || typeof rawText !== 'string') return '';
-          let clean = rawText.trim();
-          const letterPrefixRegex = new RegExp(`^\\(?\\s*${letter || '[A-E]'}\\s*[\\).\\-–—:]?\\s+`, 'i');
-          clean = clean.replace(letterPrefixRegex, '').trim();
-          const isOnlyPercentage = /^\d+(?:[.,]\d+)?\s*%\s*$/.test(clean);
-          if (!isOnlyPercentage) {
-            clean = clean.replace(/^\s*\d{1,3}(?:[.,]\d+)?\s*%\s*/, '').trim();
-            clean = clean.replace(/\s*\d{1,3}(?:[.,]\d+)?\s*%\s*$/, '').trim();
-          }
-          return clean || rawText;
-        };
-
         const sanitizedAlternatives = Array.isArray(question.alternatives)
           ? question.alternatives.map(a => ({
               ...a,
@@ -1240,19 +1242,6 @@ export const useStore = create(
             userChoice: parsedUser,
             subject: fallbackSub,
             topic: fallbackTop
-          };
-
-          const cleanAltText = (rawText, letter) => {
-            if (!rawText || typeof rawText !== 'string') return '';
-            let clean = rawText.trim();
-            const letterPrefixRegex = new RegExp(`^\\(?\\s*${letter || '[A-E]'}\\s*[\\).\\-–—:]?\\s+`, 'i');
-            clean = clean.replace(letterPrefixRegex, '').trim();
-            const isOnlyPercentage = /^\d+(?:[.,]\d+)?\s*%\s*$/.test(clean);
-            if (!isOnlyPercentage) {
-              clean = clean.replace(/^\s*\d{1,3}(?:[.,]\d+)?\s*%\s*/, '').trim();
-              clean = clean.replace(/\s*\d{1,3}(?:[.,]\d+)?\s*%\s*$/, '').trim();
-            }
-            return clean || rawText;
           };
 
           const rawAlts = matchedQ?.alternatives || rev.questionData?.alternatives || null;
