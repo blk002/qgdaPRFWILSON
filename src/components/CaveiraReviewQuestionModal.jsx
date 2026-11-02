@@ -3,6 +3,23 @@ import { useStore } from '../store/useStore';
 import { BrainCircuit, CheckCircle2, XCircle, ArrowRight, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
+const KNOWN_CAVEIRA_ALTERNATIVES = {
+  Q111903: [
+    { letter: 'A', text: 'Integrated Development Environment.' },
+    { letter: 'B', text: 'Infrastructure as a Service.' },
+    { letter: 'C', text: 'Platform as a Service.' },
+    { letter: 'D', text: 'Azure Cloud Services.' },
+    { letter: 'E', text: 'Software as a Service.' }
+  ],
+  Q112072: [
+    { letter: 'A', text: 'Resumo de mensagem.' },
+    { letter: 'B', text: 'Certificado digital.' },
+    { letter: 'C', text: 'Envelope digital.' },
+    { letter: 'D', text: 'Cifragem simétrica.' },
+    { letter: 'E', text: 'Senha de uso único.' }
+  ]
+};
+
 export default function CaveiraReviewQuestionModal({ review, onClose }) {
   const { handleReviewSubmit, caveiraQuestions = [], updateFsrsCard, getLocalDateStr, getTodayDate } = useStore();
 
@@ -35,10 +52,15 @@ export default function CaveiraReviewQuestionModal({ review, onClose }) {
     const fallbackSub = review.customSubjectName || titleParts[0] || 'Questão Caveira';
     const fallbackTop = titleParts.slice(1).join(' ➔ ') || fallbackSub;
 
+    const rawAlts = storeMatch?.alternatives || review.questionData?.alternatives || KNOWN_CAVEIRA_ALTERNATIVES[qId] || null;
+    const validAlts = Array.isArray(rawAlts) && rawAlts.some(a => a && a.text && a.text.trim() !== '' && a.text.trim().toUpperCase() !== a.letter)
+      ? rawAlts
+      : (KNOWN_CAVEIRA_ALTERNATIVES[qId] || null);
+
     return {
       id: qId,
       content: storeMatch?.content || review.questionData?.content || parsedContent || rawTitleClean,
-      alternatives: storeMatch?.alternatives || review.questionData?.alternatives || null,
+      alternatives: validAlts,
       userChoice: storeMatch?.userChoice || review.questionData?.userChoice || parsedUser,
       correctChoice: storeMatch?.correctChoice || review.questionData?.correctChoice || parsedCorrect,
       subject: storeMatch?.subject || review.questionData?.subject || fallbackSub,

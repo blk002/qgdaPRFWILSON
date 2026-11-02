@@ -28,6 +28,8 @@
   const pendingAnswerQIds = new Set();
   // Cache de questões já salvas no storage local do Chrome
   const savedQuestionIds = new Set();
+  // Questões já salvas anteriormente que ainda não possuem o texto das alternativas
+  const savedQuestionsMissingAlts = new Set();
 
   // Estado da Sessão no HUD
   let sessionStats = {
@@ -53,7 +55,12 @@
 
         const questions = Array.isArray(res[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
         questions.forEach(q => {
-          if (q && q.id) savedQuestionIds.add(q.id);
+          if (q && q.id) {
+            savedQuestionIds.add(q.id);
+            if (!Array.isArray(q.alternatives) || q.alternatives.length === 0 || q.alternatives.every(a => !a.text || a.text === a.letter)) {
+              savedQuestionsMissingAlts.add(q.id);
+            }
+          }
         });
 
         const session = res[SESSION_KEY] || { hits: 0, errors: 0, total: 0 };
@@ -583,20 +590,51 @@
     }
 
     const alternatives = [];
-    const altEls = card.querySelectorAll('.alternative, .question-alternatives > div, .q-radio');
-    altEls.forEach(altEl => {
-      const letter = altEl.querySelector('.alternative-letter, .q-radio__label')?.textContent?.trim()?.slice(0, 2) || '';
-      // Texto da alternativa sem a letra
-      const clone = altEl.cloneNode(true);
-      clone.querySelector('.alternative-letter, .q-radio__inner')?.remove();
-      const altText = clone.textContent?.trim() || '';
-      if (letter || altText) {
+    const seenLetters = new Set();
+    const altScopeForText = card.querySelector('.question-alternatives') || card;
+
+    // Estratégia 1: Busca a partir de cada caixinha de letra (.alternative-letter) e extrai o texto irmão na linha
+    const letterNodes = altScopeForText.querySelectorAll('.alternative-letter');
+    letterNodes.forEach(letterNode => {
+      const rawLetter = (letterNode.textContent || '').trim().replace(/[^A-Za-z]/g, '').toUpperCase();
+      if (!rawLetter || rawLetter.length > 2 || seenLetters.has(rawLetter)) return;
+
+      const rowEl = letterNode.closest('.alternative') || letterNode.parentElement;
+      if (!rowEl) return;
+
+      const clone = rowEl.cloneNode(true);
+      clone.querySelectorAll('.alternative-letter, .q-radio__inner, button, .q-icon, i.material-icons').forEach(el => el.remove());
+      let altText = (clone.innerText || clone.textContent || '').replace(/\s+/g, ' ').trim();
+      // Remove eventual letra solta duplicada no começo (ex: "A Resumo de mensagem")
+      if (altText.toUpperCase().startsWith(rawLetter + ' ') || altText.toUpperCase().startsWith(rawLetter + ')') || altText.toUpperCase().startsWith(rawLetter + '.')) {
+        altText = altText.slice(rawLetter.length + 1).trim();
+      }
+
+      if (altText) {
+        seenLetters.add(rawLetter);
         alternatives.push({
-          letter: letter.replace(/[^A-Za-z]/g, '').toUpperCase() || '',
+          letter: rawLetter,
           text: altText
         });
       }
     });
+
+    // Estratégia 2 (Fallback): Busca direto nos elementos .alternative caso não haja .alternative-letter
+    if (alternatives.length === 0) {
+      const altEls = altScopeForText.querySelectorAll('.alternative');
+      altEls.forEach((altEl, idx) => {
+        const defaultLetters = ['A', 'B', 'C', 'D', 'E'];
+        const rawText = (altEl.innerText || altEl.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!rawText) return;
+        const match = rawText.match(/^([A-E])[\s.)-]+(.*)$/i);
+        const letter = match ? match[1].toUpperCase() : (defaultLetters[idx] || String(idx + 1));
+        const text = match ? match[2].trim() : rawText;
+        if (!seenLetters.has(letter)) {
+          seenLetters.add(letter);
+          alternatives.push({ letter, text });
+        }
+      });
+    }
 
     const elapsedForThisQ = questionTimers.get(qId) || timerSeconds || 10;
     const durationSeconds = Math.max(3, elapsedForThisQ);
@@ -717,6 +755,32 @@
     cards.forEach(card => {
       const qId = extractQuestionId(card);
       if (!qId) return;
+
+      // Se a questão já estava salva antes da v1.1.3 sem o texto das alternativas, enriquece automaticamente!
+      if (savedQuestionsMissingAlts.has(qId)) {
+        const enriched = extractQuestionData(card, qId);
+        if (enriched && Array.isArray(enriched.alternatives) && enriched.alternatives.length > 0) {
+          savedQuestionsMissingAlts.delete(qId);
+          if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+            chrome.storage.local.get([STORAGE_KEY], (res) => {
+              const list = Array.isArray(res[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
+              const idx = list.findIndex(item => item.id === qId);
+              if (idx >= 0) {
+                list[idx] = {
+                  ...list[idx],
+                  alternatives: enriched.alternatives,
+                  subject: (list[idx].subject && list[idx].subject !== 'Geral') ? list[idx].subject : enriched.subject,
+                  topic: (list[idx].topic && list[idx].topic !== 'Geral') ? list[idx].topic : enriched.topic,
+                  canonicalSubject: enriched.canonicalSubject || list[idx].canonicalSubject,
+                  bloco: enriched.bloco || list[idx].bloco,
+                  content: enriched.content || list[idx].content
+                };
+                chrome.storage.local.set({ [STORAGE_KEY]: list });
+              }
+            });
+          }
+        }
+      }
 
       const answered = isCardAnswered(card);
 
