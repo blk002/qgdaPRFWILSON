@@ -1,27 +1,39 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v3.1 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v3.2 ativo em:', window.location.href);
+
+  // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
+  try {
+    window.dispatchEvent(new CustomEvent('qg-caveira-teardown'));
+    const oldHud = document.getElementById('qg-caveira-hud');
+    if (oldHud) oldHud.remove();
+  } catch (_) {}
 
   const QG_WEB_URL = 'https://blk002.github.io/qgdaPRFWILSON/#/caveira';
   const STORAGE_KEY = 'qg_caveira_questions';
   const SESSION_KEY = 'qg_caveira_session';
   const SCHEMA_KEY = 'qg_caveira_schema_v3';
 
+  let isDestroyed = false;
+  let isStorageLoaded = false;
   let currentQuestionId = null;
   let timerSeconds = 0;
   let isTimerRunning = false;
   let timerInterval = null;
+  let scanIntervalId = null;
+  let domObserver = null;
   let promptDismissTimer = null;
   let lastUserClickedChoice = null;
   let activeQuestionData = null;
   let scanDebounceTimer = null;
   let scrollRafId = null;
 
+  // Cache em memória da lista de questões para evitar condição de corrida em escritas simultâneas
+  let questionsCache = [];
+
   // Armazena o tempo individual de cada questão (permite rolar entre questões sem perder a contagem de cada uma)
   const questionTimers = new Map();
-  // Rastreia questões que já estavam respondidas quando a página carregou
-  const preAnsweredOnLoad = new Set();
   // Rastreia questões já contabilizadas nesta sessão da página
   const processedInSession = new Set();
   // Rastreia questões nas quais o usuário REALMENTE clicou em "Responder"
@@ -38,9 +50,30 @@
     errors: 0
   };
 
+  function isExtensionContextValid() {
+    try {
+      return !isDestroyed && Boolean(typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id && chrome.storage && chrome.storage.local);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function teardownInstance() {
+    isDestroyed = true;
+    if (timerInterval) clearInterval(timerInterval);
+    if (scanIntervalId) clearInterval(scanIntervalId);
+    if (scanDebounceTimer) clearTimeout(scanDebounceTimer);
+    if (promptDismissTimer) clearTimeout(promptDismissTimer);
+    if (domObserver) domObserver.disconnect();
+  }
+
+  window.addEventListener('qg-caveira-teardown', teardownInstance, { once: true });
+
   function loadInitialState() {
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
+    if (!isExtensionContextValid()) return;
+    try {
       chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY], (res) => {
+        if (chrome.runtime.lastError || isDestroyed) return;
         if (res[SCHEMA_KEY] !== 'v3_strict_clean') {
           const cleanSession = { total: 0, hits: 0, errors: 0 };
           chrome.storage.local.set({
@@ -48,12 +81,16 @@
             [SESSION_KEY]: cleanSession,
             [SCHEMA_KEY]: 'v3_strict_clean'
           });
+          questionsCache = [];
           sessionStats = cleanSession;
+          isStorageLoaded = true;
           updateHudStats();
+          scanCards();
           return;
         }
 
         const questions = Array.isArray(res[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
+        questionsCache = [...questions];
         questions.forEach(q => {
           if (q && q.id) {
             savedQuestionIds.add(q.id);
@@ -69,25 +106,51 @@
           hits: Number(session.hits) || 0,
           errors: Number(session.errors) || 0
         };
+        isStorageLoaded = true;
         updateHudStats();
+        scanCards();
       });
-    }
+    } catch (_) {}
   }
 
   loadInitialState();
 
-  if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.onChanged) {
-    chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && changes[SESSION_KEY]) {
-        const newSession = changes[SESSION_KEY].newValue || { total: 0, hits: 0, errors: 0 };
-        sessionStats = {
-          total: Number(newSession.total) || 0,
-          hits: Number(newSession.hits) || 0,
-          errors: Number(newSession.errors) || 0
-        };
-        updateHudStats();
-      }
-    });
+  if (isExtensionContextValid() && chrome.storage.onChanged) {
+    try {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (!isExtensionContextValid()) {
+          teardownInstance();
+          return;
+        }
+        if (area === 'local') {
+          if (changes[STORAGE_KEY]) {
+            const updatedList = Array.isArray(changes[STORAGE_KEY].newValue) ? changes[STORAGE_KEY].newValue : [];
+            questionsCache = [...updatedList];
+            updatedList.forEach(q => { if (q && q.id) savedQuestionIds.add(q.id); });
+          }
+          if (changes[SESSION_KEY]) {
+            const newSession = changes[SESSION_KEY].newValue || { total: 0, hits: 0, errors: 0 };
+            sessionStats = {
+              total: Number(newSession.total) || 0,
+              hits: Number(newSession.hits) || 0,
+              errors: Number(newSession.errors) || 0
+            };
+            updateHudStats();
+          }
+        }
+      });
+    } catch (_) {}
+  }
+
+  if (isExtensionContextValid() && chrome.runtime.onMessage) {
+    try {
+      chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+        if (msg && msg.type === 'FORCE_SCAN_NOW') {
+          scanCards();
+          sendResponse({ ok: true });
+        }
+      });
+    } catch (_) {}
   }
 
   // --- 1. CRIAÇÃO DO HUD FLUTUANTE ---
@@ -309,12 +372,10 @@
     return Array.from(allCards).filter(card => {
       if (card.closest('#qg-caveira-hud')) return false;
       if (card.parentElement && card.parentElement.closest('.q-card')) return false;
-      // Garante que o card está realmente visível na tela atual (ignora abas/rotas em cache ou ocultas)
-      if (card.offsetParent === null) return false;
       const rect = card.getBoundingClientRect();
       if (rect.width === 0 || rect.height === 0) return false;
       const hasNumber = Boolean(card.querySelector('.number'));
-      const hasAlternatives = Boolean(card.querySelector('.question-alternatives, .alternative'));
+      const hasAlternatives = Boolean(card.querySelector('.question-alternatives, .alternative, .alternative-letter'));
       return hasNumber && hasAlternatives;
     });
   }
@@ -660,8 +721,13 @@
     };
   }
 
-  // --- 5. SALVAR QUESTÃO DIRETO NO STORAGE ---
+  // --- 5. SALVAR QUESTÃO DIRETO NO STORAGE (SEM RACE CONDITION) ---
   function saveQuestion(question, isMetadataUpdateOnly = false) {
+    if (!isExtensionContextValid()) {
+      teardownInstance();
+      return;
+    }
+
     if (!isMetadataUpdateOnly) {
       sessionStats.total += 1;
       if (question.hit) sessionStats.hits += 1;
@@ -669,38 +735,38 @@
       updateHudStats();
     }
 
-    if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-      chrome.storage.local.get([STORAGE_KEY], (res) => {
-        const questions = Array.isArray(res[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
-        const existingIdx = questions.findIndex(q => q.id === question.id);
-
-        if (existingIdx >= 0) {
-          questions[existingIdx] = { ...questions[existingIdx], ...question };
-        } else {
-          questions.unshift(question);
-        }
-
-        const updatedSession = {
-          total: sessionStats.total,
-          hits: sessionStats.hits,
-          errors: sessionStats.errors
-        };
-
-        savedQuestionIds.add(question.id);
-
-        chrome.storage.local.set({
-          [STORAGE_KEY]: questions,
-          [SESSION_KEY]: updatedSession
-        }, () => {
-          if (chrome.runtime && chrome.runtime.sendMessage) {
-            chrome.runtime.sendMessage({
-              type: 'UPDATE_BADGE_ONLY',
-              payload: { session: updatedSession }
-            }).catch(() => {});
-          }
-        });
-      });
+    const existingIdx = questionsCache.findIndex(q => q && q.id === question.id);
+    if (existingIdx >= 0) {
+      questionsCache[existingIdx] = { ...questionsCache[existingIdx], ...question };
+    } else {
+      questionsCache.unshift(question);
     }
+
+    savedQuestionIds.add(question.id);
+    if (Array.isArray(question.alternatives) && question.alternatives.length > 0) {
+      savedQuestionsMissingAlts.delete(question.id);
+    }
+
+    const updatedSession = {
+      total: sessionStats.total,
+      hits: sessionStats.hits,
+      errors: sessionStats.errors
+    };
+
+    try {
+      chrome.storage.local.set({
+        [STORAGE_KEY]: questionsCache,
+        [SESSION_KEY]: updatedSession
+      }, () => {
+        if (chrome.runtime.lastError) return;
+        if (chrome.runtime && chrome.runtime.sendMessage) {
+          chrome.runtime.sendMessage({
+            type: 'UPDATE_BADGE_ONLY',
+            payload: { session: updatedSession }
+          }).catch(() => {});
+        }
+      });
+    } catch (_) {}
   }
 
   // --- 6. EXIBIR E FECHAR PROMPT TÁTICO ---
@@ -741,10 +807,13 @@
   }
 
   // --- 7. VARREDURA DE CARDS E DETECÇÃO DE VIEWPORT ---
-  let isInitialScan = true;
-
   function scanCards() {
+    if (!isExtensionContextValid()) {
+      teardownInstance();
+      return;
+    }
     createHud();
+    if (!isStorageLoaded) return;
 
     const cards = getQuestionCards();
     if (!cards || cards.length === 0) {
@@ -756,54 +825,36 @@
       const qId = extractQuestionId(card);
       if (!qId) return;
 
-      // Se a questão já estava salva antes da v1.1.3 sem o texto das alternativas, enriquece automaticamente!
+      // Se a questão já estava salva antes da v1.1.4 sem o texto das alternativas, enriquece automaticamente!
       if (savedQuestionsMissingAlts.has(qId)) {
         const enriched = extractQuestionData(card, qId);
         if (enriched && Array.isArray(enriched.alternatives) && enriched.alternatives.length > 0) {
           savedQuestionsMissingAlts.delete(qId);
-          if (typeof chrome !== 'undefined' && chrome.storage && chrome.storage.local) {
-            chrome.storage.local.get([STORAGE_KEY], (res) => {
-              const list = Array.isArray(res[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
-              const idx = list.findIndex(item => item.id === qId);
-              if (idx >= 0) {
-                list[idx] = {
-                  ...list[idx],
-                  alternatives: enriched.alternatives,
-                  subject: (list[idx].subject && list[idx].subject !== 'Geral') ? list[idx].subject : enriched.subject,
-                  topic: (list[idx].topic && list[idx].topic !== 'Geral') ? list[idx].topic : enriched.topic,
-                  canonicalSubject: enriched.canonicalSubject || list[idx].canonicalSubject,
-                  bloco: enriched.bloco || list[idx].bloco,
-                  content: enriched.content || list[idx].content
-                };
-                chrome.storage.local.set({ [STORAGE_KEY]: list });
-              }
-            });
-          }
+          const existing = questionsCache.find(item => item && item.id === qId) || {};
+          saveQuestion({
+            ...existing,
+            id: qId,
+            alternatives: enriched.alternatives,
+            subject: (existing.subject && existing.subject !== 'Geral') ? existing.subject : enriched.subject,
+            topic: (existing.topic && existing.topic !== 'Geral') ? existing.topic : enriched.topic,
+            canonicalSubject: enriched.canonicalSubject || existing.canonicalSubject,
+            bloco: enriched.bloco || existing.bloco,
+            content: enriched.content || existing.content
+          }, true);
         }
       }
 
       const answered = isCardAnswered(card);
 
-      if (isInitialScan && answered) {
-        preAnsweredOnLoad.add(qId);
-        processedInSession.add(qId);
-        return;
-      }
-
       if (!answered) {
-        preAnsweredOnLoad.delete(qId);
         processedInSession.delete(qId);
       } else {
-        // A questão está respondida no Caveira.
-        // Se ela ainda não foi salva no storage ou foi marcada por clique/foco, ela DEVE ser capturada!
-        const wasSolvedNow = pendingAnswerQIds.has(qId) || 
-                             (currentQuestionId === qId && !preAnsweredOnLoad.has(qId)) ||
-                             (!preAnsweredOnLoad.has(qId) && !isInitialScan) ||
-                             (!savedQuestionIds.has(qId) && !preAnsweredOnLoad.has(qId));
+        // A questão está respondida no Caveira!
+        // Se ela ainda não está salva no storage do QG ou se o usuário acabou de clicar em Responder, captura imediatamente!
+        const shouldCapture = !savedQuestionIds.has(qId) || pendingAnswerQIds.has(qId);
 
-        if (wasSolvedNow && !processedInSession.has(qId)) {
+        if (shouldCapture && !processedInSession.has(qId)) {
           processedInSession.add(qId);
-          savedQuestionIds.add(qId);
           pendingAnswerQIds.delete(qId);
 
           pauseTimer();
@@ -822,8 +873,6 @@
         }
       }
     });
-
-    isInitialScan = false;
 
     // Atualiza a questão ativa de acordo com o card que está visível no centro da tela (scroll)
     const focusedCard = findCardInViewport(cards);
@@ -902,7 +951,6 @@
         ) {
           const targetQId = clickedCardQId || currentQuestionId;
           if (targetQId) {
-            preAnsweredOnLoad.delete(targetQId);
             processedInSession.delete(targetQId);
             pendingAnswerQIds.add(targetQId);
           }
@@ -925,7 +973,6 @@
     // 3. Teclado (Enter, Setas, PageDown/PageUp)
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && currentQuestionId) {
-        preAnsweredOnLoad.delete(currentQuestionId);
         processedInSession.delete(currentQuestionId);
         pendingAnswerQIds.add(currentQuestionId);
         setTimeout(scanCards, 80);
@@ -938,20 +985,20 @@
     });
 
     // 4. MutationObserver para capturar respostas instantaneamente
-    const observer = new MutationObserver((mutations) => {
+    domObserver = new MutationObserver((mutations) => {
       const isInternal = mutations.every(m => m.target.closest && m.target.closest('#qg-caveira-hud'));
       if (isInternal) return;
       scheduleScan(40);
     });
 
-    observer.observe(document.body, {
+    domObserver.observe(document.body, {
       childList: true,
       subtree: true,
       attributes: true,
       attributeFilter: ['class', 'disabled']
     });
 
-    setInterval(scanCards, 1500);
+    scanIntervalId = setInterval(scanCards, 1500);
     scanCards();
   }
 

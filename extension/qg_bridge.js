@@ -18,9 +18,44 @@
     }
   }
 
+  // Limpa cache de Service Worker antigo (pré-v50) que impedia o site de carregar os novos deploys
+  if ('caches' in window) {
+    caches.keys().then((names) => {
+      const staleCaches = names.filter(n => n.startsWith('qg-prf-cache-') && n !== 'qg-prf-cache-v50');
+      if (staleCaches.length > 0) {
+        Promise.all(staleCaches.map(n => caches.delete(n))).then(() => {
+          if ('serviceWorker' in navigator) {
+            navigator.serviceWorker.getRegistrations().then(regs => regs.forEach(r => r.update()));
+          }
+          if (!sessionStorage.getItem('qg_sw_purged_v50')) {
+            sessionStorage.setItem('qg_sw_purged_v50', 'true');
+            window.location.reload();
+          }
+        });
+      }
+    }).catch(() => {});
+  }
+
   function sendStoredData() {
     if (!isExtensionContextValid()) return;
     try {
+      // Pede ao background para varrer abas abertas do Caveira e retornar a lista atualizada
+      if (chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({ type: 'GET_CAVEIRA_QUESTIONS' }, (response) => {
+          if (!chrome.runtime.lastError && response && Array.isArray(response.questions)) {
+            window.postMessage({
+              source: 'QG_CAVEIRA_EXTENSION',
+              type: 'CAVEIRA_DATA_RESPONSE',
+              payload: {
+                questions: response.questions,
+                session: response.session || { hits: 0, errors: 0, total: 0 }
+              }
+            }, '*');
+            return;
+          }
+        });
+      }
+
       chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
         if (chrome.runtime.lastError) return;
         const questions = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];

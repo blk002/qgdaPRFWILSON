@@ -110,12 +110,32 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'GET_CAVEIRA_QUESTIONS') {
-    chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
-      sendResponse({
-        questions: res[STORAGE_KEY] || [],
-        session: res[SESSION_KEY] || { hits: 0, errors: 0, total: 0 }
+    // Solicita varredura imediata nas abas abertas do Projeto Caveira antes de retornar os dados
+    if (chrome.tabs) {
+      chrome.tabs.query({
+        url: [
+          '*://*.projetocaveira.com.br/*',
+          '*://projetocaveira.com.br/*',
+          '*://*.caveira.com.br/*',
+          '*://caveira.com.br/*'
+        ]
+      }).then((tabs) => {
+        for (const t of tabs) {
+          if (t.id) {
+            chrome.tabs.sendMessage(t.id, { type: 'FORCE_SCAN_NOW' }).catch(() => {});
+          }
+        }
+      }).catch(() => {});
+    }
+
+    setTimeout(() => {
+      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
+        sendResponse({
+          questions: res[STORAGE_KEY] || [],
+          session: res[SESSION_KEY] || { hits: 0, errors: 0, total: 0 }
+        });
       });
-    });
+    }, 150);
     return true;
   }
 

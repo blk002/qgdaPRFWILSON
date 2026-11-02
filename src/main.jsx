@@ -39,9 +39,30 @@ if ('serviceWorker' in navigator) {
       });
     }
   } else {
+    // Limpa caches antigos (pré-v50) que usavam Stale-While-Revalidate no index.html
+    if ('caches' in window) {
+      caches.keys().then(names => {
+        names.forEach(name => {
+          if (name !== 'qg-prf-cache-v50') {
+            caches.delete(name);
+          }
+        });
+      });
+    }
+
+    let refreshing = false;
+    navigator.serviceWorker.addEventListener('controllerchange', () => {
+      if (refreshing) return;
+      refreshing = true;
+      window.location.reload();
+    });
+
     window.addEventListener('load', () => {
       navigator.serviceWorker.register(`${import.meta.env.BASE_URL}sw.js`)
-        .then(reg => console.log('Service Worker registrado com sucesso:', reg.scope))
+        .then(reg => {
+          console.log('Service Worker registrado com sucesso:', reg.scope);
+          reg.update();
+        })
         .catch(err => console.error('Erro ao registrar o Service Worker:', err));
     });
   }
