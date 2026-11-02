@@ -885,10 +885,20 @@ export const useStore = create(
             setCoins(c => c + 3);
           } else {
             addXP(10, `Questão Caveira ${question.id} Analisada`);
+            // Se errou a questão, agenda AUTOMATICAMENTE no FSRS para revisão
+            setTimeout(() => {
+              get().createFsrsCardFromCaveira(question, true);
+            }, 50);
           }
           boostPetWithStudy('review');
         } else {
           updatedList[existingIdx] = { ...updatedList[existingIdx], ...question };
+          // Se foi atualizada para erro e ainda não tinha card FSRS
+          if (!question.hit && !question.fsrsCreated) {
+            setTimeout(() => {
+              get().createFsrsCardFromCaveira(question, true);
+            }, 50);
+          }
         }
 
         set({ caveiraQuestions: updatedList });
@@ -954,6 +964,13 @@ export const useStore = create(
           toast.info('As questões já estavam atualizadas no QG.');
         }
 
+        // Garante que todas as questões erradas existentes sejam agendadas no FSRS
+        merged.forEach(q => {
+          if (!q.hit && !q.fsrsCreated) {
+            get().createFsrsCardFromCaveira(q, true);
+          }
+        });
+
         set({ caveiraQuestions: merged });
         try { localStorage.setItem('prf_caveira_questions', JSON.stringify(merged)); } catch (_) {}
         return newCount;
@@ -981,9 +998,13 @@ export const useStore = create(
         toast.info('Histórico do Raio-X Caveira limpo.');
       },
 
-      createFsrsCardFromCaveira: (question) => {
+      createFsrsCardFromCaveira: (question, silent = false) => {
         const { reviews = [], caveiraQuestions = [], getLocalDateStr, subjects, playSound } = get();
         
+        // Verifica se já existe um card ativo desta questão no FSRS
+        const alreadyExists = reviews.some(r => r.caveiraQuestionId === question.id || r.id.includes(question.id));
+        if (alreadyExists) return false;
+
         // Tenta associar com uma matéria do edital se o nome bater
         let matchedSubjectId = Object.keys(subjects)[0] || 'sub_transito';
         const qSubLower = (question.canonicalSubject || question.subject || '').toLowerCase();
@@ -1002,6 +1023,22 @@ export const useStore = create(
         const noteLine = question.userNote ? `\nBizu / Anotação Tática: ${question.userNote}` : '';
         const newReview = {
           id: 'rev_caveira_' + question.id + '_' + Date.now(),
+          caveiraQuestionId: question.id,
+          isCaveiraQuestion: true,
+          questionData: {
+            id: question.id,
+            content: question.content || '',
+            alternatives: question.alternatives || null,
+            userChoice: question.userChoice,
+            correctChoice: question.correctChoice,
+            subject: question.subject,
+            topic: question.topic,
+            canonicalSubject: question.canonicalSubject,
+            banca: question.banca,
+            ano: question.ano,
+            errorReason: question.errorReason || 'conteudo',
+            userNote: question.userNote || ''
+          },
           subjectId: matchedSubjectId,
           topicName: `[Caveira ${question.id}] ${question.topic || question.subject}`,
           notes: `Enunciado: ${question.content || ''}\nGabarito: ${question.correctChoice} (Você marcou: ${question.userChoice})\nMotivo do erro: ${question.errorReason || 'Conteúdo'}${noteLine}`,
@@ -1010,14 +1047,17 @@ export const useStore = create(
           stability: 0,
           difficulty: 0,
           lastReviewDate: null,
-          lastPerformance: 0.5
+          lastPerformance: 0.0
         };
 
         const updatedQuestions = caveiraQuestions.map(q => q.id === question.id ? { ...q, fsrsCreated: true } : q);
         set({ reviews: [newReview, ...reviews], caveiraQuestions: updatedQuestions });
         try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updatedQuestions)); } catch (_) {}
-        playSound('coin');
-        toast.success(`🃏 Flashcard criado no FSRS para revisão amanhã: ${question.id}`);
+        if (!silent) {
+          playSound('coin');
+          toast.success(`🃏 Questão ${question.id} adicionada ao FSRS para revisão amanhã!`);
+        }
+        return true;
       },
 
       // --- AÇÕES LÓGICAS ---

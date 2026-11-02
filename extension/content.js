@@ -568,6 +568,22 @@
       }
     }
 
+    const alternatives = [];
+    const altEls = card.querySelectorAll('.alternative, .question-alternatives > div, .q-radio');
+    altEls.forEach(altEl => {
+      const letter = altEl.querySelector('.alternative-letter, .q-radio__label')?.textContent?.trim()?.slice(0, 2) || '';
+      // Texto da alternativa sem a letra
+      const clone = altEl.cloneNode(true);
+      clone.querySelector('.alternative-letter, .q-radio__inner')?.remove();
+      const altText = clone.textContent?.trim() || '';
+      if (letter || altText) {
+        alternatives.push({
+          letter: letter.replace(/[^A-Za-z]/g, '').toUpperCase() || '',
+          text: altText
+        });
+      }
+    });
+
     const elapsedForThisQ = questionTimers.get(qId) || timerSeconds || 10;
     const durationSeconds = Math.max(3, elapsedForThisQ);
 
@@ -580,7 +596,8 @@
       banca,
       ano,
       difficulty,
-      content: content.slice(0, 500),
+      content: content.slice(0, 1000),
+      alternatives: alternatives.length > 0 ? alternatives : null,
       userChoice,
       correctChoice,
       hit: isCorrect,

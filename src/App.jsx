@@ -5,6 +5,7 @@ import Login from './components/Login';
 import { useStore } from './store/useStore';
 import Dashboard from './pages/Dashboard';
 import ClassCompletionModal from './components/ClassCompletionModal';
+import CaveiraReviewQuestionModal from './components/CaveiraReviewQuestionModal';
 import RankBadge from './components/RankBadge';
 import { useConfetti } from './hooks/useConfetti';
 
@@ -425,8 +426,13 @@ export default function App() {
 
       {/* Modais do Sistema - Renderizados via Portal para garantir z-index absoluto */}
       
-      {/* 1. Modal de Avaliação de Revisão */}
-      {reviewModal && createPortal(
+      {/* 1. Modal de Avaliação de Revisão (Questão Interativa do Caveira OU Auditoria Geral) */}
+      {reviewModal && (reviewModal.isCaveiraQuestion || reviewModal.questionData) ? (
+        createPortal(
+          <CaveiraReviewQuestionModal review={reviewModal} onClose={() => setReviewModal(null)} />,
+          document.body
+        )
+      ) : reviewModal && createPortal(
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[110] p-4 fade-in font-sans">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800">
             <h3 className="text-xl font-black mb-1 text-slate-800 dark:text-slate-100 flex items-center gap-2">
