@@ -159,6 +159,7 @@ export default function RaioXCaveira() {
   const [showImportModal, setShowImportModal] = useState(false);
   const [importJsonText, setImportJsonText] = useState('');
   const [copiedExtensionPath, setCopiedExtensionPath] = useState(false);
+  const [selectedLegalDevice, setSelectedLegalDevice] = useState(null);
 
   // Escuta detecção e sincronização da extensão via bridge
   useEffect(() => {
@@ -385,10 +386,117 @@ export default function RaioXCaveira() {
     }).sort((a, b) => a.grossPercent - b.grossPercent || b.errors - a.errors);
   }, [blockScopedQuestions]);
 
+  // --- #11. RADAR DE LEI SECA: RASTREADOR AUTOMÁTICO DE ARTIGOS, LEIS, SÚMULAS E RESOLUÇÕES ---
+  const legalRadarList = useMemo(() => {
+    const deviceMap = {};
+
+    const registerDevice = (key, label, category, q) => {
+      if (!deviceMap[key]) {
+        deviceMap[key] = {
+          key,
+          label,
+          category,
+          subject: q.canonicalSubject || q.subject || 'Direito / Legislação',
+          total: 0,
+          errors: 0,
+          guessesOrDoubts: 0,
+          hits: 0,
+          questionIds: new Set()
+        };
+      }
+      const entry = deviceMap[key];
+      if (!entry.questionIds.has(q.id)) {
+        entry.questionIds.add(q.id);
+        entry.total += 1;
+        if (!q.hit) entry.errors += 1;
+        else entry.hits += 1;
+        if (q.confidence === 'chute' || q.confidence === 'duvida') {
+          entry.guessesOrDoubts += 1;
+        }
+      }
+    };
+
+    const KNOWN_LAWS = [
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?9\.?503(?:\s*\/\s*\d{2,4})?|c[óo]digo\s+de\s+tr[âa]nsito|ctb)\b/i, key: 'LEI_9503', label: 'Lei 9.503/97 (CTB)', cat: 'Legislação de Trânsito' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?11\.?343(?:\s*\/\s*\d{2,4})?|lei\s+de\s+drogas)\b/i, key: 'LEI_11343', label: 'Lei 11.343/06 (Lei de Drogas)', cat: 'Legislação Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?10\.?826(?:\s*\/\s*\d{2,4})?|estatuto\s+do\s+desarmamento)\b/i, key: 'LEI_10826', label: 'Lei 10.826/03 (Desarmamento)', cat: 'Legislação Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?13\.?869(?:\s*\/\s*\d{2,4})?|abuso\s+de\s+autoridade)\b/i, key: 'LEI_13869', label: 'Lei 13.869/19 (Abuso de Autoridade)', cat: 'Legislação Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?8\.?112(?:\s*\/\s*\d{2,4})?)\b/i, key: 'LEI_8112', label: 'Lei 8.112/90 (Servidores Públicos)', cat: 'Direito Administrativo' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?8\.?429(?:\s*\/\s*\d{2,4})?|improbidade\s+administrativa)\b/i, key: 'LEI_8429', label: 'Lei 8.429/92 (Improbidade)', cat: 'Direito Administrativo' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?14\.?133(?:\s*\/\s*\d{2,4})?)\b/i, key: 'LEI_14133', label: 'Lei 14.133/21 (Licitações)', cat: 'Direito Administrativo' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?9\.?784(?:\s*\/\s*\d{2,4})?)\b/i, key: 'LEI_9784', label: 'Lei 9.784/99 (Processo Administrativo)', cat: 'Direito Administrativo' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?12\.?850(?:\s*\/\s*\d{2,4})?|organiza[çc][õo]es\s+criminosas)\b/i, key: 'LEI_12850', label: 'Lei 12.850/13 (Org. Criminosas)', cat: 'Legislação Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?9\.?455(?:\s*\/\s*\d{2,4})?|crime[s]?\s+de\s+tortura)\b/i, key: 'LEI_9455', label: 'Lei 9.455/97 (Tortura)', cat: 'Legislação Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?8\.?072(?:\s*\/\s*\d{2,4})?|crimes?\s+hediondos?)\b/i, key: 'LEI_8072', label: 'Lei 8.072/90 (Crimes Hediondos)', cat: 'Legislação Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?11\.?340(?:\s*\/\s*\d{2,4})?|maria\s+da\s+penha)\b/i, key: 'LEI_11340', label: 'Lei 11.340/06 (Maria da Penha)', cat: 'Legislação Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?9\.?099(?:\s*\/\s*\d{2,4})?|juizados?\s+especiais?)\b/i, key: 'LEI_9099', label: 'Lei 9.099/95 (JECRIM)', cat: 'Legislação Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?9\.?605(?:\s*\/\s*\d{2,4})?|crimes?\s+ambientais?)\b/i, key: 'LEI_9605', label: 'Lei 9.605/98 (Crimes Ambientais)', cat: 'Legislação Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?8\.?069(?:\s*\/\s*\d{2,4})?|\beca\b|estatuto\s+da\s+crian[çc]a)\b/i, key: 'LEI_8069', label: 'Lei 8.069/90 (ECA)', cat: 'Legislação Especial' },
+      { regex: /\b(?:decreto\s*(?:n[º°.]?\s*)?1\.?171(?:\s*\/\s*\d{2,4})?)\b/i, key: 'DEC_1171', label: 'Decreto 1.171/94 (Ética no Serviço Público)', cat: 'Ética' }
+    ];
+
+    blockScopedQuestions.forEach(q => {
+      const fullText = `${q.subject || ''} ${q.topic || ''} ${q.content || ''} ${q.teacherComment || ''} ${q.userNote || ''}`;
+      const shortContext = q.canonicalSubject || q.subject || 'Lei Seca';
+
+      // 1. Leis Conhecidas do Edital
+      KNOWN_LAWS.forEach(law => {
+        if (law.regex.test(fullText)) {
+          registerDevice(law.key, law.label, law.cat, q);
+        }
+      });
+
+      // 2. Outras Leis numeradas (ex: Lei 4.133/1999, Lei Complementar 123)
+      const genericLawMatches = fullText.matchAll(/\blei(?:\s+complementar|\s+estadual|\s+federal)?\s*(?:n[º°.]?\s*)?(\d{1,2}\.?\d{3}(?:\s*\/\s*\d{2,4})?)/gi);
+      for (const m of genericLawMatches) {
+        const rawNum = m[1].replace(/\s+/g, '');
+        const cleanDigits = rawNum.split('/')[0].replace(/\D/g, '');
+        const alreadyKnown = KNOWN_LAWS.some(kl => kl.key.endsWith(cleanDigits));
+        if (!alreadyKnown && cleanDigits.length >= 3) {
+          registerDevice(`LEI_${cleanDigits}`, `Lei ${rawNum} (${shortContext})`, 'Lei Seca', q);
+        }
+      }
+
+      // 3. Artigos explícitos (ex: Art. 5º, Art. 144, Art. 306)
+      const artMatches = fullText.matchAll(/\bart(?:igo)?\.?\s*(\d{1,4})(?:\s*[º°]|-[A-Za-z])?/gi);
+      for (const m of artMatches) {
+        const artNum = m[1];
+        const key = `ART_${artNum}_${shortContext}`;
+        registerDevice(key, `Art. ${artNum} (${shortContext})`, 'Artigo', q);
+      }
+
+      // 4. Resoluções do CONTRAN
+      const resMatches = fullText.matchAll(/\bresolu[çc][ãa]o(?:\s+do)?(?:\s+contran)?\s*(?:n[º°.]?\s*)?(\d{2,4}(?:\s*\/\s*\d{2,4})?)/gi);
+      for (const m of resMatches) {
+        const resNum = m[1].replace(/\s+/g, '');
+        registerDevice(`RES_CONTRAN_${resNum}`, `Resolução CONTRAN ${resNum}`, 'CONTRAN', q);
+      }
+
+      // 5. Súmulas (STF, STJ, Vinculante)
+      const sumMatches = fullText.matchAll(/\bs[úu]mula\s*(vinculante)?\s*(?:n[º°.]?\s*)?(\d{1,4})/gi);
+      for (const m of sumMatches) {
+        const isVinc = Boolean(m[1]);
+        const sumNum = m[2];
+        const key = isVinc ? `SUM_VINC_${sumNum}` : `SUM_${sumNum}`;
+        const label = isVinc ? `Súmula Vinculante ${sumNum}` : `Súmula ${sumNum} (${shortContext})`;
+        registerDevice(key, label, 'Jurisprudência', q);
+      }
+    });
+
+    return Object.values(deviceMap)
+      .map(d => ({
+        ...d,
+        questionIds: Array.from(d.questionIds),
+        criticalScore: d.errors * 3 + d.guessesOrDoubts * 2 + d.total
+      }))
+      .sort((a, b) => b.errors - a.errors || b.guessesOrDoubts - a.guessesOrDoubts || b.total - a.total);
+  }, [blockScopedQuestions]);
+
   // Lista de Questões Filtrada para o Caderno Tático
   const filteredQuestions = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return blockScopedQuestions.filter(q => {
+      if (selectedLegalDevice && !selectedLegalDevice.questionIds.includes(q.id)) return false;
       if (selectedSubject !== 'all' && q.canonicalSubject !== selectedSubject) return false;
       if (selectedTopic !== 'all') {
         const topicLabel = (q.topic && q.topic !== q.subject)
@@ -405,13 +513,13 @@ export default function RaioXCaveira() {
       if (filterType === 'theory' && (q.hit || (q.errorReason && q.errorReason !== 'conteudo'))) return false;
 
       if (query) {
-        const hay = `${q.id} ${q.canonicalSubject} ${q.subject} ${q.topic} ${q.content} ${q.userNote || ''}`.toLowerCase();
+        const hay = `${q.id} ${q.canonicalSubject} ${q.subject} ${q.topic} ${q.content} ${q.userNote || ''} ${q.teacherComment || ''}`.toLowerCase();
         if (!hay.includes(query)) return false;
       }
 
       return true;
     });
-  }, [blockScopedQuestions, selectedSubject, selectedTopic, filterType, searchQuery]);
+  }, [blockScopedQuestions, selectedLegalDevice, selectedSubject, selectedTopic, filterType, searchQuery]);
 
   const handleRequestSync = () => {
     window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA' }, '*');
@@ -835,6 +943,82 @@ export default function RaioXCaveira() {
         )}
       </div>
 
+      {/* PAINEL #11: RADAR DE LEI SECA (ARTIGOS, LEIS, SÚMULAS E RESOLUÇÕES MAIS ERRADOS / CHUTADOS) */}
+      {legalRadarList.length > 0 && (
+        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+            <div>
+              <h2 className="text-sm sm:text-base font-bold text-slate-800 dark:text-[#F1F5F9] uppercase tracking-[0.03em] flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-amber-400" /> Radar de Lei Seca • Artigos & Leis Mais Cobrados / Errados ({legalRadarList.length})
+              </h2>
+              <p className="text-xs font-normal text-slate-500 dark:text-[#A0AAB2]">
+                Dispositivos legais extraídos automaticamente dos enunciados, bizus e comentários das suas questões. Clique em qualquer dispositivo para filtrar o Caderno abaixo.
+              </p>
+            </div>
+            {selectedLegalDevice && (
+              <button
+                type="button"
+                onClick={() => setSelectedLegalDevice(null)}
+                className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold uppercase tracking-wider cursor-pointer shrink-0"
+              >
+                Filtro Ativo: {selectedLegalDevice.label} ✕
+              </button>
+            )}
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
+            {legalRadarList.slice(0, 12).map((dev, idx) => {
+              const isSelected = selectedLegalDevice?.key === dev.key;
+              const hasErrors = dev.errors > 0;
+              return (
+                <button
+                  key={dev.key}
+                  type="button"
+                  onClick={() => setSelectedLegalDevice(isSelected ? null : dev)}
+                  className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                    isSelected
+                      ? 'bg-amber-500/15 border-amber-400 ring-2 ring-amber-500/30'
+                      : hasErrors
+                      ? 'bg-red-500/5 dark:bg-[#1E2022] border-red-500/30 hover:border-red-400'
+                      : 'bg-slate-50 dark:bg-[#1E2022] border-slate-200 dark:border-[#34383D] hover:border-slate-500'
+                  }`}
+                >
+                  <div className="flex items-start justify-between gap-2 w-full">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className="w-6 h-6 rounded-lg bg-black/30 border border-white/10 text-[11px] font-mono font-black text-amber-400 flex items-center justify-center shrink-0">
+                        #{idx + 1}
+                      </span>
+                      <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-[#F1F5F9] truncate" title={dev.label}>
+                        {dev.label}
+                      </span>
+                    </div>
+                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-slate-200 dark:bg-[#26292C] text-slate-600 dark:text-[#A0AAB2] shrink-0">
+                      {dev.category}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] font-semibold w-full pt-1 border-t border-slate-200/50 dark:border-[#2E3236]">
+                    <div className="flex items-center gap-2">
+                      {dev.errors > 0 ? (
+                        <span className="text-red-400 font-bold">✗ {dev.errors} {dev.errors === 1 ? 'erro' : 'erros'}</span>
+                      ) : (
+                        <span className="text-emerald-400">✓ 0 erros</span>
+                      )}
+                      {dev.guessesOrDoubts > 0 && (
+                        <span className="text-amber-300">🎲 {dev.guessesOrDoubts} dúvida/chute</span>
+                      )}
+                    </div>
+                    <span className="text-slate-400">
+                      {dev.total} {dev.total === 1 ? 'questão' : 'questões'} →
+                    </span>
+                  </div>
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* PAINEL 3: CADERNO DE QUESTÕES */}
       <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] space-y-4">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
@@ -860,7 +1044,7 @@ export default function RaioXCaveira() {
               />
             </div>
 
-            {(selectedBloco !== 'all' || selectedSubject !== 'all' || selectedTopic !== 'all' || filterType !== 'all' || searchQuery) && (
+            {(selectedBloco !== 'all' || selectedSubject !== 'all' || selectedTopic !== 'all' || filterType !== 'all' || searchQuery || selectedLegalDevice) && (
               <button
                 onClick={() => {
                   setSelectedBloco('all');
@@ -868,6 +1052,7 @@ export default function RaioXCaveira() {
                   setSelectedTopic('all');
                   setFilterType('all');
                   setSearchQuery('');
+                  setSelectedLegalDevice(null);
                 }}
                 className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold uppercase tracking-[0.03em] text-amber-400 cursor-pointer"
               >

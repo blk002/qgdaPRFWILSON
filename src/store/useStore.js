@@ -1085,6 +1085,28 @@ export const useStore = create(
         toast.info('Histórico do Raio-X Caveira limpo.');
       },
 
+      advanceFutureReviews: (targetDateStr) => {
+        const { reviews = [], getLocalDateStr, playSound } = get();
+        const todayStr = getLocalDateStr();
+        let movedCount = 0;
+        const updatedReviews = reviews.map(r => {
+          if (r.nextDateStr === targetDateStr && r.nextDateStr > todayStr) {
+            movedCount++;
+            return { ...r, nextDateStr: todayStr };
+          }
+          return r;
+        });
+        if (movedCount > 0) {
+          set({ reviews: updatedReviews });
+          playSound?.('coin');
+          const [y, m, d] = targetDateStr.split('-');
+          toast.success(`⚡ ${movedCount} ${movedCount === 1 ? 'revisão adiantada' : 'revisões adiantadas'} de ${d}/${m}/${y} para hoje!`);
+        } else {
+          toast.info('Nenhuma revisão pendente nesta data para adiantar.');
+        }
+        return movedCount;
+      },
+
       createFsrsCardFromCaveira: (question, silent = false) => {
         if (!question || !question.id) return false;
         const { reviews = [], caveiraQuestions = [], getLocalDateStr, subjects, playSound, resolveCaveiraSubject } = get();

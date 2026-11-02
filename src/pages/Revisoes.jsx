@@ -4,7 +4,7 @@ import CaveiraReviewQuestionModal from '../components/CaveiraReviewQuestionModal
 import { 
   BrainCircuit, AlertTriangle, Target as TargetIcon, Clock, 
   ChevronLeft, ChevronRight, CalendarDays, Layers, CheckCircle, 
-  TrendingUp, TrendingDown
+  TrendingUp, TrendingDown, Zap, Activity
 } from 'lucide-react';
 
 export default function Revisoes() {
@@ -18,11 +18,13 @@ export default function Revisoes() {
     subjects,
     getThermometer,
     getLocalDateStr,
+    getTodayDate,
     getPendingReviews,
     reviewCalendarDate,
     setReviewCalendarDate,
     setReviewModal,
-    syncAndRepairCaveiraReviews
+    syncAndRepairCaveiraReviews,
+    advanceFutureReviews
   } = useStore();
 
   useEffect(() => {
@@ -162,6 +164,47 @@ export default function Revisoes() {
   
   const rBlanks = Array(rFirstDayIndex).fill(null);
   const rDays = Array.from({ length: rDaysInMonth }, (_, i) => i + 1);
+
+  // --- PREVISÃO DE CARGA FSRS (PRÓXIMOS 7 DIAS) & CURVA DE ESQUECIMENTO ---
+  const baseToday = getTodayDate ? getTodayDate() : new Date();
+  const next7DaysForecast = Array.from({ length: 7 }, (_, i) => {
+    const offset = i + 1;
+    const d = new Date(baseToday);
+    d.setDate(d.getDate() + offset);
+    const dateStr = getLocalDateStr(d);
+    const dayRevs = reviews.filter(r => r.nextDateStr === dateStr);
+    const caveiraCount = dayRevs.filter(r => isCaveiraCard(r)).length;
+    const cicloCount = dayRevs.length - caveiraCount;
+    const dayName = diasSemana[d.getDay()];
+    const dayNum = String(d.getDate()).padStart(2, '0');
+    const monthNum = String(d.getMonth() + 1).padStart(2, '0');
+    return {
+      offset,
+      dateStr,
+      label: offset === 1 ? 'Amanhã' : `${dayName} (${dayNum}/${monthNum})`,
+      shortDate: `${dayNum}/${monthNum}`,
+      total: dayRevs.length,
+      caveiraCount,
+      cicloCount
+    };
+  });
+  const maxForecastCount = Math.max(5, ...next7DaysForecast.map(f => f.total));
+  const totalNext7Days = next7DaysForecast.reduce((acc, f) => acc + f.total, 0);
+
+  // Estabilidade média real dos cartões já revisados (ou 3.5d inicial) para a Curva de Esquecimento FSRS R(t) = (1 + t/(9*S))^-1
+  const cardsWithStability = reviews.filter(r => Number(r.stability) > 0);
+  const avgStabilityDays = cardsWithStability.length > 0
+    ? cardsWithStability.reduce((acc, r) => acc + Number(r.stability || 0), 0) / cardsWithStability.length
+    : 3.5;
+
+  const forgettingCurvePoints = [0, 1, 3, 7, 14, 30].map(daysElapsed => {
+    const retention = Math.round(Math.pow(1 + daysElapsed / (9 * Math.max(0.5, avgStabilityDays)), -1) * 100);
+    return {
+      daysElapsed,
+      label: daysElapsed === 0 ? 'Hoje (0d)' : `+${daysElapsed}d`,
+      retention: Math.max(15, Math.min(100, retention))
+    };
+  });
 
   return (
     <div className="fade-in w-full pb-10">
@@ -418,6 +461,120 @@ export default function Revisoes() {
           <p className="text-sm mt-1">O seu cérebro está aquecido. Vá para o seu Ciclo avançar o edital.</p>
         </div>
       )}
+
+      {/* PAINEL #13: PREVISÃO DE CARGA FSRS (7 DIAS) + ADIANTAMENTO TÁTICO + CURVA DE ESQUECIMENTO */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
+        {/* Previsão de 7 Dias + Adiantamento Tático */}
+        <div className="lg:col-span-7 bg-white dark:bg-[#1E2022] rounded-2xl shadow-lg border border-slate-200 dark:border-[#34383D] p-4 sm:p-5 flex flex-col justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+            <div>
+              <h3 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                <Zap className="w-4 h-4 text-amber-400" /> Previsão de Carga FSRS (Próximos 7 Dias)
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Total agendado na semana: <strong>{totalNext7Days} cartões</strong> • Clique em <strong>⚡ Adiantar</strong> para puxar um dia pesado para hoje.
+              </p>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-7 gap-1.5 sm:gap-2.5 items-end pt-4">
+            {next7DaysForecast.map(day => {
+              const barHeightPct = day.total > 0 ? Math.max(18, Math.round((day.total / maxForecastCount) * 100)) : 8;
+              const isHeavy = day.total >= 10;
+              return (
+                <div
+                  key={day.dateStr}
+                  className="flex flex-col items-center bg-slate-50 dark:bg-[#26292C] border border-slate-200/80 dark:border-[#34383D] rounded-xl p-2 transition-all"
+                >
+                  <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 truncate max-w-full">
+                    {day.offset === 1 ? 'Amanhã' : day.label.split(' ')[0]}
+                  </span>
+                  <span className="text-[10px] font-mono text-slate-400 mb-2">{day.shortDate}</span>
+
+                  <div className="w-full h-24 bg-slate-200/60 dark:bg-[#1E2022] rounded-lg flex flex-col justify-end p-1 overflow-hidden relative">
+                    <div
+                      className={`w-full rounded-md transition-all duration-300 ${
+                        day.total === 0
+                          ? 'bg-slate-300 dark:bg-slate-800'
+                          : isHeavy
+                          ? 'bg-gradient-to-t from-red-600 to-amber-500'
+                          : 'bg-gradient-to-t from-purple-600 to-blue-500'
+                      }`}
+                      style={{ height: `${barHeightPct}%` }}
+                    />
+                    <span className="absolute inset-x-0 top-1.5 text-center font-black text-xs text-slate-800 dark:text-white">
+                      {day.total}
+                    </span>
+                  </div>
+
+                  <div className="text-[9px] font-bold text-slate-400 mt-1.5 flex items-center gap-1">
+                    <span title="Questões Caveira">💀{day.caveiraCount}</span>
+                    <span>•</span>
+                    <span title="Aulas do Ciclo">📚{day.cicloCount}</span>
+                  </div>
+
+                  <button
+                    type="button"
+                    disabled={day.total === 0}
+                    onClick={() => advanceFutureReviews(day.dateStr)}
+                    title={day.total > 0 ? `Adiantar ${day.total} revisões de ${day.shortDate} para hoje` : 'Sem revisões agendadas'}
+                    className="mt-2 w-full py-1 px-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-amber-500/15 hover:bg-amber-500 text-amber-400 hover:text-slate-950 border border-amber-500/30 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+                  >
+                    ⚡ Adiantar
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Curva de Esquecimento de Ebbinghaus / FSRS */}
+        <div className="lg:col-span-5 bg-white dark:bg-[#1E2022] rounded-2xl shadow-lg border border-slate-200 dark:border-[#34383D] p-4 sm:p-5 flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-1">
+              <h3 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
+                <Activity className="w-4 h-4 text-emerald-400" /> Curva de Esquecimento FSRS
+              </h3>
+              <span className="text-xs font-black px-2.5 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+                Estab. Média: {avgStabilityDays.toFixed(1)}d
+              </span>
+            </div>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+              Projeção de retenção da sua memória ao longo dos dias sem revisar (Meta FSRS: revisar ao atingir <strong>90%</strong>).
+            </p>
+          </div>
+
+          <div className="space-y-2.5 my-auto">
+            {forgettingCurvePoints.map(pt => {
+              const isAboveTarget = pt.retention >= 90;
+              const isWarning = pt.retention >= 75 && pt.retention < 90;
+              return (
+                <div key={pt.daysElapsed} className="space-y-1">
+                  <div className="flex justify-between items-center text-xs font-bold">
+                    <span className="text-slate-600 dark:text-slate-300 font-mono">{pt.label}</span>
+                    <span className={isAboveTarget ? 'text-emerald-400' : isWarning ? 'text-amber-400' : 'text-red-400'}>
+                      {pt.retention}% de retenção estimada
+                    </span>
+                  </div>
+                  <div className="w-full h-2.5 bg-slate-100 dark:bg-[#26292C] rounded-full overflow-hidden relative">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        isAboveTarget ? 'bg-emerald-500' : isWarning ? 'bg-amber-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${pt.retention}%` }}
+                    />
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+
+          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-[#2E3236] flex items-center justify-between text-[11px] text-slate-400">
+            <span>🎯 Gatilho ideal de revisão: <strong>90%</strong></span>
+            <span>🃏 Cartões monitorados: <strong>{reviews.length}</strong></span>
+          </div>
+        </div>
+      </div>
 
       <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-800 overflow-hidden mt-6">
         <div className="p-4 sm:p-5 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
