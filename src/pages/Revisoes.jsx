@@ -10,6 +10,7 @@ import {
 export default function Revisoes() {
   const [currentCardIdx, setCurrentCardIdx] = useState(0);
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState('ALL');
+  const [reviewTypeFilter, setReviewTypeFilter] = useState('ALL'); // 'ALL' | 'CAVEIRA' | 'CICLO'
   const {
     reviews,
     caveiraQuestions = [],
@@ -116,9 +117,18 @@ export default function Revisoes() {
       return String(a.id || '').localeCompare(String(b.id || ''));
     });
 
+  const caveiraDueCount = allDueToday.filter(rev => isCaveiraCard(rev)).length;
+  const cicloDueCount = allDueToday.length - caveiraDueCount;
+
+  const typeFilteredDueToday = allDueToday.filter(rev => {
+    if (reviewTypeFilter === 'CAVEIRA') return isCaveiraCard(rev);
+    if (reviewTypeFilter === 'CICLO') return !isCaveiraCard(rev);
+    return true;
+  });
+
   const filteredDueToday = selectedSubjectFilter === 'ALL'
-    ? allDueToday
-    : allDueToday.filter(rev => getReviewSubjectMeta(rev).id === selectedSubjectFilter);
+    ? typeFilteredDueToday
+    : typeFilteredDueToday.filter(rev => getReviewSubjectMeta(rev).id === selectedSubjectFilter);
 
   const safeCardIdx = filteredDueToday.length > 0
     ? Math.min(currentCardIdx, filteredDueToday.length - 1)
@@ -128,7 +138,7 @@ export default function Revisoes() {
   const isProcrastinating = backlogCount > 5;
 
   const subjectsDueMap = {};
-  allDueToday.forEach(rev => {
+  typeFilteredDueToday.forEach(rev => {
     const meta = getReviewSubjectMeta(rev);
     if (!subjectsDueMap[meta.id]) {
       subjectsDueMap[meta.id] = { subject: meta, count: 0 };
@@ -215,6 +225,37 @@ export default function Revisoes() {
             </span>
           </div>
 
+          {/* Filtro por Tipo de Revisão: Todas | Questões Caveira | Aulas do Ciclo */}
+          <div className="flex flex-wrap gap-2 mb-3">
+            {[
+              { id: 'ALL', label: 'Todas as Revisões', count: allDueToday.length, activeClass: 'bg-slate-800 text-white border-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:border-white' },
+              { id: 'CAVEIRA', label: '💀 Questões Caveira', count: caveiraDueCount, activeClass: 'bg-purple-600 text-white border-purple-500 ring-2 ring-purple-500/30' },
+              { id: 'CICLO', label: '📚 Aulas do Ciclo', count: cicloDueCount, activeClass: 'bg-red-600 text-white border-red-500 ring-2 ring-red-500/30' }
+            ].map(tab => {
+              const isSelected = reviewTypeFilter === tab.id;
+              return (
+                <button
+                  key={tab.id}
+                  onClick={() => {
+                    setReviewTypeFilter(tab.id);
+                    setSelectedSubjectFilter('ALL');
+                    setCurrentCardIdx(0);
+                  }}
+                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
+                    isSelected
+                      ? tab.activeClass
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-[#1E2022] dark:text-slate-300 dark:border-[#34383D] dark:hover:bg-[#26292C]'
+                  }`}
+                >
+                  <span>{tab.label}</span>
+                  <span className={`px-1.5 py-0.5 rounded-md text-[11px] font-black ${isSelected ? 'bg-black/20' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                    {tab.count}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+
           {activeReviewSubjects.length > 0 && (
             <div className="flex gap-2 overflow-x-auto pb-3 mb-4 snap-x items-center">
               <div className="flex items-center justify-center px-1 shrink-0" title="Filtrar por Disciplina">
@@ -229,7 +270,7 @@ export default function Revisoes() {
                 }`}
               >
                 <span className="text-[12px] font-black uppercase tracking-wider">Todas</span>
-                <span className="bg-black/20 px-1.5 py-0.5 rounded text-[11px] font-black">{allDueToday.length}</span>
+                <span className="bg-black/20 px-1.5 py-0.5 rounded text-[11px] font-black">{typeFilteredDueToday.length}</span>
               </button>
               {activeReviewSubjects.map(({ subject, count }) => {
                 const isSelected = selectedSubjectFilter === subject.id;
@@ -246,6 +287,20 @@ export default function Revisoes() {
                   </button>
                 );
               })}
+            </div>
+          )}
+
+          {!activeRev && (
+            <div className="bg-white dark:bg-[#1E2022] border border-slate-200 dark:border-[#34383D] rounded-2xl p-6 text-center mb-8">
+              <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
+                Nenhum cartão pendente neste filtro.
+              </p>
+              <button
+                onClick={() => { setReviewTypeFilter('ALL'); setSelectedSubjectFilter('ALL'); setCurrentCardIdx(0); }}
+                className="mt-3 px-4 py-2 rounded-xl text-xs font-black uppercase bg-purple-600 text-white hover:bg-purple-500 cursor-pointer"
+              >
+                Mostrar Todas as Revisões ({allDueToday.length})
+              </button>
             </div>
           )}
 

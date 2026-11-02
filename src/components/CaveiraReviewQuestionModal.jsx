@@ -71,7 +71,8 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
       canonicalSubject: review.customSubjectName || storeMatch?.canonicalSubject || review.questionData?.canonicalSubject || fallbackSub,
       banca: storeMatch?.banca || review.questionData?.banca || '',
       ano: storeMatch?.ano || review.questionData?.ano || '',
-      userNote: storeMatch?.userNote || review.questionData?.userNote || ''
+      userNote: storeMatch?.userNote || review.questionData?.userNote || '',
+      teacherComment: storeMatch?.teacherComment || review.questionData?.teacherComment || ''
     };
   }, [review, caveiraQuestions]);
   
@@ -80,6 +81,8 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
   const [hasSubmitted, setHasSubmitted] = useState(false);
   const [isEditingBizu, setIsEditingBizu] = useState(false);
   const [bizuDraft, setBizuDraft] = useState('');
+  const [isEditingTeacherComment, setIsEditingTeacherComment] = useState(false);
+  const [teacherCommentDraft, setTeacherCommentDraft] = useState('');
 
   const correctChoice = (qData.correctChoice || 'C').toUpperCase();
   const userPrevChoice = (qData.userChoice || '').toUpperCase();
@@ -94,35 +97,47 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
   const isCebraspeStyle = !isMultipleChoiceLetters;
   const isHit = selectedChoice === correctChoice;
 
-  // Simulação do agendamento FSRS conforme acerto ou erro
-  const fsrsPreview = useMemo(() => {
+  // Simulação do agendamento FSRS para todos os graus (1: Repetir, 2: Difícil, 3: Bom, 4: Fácil)
+  const fsrsOptions = useMemo(() => {
     if (!hasSubmitted) return null;
-    const rating = isHit ? 4 : 1;
-    const pred = updateFsrsCard(review, rating);
-    const nextDate = getTodayDate ? getTodayDate() : new Date();
-    nextDate.setDate(nextDate.getDate() + pred.nextInterval);
-    const nextDateStr = getLocalDateStr(nextDate);
-    const [y, m, d] = nextDateStr.split('-');
-    return {
-      ...pred,
-      formattedDate: `${d}/${m}/${y}`
+    const buildOption = (rating) => {
+      const pred = updateFsrsCard(review, rating);
+      const nextDate = getTodayDate ? getTodayDate() : new Date();
+      nextDate.setDate(nextDate.getDate() + pred.nextInterval);
+      const nextDateStr = getLocalDateStr(nextDate);
+      const [y, m, d] = nextDateStr.split('-');
+      return {
+        ...pred,
+        formattedDate: `${d}/${m}/${y}`,
+        shortDate: `${d}/${m}`
+      };
     };
-  }, [hasSubmitted, isHit, review, updateFsrsCard, getLocalDateStr, getTodayDate]);
+    return {
+      1: buildOption(1), // Repetir (performance 0.0)
+      2: buildOption(2), // Difícil (performance 0.65)
+      3: buildOption(3), // Bom (performance 0.85)
+      4: buildOption(4)  // Fácil (performance 1.0)
+    };
+  }, [hasSubmitted, review, updateFsrsCard, getLocalDateStr, getTodayDate]);
+
+  const fsrsPreview = fsrsOptions ? (isHit ? fsrsOptions[3] : fsrsOptions[1]) : null;
 
   const handleSubmitAnswer = () => {
     if (!selectedChoice) return;
     setHasSubmitted(true);
   };
 
-  const handleFinishReview = () => {
-    // 1.0 para acerto no FSRS (nota 4 Easy), 0.0 para erro (nota 1 Again)
-    const performance = isHit ? 1.0 : 0.0;
+  const handleFinishReview = (customPerformance) => {
+    // 1.0 = Fácil (rating 4), 0.85 = Bom (rating 3), 0.65 = Difícil (rating 2), 0.0 = Repetir (rating 1)
+    const performance = typeof customPerformance === 'number'
+      ? customPerformance
+      : (isHit ? 0.85 : 0.0);
     handleReviewSubmit(review.id, performance);
     if (onCompleted) onCompleted();
     if (onClose) onClose();
   };
 
-  // Atalhos de teclado (A-E / C-E para selecionar, Enter para confirmar/avançar)
+  // Atalhos de teclado (A-E / C-E para selecionar, Enter para confirmar, 1/2/3/Enter para graduar FSRS)
   useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
@@ -138,12 +153,29 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
           e.preventDefault();
           setHasSubmitted(true);
         }
-      } else if (e.key === 'Enter') {
-        e.preventDefault();
-        const performance = isHit ? 1.0 : 0.0;
-        handleReviewSubmit(review.id, performance);
-        if (onCompleted) onCompleted();
-        if (onClose) onClose();
+      } else {
+        if (isHit && key === '1') {
+          e.preventDefault();
+          handleReviewSubmit(review.id, 0.65);
+          if (onCompleted) onCompleted();
+          if (onClose) onClose();
+        } else if (isHit && key === '2') {
+          e.preventDefault();
+          handleReviewSubmit(review.id, 0.85);
+          if (onCompleted) onCompleted();
+          if (onClose) onClose();
+        } else if (isHit && key === '3') {
+          e.preventDefault();
+          handleReviewSubmit(review.id, 1.0);
+          if (onCompleted) onCompleted();
+          if (onClose) onClose();
+        } else if (e.key === 'Enter') {
+          e.preventDefault();
+          const performance = isHit ? 0.85 : 0.0;
+          handleReviewSubmit(review.id, performance);
+          if (onCompleted) onCompleted();
+          if (onClose) onClose();
+        }
       }
     };
     window.addEventListener('keydown', handleKeyDown);
@@ -155,6 +187,13 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
       updateCaveiraQuestion(qData.id, { userNote: bizuDraft.trim() });
     }
     setIsEditingBizu(false);
+  };
+
+  const handleSaveTeacherComment = () => {
+    if (qData.id) {
+      updateCaveiraQuestion(qData.id, { teacherComment: teacherCommentDraft.trim() });
+    }
+    setIsEditingTeacherComment(false);
   };
 
   const cardInner = (
@@ -360,6 +399,63 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
                 </div>
               )}
 
+              {/* Comentário do Professor / Gabarito Comentado */}
+              {!isEditingTeacherComment ? (
+                <div className="mt-3 p-3 rounded-xl bg-blue-500/10 border border-blue-500/25 text-xs text-blue-100">
+                  <div className="flex items-center justify-between gap-2 mb-1">
+                    <span className="font-bold text-blue-300 flex items-center gap-1.5">
+                      🎓 Comentário do Professor / Gabarito Comentado:
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setTeacherCommentDraft(qData.teacherComment || '');
+                        setIsEditingTeacherComment(true);
+                      }}
+                      className="text-[11px] font-bold uppercase tracking-wider text-blue-300 hover:text-white underline shrink-0 cursor-pointer"
+                    >
+                      {qData.teacherComment ? 'Editar Comentário' : '+ Colar Comentário'}
+                    </button>
+                  </div>
+                  {qData.teacherComment ? (
+                    <div className="text-slate-200 leading-relaxed whitespace-pre-line max-h-48 overflow-y-auto custom-scrollbar pr-1 mt-1">
+                      {qData.teacherComment}
+                    </div>
+                  ) : (
+                    <p className="text-[11px] text-blue-200/70 italic">
+                      Nenhum comentário salvo ainda. Ao abrir a aba &ldquo;Comentário do Professor&rdquo; no Projeto Caveira, a extensão captura automaticamente — ou clique em &ldquo;+ Colar Comentário&rdquo; acima.
+                    </p>
+                  )}
+                </div>
+              ) : (
+                <div className="mt-3 space-y-2 bg-black/30 p-3 rounded-xl border border-blue-500/40">
+                  <textarea
+                    rows={4}
+                    autoFocus
+                    value={teacherCommentDraft}
+                    onChange={(e) => setTeacherCommentDraft(e.target.value)}
+                    placeholder="Cole ou digite aqui o comentário do professor / fundamentação legal do gabarito..."
+                    className="w-full bg-black/40 border border-blue-500/30 rounded-xl p-2.5 text-xs text-white outline-none resize-y"
+                  />
+                  <div className="flex justify-end gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setIsEditingTeacherComment(false)}
+                      className="text-xs font-bold text-slate-400 hover:text-white px-3 py-1.5 rounded-lg cursor-pointer"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleSaveTeacherComment}
+                      className="bg-blue-500 hover:bg-blue-400 text-slate-950 font-black text-xs uppercase px-3 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer"
+                    >
+                      <Save className="w-3.5 h-3.5" /> Salvar Comentário
+                    </button>
+                  </div>
+                </div>
+              )}
+
               {!isEditingBizu ? (
                 <div className="mt-3 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-200 flex items-center justify-between gap-2">
                   <span>
@@ -401,7 +497,7 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
           )}
         </AnimatePresence>
 
-        {/* Botão de Ação */}
+        {/* Botão de Ação / Graduação FSRS */}
         <div className="mt-auto pt-2">
           {!hasSubmitted ? (
             <button
@@ -409,18 +505,57 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
               onClick={handleSubmitAnswer}
               className="w-full py-3.5 bg-purple-600 hover:bg-purple-500 disabled:opacity-50 disabled:grayscale text-white font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all cursor-pointer"
             >
-              Confirmar Resposta
+              Confirmar Resposta (Enter)
             </button>
+          ) : isHit && fsrsOptions ? (
+            <div className="space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-wider text-slate-400 text-center">
+                Avalie o grau de esforço desta questão para agendar no FSRS (Teclas 1, 2 ou 3):
+              </p>
+              <div className="grid grid-cols-3 gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => handleFinishReview(0.65)}
+                  className="py-3 px-2 rounded-xl border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 text-amber-200 transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 shadow-md"
+                >
+                  <span className="text-xs font-black uppercase tracking-wider">😓 Difícil (1)</span>
+                  <span className="text-[11px] font-bold text-amber-300">
+                    +{fsrsOptions[2].nextInterval}d ({fsrsOptions[2].shortDate})
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleFinishReview(0.85)}
+                  className="py-3 px-2 rounded-xl border border-emerald-500/50 bg-emerald-600 hover:bg-emerald-500 text-white transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 shadow-lg ring-2 ring-emerald-500/30"
+                >
+                  <span className="text-xs font-black uppercase tracking-wider">🎯 Bom (2 / Enter)</span>
+                  <span className="text-[11px] font-bold text-emerald-100">
+                    +{fsrsOptions[3].nextInterval}d ({fsrsOptions[3].shortDate})
+                  </span>
+                </button>
+
+                <button
+                  type="button"
+                  onClick={() => handleFinishReview(1.0)}
+                  className="py-3 px-2 rounded-xl border border-blue-500/40 bg-blue-500/15 hover:bg-blue-500/25 text-blue-200 transition-all cursor-pointer flex flex-col items-center justify-center gap-0.5 shadow-md"
+                >
+                  <span className="text-xs font-black uppercase tracking-wider">⚡ Fácil (3)</span>
+                  <span className="text-[11px] font-bold text-blue-300">
+                    +{fsrsOptions[4].nextInterval}d ({fsrsOptions[4].shortDate})
+                  </span>
+                </button>
+              </div>
+            </div>
           ) : (
             <button
-              onClick={handleFinishReview}
-              className={`w-full py-3.5 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 ${
-                isHit
-                  ? 'bg-emerald-600 hover:bg-emerald-500 text-white'
-                  : 'bg-red-600 hover:bg-red-500 text-white'
-              }`}
+              type="button"
+              onClick={() => handleFinishReview(0.0)}
+              className="w-full py-3.5 font-black text-xs uppercase tracking-wider rounded-xl shadow-lg transition-all cursor-pointer flex items-center justify-center gap-2 bg-red-600 hover:bg-red-500 text-white"
             >
-              <span>{inline ? 'Concluir Revisão e Ir para a Próxima Questão' : 'Concluir Revisão e Agendar FSRS'}</span>
+              <span>
+                🔁 Reagendar para Amanhã (+{fsrsOptions?.[1]?.nextInterval || 1}d) e Ir para a Próxima (Enter)
+              </span>
               <ArrowRight className="w-4 h-4" />
             </button>
           )}

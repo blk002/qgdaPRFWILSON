@@ -987,6 +987,16 @@ export default function RaioXCaveira() {
                     {q.content}
                   </p>
 
+                  {/* Comentário do Professor / Gabarito Comentado */}
+                  {q.teacherComment && (
+                    <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/25 text-xs sm:text-sm text-blue-100">
+                      <span className="font-bold text-blue-300 block mb-1">🎓 Comentário do Professor / Gabarito Comentado:</span>
+                      <div className="text-slate-200 leading-relaxed whitespace-pre-line max-h-40 overflow-y-auto custom-scrollbar pr-1">
+                        {q.teacherComment}
+                      </div>
+                    </div>
+                  )}
+
                   {/* Anotação Tática / Bizu Salvo */}
                   {q.userNote && !isEditingThisNote && (
                     <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-sm text-amber-200 font-medium flex items-center justify-between">

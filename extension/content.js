@@ -713,6 +713,19 @@
     const elapsedForThisQ = questionTimers.get(qId) || timerSeconds || 10;
     const durationSeconds = Math.max(3, elapsedForThisQ);
 
+    // Captura Comentário do Professor caso esteja aberto no card
+    let teacherComment = '';
+    const commentNodes = card.querySelectorAll(
+      '.teacher-comment, .comment-teacher, .professor-comment, .comentario-professor, [class*="teacher-comment"], [class*="comentario"], .q-tab-panel'
+    );
+    for (const node of commentNodes) {
+      const txt = (node.innerText || node.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+      if (txt.length > 50 && !txt.toUpperCase().startsWith('SELECIONE') && !txt.includes('Estatísticas da questão')) {
+        teacherComment = txt.slice(0, 2500);
+        break;
+      }
+    }
+
     return {
       id: qId,
       bloco,
@@ -724,6 +737,7 @@
       difficulty,
       content: content.slice(0, 1000),
       alternatives: alternatives.length > 0 ? alternatives : null,
+      teacherComment: teacherComment || undefined,
       userChoice,
       correctChoice,
       hit: isCorrect,
@@ -854,6 +868,23 @@
             bloco: enriched.bloco || existing.bloco,
             content: enriched.content || existing.content
           }, true);
+        }
+      }
+
+      // Se a questão já estava salva e o usuário abriu o Comentário do Professor depois, enriquece automaticamente!
+      if (savedQuestionIds.has(qId)) {
+        const existing = questionsCache.find(item => item && item.id === qId);
+        if (existing && !existing.teacherComment) {
+          const commentNodes = card.querySelectorAll(
+            '.teacher-comment, .comment-teacher, .professor-comment, .comentario-professor, [class*="teacher-comment"], [class*="comentario"], .q-tab-panel'
+          );
+          for (const node of commentNodes) {
+            const txt = (node.innerText || node.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+            if (txt.length > 50 && !txt.toUpperCase().startsWith('SELECIONE') && !txt.includes('Estatísticas da questão')) {
+              saveQuestion({ ...existing, teacherComment: txt.slice(0, 2500) }, true);
+              break;
+            }
+          }
         }
       }
 

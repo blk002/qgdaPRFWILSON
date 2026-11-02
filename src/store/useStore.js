@@ -1020,11 +1020,17 @@ export const useStore = create(
               prev.topic !== q.topic ||
               prev.userChoice !== q.userChoice ||
               prev.correctChoice !== q.correctChoice ||
-              (!prev.alternatives && q.alternatives)
+              (!prev.alternatives && q.alternatives) ||
+              (!prev.teacherComment && q.teacherComment)
             ) {
               updatedExisting = true;
             }
-            map.set(q.id, { ...prev, ...q });
+            map.set(q.id, {
+              ...prev,
+              ...q,
+              teacherComment: q.teacherComment || prev.teacherComment || '',
+              userNote: q.userNote || prev.userNote || ''
+            });
           }
         });
 
@@ -1104,6 +1110,7 @@ export const useStore = create(
           ano: question.ano,
           errorReason: question.errorReason || 'conteudo',
           userNote: question.userNote || '',
+          teacherComment: question.teacherComment || '',
           timestamp: question.timestamp || null
         };
 
@@ -1268,6 +1275,7 @@ export const useStore = create(
             ano: matchedQ?.ano || rev.questionData?.ano || '',
             errorReason: matchedQ?.errorReason || rev.questionData?.errorReason || 'conteudo',
             userNote: matchedQ?.userNote || rev.questionData?.userNote || '',
+            teacherComment: matchedQ?.teacherComment || rev.questionData?.teacherComment || '',
             timestamp: resolvedTimestamp
           };
 
@@ -1291,6 +1299,8 @@ export const useStore = create(
             rev.createdAt !== resolvedTimestamp ||
             !rev.questionData ||
             rev.questionData.content !== mergedQuestionData.content ||
+            rev.questionData.userNote !== mergedQuestionData.userNote ||
+            rev.questionData.teacherComment !== mergedQuestionData.teacherComment ||
             rev.questionData.timestamp !== resolvedTimestamp ||
             altsMismatch
           ) {
@@ -1359,6 +1369,7 @@ export const useStore = create(
                 ano: q.ano,
                 errorReason: q.errorReason || 'conteudo',
                 userNote: q.userNote || '',
+                teacherComment: q.teacherComment || '',
                 timestamp: q.timestamp || null
               },
               notes: `Enunciado: ${q.content || ''}\nGabarito: ${q.correctChoice} (Você marcou: ${q.userChoice})\nMotivo do erro: ${q.errorReason || 'Conteúdo'}${noteLine}`,
