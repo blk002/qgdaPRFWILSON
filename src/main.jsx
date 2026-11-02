@@ -5,6 +5,13 @@ import './index.css'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
 
+// Auto-recuperação contra chunk cache antigo (Failed to fetch dynamically imported module)
+window.addEventListener('vite:preloadError', (event) => {
+  console.warn('🔄 Novo deploy detectado! Recarregando para buscar a versão mais recente dos arquivos...');
+  event.preventDefault();
+  window.location.reload();
+});
+
 createRoot(document.getElementById('root')).render(
   <StrictMode>
     <HashRouter>

@@ -15,7 +15,21 @@ export default class ErrorBoundary extends React.Component {
     console.error("ErrorBoundary pegou um erro:", error, errorInfo);
   }
 
-  handleReload = () => {
+  handleReload = async () => {
+    try {
+      if ('serviceWorker' in navigator) {
+        const regs = await navigator.serviceWorker.getRegistrations();
+        for (const r of regs) {
+          await r.update().catch(() => {});
+        }
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        for (const k of keys) {
+          await caches.delete(k);
+        }
+      }
+    } catch (_) {}
     window.location.reload();
   };
 
