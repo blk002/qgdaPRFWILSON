@@ -1000,6 +1000,29 @@
           }
           // Varreduras rápidas e estendidas para cobrir qualquer atraso de rede da API do Caveira
           [40, 100, 200, 400, 800, 1500, 2500, 4000].forEach(delay => setTimeout(scanCards, delay));
+
+          // Tentativa de auto-carregar o Comentário do Professor em segundo plano sem quebrar a visão do usuário
+          setTimeout(() => {
+            try {
+              if (rootCard) {
+                const tabs = rootCard.querySelectorAll('.q-tab, [role="tab"], button, .q-btn');
+                for (const t of tabs) {
+                  const tText = (t.textContent || '').toLowerCase();
+                  if (tText.includes('comentário') || tText.includes('comentario') || tText.includes('professor')) {
+                    // Se o comentário ainda não foi carregado e a aba existe, dá um toque para disparar a busca
+                    if (!rootCard.querySelector('.teacher-comment, [class*="teacher-comment"]')) {
+                      // Dispara clique na aba do comentário
+                      t.click();
+                      // E após carregar o comentário, varre os cards
+                      setTimeout(scanCards, 300);
+                      setTimeout(scanCards, 800);
+                    }
+                    break;
+                  }
+                }
+              }
+            } catch (_) {}
+          }, 450);
         }
 
         if (
