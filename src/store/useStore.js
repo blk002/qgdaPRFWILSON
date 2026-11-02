@@ -327,6 +327,7 @@ export const useStore = create(
             get().checkAndResetWeekly();
             get().checkAndAdvanceSeason();
             get().checkAndResetDailyMissions();
+            get().syncAndRepairCaveiraReviews?.();
             return true;
           }
           console.log('ℹ️ [Nuvem] Perfil pronto para uso.');
@@ -869,6 +870,79 @@ export const useStore = create(
       },
 
       // --- SISTEMA RAIO-X PROJETO CAVEIRA ---
+      resolveCaveiraSubject: (question, subjects = {}) => {
+        const norm = (str) => String(str || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+        const rawSub = String(question?.subject || question?.canonicalSubject || '').trim();
+        const rawTop = String(question?.topic || '').trim();
+        const s = norm(rawSub);
+        const t = norm(rawTop);
+        const c = norm(question?.content || '');
+        const full = `${s} ${t} ${c}`;
+
+        let canonical = rawSub && rawSub !== 'Geral' ? rawSub : '';
+        if (s.includes('informatica') || t.includes('informatica') || t.includes('seguranca da informacao') || t.includes('computacao em nuvem') || t.includes('redes de computadores')) {
+          canonical = 'Informática';
+        } else if (s.includes('portugues') || s.includes('lingua portuguesa')) {
+          canonical = 'Língua Portuguesa';
+        } else if (s.includes('raciocinio logico') || s.includes('rlm') || s.includes('matematica')) {
+          canonical = 'Raciocínio Lógico-Matemático';
+        } else if (s.includes('fisica')) {
+          canonical = 'Física';
+        } else if (s.includes('etica')) {
+          canonical = 'Ética e Cidadania';
+        } else if (s.includes('geopolitica')) {
+          canonical = 'Geopolítica';
+        } else if (s.includes('ingles') || s.includes('espanhol') || s.includes('lingua estrangeira')) {
+          canonical = 'Língua Estrangeira';
+        } else if (s.includes('transito') || s.includes('ctb') || s.includes('contran')) {
+          canonical = (full.includes('contran') || full.includes('resolucao')) ? 'Resoluções do CONTRAN' : 'Legislação de Trânsito (CTB)';
+        } else if (s.includes('constitucional')) {
+          canonical = 'Direito Constitucional';
+        } else if (s.includes('administrativo')) {
+          canonical = 'Direito Administrativo';
+        } else if (s.includes('processual penal') || s.includes('processo penal')) {
+          canonical = 'Direito Processual Penal';
+        } else if (s.includes('penal especial') || s.includes('legislacao especial') || s.includes('leis especiais')) {
+          canonical = 'Legislação Penal Especial';
+        } else if (s.includes('direitos humanos')) {
+          canonical = 'Direitos Humanos';
+        } else if (s.includes('direito penal')) {
+          canonical = 'Direito Penal';
+        } else if (s.includes('legislacao aplicada') || s.includes('policia civil') || s.includes('estatuto')) {
+          canonical = rawSub.length > 32 ? 'Legislação Institucional' : rawSub;
+        } else if (!canonical) {
+          if (full.includes('informatica') || full.includes('seguranca da informacao') || full.includes('cloud computing')) canonical = 'Informática';
+          else if (full.includes('transito') || full.includes('ctb') || full.includes('contran')) canonical = 'Legislação de Trânsito (CTB)';
+          else if (full.includes('constitucional')) canonical = 'Direito Constitucional';
+          else if (full.includes('administrativo')) canonical = 'Direito Administrativo';
+          else if (full.includes('processo penal') || full.includes('inquerito')) canonical = 'Direito Processual Penal';
+          else if (full.includes('direito penal')) canonical = 'Direito Penal';
+          else canonical = rawTop && rawTop !== 'Geral' ? rawTop : 'Questão Caveira';
+        }
+
+        const normTarget = norm(canonical);
+        const normRawSub = norm(rawSub);
+        let matchedSubjectId = null;
+
+        for (const [subId, sub] of Object.entries(subjects || {})) {
+          const sNameNorm = norm(sub?.name || '');
+          if (!sNameNorm || sNameNorm.length < 3) continue;
+          if (
+            (normTarget && (normTarget === sNameNorm || (sNameNorm.length >= 5 && (normTarget.includes(sNameNorm) || sNameNorm.includes(normTarget))))) ||
+            (normRawSub && (normRawSub === sNameNorm || (sNameNorm.length >= 5 && (normRawSub.includes(sNameNorm) || sNameNorm.includes(normRawSub)))))
+          ) {
+            matchedSubjectId = subId;
+            break;
+          }
+        }
+
+        const fallbackSubjectId = 'caveira_sub_' + (normTarget.replace(/[^a-z0-9]+/g, '_') || 'geral');
+        return {
+          subjectId: matchedSubjectId || fallbackSubjectId,
+          customSubjectName: canonical || rawSub || 'Questão Caveira'
+        };
+      },
+
       addCaveiraQuestion: (question) => {
         if (!question || !question.id) return false;
         const { caveiraQuestions = [], addXP, setCoins, boostPetWithStudy } = get();
@@ -879,30 +953,23 @@ export const useStore = create(
 
         if (isNew) {
           updatedList.unshift(question);
-          // Recompensa silenciosa em XP e Moedas (sem som na aba em segundo plano)
           if (question.hit) {
             addXP(25, `Questão Caveira ${question.id} Acertada`);
             setCoins(c => c + 3);
           } else {
             addXP(10, `Questão Caveira ${question.id} Analisada`);
-            // Se errou a questão, agenda AUTOMATICAMENTE no FSRS para revisão
-            setTimeout(() => {
-              get().createFsrsCardFromCaveira(question, true);
-            }, 50);
           }
           boostPetWithStudy('review');
         } else {
           updatedList[existingIdx] = { ...updatedList[existingIdx], ...question };
-          // Se foi atualizada para erro e ainda não tinha card FSRS
-          if (!question.hit && !question.fsrsCreated) {
-            setTimeout(() => {
-              get().createFsrsCardFromCaveira(question, true);
-            }, 50);
-          }
         }
 
         set({ caveiraQuestions: updatedList });
         try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updatedList)); } catch (_) {}
+
+        if (!question.hit) {
+          get().createFsrsCardFromCaveira(updatedList.find(q => q.id === question.id) || question, true);
+        }
         return true;
       },
 
@@ -942,7 +1009,7 @@ export const useStore = create(
             newCount++;
             map.set(q.id, q);
           } else {
-            if (prev.confidence !== q.confidence || prev.errorReason !== q.errorReason || prev.hit !== q.hit) {
+            if (prev.confidence !== q.confidence || prev.errorReason !== q.errorReason || prev.hit !== q.hit || (!prev.alternatives && q.alternatives)) {
               updatedExisting = true;
             }
             map.set(q.id, { ...prev, ...q });
@@ -950,6 +1017,7 @@ export const useStore = create(
         });
 
         if (newCount === 0 && !updatedExisting && map.size === caveiraQuestions.length) {
+          get().syncAndRepairCaveiraReviews?.();
           if (!silent) toast.info('As questões já estavam atualizadas no QG.');
           return 0;
         }
@@ -964,15 +1032,11 @@ export const useStore = create(
           toast.info('As questões já estavam atualizadas no QG.');
         }
 
-        // Garante que todas as questões erradas existentes sejam agendadas no FSRS
-        merged.forEach(q => {
-          if (!q.hit && !q.fsrsCreated) {
-            get().createFsrsCardFromCaveira(q, true);
-          }
-        });
-
         set({ caveiraQuestions: merged });
         try { localStorage.setItem('prf_caveira_questions', JSON.stringify(merged)); } catch (_) {}
+
+        // Sincroniza, repara e agenda no FSRS todas as questões erradas sem duplicar
+        get().syncAndRepairCaveiraReviews?.();
         return newCount;
       },
 
@@ -981,68 +1045,96 @@ export const useStore = create(
         const updated = caveiraQuestions.map(q => q.id === id ? { ...q, ...updates } : q);
         set({ caveiraQuestions: updated });
         try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updated)); } catch (_) {}
+        get().syncAndRepairCaveiraReviews?.();
       },
 
       deleteCaveiraQuestion: (id) => {
-        const { caveiraQuestions = [] } = get();
+        const { caveiraQuestions = [], reviews = [] } = get();
         const updated = caveiraQuestions.filter(q => q.id !== id);
-        set({ caveiraQuestions: updated });
+        const filteredReviews = reviews.filter(r => !(r.caveiraQuestionId === id || String(r.id || '').includes(id) || String(r.topicName || '').includes(id)));
+        set({ caveiraQuestions: updated, reviews: filteredReviews });
         try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updated)); } catch (_) {}
         toast.success('Questão removida do histórico.');
       },
 
       clearCaveiraQuestions: () => {
-        set({ caveiraQuestions: [] });
+        const { reviews = [] } = get();
+        const filteredReviews = reviews.filter(r => !(r.isCaveiraQuestion || String(r.id || '').startsWith('rev_caveira_') || String(r.topicName || '').startsWith('[Caveira')));
+        set({ caveiraQuestions: [], reviews: filteredReviews });
         try { localStorage.removeItem('prf_caveira_questions'); } catch (_) {}
         try { window.postMessage({ source: 'QG_WEB_APP', type: 'CLEAR_SESSION' }, '*'); } catch (_) {}
         toast.info('Histórico do Raio-X Caveira limpo.');
       },
 
       createFsrsCardFromCaveira: (question, silent = false) => {
-        const { reviews = [], caveiraQuestions = [], getLocalDateStr, subjects, playSound } = get();
-        
-        // Verifica se já existe um card ativo desta questão no FSRS
-        const alreadyExists = reviews.some(r => r.caveiraQuestionId === question.id || r.id.includes(question.id));
-        if (alreadyExists) return false;
+        if (!question || !question.id) return false;
+        const { reviews = [], caveiraQuestions = [], getLocalDateStr, subjects, playSound, resolveCaveiraSubject } = get();
+        const { subjectId, customSubjectName } = resolveCaveiraSubject(question, subjects);
 
-        // Tenta associar com uma matéria do edital se o nome bater
-        let matchedSubjectId = Object.keys(subjects)[0] || 'sub_transito';
-        const qSubLower = (question.canonicalSubject || question.subject || '').toLowerCase();
-        for (const [subId, sub] of Object.entries(subjects)) {
-          const sNameLower = (sub.name || '').toLowerCase();
-          if (qSubLower.includes(sNameLower) || sNameLower.includes(qSubLower)) {
-            matchedSubjectId = subId;
-            break;
-          }
-        }
-
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const tomorrowStr = getLocalDateStr(tomorrow);
+        const qDataPayload = {
+          id: question.id,
+          content: question.content || '',
+          alternatives: question.alternatives || null,
+          userChoice: question.userChoice,
+          correctChoice: question.correctChoice,
+          subject: question.subject || customSubjectName,
+          topic: question.topic || '',
+          canonicalSubject: customSubjectName,
+          banca: question.banca,
+          ano: question.ano,
+          errorReason: question.errorReason || 'conteudo',
+          userNote: question.userNote || ''
+        };
 
         const noteLine = question.userNote ? `\nBizu / Anotação Tática: ${question.userNote}` : '';
+        const topicLabel = question.topic && question.topic !== question.subject
+          ? `${customSubjectName} ➔ ${question.topic}`
+          : (question.topic || customSubjectName);
+
+        // Verifica se já existe um card ativo desta questão no FSRS
+        const existingMatches = reviews.filter(r =>
+          r.caveiraQuestionId === question.id ||
+          String(r.id || '').includes(question.id) ||
+          String(r.topicName || '').includes(question.id)
+        );
+
+        if (existingMatches.length > 0) {
+          // Atualiza o primeiro card existente com os metadados completos e remove duplicatas
+          const primaryId = existingMatches[0].id;
+          const duplicateIds = new Set(existingMatches.slice(1).map(r => r.id));
+          const repairedReviews = reviews
+            .filter(r => !duplicateIds.has(r.id))
+            .map(r => r.id === primaryId ? {
+              ...r,
+              caveiraQuestionId: question.id,
+              isCaveiraQuestion: true,
+              customSubjectName,
+              subjectId,
+              topicName: `[Caveira ${question.id}] ${topicLabel}`,
+              questionData: { ...(r.questionData || {}), ...qDataPayload }
+            } : r);
+
+          const updatedQuestions = caveiraQuestions.map(q => q.id === question.id ? { ...q, fsrsCreated: true } : q);
+          set({ reviews: repairedReviews, caveiraQuestions: updatedQuestions });
+          try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updatedQuestions)); } catch (_) {}
+          if (!silent) {
+            toast.info(`🃏 Questão ${question.id} já está na fila de revisão FSRS!`);
+          }
+          return false;
+        }
+
+        const todayStr = getLocalDateStr();
+
         const newReview = {
-          id: 'rev_caveira_' + question.id + '_' + Date.now(),
+          id: 'rev_caveira_' + question.id,
           caveiraQuestionId: question.id,
           isCaveiraQuestion: true,
-          questionData: {
-            id: question.id,
-            content: question.content || '',
-            alternatives: question.alternatives || null,
-            userChoice: question.userChoice,
-            correctChoice: question.correctChoice,
-            subject: question.subject,
-            topic: question.topic,
-            canonicalSubject: question.canonicalSubject,
-            banca: question.banca,
-            ano: question.ano,
-            errorReason: question.errorReason || 'conteudo',
-            userNote: question.userNote || ''
-          },
-          subjectId: matchedSubjectId,
-          topicName: `[Caveira ${question.id}] ${question.topic || question.subject}`,
+          customSubjectName,
+          questionData: qDataPayload,
+          subjectId,
+          topicName: `[Caveira ${question.id}] ${topicLabel}`,
           notes: `Enunciado: ${question.content || ''}\nGabarito: ${question.correctChoice} (Você marcou: ${question.userChoice})\nMotivo do erro: ${question.errorReason || 'Conteúdo'}${noteLine}`,
-          nextDateStr: tomorrowStr,
+          nextDateStr: todayStr,
           interval: 0,
           stability: 0,
           difficulty: 0,
@@ -1055,9 +1147,191 @@ export const useStore = create(
         try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updatedQuestions)); } catch (_) {}
         if (!silent) {
           playSound('coin');
-          toast.success(`🃏 Questão ${question.id} adicionada ao FSRS para revisão amanhã!`);
+          toast.success(`🃏 Questão ${question.id} adicionada à fila de Revisões FSRS!`);
         }
         return true;
+      },
+
+      syncAndRepairCaveiraReviews: () => {
+        const { reviews = [], caveiraQuestions = [], subjects = {}, getLocalDateStr, resolveCaveiraSubject } = get();
+        const qMap = new Map();
+        caveiraQuestions.forEach(q => {
+          if (q && q.id) qMap.set(q.id, q);
+        });
+
+        const seenCaveiraIds = new Set();
+        let reviewsChanged = false;
+        let questionsChanged = false;
+        const repairedReviews = [];
+        const todayStr = getLocalDateStr();
+
+        for (const rev of reviews) {
+          const isCaveira = Boolean(
+            rev.isCaveiraQuestion ||
+            rev.questionData ||
+            String(rev.id || '').startsWith('rev_caveira_') ||
+            String(rev.topicName || '').startsWith('[Caveira')
+          );
+
+          if (!isCaveira) {
+            repairedReviews.push(rev);
+            continue;
+          }
+
+          // Extrai o ID Q\d+ do card
+          const idMatch =
+            String(rev.caveiraQuestionId || '').match(/Q\d+/i) ||
+            String(rev.id || '').match(/Q\d+/i) ||
+            String(rev.topicName || '').match(/Q\d+/i);
+          const qId = idMatch ? idMatch[0].toUpperCase() : (rev.caveiraQuestionId || rev.id);
+
+          // Remove cartões duplicados da mesma questão Caveira
+          if (seenCaveiraIds.has(qId)) {
+            reviewsChanged = true;
+            continue;
+          }
+          seenCaveiraIds.add(qId);
+
+          const matchedQ = qMap.get(qId);
+
+          // Extrai dados de fallback das notas/título caso a questão seja antiga
+          let parsedContent = '';
+          let parsedCorrect = 'C';
+          let parsedUser = 'E';
+          if (rev.notes) {
+            const enunMatch = rev.notes.match(/Enunciado:\s*([\s\S]*?)(?:\nGabarito:|$)/i);
+            if (enunMatch) parsedContent = enunMatch[1].trim();
+            const gabMatch = rev.notes.match(/Gabarito:\s*([A-E])\s*\(Voc[eê] marcou:\s*([A-E])\)/i);
+            if (gabMatch) {
+              parsedCorrect = gabMatch[1].toUpperCase();
+              parsedUser = gabMatch[2].toUpperCase();
+            }
+          }
+
+          const rawTitleClean = String(rev.topicName || '').replace(/^\[Caveira\s*Q?\d*\]\s*/i, '').trim();
+          const titleParts = rawTitleClean.split(/\s*(?:->|➔)\s*/);
+          const fallbackSub = titleParts[0] || 'Questão Caveira';
+          const fallbackTop = titleParts.slice(1).join(' ➔ ') || fallbackSub;
+
+          const sourceQuestion = matchedQ || rev.questionData || {
+            id: qId,
+            content: parsedContent || rawTitleClean,
+            correctChoice: parsedCorrect,
+            userChoice: parsedUser,
+            subject: fallbackSub,
+            topic: fallbackTop
+          };
+
+          const { subjectId, customSubjectName } = resolveCaveiraSubject(sourceQuestion, subjects);
+          const mergedQuestionData = {
+            id: qId,
+            content: matchedQ?.content || rev.questionData?.content || parsedContent || rawTitleClean,
+            alternatives: matchedQ?.alternatives || rev.questionData?.alternatives || null,
+            userChoice: matchedQ?.userChoice || rev.questionData?.userChoice || parsedUser,
+            correctChoice: matchedQ?.correctChoice || rev.questionData?.correctChoice || parsedCorrect,
+            subject: matchedQ?.subject || rev.questionData?.subject || fallbackSub,
+            topic: matchedQ?.topic || rev.questionData?.topic || fallbackTop,
+            canonicalSubject: customSubjectName,
+            banca: matchedQ?.banca || rev.questionData?.banca || '',
+            ano: matchedQ?.ano || rev.questionData?.ano || '',
+            errorReason: matchedQ?.errorReason || rev.questionData?.errorReason || 'conteudo',
+            userNote: matchedQ?.userNote || rev.questionData?.userNote || ''
+          };
+
+          const topicLabel = mergedQuestionData.topic && mergedQuestionData.topic !== mergedQuestionData.subject
+            ? `${customSubjectName} ➔ ${mergedQuestionData.topic}`
+            : (mergedQuestionData.topic || customSubjectName);
+          const expectedTopicName = `[Caveira ${qId}] ${topicLabel}`;
+
+          // Se nunca foi revisado ainda (lastReviewDate === null) e estava agendado para amanhã, traz para hoje
+          const repairedNextDateStr = (!rev.lastReviewDate && rev.nextDateStr > todayStr) ? todayStr : rev.nextDateStr;
+
+          if (
+            !rev.isCaveiraQuestion ||
+            rev.caveiraQuestionId !== qId ||
+            rev.subjectId !== subjectId ||
+            rev.customSubjectName !== customSubjectName ||
+            rev.topicName !== expectedTopicName ||
+            rev.nextDateStr !== repairedNextDateStr ||
+            !rev.questionData ||
+            rev.questionData.content !== mergedQuestionData.content
+          ) {
+            reviewsChanged = true;
+          }
+
+          repairedReviews.push({
+            ...rev,
+            caveiraQuestionId: qId,
+            isCaveiraQuestion: true,
+            subjectId,
+            customSubjectName,
+            topicName: expectedTopicName,
+            nextDateStr: repairedNextDateStr,
+            questionData: mergedQuestionData
+          });
+        }
+
+        // Agora garante que toda questão errada (!q.hit) em caveiraQuestions tenha seu card FSRS
+        const updatedCaveiraQuestions = caveiraQuestions.map(q => {
+          if (!q || !q.id) return q;
+          if (!q.hit && !seenCaveiraIds.has(q.id)) {
+            seenCaveiraIds.add(q.id);
+            reviewsChanged = true;
+            questionsChanged = true;
+
+            const { subjectId, customSubjectName } = resolveCaveiraSubject(q, subjects);
+            const topicLabel = q.topic && q.topic !== q.subject
+              ? `${customSubjectName} ➔ ${q.topic}`
+              : (q.topic || customSubjectName);
+            const noteLine = q.userNote ? `\nBizu / Anotação Tática: ${q.userNote}` : '';
+
+            repairedReviews.unshift({
+              id: 'rev_caveira_' + q.id,
+              caveiraQuestionId: q.id,
+              isCaveiraQuestion: true,
+              customSubjectName,
+              subjectId,
+              topicName: `[Caveira ${q.id}] ${topicLabel}`,
+              questionData: {
+                id: q.id,
+                content: q.content || '',
+                alternatives: q.alternatives || null,
+                userChoice: q.userChoice,
+                correctChoice: q.correctChoice,
+                subject: q.subject || customSubjectName,
+                topic: q.topic || '',
+                canonicalSubject: customSubjectName,
+                banca: q.banca,
+                ano: q.ano,
+                errorReason: q.errorReason || 'conteudo',
+                userNote: q.userNote || ''
+              },
+              notes: `Enunciado: ${q.content || ''}\nGabarito: ${q.correctChoice} (Você marcou: ${q.userChoice})\nMotivo do erro: ${q.errorReason || 'Conteúdo'}${noteLine}`,
+              nextDateStr: todayStr,
+              interval: 0,
+              stability: 0,
+              difficulty: 0,
+              lastReviewDate: null,
+              lastPerformance: 0.0
+            });
+            return { ...q, fsrsCreated: true };
+          }
+          if (!q.hit && !q.fsrsCreated && seenCaveiraIds.has(q.id)) {
+            questionsChanged = true;
+            return { ...q, fsrsCreated: true };
+          }
+          return q;
+        });
+
+        if (reviewsChanged || questionsChanged) {
+          set({
+            ...(reviewsChanged ? { reviews: repairedReviews } : {}),
+            ...(questionsChanged ? { caveiraQuestions: updatedCaveiraQuestions } : {})
+          });
+          if (questionsChanged) {
+            try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updatedCaveiraQuestions)); } catch (_) {}
+          }
+        }
       },
 
       // --- AÇÕES LÓGICAS ---

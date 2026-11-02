@@ -427,7 +427,7 @@ export default function App() {
       {/* Modais do Sistema - Renderizados via Portal para garantir z-index absoluto */}
       
       {/* 1. Modal de Avaliação de Revisão (Questão Interativa do Caveira OU Auditoria Geral) */}
-      {reviewModal && (reviewModal.isCaveiraQuestion || reviewModal.questionData) ? (
+      {reviewModal && (reviewModal.isCaveiraQuestion || reviewModal.questionData || String(reviewModal.id || '').startsWith('rev_caveira_') || String(reviewModal.topicName || '').startsWith('[Caveira')) ? (
         createPortal(
           <CaveiraReviewQuestionModal review={reviewModal} onClose={() => setReviewModal(null)} />,
           document.body

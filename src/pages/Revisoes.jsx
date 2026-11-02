@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useStore } from '../store/useStore';
 import { 
   BrainCircuit, AlertTriangle, Target as TargetIcon, Clock, Eye, EyeOff, 
@@ -10,6 +10,7 @@ export default function Revisoes() {
   const [showBacklog, setShowBacklog] = useState(false);
   const {
     reviews,
+    caveiraQuestions = [],
     reviewStats,
     subjects,
     getThermometer,
@@ -17,26 +18,61 @@ export default function Revisoes() {
     getPendingReviews,
     reviewCalendarDate,
     setReviewCalendarDate,
-    setReviewModal
+    setReviewModal,
+    syncAndRepairCaveiraReviews
   } = useStore();
+
+  useEffect(() => {
+    syncAndRepairCaveiraReviews?.();
+  }, [reviews.length, caveiraQuestions.length, syncAndRepairCaveiraReviews]);
   
   if (!reviewCalendarDate) return null; // Safety check
   const todayStr = getLocalDateStr();
   const allDueToday = getPendingReviews()
-    .sort((a, b) => a.ease - b.ease);
+    .sort((a, b) => (a.stability || 0) - (b.stability || 0));
     
-  const pendingReviews = allDueToday.slice(0, 4);
-  const backlogReviews = allDueToday.slice(4);
+  const pendingReviews = allDueToday.slice(0, 12);
+  const backlogReviews = allDueToday.slice(12);
   const backlogCount = backlogReviews.length;
   const isProcrastinating = backlogCount > 5;
 
-  const subjectsDueCounts = {};
+  const isCaveiraCard = (rev) => Boolean(
+    rev.isCaveiraQuestion ||
+    rev.questionData ||
+    String(rev.id || '').startsWith('rev_caveira_') ||
+    String(rev.topicName || '').startsWith('[Caveira')
+  );
+
+  const getReviewSubjectMeta = (rev) => {
+    const sub = subjects[rev.subjectId];
+    const caveira = isCaveiraCard(rev);
+    if (caveira) {
+      const name =
+        rev.customSubjectName ||
+        rev.questionData?.canonicalSubject ||
+        rev.questionData?.subject ||
+        sub?.name ||
+        'Questão Caveira';
+      const color = sub?.color || 'bg-purple-500/15 text-purple-400 border-purple-500/30';
+      return { id: `caveira_${name}`, name, color, isCaveira: true };
+    }
+    return {
+      id: rev.subjectId || 'geral',
+      name: sub?.name || rev.customSubjectName || 'Geral',
+      color: sub?.color || 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+      isCaveira: false
+    };
+  };
+
+  const subjectsDueMap = {};
   allDueToday.forEach(rev => {
-    subjectsDueCounts[rev.subjectId] = (subjectsDueCounts[rev.subjectId] || 0) + 1;
+    const meta = getReviewSubjectMeta(rev);
+    if (!subjectsDueMap[meta.id]) {
+      subjectsDueMap[meta.id] = { subject: meta, count: 0 };
+    }
+    subjectsDueMap[meta.id].count += 1;
   });
-  const activeReviewSubjects = Object.entries(subjectsDueCounts)
-    .map(([id, count]) => ({ subject: subjects[id], count }))
-    .filter(item => item.subject)
+  const activeReviewSubjects = Object.values(subjectsDueMap)
     .sort((a, b) => b.count - a.count);
 
   const perfReviews = reviews.filter(r => r.lastPerformance !== undefined);
@@ -127,17 +163,20 @@ export default function Revisoes() {
           
           <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 mb-6">
             {pendingReviews.map(rev => {
-              const sub = subjects[rev.subjectId];
+              const meta = getReviewSubjectMeta(rev);
               const thermo = getThermometer(rev.lastPerformance);
+              const qPreview = rev.questionData?.content
+                ? (rev.questionData.content.length > 110 ? rev.questionData.content.slice(0, 110) + '...' : rev.questionData.content)
+                : null;
               
               return (
-                <div key={rev.id} className="bg-white p-4 rounded-xl border-2 border-slate-200 shadow-sm flex flex-col justify-between hover:border-red-300 transition-colors dark:bg-slate-900 dark:border-slate-800">
+                <div key={rev.id} className="bg-white p-4 rounded-xl border-2 border-slate-200 shadow-sm flex flex-col justify-between hover:border-purple-400/60 transition-colors dark:bg-slate-900 dark:border-slate-800">
                   <div>
-                    <div className="flex justify-between items-start mb-3">
-                      <span className={`text-[11px] sm:text-[13px] font-black px-2 py-1 rounded uppercase ${sub?.color || 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
-                        {sub?.name}
+                    <div className="flex justify-between items-start gap-2 mb-3">
+                      <span className={`text-[11px] font-black px-2 py-1 rounded uppercase border leading-tight ${meta.color}`}>
+                        {meta.name}
                       </span>
-                      <div className="flex flex-col items-end gap-1">
+                      <div className="flex flex-col items-end gap-1 shrink-0">
                         <div className={`text-[11px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 ${thermo.color}`} title="Termômetro de Memória">
                           {thermo.icon} {Math.round(rev.lastPerformance * 100 || 0)}%
                         </div>
@@ -149,7 +188,12 @@ export default function Revisoes() {
                         )}
                       </div>
                     </div>
-                    <p className="text-sm font-bold text-slate-800 leading-tight mb-2 dark:text-slate-100">{rev.topicName}</p>
+                    <p className="text-sm font-bold text-slate-800 leading-tight mb-1.5 dark:text-slate-100">{rev.topicName}</p>
+                    {meta.isCaveira && qPreview && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2 mb-2.5 leading-snug">
+                        {qPreview}
+                      </p>
+                    )}
                     
                     <div className="flex items-center justify-between text-[10px] text-slate-400 font-bold bg-slate-50 p-1.5 rounded border border-slate-100 dark:bg-slate-950 dark:border-slate-800">
                       <div className="flex flex-col gap-0.5">
@@ -162,8 +206,15 @@ export default function Revisoes() {
                       </div>
                     </div>
                   </div>
-                  <button onClick={() => setReviewModal(rev)} className="mt-4 w-full py-2.5 bg-red-50 hover:bg-red-500 text-red-600 hover:text-white border border-red-200 rounded-lg text-xs font-bold transition-all shadow-sm">
-                    Fazer Questões
+                  <button
+                    onClick={() => setReviewModal(rev)}
+                    className={`mt-4 w-full py-2.5 rounded-lg text-xs font-bold transition-all shadow-sm cursor-pointer ${
+                      meta.isCaveira
+                        ? 'bg-purple-600/15 hover:bg-purple-600 text-purple-400 hover:text-white border border-purple-500/30'
+                        : 'bg-red-50 hover:bg-red-500 text-red-600 hover:text-white border border-red-200'
+                    }`}
+                  >
+                    {meta.isCaveira ? '🃏 Refazer Questão' : 'Fazer Questões'}
                   </button>
                 </div>
               );
@@ -188,15 +239,15 @@ export default function Revisoes() {
               {showBacklog && (
                 <div className="bg-white p-4 border-t border-orange-200 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3 dark:bg-slate-900">
                   {backlogReviews.map(rev => {
-                    const sub = subjects[rev.subjectId];
+                    const meta = getReviewSubjectMeta(rev);
                     return (
                       <div key={rev.id} className="p-3 border border-slate-200 rounded-lg flex justify-between items-center bg-slate-50 dark:bg-slate-950 dark:border-slate-800">
                         <div>
-                          <span className="text-[11px] font-black text-slate-500 block uppercase mb-0.5 dark:text-slate-400">{sub?.name}</span>
+                          <span className="text-[11px] font-black text-slate-500 block uppercase mb-0.5 dark:text-slate-400">{meta.name}</span>
                           <span className="text-xs font-bold text-slate-800 line-clamp-1 dark:text-slate-100">{rev.topicName}</span>
                         </div>
-                        <button onClick={() => setReviewModal(rev)} className="text-[10px] font-bold bg-orange-100 text-orange-700 hover:bg-orange-500 hover:text-white px-2 py-1.5 rounded transition-colors">
-                          Revisar
+                        <button onClick={() => setReviewModal(rev)} className="text-[10px] font-bold bg-orange-100 text-orange-700 hover:bg-orange-500 hover:text-white px-2 py-1.5 rounded transition-colors cursor-pointer">
+                          {meta.isCaveira ? 'Refazer' : 'Revisar'}
                         </button>
                       </div>
                     )

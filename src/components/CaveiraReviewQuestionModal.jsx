@@ -1,19 +1,84 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
-import { BrainCircuit, CheckCircle2, XCircle, RotateCcw, AlertTriangle, ArrowRight, BookOpen } from 'lucide-react';
+import { BrainCircuit, CheckCircle2, XCircle, ArrowRight, Calendar } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 export default function CaveiraReviewQuestionModal({ review, onClose }) {
-  const { handleReviewSubmit, useStore: store } = useStore();
-  const qData = review.questionData || {};
+  const { handleReviewSubmit, caveiraQuestions = [], updateFsrsCard, getLocalDateStr, getTodayDate } = useStore();
+
+  // Resolve dados completos da questão mesmo se o cartão for antigo (pré-migração)
+  const qData = useMemo(() => {
+    const idMatch =
+      String(review.caveiraQuestionId || '').match(/Q\d+/i) ||
+      String(review.questionData?.id || '').match(/Q\d+/i) ||
+      String(review.id || '').match(/Q\d+/i) ||
+      String(review.topicName || '').match(/Q\d+/i);
+    const qId = idMatch ? idMatch[0].toUpperCase() : (review.questionData?.id || review.caveiraQuestionId || review.id);
+
+    const storeMatch = caveiraQuestions.find(q => String(q.id || '').toUpperCase() === qId);
+
+    let parsedContent = '';
+    let parsedCorrect = 'C';
+    let parsedUser = 'E';
+    if (review.notes) {
+      const enunMatch = review.notes.match(/Enunciado:\s*([\s\S]*?)(?:\nGabarito:|$)/i);
+      if (enunMatch) parsedContent = enunMatch[1].trim();
+      const gabMatch = review.notes.match(/Gabarito:\s*([A-E])\s*\(Voc[eê] marcou:\s*([A-E])\)/i);
+      if (gabMatch) {
+        parsedCorrect = gabMatch[1].toUpperCase();
+        parsedUser = gabMatch[2].toUpperCase();
+      }
+    }
+
+    const rawTitleClean = String(review.topicName || '').replace(/^\[Caveira\s*Q?\d*\]\s*/i, '').trim();
+    const titleParts = rawTitleClean.split(/\s*(?:->|➔)\s*/);
+    const fallbackSub = review.customSubjectName || titleParts[0] || 'Questão Caveira';
+    const fallbackTop = titleParts.slice(1).join(' ➔ ') || fallbackSub;
+
+    return {
+      id: qId,
+      content: storeMatch?.content || review.questionData?.content || parsedContent || rawTitleClean,
+      alternatives: storeMatch?.alternatives || review.questionData?.alternatives || null,
+      userChoice: storeMatch?.userChoice || review.questionData?.userChoice || parsedUser,
+      correctChoice: storeMatch?.correctChoice || review.questionData?.correctChoice || parsedCorrect,
+      subject: storeMatch?.subject || review.questionData?.subject || fallbackSub,
+      topic: storeMatch?.topic || review.questionData?.topic || fallbackTop,
+      canonicalSubject: review.customSubjectName || storeMatch?.canonicalSubject || review.questionData?.canonicalSubject || fallbackSub,
+      banca: storeMatch?.banca || review.questionData?.banca || '',
+      ano: storeMatch?.ano || review.questionData?.ano || '',
+      userNote: storeMatch?.userNote || review.questionData?.userNote || ''
+    };
+  }, [review, caveiraQuestions]);
   
   // Opção marcada nesta rodada de revisão
   const [selectedChoice, setSelectedChoice] = useState(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
 
-  const isCebraspeStyle = !qData.alternatives || qData.alternatives.length === 0;
   const correctChoice = (qData.correctChoice || 'C').toUpperCase();
+  const userPrevChoice = (qData.userChoice || '').toUpperCase();
+  const hasFullAlternatives = Array.isArray(qData.alternatives) && qData.alternatives.length > 0;
+  const isMultipleChoiceLetters =
+    hasFullAlternatives ||
+    ['A', 'B', 'D'].includes(correctChoice) ||
+    ['A', 'B', 'D'].includes(userPrevChoice) ||
+    (qData.banca && !qData.banca.toUpperCase().includes('CEBRASPE') && !qData.banca.toUpperCase().includes('CESPE'));
+  const isCebraspeStyle = !isMultipleChoiceLetters;
   const isHit = selectedChoice === correctChoice;
+
+  // Simulação do agendamento FSRS conforme acerto ou erro
+  const fsrsPreview = useMemo(() => {
+    if (!hasSubmitted) return null;
+    const rating = isHit ? 4 : 1;
+    const pred = updateFsrsCard(review, rating);
+    const nextDate = getTodayDate ? getTodayDate() : new Date();
+    nextDate.setDate(nextDate.getDate() + pred.nextInterval);
+    const nextDateStr = getLocalDateStr(nextDate);
+    const [y, m, d] = nextDateStr.split('-');
+    return {
+      ...pred,
+      formattedDate: `${d}/${m}/${y}`
+    };
+  }, [hasSubmitted, isHit, review, updateFsrsCard, getLocalDateStr, getTodayDate]);
 
   const handleSubmitAnswer = () => {
     if (!selectedChoice) return;
@@ -21,7 +86,7 @@ export default function CaveiraReviewQuestionModal({ review, onClose }) {
   };
 
   const handleFinishReview = () => {
-    // 1.0 para acerto no FSRS (nota 4 Easy ou 3 Good), 0.0 para erro (nota 1 Again)
+    // 1.0 para acerto no FSRS (nota 4 Easy), 0.0 para erro (nota 1 Again)
     const performance = isHit ? 1.0 : 0.0;
     handleReviewSubmit(review.id, performance);
     onClose();
@@ -108,8 +173,8 @@ export default function CaveiraReviewQuestionModal({ review, onClose }) {
                 );
               })}
             </div>
-          ) : (
-            /* Estilo Múltipla Escolha (A, B, C, D, E) */
+          ) : hasFullAlternatives ? (
+            /* Estilo Múltipla Escolha com Texto Completo (A, B, C, D, E) */
             <div className="space-y-2">
               {qData.alternatives.map(alt => {
                 const isSelected = selectedChoice === alt.letter;
@@ -136,6 +201,35 @@ export default function CaveiraReviewQuestionModal({ review, onClose }) {
                       {alt.letter}
                     </span>
                     <span className="leading-snug">{alt.text || alt.label || alt.letter}</span>
+                  </button>
+                );
+              })}
+            </div>
+          ) : (
+            /* Estilo Múltipla Escolha (Botões A, B, C, D, E para questões sem texto das alternativas salvo) */
+            <div className="grid grid-cols-5 gap-2.5">
+              {['A', 'B', 'C', 'D', 'E'].map(letter => {
+                const isSelected = selectedChoice === letter;
+                let btnStyle = 'border-slate-200 dark:border-[#383D43] bg-slate-50 dark:bg-[#26292C] hover:border-slate-400 text-slate-700 dark:text-[#E2E8F0]';
+
+                if (hasSubmitted) {
+                  if (letter === correctChoice) {
+                    btnStyle = 'border-emerald-500 bg-emerald-500/20 text-emerald-300 ring-2 ring-emerald-500/40';
+                  } else if (isSelected && !isHit) {
+                    btnStyle = 'border-red-500 bg-red-500/20 text-red-300 ring-2 ring-red-500/40';
+                  }
+                } else if (isSelected) {
+                  btnStyle = 'border-purple-500 bg-purple-500/20 text-white ring-2 ring-purple-500/40';
+                }
+
+                return (
+                  <button
+                    key={letter}
+                    disabled={hasSubmitted}
+                    onClick={() => setSelectedChoice(letter)}
+                    className={`p-3.5 rounded-xl border text-center font-mono font-black text-sm transition-all cursor-pointer flex flex-col items-center justify-center gap-1 ${btnStyle}`}
+                  >
+                    <span>{letter}</span>
                   </button>
                 );
               })}
@@ -169,11 +263,34 @@ export default function CaveiraReviewQuestionModal({ review, onClose }) {
                 )}
               </div>
               <p className="text-xs leading-relaxed text-slate-300">
-                Gabarito oficial: <strong>{correctChoice}</strong>.
+                Gabarito oficial: <strong>{correctChoice}</strong> (Você marcou hoje: <strong>{selectedChoice}</strong>).
                 {isHit
-                  ? ' O FSRS calculou um aumento de estabilidade. Esta questão será espaçada para os próximos dias.'
-                  : ' O FSRS resetou a estabilidade para esta questão. Ela voltará para a fila de amanhã para fixação.'}
+                  ? ' O FSRS calculou um aumento de estabilidade e espaçou sua próxima revisão.'
+                  : ' O FSRS reajustou a estabilidade para fixação prioritária.'}
               </p>
+
+              {fsrsPreview && (
+                <div className="mt-3 p-3 rounded-xl bg-black/25 border border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs">
+                  <div className="flex items-center gap-4">
+                    <div>
+                      <span className="text-[10px] uppercase text-slate-400 block font-bold">Dificuldade</span>
+                      <span className="font-black text-white">{fsrsPreview.difficulty.toFixed(1)}</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase text-slate-400 block font-bold">Estabilidade</span>
+                      <span className="font-black text-emerald-400">{fsrsPreview.stability.toFixed(1)}d</span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] uppercase text-slate-400 block font-bold">Novo Intervalo</span>
+                      <span className="font-black text-blue-400">+{fsrsPreview.nextInterval} {fsrsPreview.nextInterval === 1 ? 'dia' : 'dias'}</span>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-1.5 text-slate-200 font-bold bg-white/5 px-2.5 py-1.5 rounded-lg">
+                    <Calendar className="w-3.5 h-3.5 text-purple-400" />
+                    <span>Próxima revisão: <strong>{fsrsPreview.formattedDate}</strong></span>
+                  </div>
+                </div>
+              )}
 
               {qData.userNote && (
                 <div className="mt-3 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-200">
