@@ -319,15 +319,17 @@ export const useStore = create(
               try { localStorage.setItem('prf_caveira_cloud_v3_cleaned', 'true'); } catch (_) {}
             }
             const mergedMap = new Map();
-            currentCaveira.forEach(q => mergedMap.set(q.id, q));
-            remoteCaveira.forEach(q => mergedMap.set(q.id, { ...(mergedMap.get(q.id) || {}), ...q }));
+            remoteCaveira.forEach(q => { if (q && q.id) mergedMap.set(q.id, q); });
+            currentCaveira.forEach(q => { if (q && q.id) mergedMap.set(q.id, { ...(mergedMap.get(q.id) || {}), ...q }); });
             cleanData.caveiraQuestions = Array.from(mergedMap.values());
+            try { localStorage.setItem('prf_caveira_questions', JSON.stringify(cleanData.caveiraQuestions)); } catch (_) {}
             
             set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false, lastSyncedAt: remoteUpdatedAt });
             get().checkAndResetWeekly();
             get().checkAndAdvanceSeason();
             get().checkAndResetDailyMissions();
             get().syncAndRepairCaveiraReviews?.();
+            try { window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA' }, '*'); } catch (_) {}
             return true;
           }
           console.log('ℹ️ [Nuvem] Perfil pronto para uso.');
@@ -978,21 +980,10 @@ export const useStore = create(
         const { caveiraQuestions = [], addXP, setCoins } = get();
         
         const map = new Map();
-        const realContentSet = new Set();
-
-        // Identifica conteúdos que possuem disciplina real (para remover duplicatas órfãs de sub-seções)
-        [...caveiraQuestions, ...questionsList].forEach(q => {
-          if (q && q.content && q.subject && q.subject !== 'Geral') {
-            realContentSet.add(q.content.slice(0, 80));
-          }
-        });
 
         // Preserva existentes válidos
         caveiraQuestions.forEach(q => {
           if (!q || !q.id) return;
-          if (q.subject === 'Geral' && q.topic === 'Geral' && realContentSet.has((q.content || '').slice(0, 80))) {
-            return;
-          }
           map.set(q.id, q);
         });
         
@@ -1001,35 +992,41 @@ export const useStore = create(
 
         questionsList.forEach(q => {
           if (!q || !q.id) return;
-          if (q.subject === 'Geral' && q.topic === 'Geral' && realContentSet.has((q.content || '').slice(0, 80))) {
-            return;
-          }
           const prev = map.get(q.id);
           if (!prev) {
             newCount++;
             map.set(q.id, q);
           } else {
-            if (prev.confidence !== q.confidence || prev.errorReason !== q.errorReason || prev.hit !== q.hit || (!prev.alternatives && q.alternatives)) {
+            if (
+              prev.confidence !== q.confidence ||
+              prev.errorReason !== q.errorReason ||
+              prev.hit !== q.hit ||
+              prev.subject !== q.subject ||
+              prev.topic !== q.topic ||
+              prev.userChoice !== q.userChoice ||
+              prev.correctChoice !== q.correctChoice ||
+              (!prev.alternatives && q.alternatives)
+            ) {
               updatedExisting = true;
             }
             map.set(q.id, { ...prev, ...q });
           }
         });
 
+        const merged = Array.from(map.values()).sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
+
         if (newCount === 0 && !updatedExisting && map.size === caveiraQuestions.length) {
           get().syncAndRepairCaveiraReviews?.();
           if (!silent) toast.info('As questões já estavam atualizadas no QG.');
           return 0;
         }
-
-        const merged = Array.from(map.values()).sort((a, b) => new Date(b.timestamp || 0) - new Date(a.timestamp || 0));
         
         if (newCount > 0) {
           addXP(newCount * 15, `${newCount} Questões Caveira Sincronizadas`);
           setCoins(c => c + Math.min(100, newCount * 2));
           toast.success(`🎯 ${newCount} novas questões do Projeto Caveira sincronizadas!`);
-        } else if (!silent && !updatedExisting) {
-          toast.info('As questões já estavam atualizadas no QG.');
+        } else if (!silent) {
+          toast.success('🔄 Questões do Projeto Caveira sincronizadas com sucesso!');
         }
 
         set({ caveiraQuestions: merged });

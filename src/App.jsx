@@ -184,6 +184,45 @@ export default function App() {
     };
   }, [setSession, loadFromCloud]);
 
+  // --- PONTE GLOBAL DE SINCRONIZAÇÃO COM A EXTENSÃO CAVEIRA (ATIVA EM TODAS AS ABAS DO SITE) ---
+  useEffect(() => {
+    const handleExtensionMessage = (event) => {
+      if (event.data && event.data.source === 'QG_CAVEIRA_EXTENSION') {
+        if (event.data.type === 'SYNC_UPDATE' && event.data.payload) {
+          const { newQuestion, questions } = event.data.payload;
+          if (newQuestion) {
+            useStore.getState().addCaveiraQuestion(newQuestion);
+          } else if (Array.isArray(questions) && questions.length > 0) {
+            useStore.getState().importCaveiraQuestions(questions, true);
+          }
+        }
+        if (event.data.type === 'CAVEIRA_DATA_RESPONSE' && event.data.payload) {
+          const { questions } = event.data.payload;
+          if (Array.isArray(questions) && questions.length > 0) {
+            useStore.getState().importCaveiraQuestions(questions, true);
+          }
+        }
+      }
+    };
+
+    const requestExtensionSync = () => {
+      try {
+        window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA' }, '*');
+      } catch (_) {}
+    };
+
+    window.addEventListener('message', handleExtensionMessage);
+    window.addEventListener('focus', requestExtensionSync);
+    requestExtensionSync();
+    const syncTimer = setTimeout(requestExtensionSync, 1500);
+
+    return () => {
+      window.removeEventListener('message', handleExtensionMessage);
+      window.removeEventListener('focus', requestExtensionSync);
+      clearTimeout(syncTimer);
+    };
+  }, [session]);
+
   // --- MONITOR DE PROMOÇÃO ---
   useEffect(() => {
     const currentP = useStore.getState().getCurrentPatente();

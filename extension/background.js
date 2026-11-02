@@ -3,6 +3,59 @@
 const STORAGE_KEY = 'qg_caveira_questions';
 const SESSION_KEY = 'qg_caveira_session';
 
+// Reinjetar scripts automaticamente em abas já abertas ao instalar/atualizar a extensão
+async function reinjectOpenTabs() {
+  if (!chrome.scripting || !chrome.tabs) return;
+  try {
+    const qgTabs = await chrome.tabs.query({ url: ['https://blk002.github.io/*', 'http://localhost:*/*'] });
+    for (const tab of qgTabs) {
+      if (tab.id) {
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['qg_bridge.js']
+        }).catch(() => {});
+      }
+    }
+
+    const caveiraTabs = await chrome.tabs.query({
+      url: [
+        '*://*.projetocaveira.com.br/*',
+        '*://projetocaveira.com.br/*',
+        '*://*.caveira.com.br/*',
+        '*://caveira.com.br/*'
+      ]
+    });
+    for (const tab of caveiraTabs) {
+      if (tab.id) {
+        chrome.scripting.insertCSS({
+          target: { tabId: tab.id },
+          files: ['content.css']
+        }).catch(() => {});
+        chrome.scripting.executeScript({
+          target: { tabId: tab.id },
+          files: ['content.js']
+        }).catch(() => {});
+      }
+    }
+  } catch (_) {}
+}
+
+// Notifica todas as abas abertas do QG da PRF imediatamente quando novas questões são salvas
+async function broadcastToQgTabs(questions, session) {
+  if (!chrome.tabs) return;
+  try {
+    const qgTabs = await chrome.tabs.query({ url: ['https://blk002.github.io/*', 'http://localhost:*/*'] });
+    for (const tab of qgTabs) {
+      if (tab.id) {
+        chrome.tabs.sendMessage(tab.id, {
+          type: 'PUSH_CAVEIRA_SYNC',
+          payload: { questions, session }
+        }).catch(() => {});
+      }
+    }
+  } catch (_) {}
+}
+
 // Inicializar armazenamento
 chrome.runtime.onInstalled.addListener(() => {
   chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
@@ -13,19 +66,28 @@ chrome.runtime.onInstalled.addListener(() => {
       chrome.storage.local.set({ [SESSION_KEY]: { hits: 0, errors: 0, total: 0, wasExplicitlyReset: false } });
     }
   });
+  reinjectOpenTabs();
 });
 
-// Atualiza o badge do ícone da extensão sempre que a sessão mudar no storage
+// Atualiza o badge do ícone da extensão e faz push para abas do QG sempre que o storage mudar
 chrome.storage.onChanged.addListener((changes, area) => {
-  if (area === 'local' && changes[SESSION_KEY]) {
-    const session = changes[SESSION_KEY].newValue || { hits: 0, errors: 0, total: 0 };
-    const total = Number(session.total) || 0;
-    const net = (Number(session.hits) || 0) - (Number(session.errors) || 0);
-    if (total > 0) {
-      chrome.action.setBadgeText({ text: `${total}` });
-      chrome.action.setBadgeBackgroundColor({ color: net >= 0 ? '#10b981' : '#ef4444' });
-    } else {
-      chrome.action.setBadgeText({ text: '' });
+  if (area === 'local') {
+    if (changes[SESSION_KEY]) {
+      const session = changes[SESSION_KEY].newValue || { hits: 0, errors: 0, total: 0 };
+      const total = Number(session.total) || 0;
+      const net = (Number(session.hits) || 0) - (Number(session.errors) || 0);
+      if (total > 0) {
+        chrome.action.setBadgeText({ text: `${total}` });
+        chrome.action.setBadgeBackgroundColor({ color: net >= 0 ? '#10b981' : '#ef4444' });
+      } else {
+        chrome.action.setBadgeText({ text: '' });
+      }
+    }
+
+    if (changes[STORAGE_KEY]) {
+      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
+        broadcastToQgTabs(res[STORAGE_KEY] || [], res[SESSION_KEY] || { hits: 0, errors: 0, total: 0 });
+      });
     }
   }
 });
@@ -40,6 +102,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (total > 0) {
       chrome.action.setBadgeBackgroundColor({ color: net >= 0 ? '#10b981' : '#ef4444' });
     }
+    chrome.storage.local.get([STORAGE_KEY], (res) => {
+      broadcastToQgTabs(res[STORAGE_KEY] || [], session);
+    });
     sendResponse({ success: true });
     return true;
   }

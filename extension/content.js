@@ -362,28 +362,29 @@
     // Regra 1: O box de estatísticas com feedback oficial de resposta
     const statsBox = card.querySelector('.stats-box');
     if (statsBox) {
-      const text = statsBox.textContent || '';
+      const text = (statsBox.textContent || '').toUpperCase();
       if (
         Boolean(statsBox.querySelector('.bg-correct-1, .bg-incorrect-1, .title-stats')) ||
         text.includes('PARABÉNS') ||
         text.includes('ERROU') ||
-        text.includes('Resposta correta')
+        text.includes('VOCÊ ACERTOU') ||
+        text.includes('VOCÊ ERROU') ||
+        text.includes('RESPOSTA CORRETA')
       ) {
         return true;
       }
     }
 
-    // Regra 2: Alternativas marcadas com a cor verde ou vermelha do gabarito (reveladas)
+    // Regra 2: Alternativas marcadas com a cor verde ou vermelha do gabarito (dentro de .question-alternatives ou .alternative)
+    const altScope = card.querySelector('.question-alternatives') || card;
     const hasColoredAlternative = Boolean(
-      card.querySelector('.alternative-letter.bg-correct-1, .alternative-letter.bg-correct-2, .alternative-letter.bg-incorrect-1, .alternative-letter.bg-incorrect-2')
+      altScope.querySelector(
+        '.alternative.bg-correct-1, .alternative.bg-correct-2, .alternative.bg-incorrect-1, .alternative.bg-incorrect-2, ' +
+        '.alternative-letter.bg-correct-1, .alternative-letter.bg-correct-2, .alternative-letter.bg-incorrect-1, .alternative-letter.bg-incorrect-2, ' +
+        '.alternative [class*="bg-correct"], .alternative [class*="bg-incorrect"]'
+      )
     );
     if (hasColoredAlternative) return true;
-
-    // Se o botão de responder ainda existe e está habilitado para clique, a questão NÃO foi respondida!
-    const answerBtn = card.querySelector('button.light-mode-answer-btn, .q-btn');
-    if (answerBtn && !answerBtn.disabled && answerBtn.textContent.includes('RESPONDER')) {
-      return false;
-    }
 
     return false;
   }
@@ -537,32 +538,45 @@
     const statsBox = card.querySelector('.stats-box');
     const statsText = statsBox ? statsBox.textContent : '';
 
-    const isCorrect = Boolean(statsBox?.querySelector('.bg-correct-1')) ||
-                      statsText.includes('PARABÉNS') ||
-                      statsText.includes('acertou');
+    let correctLetterFromDom = null;
+    let incorrectLetterFromDom = null;
+    const altScope = card.querySelector('.question-alternatives') || card;
+    const altItems = altScope.querySelectorAll('.alternative');
 
-    let markedLetter = null;
-    const letterEls = card.querySelectorAll('.alternative-letter');
-    letterEls.forEach(letterEl => {
-      const letter = letterEl.textContent.trim();
+    altItems.forEach(altEl => {
+      const letterEl = altEl.querySelector('.alternative-letter') || altEl;
+      const letter = (altEl.querySelector('.alternative-letter')?.textContent || '').trim().toUpperCase();
       if (!letter || letter.length > 2) return;
-      if (
-        letterEl.classList.contains('bg-correct-2') ||
-        letterEl.classList.contains('bg-correct-1') ||
-        letterEl.classList.contains('bg-incorrect-2') ||
-        letterEl.classList.contains('bg-incorrect-1')
-      ) {
-        markedLetter = letter;
+
+      const combinedClasses = `${altEl.className || ''} ${letterEl.className || ''}`;
+      if (combinedClasses.includes('bg-incorrect-1') || combinedClasses.includes('bg-incorrect-2')) {
+        incorrectLetterFromDom = letter;
+      } else if (combinedClasses.includes('bg-correct-1') || combinedClasses.includes('bg-correct-2')) {
+        correctLetterFromDom = letter;
       }
     });
 
-    const userChoice = markedLetter || lastUserClickedChoice || 'C';
-    let correctChoice = userChoice;
+    const isCorrect = incorrectLetterFromDom
+      ? false
+      : (
+          Boolean(statsBox?.querySelector('.bg-correct-1')) ||
+          statsText.toUpperCase().includes('PARABÉNS') ||
+          statsText.toLowerCase().includes('acertou') ||
+          (Boolean(correctLetterFromDom) && !statsText.toUpperCase().includes('ERROU'))
+        );
+
+    const userChoice = isCorrect
+      ? (correctLetterFromDom || lastUserClickedChoice || 'C')
+      : (incorrectLetterFromDom || lastUserClickedChoice || 'C');
+
+    let correctChoice = correctLetterFromDom || userChoice;
 
     if (!isCorrect) {
       const ansMatch = statsText.match(/Resposta correta:\s*([A-E])/i);
       if (ansMatch) {
         correctChoice = ansMatch[1].toUpperCase();
+      } else if (correctLetterFromDom) {
+        correctChoice = correctLetterFromDom;
       } else {
         correctChoice = userChoice === 'C' ? 'E' : 'C';
       }
@@ -815,9 +829,17 @@
       const btn = e.target.closest('button, .q-btn, a');
       if (btn) {
         const text = (btn.textContent || '').trim();
-        if (text.includes('Responder') || btn.classList.contains('light-mode-answer-btn') || btn.classList.contains('bg-primary') || btn.getAttribute('aria-label')?.includes('Responder')) {
+        const textUpper = text.toUpperCase();
+        if (
+          textUpper.includes('RESPONDER') ||
+          btn.classList.contains('light-mode-answer-btn') ||
+          btn.classList.contains('bg-primary') ||
+          (btn.getAttribute('aria-label') || '').toUpperCase().includes('RESPONDER')
+        ) {
           const targetQId = clickedCardQId || currentQuestionId;
           if (targetQId) {
+            preAnsweredOnLoad.delete(targetQId);
+            processedInSession.delete(targetQId);
             pendingAnswerQIds.add(targetQId);
           }
           // Varreduras rápidas e estendidas para cobrir qualquer atraso de rede da API do Caveira
@@ -825,8 +847,8 @@
         }
 
         if (
-          text.includes('Próxima') ||
-          text.includes('Avançar') ||
+          textUpper.includes('PRÓXIMA') ||
+          textUpper.includes('AVANÇAR') ||
           btn.querySelector('.material-icons')?.textContent?.includes('chevron_right') ||
           btn.querySelector('.material-icons')?.textContent?.includes('navigate_next')
         ) {
@@ -839,6 +861,8 @@
     // 3. Teclado (Enter, Setas, PageDown/PageUp)
     document.addEventListener('keydown', (e) => {
       if (e.key === 'Enter' && currentQuestionId) {
+        preAnsweredOnLoad.delete(currentQuestionId);
+        processedInSession.delete(currentQuestionId);
         pendingAnswerQIds.add(currentQuestionId);
         setTimeout(scanCards, 80);
         setTimeout(scanCards, 350);
