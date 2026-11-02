@@ -1,27 +1,7 @@
-import React, { useState, useMemo } from 'react';
-import { useStore } from '../store/useStore';
-import { BrainCircuit, CheckCircle2, XCircle, ArrowRight, Calendar } from 'lucide-react';
+import React, { useState, useMemo, useEffect } from 'react';
+import { useStore, cleanAlternativeText } from '../store/useStore';
+import { BrainCircuit, CheckCircle2, XCircle, ArrowRight, Calendar, Save } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
-
-export function cleanAlternativeText(rawText, letter) {
-  if (!rawText || typeof rawText !== 'string') return '';
-  let clean = rawText.trim();
-  
-  // 1. Remove letra da alternativa duplicada no início: "A)", "A -", "A.", "(A)", "A "
-  const letterPrefixRegex = new RegExp(`^\\(?\\s*${letter || '[A-E]'}\\s*[\\).\\-–—:]?\\s+`, 'i');
-  clean = clean.replace(letterPrefixRegex, '').trim();
-
-  // 2. Remove porcentagem de estatística grudada no início (ex: "0%3.400 registros.", "0%10.", "0% 3.400", "15% 10.", etc.)
-  // Não remove se a alternativa inteira for APENAS uma porcentagem (ex: "10%" ou "15,5%")
-  const isOnlyPercentage = /^\d+(?:[.,]\d+)?\s*%\s*$/.test(clean);
-  if (!isOnlyPercentage) {
-    clean = clean.replace(/^\s*\d{1,3}(?:[.,]\d+)?\s*%\s*/, '').trim();
-    // Também remove se houver porcentagem de estatística solta no final (ex: "3.400 registros. 0%")
-    clean = clean.replace(/\s*\d{1,3}(?:[.,]\d+)?\s*%\s*$/, '').trim();
-  }
-
-  return clean || rawText;
-}
 
 const KNOWN_CAVEIRA_ALTERNATIVES = {
   Q111903: [
@@ -41,7 +21,7 @@ const KNOWN_CAVEIRA_ALTERNATIVES = {
 };
 
 export default function CaveiraReviewQuestionModal({ review, onClose, inline = false, onCompleted }) {
-  const { handleReviewSubmit, caveiraQuestions = [], updateFsrsCard, getLocalDateStr, getTodayDate } = useStore();
+  const { handleReviewSubmit, caveiraQuestions = [], updateCaveiraQuestion, updateFsrsCard, getLocalDateStr, getTodayDate } = useStore();
 
   // Resolve dados completos da questão mesmo se o cartão for antigo (pré-migração)
   const qData = useMemo(() => {
@@ -98,6 +78,8 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
   // Opção marcada nesta rodada de revisão
   const [selectedChoice, setSelectedChoice] = useState(null);
   const [hasSubmitted, setHasSubmitted] = useState(false);
+  const [isEditingBizu, setIsEditingBizu] = useState(false);
+  const [bizuDraft, setBizuDraft] = useState('');
 
   const correctChoice = (qData.correctChoice || 'C').toUpperCase();
   const userPrevChoice = (qData.userChoice || '').toUpperCase();
@@ -138,6 +120,41 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
     handleReviewSubmit(review.id, performance);
     if (onCompleted) onCompleted();
     if (onClose) onClose();
+  };
+
+  // Atalhos de teclado (A-E / C-E para selecionar, Enter para confirmar/avançar)
+  useEffect(() => {
+    const handleKeyDown = (e) => {
+      if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
+      const key = e.key.toUpperCase();
+      if (!hasSubmitted) {
+        if (isCebraspeStyle && (key === 'C' || key === 'E')) {
+          e.preventDefault();
+          setSelectedChoice(key);
+        } else if (!isCebraspeStyle && ['A', 'B', 'C', 'D', 'E'].includes(key)) {
+          e.preventDefault();
+          setSelectedChoice(key);
+        } else if (e.key === 'Enter' && selectedChoice) {
+          e.preventDefault();
+          setHasSubmitted(true);
+        }
+      } else if (e.key === 'Enter') {
+        e.preventDefault();
+        const performance = isHit ? 1.0 : 0.0;
+        handleReviewSubmit(review.id, performance);
+        if (onCompleted) onCompleted();
+        if (onClose) onClose();
+      }
+    };
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [hasSubmitted, isCebraspeStyle, selectedChoice, isHit, review.id, handleReviewSubmit, onCompleted, onClose]);
+
+  const handleSaveBizu = () => {
+    if (qData.id) {
+      updateCaveiraQuestion(qData.id, { userNote: bizuDraft.trim() });
+    }
+    setIsEditingBizu(false);
   };
 
   const cardInner = (
@@ -343,9 +360,41 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
                 </div>
               )}
 
-              {qData.userNote && (
-                <div className="mt-3 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-200">
-                  💡 <strong>Seu Bizu Tático:</strong> {qData.userNote}
+              {!isEditingBizu ? (
+                <div className="mt-3 p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs text-amber-200 flex items-center justify-between gap-2">
+                  <span>
+                    💡 <strong>Seu Bizu Tático:</strong>{' '}
+                    {qData.userNote || <em className="opacity-70">Nenhum bizu salvo nesta questão.</em>}
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setBizuDraft(qData.userNote || '');
+                      setIsEditingBizu(true);
+                    }}
+                    className="text-[11px] font-bold uppercase tracking-wider text-amber-300 hover:text-white underline shrink-0 cursor-pointer"
+                  >
+                    {qData.userNote ? 'Editar Bizu' : '+ Adicionar Bizu'}
+                  </button>
+                </div>
+              ) : (
+                <div className="mt-3 flex items-center gap-2">
+                  <input
+                    type="text"
+                    autoFocus
+                    value={bizuDraft}
+                    onChange={(e) => setBizuDraft(e.target.value)}
+                    onKeyDown={(e) => e.key === 'Enter' && handleSaveBizu()}
+                    placeholder="Anote a pegadinha ou artigo da lei para a próxima revisão..."
+                    className="flex-1 bg-black/30 border border-amber-500/40 rounded-xl px-3 py-2 text-xs text-white outline-none"
+                  />
+                  <button
+                    type="button"
+                    onClick={handleSaveBizu}
+                    className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase px-3 py-2 rounded-xl flex items-center gap-1 cursor-pointer"
+                  >
+                    <Save className="w-3.5 h-3.5" /> Salvar
+                  </button>
                 </div>
               )}
             </motion.div>

@@ -1066,6 +1066,7 @@ export const useStore = create(
         const filteredReviews = reviews.filter(r => !(r.caveiraQuestionId === id || String(r.id || '').includes(id) || String(r.topicName || '').includes(id)));
         set({ caveiraQuestions: updated, reviews: filteredReviews });
         try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updated)); } catch (_) {}
+        try { window.postMessage({ source: 'QG_WEB_APP', type: 'DELETE_CAVEIRA_QUESTION', payload: { id } }, '*'); } catch (_) {}
         toast.success('Questão removida do histórico.');
       },
 

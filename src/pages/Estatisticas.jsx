@@ -131,6 +131,49 @@ export default function Estatisticas() {
       }
     });
 
+    // Inclui também cartões FSRS gerados pelo Projeto Caveira (agrupados por disciplina canônica)
+    const caveiraRevs = reviews.filter(r =>
+      r.isCaveiraQuestion || r.questionData || String(r.id || '').startsWith('rev_caveira_') || String(r.topicName || '').startsWith('[Caveira')
+    );
+    const caveiraBySub = {};
+    caveiraRevs.forEach(r => {
+      const subName = r.customSubjectName || r.questionData?.canonicalSubject || r.questionData?.subject || 'Questões Caveira';
+      if (!caveiraBySub[subName]) caveiraBySub[subName] = [];
+      caveiraBySub[subName].push(r);
+    });
+
+    Object.entries(caveiraBySub).forEach(([subName, revList]) => {
+      const total = revList.length;
+      const novos = revList.filter(r => r.lastReviewDate === null).length;
+      const bom = revList.filter(r => r.lastReviewDate !== null && r.lastPerformance >= 0.75).length;
+      const dificil = revList.filter(r => r.lastReviewDate !== null && r.lastPerformance < 0.75).length;
+      const reviewedCount = total - novos;
+      const accuracy = reviewedCount > 0 ? Math.round((bom / reviewedCount) * 100) : 0;
+      const avgStability = total > 0 ? parseFloat((revList.reduce((acc, r) => acc + (r.stability || 0), 0) / total).toFixed(1)) : 0;
+
+      result.push({
+        id: 'caveira_audit_' + subName,
+        name: `💀 ${subName} (Caveira)`,
+        color: 'bg-purple-500/15 text-purple-400 border border-purple-500/30',
+        total,
+        novos,
+        bom,
+        dificil,
+        accuracy,
+        avgStability,
+        topics: revList.map(r => ({
+          id: r.id,
+          name: r.topicName,
+          total: 1,
+          novos: r.lastReviewDate === null ? 1 : 0,
+          bom: r.lastReviewDate !== null && r.lastPerformance >= 0.75 ? 1 : 0,
+          dificil: r.lastReviewDate !== null && r.lastPerformance < 0.75 ? 1 : 0,
+          accuracy: r.lastReviewDate === null ? 0 : Math.round((r.lastPerformance || 0) * 100),
+          avgStability: parseFloat((r.stability || 0).toFixed(1))
+        }))
+      });
+    });
+
     return result;
   }, [subjects, reviews]);
 

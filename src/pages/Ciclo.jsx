@@ -170,14 +170,17 @@ export default function Ciclo() {
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 relative z-10">
               {pendingReviews.map(rev => {
                 const sub = subjects[rev.subjectId];
+                const isCaveira = Boolean(rev.isCaveiraQuestion || rev.questionData || String(rev.id || '').startsWith('rev_caveira_'));
+                const subName = rev.customSubjectName || rev.questionData?.canonicalSubject || sub?.name || 'Revisão FSRS';
+                const subColor = sub?.color || (isCaveira ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400');
                 const thermo = getThermometer(rev.lastPerformance);
                 
                 return (
                   <div key={rev.id} className="bg-white p-3 rounded-lg border border-red-100 shadow-sm flex flex-col justify-between hover:border-red-300 transition-colors dark:bg-slate-900">
                     <div>
                       <div className="flex justify-between items-start mb-2">
-                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase truncate max-w-[60%] ${sub?.color || 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400'}`}>
-                          {sub?.name}
+                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase truncate max-w-[65%] ${subColor}`}>
+                          {subName}
                         </span>
                         <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 ${thermo.color}`} title={thermo.label}>
                           {thermo.icon} {Math.round(rev.lastPerformance * 100 || 0)}%
@@ -185,7 +188,7 @@ export default function Ciclo() {
                       </div>
                       <p className="text-xs font-bold text-slate-800 leading-tight mb-2 line-clamp-2 dark:text-slate-100" title={rev.topicName}>{rev.topicName}</p>
                     </div>
-                    <button onClick={() => { navigate('/revisoes'); setReviewModal(rev); }} className="mt-2 w-full py-1.5 bg-red-100 hover:bg-red-500 text-red-700 hover:text-white border border-red-200 rounded text-[11px] font-black transition-all flex items-center justify-center gap-1 dark:bg-red-900/30 dark:border-red-800/50 dark:text-red-400 dark:hover:bg-red-600 dark:hover:text-white">
+                    <button onClick={() => { navigate('/revisoes'); }} className="mt-2 w-full py-1.5 bg-red-100 hover:bg-red-500 text-red-700 hover:text-white border border-red-200 rounded text-[11px] font-black transition-all flex items-center justify-center gap-1 cursor-pointer dark:bg-red-900/30 dark:border-red-800/50 dark:text-red-400 dark:hover:bg-red-600 dark:hover:text-white">
                       <Activity className="w-3 h-3"/> Executar Revisão
                     </button>
                   </div>

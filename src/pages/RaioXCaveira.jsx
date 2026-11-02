@@ -508,9 +508,11 @@ export default function RaioXCaveira() {
             {caveiraQuestions.length > 0 && (
               <button
                 onClick={() => {
-                  if (confirm('Deseja limpar todo o histórico de questões do Caveira?')) {
-                    clearCaveiraQuestions();
-                  }
+                  useStore.getState().setGlobalModal({
+                    title: 'Limpar Histórico do Caveira?',
+                    message: 'Esta ação removerá todas as questões sincronizadas do Raio-X Caveira e seus respectivos cartões FSRS.',
+                    onConfirm: () => clearCaveiraQuestions()
+                  });
                 }}
                 className="p-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl border border-red-500/20 transition-all cursor-pointer"
                 title="Limpar histórico do Caveira"

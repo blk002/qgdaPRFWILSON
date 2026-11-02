@@ -18,10 +18,14 @@
     }
   }
 
-  // Limpa cache de Service Worker antigo (pré-v50) que impedia o site de carregar os novos deploys
+  // Limpa apenas caches de Service Worker legados (pré-v50) que usavam Stale-While-Revalidate no HTML
   if ('caches' in window) {
     caches.keys().then((names) => {
-      const staleCaches = names.filter(n => n.startsWith('qg-prf-cache-') && n !== 'qg-prf-cache-v50');
+      const staleCaches = names.filter(n => {
+        if (!n.startsWith('qg-prf-cache-v')) return false;
+        const ver = parseInt(n.replace('qg-prf-cache-v', ''), 10);
+        return Number.isFinite(ver) && ver < 50;
+      });
       if (staleCaches.length > 0) {
         Promise.all(staleCaches.map(n => caches.delete(n))).then(() => {
           if ('serviceWorker' in navigator) {
@@ -117,6 +121,18 @@
     if (event.data && event.data.source === 'QG_WEB_APP') {
       if (event.data.type === 'FETCH_CAVEIRA_DATA') {
         sendStoredData();
+      }
+
+      if (event.data.type === 'DELETE_CAVEIRA_QUESTION' && event.data.payload?.id) {
+        const targetId = event.data.payload.id;
+        try {
+          chrome.storage.local.get([STORAGE_KEY], (res) => {
+            if (chrome.runtime.lastError) return;
+            const list = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
+            const filtered = list.filter(q => q && q.id !== targetId);
+            chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+          });
+        } catch (_) {}
       }
 
       if (event.data.type === 'CLEAR_SESSION') {
