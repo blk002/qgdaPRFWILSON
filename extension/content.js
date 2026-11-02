@@ -358,6 +358,8 @@
 
   function isCardAnswered(card) {
     if (!card) return false;
+
+    // Regra 1: O box de estatísticas com feedback oficial de resposta
     const statsBox = card.querySelector('.stats-box');
     if (statsBox) {
       const text = statsBox.textContent || '';
@@ -365,23 +367,22 @@
         Boolean(statsBox.querySelector('.bg-correct-1, .bg-incorrect-1, .title-stats')) ||
         text.includes('PARABÉNS') ||
         text.includes('ERROU') ||
-        text.includes('acertou') ||
         text.includes('Resposta correta')
       ) {
         return true;
       }
     }
 
-    // Fallback: se qualquer alternativa já estiver pintada de verde ou vermelho no DOM
+    // Regra 2: Alternativas marcadas com a cor verde ou vermelha do gabarito (reveladas)
     const hasColoredAlternative = Boolean(
-      card.querySelector('.bg-correct-1, .bg-correct-2, .bg-incorrect-1, .bg-incorrect-2')
+      card.querySelector('.alternative-letter.bg-correct-1, .alternative-letter.bg-correct-2, .alternative-letter.bg-incorrect-1, .alternative-letter.bg-incorrect-2')
     );
     if (hasColoredAlternative) return true;
 
-    // Fallback: botão "Responder" ausente ou desabilitado com estatísticas já renderizadas
+    // Se o botão de responder ainda existe e está habilitado para clique, a questão NÃO foi respondida!
     const answerBtn = card.querySelector('button.light-mode-answer-btn, .q-btn');
-    if (answerBtn && answerBtn.disabled && (card.textContent.includes('Comentários') || card.textContent.includes('Estatísticas'))) {
-      return true;
+    if (answerBtn && !answerBtn.disabled && answerBtn.textContent.includes('RESPONDER')) {
+      return false;
     }
 
     return false;
