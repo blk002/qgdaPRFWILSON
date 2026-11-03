@@ -818,8 +818,8 @@ export default function RaioXCaveira() {
 
       {/* 2. DASHBOARD DE DESEMPENHO (LAYOUT PAINEL CAVEIRA: GRÁFICO CIRCULAR + MÉTRICAS) */}
       {(() => {
-        const hitPercent = stats.total > 0 ? ((stats.hits / stats.total) * 100).toFixed(2) : '0.00';
-        const errorPercent = stats.total > 0 ? ((stats.errors / stats.total) * 100).toFixed(2) : '0.00';
+        const hitPercent = stats?.total > 0 ? (((stats.hits || 0) / stats.total) * 100).toFixed(2) : '0.00';
+        const errorPercent = stats?.total > 0 ? (((stats.errors || 0) / stats.total) * 100).toFixed(2) : '0.00';
 
         const radius = 58;
         const circumference = 2 * Math.PI * radius; // ~364.425

@@ -529,13 +529,13 @@ export default function App() {
                     <div className="text-center">
                       <p className="text-[8px] font-black text-slate-400 uppercase">Dificuldade</p>
                       <p className="text-xs font-black text-slate-700 dark:text-slate-300">
-                        {fsrsPrediction ? fsrsPrediction.difficulty.toFixed(1) : '—'}
+                        {typeof fsrsPrediction?.difficulty === 'number' ? fsrsPrediction.difficulty.toFixed(1) : '—'}
                       </p>
                     </div>
                     <div className="text-center">
                       <p className="text-[8px] font-black text-slate-400 uppercase">Estabilidade</p>
                       <p className="text-xs font-black text-slate-700 dark:text-slate-300">
-                        {fsrsPrediction ? fsrsPrediction.stability.toFixed(1) + 'd' : '—'}
+                        {typeof fsrsPrediction?.stability === 'number' ? fsrsPrediction.stability.toFixed(1) + 'd' : '—'}
                       </p>
                     </div>
                     <div className="text-center">

@@ -536,7 +536,7 @@ export default function Revisoes() {
                 <Activity className="w-4 h-4 text-emerald-400" /> Curva de Esquecimento FSRS
               </h3>
               <span className="text-xs font-black px-2.5 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
-                Estab. Média: {avgStabilityDays.toFixed(1)}d
+                Estab. Média: {typeof avgStabilityDays === 'number' && !isNaN(avgStabilityDays) ? avgStabilityDays.toFixed(1) : '0.0'}d
               </span>
             </div>
             <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">

@@ -396,11 +396,11 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
                   <div className="flex items-center gap-4">
                     <div>
                       <span className="text-[10px] uppercase text-slate-400 block font-bold">Dificuldade</span>
-                      <span className="font-black text-white">{fsrsPreview.difficulty.toFixed(1)}</span>
+                      <span className="font-black text-white">{typeof fsrsPreview?.difficulty === 'number' ? fsrsPreview.difficulty.toFixed(1) : '—'}</span>
                     </div>
                     <div>
                       <span className="text-[10px] uppercase text-slate-400 block font-bold">Estabilidade</span>
-                      <span className="font-black text-emerald-400">{fsrsPreview.stability.toFixed(1)}d</span>
+                      <span className="font-black text-emerald-400">{typeof fsrsPreview?.stability === 'number' ? fsrsPreview.stability.toFixed(1) + 'd' : '—'}</span>
                     </div>
                     <div>
                       <span className="text-[10px] uppercase text-slate-400 block font-bold">Novo Intervalo</span>

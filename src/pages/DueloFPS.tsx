@@ -542,7 +542,7 @@ DIRETRIZES MANDATÓRIAS:
       const list = Object.values(stats.topics || {}).map((t: any) => {
         const grossRate = t.total > 0 ? Math.round((t.hits / t.total) * 100) : 0;
         const errorRate = 100 - grossRate;
-        const avgTime = t.total > 0 ? (t.totalTime / t.total).toFixed(1) : '0.0';
+        const avgTime = t.total > 0 && typeof t.totalTime === 'number' && !isNaN(t.totalTime) ? (t.totalTime / t.total).toFixed(1) : '0.0';
         return {
           ...t,
           grossRate,
@@ -690,10 +690,15 @@ DIRETRIZES MANDATÓRIAS:
         {/* ABA 1: ESTANDE 3D */}
         <div className={`absolute inset-0 z-0 ${activeTab === 'arena' ? 'block' : 'hidden'}`}>
           <TacticalRange3D
+            gameState={gameState}
+            currentQuestion={currentQuestion}
+            timeLeft={timeLeft}
+            roundNumber={roundNumber}
             isExecuting={gameState === 'executing'}
             isPlayerAlive={gameState !== 'gameover'}
             hoveredTarget={hoveredTarget}
             onShootTarget={handleShootTarget}
+            onHoverTargetChange={setHoveredTarget}
             externalShotCommand={externalShotCommand}
           />
         </div>
@@ -721,7 +726,7 @@ DIRETRIZES MANDATÓRIAS:
                 }`}
               >
                 <Clock className="w-4 h-4" />
-                <span className="tabular-nums text-base">{timeLeft.toFixed(1)}s</span>
+                <span className="tabular-nums text-base">{(typeof timeLeft === 'number' && !isNaN(timeLeft) ? timeLeft : 24.0).toFixed(1)}s</span>
               </div>
 
               {/* Categoria Atual (Alternância Estrita) */}
@@ -1153,7 +1158,7 @@ DIRETRIZES MANDATÓRIAS:
                       <div className="flex items-center justify-between font-mono text-[11px]">
                         <span className="font-bold text-zinc-200">Rodada #{item.round} · {item.question.category}</span>
                         <span className={item.survived ? 'text-emerald-400 font-bold' : 'text-red-400 font-bold'}>
-                          {item.survived ? '✓ SOBREVIVEU' : item.playerChoice === null ? '✕ TEMPO ESGOTADO' : '✕ TIRO ERRADO'} ({item.timeSpent.toFixed(1)}s)
+                          {item.survived ? '✓ SOBREVIVEU' : item.playerChoice === null ? '✕ TEMPO ESGOTADO' : '✕ TIRO ERRADO'} ({(typeof item.timeSpent === 'number' && !isNaN(item.timeSpent) ? item.timeSpent : 0).toFixed(1)}s)
                         </span>
                       </div>
                       <p className="text-zinc-200">"{item.question.statement}"</p>

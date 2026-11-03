@@ -381,6 +381,9 @@ export const TacticalRange3D: React.FC<TacticalRange3DProps> = ({
 
     const drawQuestionBoard = () => {
       const { currentQuestion: q, timeLeft: tl, roundNumber: rn } = stateRef.current;
+      const safeTl = typeof tl === 'number' && !isNaN(tl) ? tl : 24.0;
+      const safeRn = typeof rn === 'number' && !isNaN(rn) ? rn : 1;
+
       bCtx.fillStyle = '#090d16';
       bCtx.fillRect(0, 0, 1400, 620);
 
@@ -396,17 +399,17 @@ export const TacticalRange3D: React.FC<TacticalRange3DProps> = ({
       bCtx.fillStyle = accentHex;
       bCtx.font = 'bold 34px "Chakra Petch", sans-serif';
       const headerLabel = q
-        ? `RODADA #${String(rn).padStart(2, '0')}  ·  ${
+        ? `RODADA #${String(safeRn).padStart(2, '0')}  ·  ${
             q.category === 'CTB' ? 'CÓDIGO DE TRÂNSITO BRASILEIRO (CTB)' : 'RESOLUÇÃO DO CONTRAN'
           }`
         : 'SISTEMA DE TREINAMENTO TÁTICO CEBRASPE';
       bCtx.fillText(headerLabel, 48, 82);
 
-      const isDanger = tl <= 6;
+      const isDanger = safeTl <= 6;
       bCtx.fillStyle = isDanger ? '#ef4444' : '#f4f4f5';
       bCtx.font = 'bold 44px "JetBrains Mono", monospace';
       bCtx.textAlign = 'right';
-      bCtx.fillText(`${tl.toFixed(1)}s`, 1345, 85);
+      bCtx.fillText(`${safeTl.toFixed(1)}s`, 1345, 85);
       bCtx.textAlign = 'left';
 
       bCtx.fillStyle = '#f8fafc';
