@@ -3,8 +3,8 @@ import { useStore } from '../store/useStore';
 import { 
   Target, AlertTriangle, ShieldCheck, TrendingUp, Clock, 
   RefreshCw, Download, Upload, Trash2, CheckCircle2, XCircle,
-  Zap, BookOpen, ChevronDown, ChevronUp, Copy, Check,
-  BrainCircuit, Skull, Search, Filter, Layers, MessageSquarePlus, Save
+  BookOpen, ChevronDown, ChevronUp, Copy, Check,
+  BrainCircuit, Skull, Search, MessageSquarePlus, Save, Scale, Layers, Sparkles
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
@@ -114,24 +114,30 @@ export function classifyPRFCategory(subject, topic, content) {
 
 const BLOCO_METADATA = {
   'Bloco I': {
+    short: 'B-I',
     title: 'Bloco I • Básicas',
-    subtitle: 'Português, RLM, Informática, Física, Ética, Geopolítica e Inglês/Espanhol',
-    examWeight: '55 itens na PRF',
+    subtitle: 'Português, RLM, Informática, Física, Ética, Geopolítica e Língua Estrangeira',
+    examWeight: '55 itens',
     badgeClass: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
+    activeClass: 'bg-sky-600 text-white border-sky-500 shadow-sm',
     accentBorder: 'border-sky-500/40'
   },
   'Bloco II': {
+    short: 'B-II',
     title: 'Bloco II • Trânsito',
     subtitle: 'Código de Trânsito Brasileiro (CTB) e Resoluções do CONTRAN',
-    examWeight: '30 itens na PRF (Peso Crítico)',
+    examWeight: '30 itens',
     badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
+    activeClass: 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm',
     accentBorder: 'border-amber-500/40'
   },
   'Bloco III': {
+    short: 'B-III',
     title: 'Bloco III • Direito',
     subtitle: 'Penal, Processo Penal, Leg. Especial, Constitucional, Administrativo e DH',
-    examWeight: '35 itens na PRF',
+    examWeight: '35 itens',
     badgeClass: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
+    activeClass: 'bg-purple-600 text-white border-purple-500 shadow-sm',
     accentBorder: 'border-purple-500/40'
   }
 };
@@ -150,11 +156,12 @@ export default function RaioXCaveira() {
   const [selectedBloco, setSelectedBloco] = useState('all'); // 'all' | 'Bloco I' | 'Bloco II' | 'Bloco III'
   const [selectedSubject, setSelectedSubject] = useState('all');
   const [selectedTopic, setSelectedTopic] = useState('all');
-  const [filterType, setFilterType] = useState('all'); // 'all' | 'errors' | 'blindspot' | 'guesses' | 'attention' | 'theory' | 'hits'
+  const [filterType, setFilterType] = useState('all'); // 'all' | 'errors' | 'hits' | 'guesses' | 'attention' | 'theory'
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSubject, setExpandedSubject] = useState(null);
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [noteDraft, setNoteDraft] = useState('');
+  const [expandedComments, setExpandedComments] = useState({});
   const [showInstallModal, setShowInstallModal] = useState(false);
   const [showImportModal, setShowImportModal] = useState(false);
   const [importJsonText, setImportJsonText] = useState('');
@@ -226,9 +233,7 @@ export default function RaioXCaveira() {
       return {
         total: 0, hits: 0, errors: 0, netScore: 0, grossRate: 0, netRate: 0,
         avgTimeSec: 0, avgHitTimeSec: 0, avgErrorTimeSec: 0,
-        rushedErrors: 0, slowErrors: 0,
-        guessesTotal: 0, guessHits: 0, guessErrors: 0, guessesNet: 0,
-        solidMastery: 0, blindSpots: 0, insecureHits: 0, insecureErrors: 0,
+        guessesOrDoubtsTotal: 0,
         errorReasons: { conteudo: 0, atencao: 0, interpretacao: 0 }
       };
     }
@@ -251,23 +256,8 @@ export default function RaioXCaveira() {
       ? Math.round(errorList.reduce((acc, q) => acc + (q.durationSeconds || 0), 0) / errors)
       : 0;
 
-    // Erros por precipitação (< 15s) vs travamento (> 90s)
-    const rushedErrors = errorList.filter(q => (q.durationSeconds || 0) < 15).length;
-    const slowErrors = errorList.filter(q => (q.durationSeconds || 0) > 90).length;
+    const guessesOrDoubtsTotal = list.filter(q => q.confidence === 'chute' || q.confidence === 'duvida').length;
 
-    // Quadrantes de Confiança vs Resultado
-    const solidMastery = list.filter(q => q.hit && (q.confidence === 'sabia' || !q.confidence)).length;
-    const blindSpots = list.filter(q => !q.hit && q.confidence === 'sabia').length; // Sabia e Errou!
-    const insecureHits = list.filter(q => q.hit && q.confidence === 'duvida').length;
-    const insecureErrors = list.filter(q => !q.hit && (q.confidence === 'duvida' || !q.confidence)).length;
-
-    // Auditoria de Chutes
-    const guesses = list.filter(q => q.confidence === 'chute');
-    const guessHits = guesses.filter(q => q.hit).length;
-    const guessErrors = guesses.length - guessHits;
-    const guessesNet = guessHits - guessErrors;
-
-    // Causa Raiz dos Erros
     const errorReasons = {
       conteudo: errorList.filter(q => !q.errorReason || q.errorReason === 'conteudo').length,
       atencao: errorList.filter(q => q.errorReason === 'atencao').length,
@@ -277,9 +267,7 @@ export default function RaioXCaveira() {
     return {
       total, hits, errors, netScore, grossRate, netRate,
       avgTimeSec, avgHitTimeSec, avgErrorTimeSec,
-      rushedErrors, slowErrors,
-      guessesTotal: guesses.length, guessHits, guessErrors, guessesNet,
-      solidMastery, blindSpots, insecureHits, insecureErrors,
+      guessesOrDoubtsTotal,
       errorReasons
     };
   }, [blockScopedQuestions]);
@@ -291,20 +279,14 @@ export default function RaioXCaveira() {
       const total = qList.length;
       const hits = qList.filter(q => q.hit).length;
       const errors = total - hits;
-      const net = hits - errors;
-      const netRate = total > 0 ? Math.max(0, Math.round((net / total) * 100)) : 0;
       const grossRate = total > 0 ? Math.round((hits / total) * 100) : 0;
-      const avgTime = total > 0 ? Math.round(qList.reduce((a, q) => a + (q.durationSeconds || 0), 0) / total) : 0;
       return {
         blocoKey,
         ...BLOCO_METADATA[blocoKey],
         total,
         hits,
         errors,
-        net,
-        netRate,
-        grossRate,
-        avgTime
+        grossRate
       };
     });
   }, [enrichedQuestions]);
@@ -322,7 +304,6 @@ export default function RaioXCaveira() {
           total: 0,
           hits: 0,
           errors: 0,
-          blindSpots: 0,
           totalTime: 0,
           topics: {}
         };
@@ -331,36 +312,25 @@ export default function RaioXCaveira() {
       groups[subName].total += 1;
       groups[subName].totalTime += (q.durationSeconds || 0);
       if (q.hit) groups[subName].hits += 1;
-      else {
-        groups[subName].errors += 1;
-        if (q.confidence === 'sabia') groups[subName].blindSpots += 1;
-      }
+      else groups[subName].errors += 1;
 
       const topicLabel = (q.topic && q.topic !== q.subject)
-        ? `${q.subject} ➔ ${q.topic}`
+        ? q.topic
         : (q.topic || q.subject || 'Geral');
 
       if (!groups[subName].topics[topicLabel]) {
         groups[subName].topics[topicLabel] = {
           name: topicLabel,
-          shortTopic: q.topic || 'Geral',
-          rawSubject: q.subject || 'Geral',
           total: 0,
           hits: 0,
-          errors: 0,
-          blindSpots: 0,
-          questions: []
+          errors: 0
         };
       }
 
       const t = groups[subName].topics[topicLabel];
       t.total += 1;
       if (q.hit) t.hits += 1;
-      else {
-        t.errors += 1;
-        if (q.confidence === 'sabia') t.blindSpots += 1;
-      }
-      t.questions.push(q);
+      else t.errors += 1;
     });
 
     return Object.values(groups).map(g => {
@@ -386,7 +356,7 @@ export default function RaioXCaveira() {
     }).sort((a, b) => a.grossPercent - b.grossPercent || b.errors - a.errors);
   }, [blockScopedQuestions]);
 
-  // --- #11. RADAR DE LEI SECA: RASTREADOR AUTOMÁTICO DE ARTIGOS, LEIS, SÚMULAS E RESOLUÇÕES ---
+  // --- RADAR DE LEI SECA: RASTREADOR AUTOMÁTICO DE ARTIGOS, LEIS, SÚMULAS E RESOLUÇÕES ---
   const legalRadarList = useMemo(() => {
     const deviceMap = {};
 
@@ -417,69 +387,64 @@ export default function RaioXCaveira() {
     };
 
     const KNOWN_LAWS = [
-      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?9\.?503(?:\s*\/\s*\d{2,4})?|c[óo]digo\s+de\s+tr[âa]nsito|ctb)\b/i, key: 'LEI_9503', label: 'Lei 9.503/97 (CTB)', cat: 'Legislação de Trânsito' },
-      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?11\.?343(?:\s*\/\s*\d{2,4})?|lei\s+de\s+drogas)\b/i, key: 'LEI_11343', label: 'Lei 11.343/06 (Lei de Drogas)', cat: 'Legislação Especial' },
-      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?10\.?826(?:\s*\/\s*\d{2,4})?|estatuto\s+do\s+desarmamento)\b/i, key: 'LEI_10826', label: 'Lei 10.826/03 (Desarmamento)', cat: 'Legislação Especial' },
-      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?13\.?869(?:\s*\/\s*\d{2,4})?|abuso\s+de\s+autoridade)\b/i, key: 'LEI_13869', label: 'Lei 13.869/19 (Abuso de Autoridade)', cat: 'Legislação Especial' },
-      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?8\.?112(?:\s*\/\s*\d{2,4})?)\b/i, key: 'LEI_8112', label: 'Lei 8.112/90 (Servidores Públicos)', cat: 'Direito Administrativo' },
-      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?8\.?429(?:\s*\/\s*\d{2,4})?|improbidade\s+administrativa)\b/i, key: 'LEI_8429', label: 'Lei 8.429/92 (Improbidade)', cat: 'Direito Administrativo' },
-      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?14\.?133(?:\s*\/\s*\d{2,4})?)\b/i, key: 'LEI_14133', label: 'Lei 14.133/21 (Licitações)', cat: 'Direito Administrativo' },
-      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?9\.?784(?:\s*\/\s*\d{2,4})?)\b/i, key: 'LEI_9784', label: 'Lei 9.784/99 (Processo Administrativo)', cat: 'Direito Administrativo' },
-      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?12\.?850(?:\s*\/\s*\d{2,4})?|organiza[çc][õo]es\s+criminosas)\b/i, key: 'LEI_12850', label: 'Lei 12.850/13 (Org. Criminosas)', cat: 'Legislação Especial' },
-      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?9\.?455(?:\s*\/\s*\d{2,4})?|crime[s]?\s+de\s+tortura)\b/i, key: 'LEI_9455', label: 'Lei 9.455/97 (Tortura)', cat: 'Legislação Especial' },
-      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?8\.?072(?:\s*\/\s*\d{2,4})?|crimes?\s+hediondos?)\b/i, key: 'LEI_8072', label: 'Lei 8.072/90 (Crimes Hediondos)', cat: 'Legislação Especial' },
-      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?11\.?340(?:\s*\/\s*\d{2,4})?|maria\s+da\s+penha)\b/i, key: 'LEI_11340', label: 'Lei 11.340/06 (Maria da Penha)', cat: 'Legislação Especial' },
-      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?9\.?099(?:\s*\/\s*\d{2,4})?|juizados?\s+especiais?)\b/i, key: 'LEI_9099', label: 'Lei 9.099/95 (JECRIM)', cat: 'Legislação Especial' },
-      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?9\.?605(?:\s*\/\s*\d{2,4})?|crimes?\s+ambientais?)\b/i, key: 'LEI_9605', label: 'Lei 9.605/98 (Crimes Ambientais)', cat: 'Legislação Especial' },
-      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?8\.?069(?:\s*\/\s*\d{2,4})?|\beca\b|estatuto\s+da\s+crian[çc]a)\b/i, key: 'LEI_8069', label: 'Lei 8.069/90 (ECA)', cat: 'Legislação Especial' },
-      { regex: /\b(?:decreto\s*(?:n[º°.]?\s*)?1\.?171(?:\s*\/\s*\d{2,4})?)\b/i, key: 'DEC_1171', label: 'Decreto 1.171/94 (Ética no Serviço Público)', cat: 'Ética' }
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?9\.?503(?:\s*\/\s*\d{2,4})?|c[óo]digo\s+de\s+tr[âa]nsito|ctb)\b/i, key: 'LEI_9503', label: 'Lei 9.503/97 (CTB)', cat: 'Trânsito' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?11\.?343(?:\s*\/\s*\d{2,4})?|lei\s+de\s+drogas)\b/i, key: 'LEI_11343', label: 'Lei 11.343/06 (Lei de Drogas)', cat: 'Leg. Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?10\.?826(?:\s*\/\s*\d{2,4})?|estatuto\s+do\s+desarmamento)\b/i, key: 'LEI_10826', label: 'Lei 10.826/03 (Desarmamento)', cat: 'Leg. Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?13\.?869(?:\s*\/\s*\d{2,4})?|abuso\s+de\s+autoridade)\b/i, key: 'LEI_13869', label: 'Lei 13.869/19 (Abuso de Autoridade)', cat: 'Leg. Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?8\.?112(?:\s*\/\s*\d{2,4})?)\b/i, key: 'LEI_8112', label: 'Lei 8.112/90 (Servidores Públicos)', cat: 'Administrativo' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?8\.?429(?:\s*\/\s*\d{2,4})?|improbidade\s+administrativa)\b/i, key: 'LEI_8429', label: 'Lei 8.429/92 (Improbidade)', cat: 'Administrativo' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?14\.?133(?:\s*\/\s*\d{2,4})?)\b/i, key: 'LEI_14133', label: 'Lei 14.133/21 (Licitações)', cat: 'Administrativo' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?9\.?784(?:\s*\/\s*\d{2,4})?)\b/i, key: 'LEI_9784', label: 'Lei 9.784/99 (Processo Administrativo)', cat: 'Administrativo' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?12\.?850(?:\s*\/\s*\d{2,4})?|organiza[çc][õo]es\s+criminosas)\b/i, key: 'LEI_12850', label: 'Lei 12.850/13 (Org. Criminosas)', cat: 'Leg. Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?9\.?455(?:\s*\/\s*\d{2,4})?|crime[s]?\s+de\s+tortura)\b/i, key: 'LEI_9455', label: 'Lei 9.455/97 (Lei de Tortura)', cat: 'Leg. Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?8\.?072(?:\s*\/\s*\d{2,4})?|crimes?\s+hediondos?)\b/i, key: 'LEI_8072', label: 'Lei 8.072/90 (Crimes Hediondos)', cat: 'Leg. Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?11\.?340(?:\s*\/\s*\d{2,4})?|maria\s+da\s+penha)\b/i, key: 'LEI_11340', label: 'Lei 11.340/06 (Maria da Penha)', cat: 'Leg. Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?9\.?099(?:\s*\/\s*\d{2,4})?|juizados?\s+especiais?)\b/i, key: 'LEI_9099', label: 'Lei 9.099/95 (JECRIM)', cat: 'Leg. Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?9\.?605(?:\s*\/\s*\d{2,4})?|crimes?\s+ambientais?)\b/i, key: 'LEI_9605', label: 'Lei 9.605/98 (Crimes Ambientais)', cat: 'Leg. Especial' },
+      { regex: /\b(?:lei\s*(?:n[º°.]?\s*)?8\.?069(?:\s*\/\s*\d{2,4})?|\beca\b|estatuto\s+da\s+crian[çc]a)\b/i, key: 'LEI_8069', label: 'Lei 8.069/90 (ECA)', cat: 'Leg. Especial' },
+      { regex: /\b(?:decreto\s*(?:n[º°.]?\s*)?1\.?171(?:\s*\/\s*\d{2,4})?)\b/i, key: 'DEC_1171', label: 'Decreto 1.171/94 (Ética)', cat: 'Ética' }
     ];
 
     blockScopedQuestions.forEach(q => {
       const fullText = `${q.subject || ''} ${q.topic || ''} ${q.content || ''} ${q.teacherComment || ''} ${q.userNote || ''}`;
       const shortContext = q.canonicalSubject || q.subject || 'Lei Seca';
 
-      // 1. Leis Conhecidas do Edital
       KNOWN_LAWS.forEach(law => {
         if (law.regex.test(fullText)) {
           registerDevice(law.key, law.label, law.cat, q);
         }
       });
 
-      // 2. Outras Leis numeradas (ex: Lei 4.133/1999, Lei Complementar 123)
       const genericLawMatches = fullText.matchAll(/\blei(?:\s+complementar|\s+estadual|\s+federal)?\s*(?:n[º°.]?\s*)?(\d{1,2}\.?\d{3}(?:\s*\/\s*\d{2,4})?)/gi);
       for (const m of genericLawMatches) {
         const rawNum = m[1].replace(/\s+/g, '');
         const cleanDigits = rawNum.split('/')[0].replace(/\D/g, '');
         const alreadyKnown = KNOWN_LAWS.some(kl => kl.key.endsWith(cleanDigits));
         if (!alreadyKnown && cleanDigits.length >= 3) {
-          registerDevice(`LEI_${cleanDigits}`, `Lei ${rawNum} (${shortContext})`, 'Lei Seca', q);
+          registerDevice(`LEI_${cleanDigits}`, `Lei ${rawNum} • ${shortContext}`, 'Lei Seca', q);
         }
       }
 
-      // 3. Artigos explícitos (ex: Art. 5º, Art. 144, Art. 306)
       const artMatches = fullText.matchAll(/\bart(?:igo)?\.?\s*(\d{1,4})(?:\s*[º°]|-[A-Za-z])?/gi);
       for (const m of artMatches) {
         const artNum = m[1];
         const key = `ART_${artNum}_${shortContext}`;
-        registerDevice(key, `Art. ${artNum} (${shortContext})`, 'Artigo', q);
+        registerDevice(key, `Art. ${artNum} • ${shortContext}`, 'Artigo', q);
       }
 
-      // 4. Resoluções do CONTRAN
       const resMatches = fullText.matchAll(/\bresolu[çc][ãa]o(?:\s+do)?(?:\s+contran)?\s*(?:n[º°.]?\s*)?(\d{2,4}(?:\s*\/\s*\d{2,4})?)/gi);
       for (const m of resMatches) {
         const resNum = m[1].replace(/\s+/g, '');
         registerDevice(`RES_CONTRAN_${resNum}`, `Resolução CONTRAN ${resNum}`, 'CONTRAN', q);
       }
 
-      // 5. Súmulas (STF, STJ, Vinculante)
       const sumMatches = fullText.matchAll(/\bs[úu]mula\s*(vinculante)?\s*(?:n[º°.]?\s*)?(\d{1,4})/gi);
       for (const m of sumMatches) {
         const isVinc = Boolean(m[1]);
         const sumNum = m[2];
         const key = isVinc ? `SUM_VINC_${sumNum}` : `SUM_${sumNum}`;
-        const label = isVinc ? `Súmula Vinculante ${sumNum}` : `Súmula ${sumNum} (${shortContext})`;
-        registerDevice(key, label, 'Jurisprudência', q);
+        const label = isVinc ? `Súmula Vinculante ${sumNum}` : `Súmula ${sumNum} • ${shortContext}`;
+        registerDevice(key, label, 'Súmula', q);
       }
     });
 
@@ -500,15 +465,14 @@ export default function RaioXCaveira() {
       if (selectedSubject !== 'all' && q.canonicalSubject !== selectedSubject) return false;
       if (selectedTopic !== 'all') {
         const topicLabel = (q.topic && q.topic !== q.subject)
-          ? `${q.subject} ➔ ${q.topic}`
+          ? q.topic
           : (q.topic || q.subject || 'Geral');
         if (topicLabel !== selectedTopic) return false;
       }
 
       if (filterType === 'errors' && q.hit) return false;
       if (filterType === 'hits' && !q.hit) return false;
-      if (filterType === 'blindspot' && (q.hit || q.confidence !== 'sabia')) return false;
-      if (filterType === 'guesses' && q.confidence !== 'chute') return false;
+      if (filterType === 'guesses' && q.confidence !== 'chute' && q.confidence !== 'duvida') return false;
       if (filterType === 'attention' && (q.hit || q.errorReason !== 'atencao')) return false;
       if (filterType === 'theory' && (q.hit || (q.errorReason && q.errorReason !== 'conteudo'))) return false;
 
@@ -558,48 +522,65 @@ export default function RaioXCaveira() {
     toast.success('Bizu tático salvo na questão!');
   };
 
+  const toggleComment = (qId) => {
+    setExpandedComments(prev => ({ ...prev, [qId]: !prev[qId] }));
+  };
+
+  const hasActiveFilters = selectedBloco !== 'all' || selectedSubject !== 'all' || selectedTopic !== 'all' || filterType !== 'all' || Boolean(searchQuery) || Boolean(selectedLegalDevice);
+
+  const resetAllFilters = () => {
+    setSelectedBloco('all');
+    setSelectedSubject('all');
+    setSelectedTopic('all');
+    setFilterType('all');
+    setSearchQuery('');
+    setSelectedLegalDevice(null);
+  };
+
   return (
     <div className="fade-in w-full pb-12 font-sans space-y-4">
 
-      {/* HEADER DA SEÇÃO */}
-      <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800/80 shadow-xl relative overflow-hidden">
-        <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-4">
-          <div className="flex items-center gap-3.5">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-tr from-slate-900 to-red-950 border border-red-500/40 flex items-center justify-center text-2xl shadow-md shrink-0">
+      {/* 1. BARRA EXECUTIVA DE COMANDO + SELETOR DE BLOCOS INTEGRADO */}
+      <div className="glass-card rounded-2xl p-4 border border-slate-200 dark:border-[#2E3236] shadow-lg space-y-3.5">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          {/* Título e Status da Extensão */}
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-900 to-red-950 border border-red-500/40 flex items-center justify-center text-xl shadow-sm shrink-0">
               💀
             </div>
             <div>
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tight">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-lg sm:text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">
                   Raio-X Projeto Caveira
                 </h1>
-                <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-full border flex items-center gap-1.5 ${
+                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border flex items-center gap-1.5 ${
                   extensionDetected
-                    ? 'bg-emerald-500/10 text-emerald-500 border-emerald-500/20'
-                    : 'bg-amber-500/10 text-amber-500 border-amber-500/20'
+                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
+                    : 'bg-amber-500/10 text-amber-400 border-amber-500/25'
                 }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${extensionDetected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                  {extensionDetected ? 'Conectada' : 'Pendente'}
+                  <span className={`w-1.5 h-1.5 rounded-full ${extensionDetected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
+                  {extensionDetected ? 'Sincronizado' : 'Extensão Offline'}
                 </span>
               </div>
-              <p className="text-xs font-medium text-slate-400 mt-0.5">
-                Acompanhamento objetivo de questões por bloco e disciplina da PRF.
+              <p className="text-xs text-slate-500 dark:text-[#A0AAB2]">
+                Diagnóstico tático de questões, disciplinas, artigos de lei e caderno de erros.
               </p>
             </div>
           </div>
 
-          <div className="flex flex-wrap items-center gap-2 w-full md:w-auto">
+          {/* Ações Rápidas */}
+          <div className="flex flex-wrap items-center gap-2">
             {extensionDetected ? (
               <button
                 onClick={handleRequestSync}
-                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase px-3.5 py-2 rounded-xl shadow-md transition-all cursor-pointer"
+                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase px-3 py-1.5 rounded-xl transition-all cursor-pointer"
               >
                 <RefreshCw className="w-3.5 h-3.5" /> Sincronizar
               </button>
             ) : (
               <button
                 onClick={() => setShowInstallModal(true)}
-                className="flex items-center gap-1.5 bg-gradient-to-r from-red-600 to-rose-600 hover:from-red-500 hover:to-rose-500 text-white font-black text-xs uppercase px-3.5 py-2 rounded-xl shadow-md transition-all cursor-pointer"
+                className="flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase px-3 py-1.5 rounded-xl transition-all cursor-pointer"
               >
                 <Download className="w-3.5 h-3.5" /> Ativar Extensão
               </button>
@@ -607,7 +588,7 @@ export default function RaioXCaveira() {
 
             <button
               onClick={() => setShowImportModal(true)}
-              className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 font-black text-xs uppercase px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+              className="flex items-center gap-1.5 bg-slate-100 dark:bg-[#26292C] hover:bg-slate-200 dark:hover:bg-[#32363A] text-slate-700 dark:text-slate-200 font-bold text-xs uppercase px-3 py-1.5 rounded-xl border border-slate-200 dark:border-[#383C42] transition-all cursor-pointer"
               title="Importar questões via JSON"
             >
               <Upload className="w-3.5 h-3.5" /> Importar
@@ -622,7 +603,7 @@ export default function RaioXCaveira() {
                     onConfirm: () => clearCaveiraQuestions()
                   });
                 }}
-                className="p-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl border border-red-500/20 transition-all cursor-pointer"
+                className="p-1.5 bg-red-500/10 hover:bg-red-600 text-red-400 hover:text-white rounded-xl border border-red-500/20 transition-all cursor-pointer"
                 title="Limpar histórico do Caveira"
               >
                 <Trash2 className="w-4 h-4" />
@@ -630,269 +611,331 @@ export default function RaioXCaveira() {
             )}
           </div>
         </div>
-      </div>
 
-      {/* KPI CARDS GERAIS (COMPACTOS E HORIZONTAIS — SEM ESPAÇO VAZIO) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800/80 flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
-            <Target className="w-5 h-5 text-blue-500" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block truncate">
-              Resolvidas ({selectedBloco === 'all' ? 'Geral' : selectedBloco})
-            </span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-slate-800 dark:text-white leading-tight">{stats.total}</span>
-              <span className="text-[11px] text-slate-400 font-medium truncate">⏱️ {stats.avgTimeSec}s/q</span>
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800/80 flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-            <CheckCircle2 className="w-5 h-5 text-emerald-500" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Acertos</span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-emerald-500 leading-tight">{stats.hits}</span>
-              <span className="text-[11px] text-slate-400 font-medium truncate">
-                ({stats.total > 0 ? Math.round((stats.hits / stats.total) * 100) : 0}%)
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800/80 flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-red-500/10 border border-red-500/20 flex items-center justify-center shrink-0">
-            <XCircle className="w-5 h-5 text-red-500" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Erros</span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-red-500 leading-tight">{stats.errors}</span>
-              <span className="text-[11px] text-slate-400 font-medium truncate">
-                ({stats.total > 0 ? Math.round((stats.errors / stats.total) * 100) : 0}%)
-              </span>
-            </div>
-          </div>
-        </div>
-
-        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800/80 flex items-center gap-3.5">
-          <div className="w-11 h-11 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-            <TrendingUp className="w-5 h-5 text-amber-500" />
-          </div>
-          <div className="min-w-0">
-            <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400 block">Aproveitamento</span>
-            <div className="flex items-baseline gap-2">
-              <span className={`text-2xl font-black leading-tight ${stats.grossRate >= 75 ? 'text-emerald-500' : stats.grossRate >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-                {stats.grossRate}%
-              </span>
-              <span className="text-[11px] text-slate-400 font-medium truncate">
-                {stats.hits}C / {stats.errors}E
-              </span>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* PAINEL 1: RADAR DOS 3 BLOCOS DO EDITAL PRF (COMPACTO) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {blocoStats.map(b => {
-          const isSelected = selectedBloco === b.blocoKey;
-          return (
-            <div
-              key={b.blocoKey}
+        {/* SELETOR DE BLOCOS DO EDITAL PRF (INTEGRADO E CONCISO) */}
+        <div className="pt-3 border-t border-slate-200/70 dark:border-[#2E3236] flex flex-wrap items-center justify-between gap-2">
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button
+              type="button"
               onClick={() => {
-                setSelectedBloco(isSelected ? 'all' : b.blocoKey);
+                setSelectedBloco('all');
                 setSelectedSubject('all');
                 setSelectedTopic('all');
               }}
-              className={`glass-card rounded-2xl p-3.5 border transition-all cursor-pointer ${
-                isSelected
-                  ? `${b.accentBorder} bg-blue-500/10 ring-2 ring-blue-500/30`
-                  : 'border-slate-200 dark:border-slate-800/80 hover:border-slate-700'
+              className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer border ${
+                selectedBloco === 'all'
+                  ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                  : 'bg-slate-100 dark:bg-[#1E2022] text-slate-600 dark:text-[#A0AAB2] border-slate-200 dark:border-[#32363A] hover:text-white'
               }`}
             >
-              <div className="flex items-center justify-between gap-2 mb-2">
-                <div className="flex items-center gap-2">
-                  <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded-md border ${b.badgeClass}`}>
-                    {b.title}
-                  </span>
-                  <span className="text-[11px] font-bold text-slate-400">
-                    {b.total} feitas ({b.hits}C • {b.errors}E)
-                  </span>
-                </div>
-                <span className={`text-lg font-black ${b.total === 0 ? 'text-slate-400' : b.grossRate >= 75 ? 'text-emerald-500' : b.grossRate >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-                  {b.grossRate}%
-                </span>
-              </div>
+              Todos os Blocos ({enrichedQuestions.length})
+            </button>
 
-              <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-                <div
-                  className={`h-full rounded-full transition-all ${
-                    b.grossRate >= 75 ? 'bg-emerald-500' : b.grossRate >= 50 ? 'bg-amber-500' : 'bg-red-500'
+            {blocoStats.map(b => {
+              const isSelected = selectedBloco === b.blocoKey;
+              return (
+                <button
+                  key={b.blocoKey}
+                  type="button"
+                  onClick={() => {
+                    setSelectedBloco(isSelected ? 'all' : b.blocoKey);
+                    setSelectedSubject('all');
+                    setSelectedTopic('all');
+                  }}
+                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-2 ${
+                    isSelected
+                      ? b.activeClass
+                      : 'bg-slate-100 dark:bg-[#1E2022] text-slate-700 dark:text-[#F1F5F9] border-slate-200 dark:border-[#32363A] hover:border-slate-500'
                   }`}
-                  style={{ width: `${b.total > 0 ? Math.max(6, Math.min(100, b.grossRate)) : 0}%` }}
-                />
-              </div>
-            </div>
-          );
-        })}
-      </div>
-
-      {/* SEÇÃO 2: DESEMPENHO POR DISCIPLINA + RADAR DE LEI SECA LADO A LADO */}
-      <div className={legalRadarList.length > 0 ? "grid grid-cols-1 lg:grid-cols-2 gap-4 items-start" : "space-y-4"}>
-        {/* PAINEL 2: DESEMPENHO POR DISCIPLINA (EM GRID DE CARDS COMPACTOS) */}
-        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-            <div>
-              <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-blue-500" /> Desempenho por Disciplina ({subjectGroups.length})
-              </h2>
-              <p className="text-xs font-medium text-slate-400">
-                Clique em uma matéria para expandir os assuntos ou filtrar questões.
-              </p>
-            </div>
-
-            <div className="flex items-center gap-3 text-[11px] font-bold uppercase">
-              <span className="flex items-center gap-1 text-emerald-500">
-                <span className="w-2 h-2 rounded-full bg-emerald-500" /> &ge;75%
-              </span>
-              <span className="flex items-center gap-1 text-amber-500">
-                <span className="w-2 h-2 rounded-full bg-amber-500" /> 50–74%
-              </span>
-              <span className="flex items-center gap-1 text-red-500">
-                <span className="w-2 h-2 rounded-full bg-red-500" /> &lt;50%
-              </span>
-            </div>
+                >
+                  <span className="uppercase">{b.title}</span>
+                  <span className={`px-1.5 py-0.5 rounded text-[11px] font-black ${
+                    isSelected
+                      ? 'bg-black/20 text-current'
+                      : b.total === 0
+                      ? 'bg-slate-200 dark:bg-[#26292C] text-slate-400'
+                      : b.grossRate >= 75
+                      ? 'bg-emerald-500/15 text-emerald-400'
+                      : b.grossRate >= 50
+                      ? 'bg-amber-500/15 text-amber-400'
+                      : 'bg-red-500/15 text-red-400'
+                  }`}>
+                    {b.total > 0 ? `${b.grossRate}% (${b.hits}C/${b.errors}E)` : '0q'}
+                  </span>
+                </button>
+              );
+            })}
           </div>
 
-          {subjectGroups.length === 0 ? (
-            <div className="text-center py-8 text-slate-400">
-              <Skull className="w-10 h-10 mx-auto text-slate-600 mb-2" />
-              <p className="font-black text-xs uppercase">Nenhuma questão registrada neste filtro</p>
-              <p className="text-xs mt-1 text-slate-500">
-                Resolva questões no Projeto Caveira para alimentar as disciplinas automaticamente.
-              </p>
+          {hasActiveFilters && (
+            <button
+              type="button"
+              onClick={resetAllFilters}
+              className="text-xs font-bold uppercase text-amber-400 hover:underline cursor-pointer px-2 py-1"
+            >
+              Limpar Filtros Ativos ✕
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* 2. FAIXA EXECUTIVA DE INDICADORES (4 CARDS DE ALTA COMPREENSÃO) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+        {/* Card 1: Volume & Ritmo */}
+        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-[#2E3236] flex items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+              Volume & Ritmo
+            </span>
+            <div className="flex items-baseline gap-2">
+              <span className="text-2xl font-black text-slate-800 dark:text-white">{stats.total}</span>
+              <span className="text-xs font-semibold text-slate-400">questões</span>
             </div>
-          ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {subjectGroups.map(sub => {
-                const isExpanded = expandedSubject === sub.name;
-                const blocoMeta = BLOCO_METADATA[sub.bloco] || BLOCO_METADATA['Bloco I'];
-                return (
-                  <div
-                    key={sub.name}
-                    className={`rounded-xl border transition-all flex flex-col justify-between overflow-hidden ${
-                      isExpanded ? 'col-span-full' : ''
-                    } ${
-                      sub.status === 'vulnerabilidade'
-                        ? 'border-red-500/30 bg-red-500/5 dark:bg-[#1E2022]'
-                        : sub.status === 'blindagem'
-                          ? 'border-emerald-500/30 bg-emerald-500/5 dark:bg-[#1E2022]'
-                          : 'border-slate-200 dark:border-[#32363A] bg-white dark:bg-[#1E2022]'
-                    }`}
-                  >
+            <p className="text-[11px] text-slate-500 dark:text-[#A0AAB2]">
+              ⏱️ Média: <strong>{stats.avgTimeSec}s/q</strong> ({stats.avgHitTimeSec}s C • {stats.avgErrorTimeSec}s E)
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
+            <Target className="w-5 h-5 text-blue-400" />
+          </div>
+        </div>
+
+        {/* Card 2: Taxa de Acerto Bruta */}
+        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-[#2E3236] flex flex-col justify-between gap-2">
+          <div className="flex items-start justify-between gap-2">
+            <div>
+              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+                Taxa de Acerto Bruta
+              </span>
+              <div className="flex items-baseline gap-2 mt-0.5">
+                <span className={`text-2xl font-black ${
+                  stats.grossRate >= 75 ? 'text-emerald-400' : stats.grossRate >= 50 ? 'text-amber-400' : 'text-red-400'
+                }`}>
+                  {stats.grossRate}%
+                </span>
+                <span className="text-xs font-bold text-slate-400">
+                  <span className="text-emerald-400">{stats.hits}C</span> • <span className="text-red-400">{stats.errors}E</span>
+                </span>
+              </div>
+            </div>
+            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
+              <TrendingUp className="w-5 h-5 text-emerald-400" />
+            </div>
+          </div>
+          <div className="w-full bg-slate-200 dark:bg-[#26292C] h-1.5 rounded-full overflow-hidden">
+            <div
+              className={`h-full rounded-full transition-all ${
+                stats.grossRate >= 75 ? 'bg-emerald-500' : stats.grossRate >= 50 ? 'bg-amber-500' : 'bg-red-500'
+              }`}
+              style={{ width: `${stats.total > 0 ? Math.max(4, Math.min(100, stats.grossRate)) : 0}%` }}
+            />
+          </div>
+        </div>
+
+        {/* Card 3: Saldo Líquido Cebraspe */}
+        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-[#2E3236] flex items-center justify-between gap-3">
+          <div className="space-y-0.5">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+              Saldo Cebraspe (1E anula 1C)
+            </span>
+            <div className="flex items-baseline gap-2">
+              <span className={`text-2xl font-black ${
+                stats.netScore > 0 ? 'text-emerald-400' : stats.netScore === 0 ? 'text-amber-400' : 'text-red-400'
+              }`}>
+                {stats.netScore > 0 ? `+${stats.netScore}` : stats.netScore} pts
+              </span>
+              <span className="text-xs font-semibold text-slate-400">
+                ({stats.netRate}% líq.)
+              </span>
+            </div>
+            <p className="text-[11px] text-slate-500 dark:text-[#A0AAB2]">
+              🎲 {stats.guessesOrDoubtsTotal} {stats.guessesOrDoubtsTotal === 1 ? 'questão com dúvida/chute' : 'questões com dúvida/chute'}
+            </p>
+          </div>
+          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
+            <Scale className="w-5 h-5 text-amber-400" />
+          </div>
+        </div>
+
+        {/* Card 4: Raio-X da Causa dos Erros */}
+        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-[#2E3236] flex flex-col justify-between gap-1.5">
+          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
+            Mapa da Causa dos Erros ({stats.errors})
+          </span>
+          <div className="grid grid-cols-3 gap-1.5 pt-0.5">
+            <button
+              type="button"
+              onClick={() => setFilterType(filterType === 'theory' ? 'all' : 'theory')}
+              className={`px-2 py-1.5 rounded-lg border text-left transition-all cursor-pointer ${
+                filterType === 'theory'
+                  ? 'bg-red-500/20 border-red-400 text-white'
+                  : 'bg-slate-100 dark:bg-[#1E2022] border-slate-200 dark:border-[#32363A] hover:border-red-500/40'
+              }`}
+            >
+              <span className="text-[10px] font-bold text-slate-400 block truncate">📚 Teoria</span>
+              <span className="text-sm font-black text-red-400">{stats.errorReasons.conteudo}</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setFilterType(filterType === 'attention' ? 'all' : 'attention')}
+              className={`px-2 py-1.5 rounded-lg border text-left transition-all cursor-pointer ${
+                filterType === 'attention'
+                  ? 'bg-amber-500/20 border-amber-400 text-white'
+                  : 'bg-slate-100 dark:bg-[#1E2022] border-slate-200 dark:border-[#32363A] hover:border-amber-500/40'
+              }`}
+            >
+              <span className="text-[10px] font-bold text-slate-400 block truncate">⚠️ Atenção</span>
+              <span className="text-sm font-black text-amber-400">{stats.errorReasons.atencao}</span>
+            </button>
+            <div className="px-2 py-1.5 rounded-lg border bg-slate-100 dark:bg-[#1E2022] border-slate-200 dark:border-[#32363A]">
+              <span className="text-[10px] font-bold text-slate-400 block truncate">🔍 Interpr.</span>
+              <span className="text-sm font-black text-purple-400">{stats.errorReasons.interpretacao}</span>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      {/* 3. PAINÉIS ANALÍTICOS LADO A LADO: DISCIPLINAS (ESQUERDA) + RADAR DE LEI SECA (DIREITA) */}
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+
+        {/* COLUNA ESQUERDA: DESEMPENHO POR DISCIPLINA (LISTA HORIZONTAL DE ALTA LEITURA) */}
+        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-200/70 dark:border-[#2E3236]">
+              <div>
+                <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-blue-400" /> Desempenho por Disciplina ({subjectGroups.length})
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-[#A0AAB2]">
+                  Ordenado da matéria mais crítica para a mais forte. Clique para ver os tópicos.
+                </p>
+              </div>
+              {selectedSubject !== 'all' && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSubject('all');
+                    setSelectedTopic('all');
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-blue-500/20 border border-blue-500/40 text-blue-300 text-[11px] font-bold uppercase cursor-pointer shrink-0"
+                >
+                  {selectedSubject} ✕
+                </button>
+              )}
+            </div>
+
+            {subjectGroups.length === 0 ? (
+              <div className="text-center py-10 text-slate-400">
+                <Skull className="w-9 h-9 mx-auto text-slate-600 mb-2" />
+                <p className="font-bold text-xs uppercase">Nenhuma disciplina registrada</p>
+                <p className="text-xs mt-1 text-slate-500">
+                  Resolva questões no Projeto Caveira para alimentar o diagnóstico.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[430px] overflow-y-auto custom-scrollbar pr-1">
+                {subjectGroups.map(sub => {
+                  const isExpanded = expandedSubject === sub.name;
+                  const isFiltered = selectedSubject === sub.name;
+                  const blocoMeta = BLOCO_METADATA[sub.bloco] || BLOCO_METADATA['Bloco I'];
+
+                  return (
                     <div
-                      onClick={() => setExpandedSubject(isExpanded ? null : sub.name)}
-                      className="p-3.5 cursor-pointer hover:bg-slate-100/40 dark:hover:bg-[#26292C]/60 transition-colors flex flex-col gap-2.5"
+                      key={sub.name}
+                      className={`rounded-xl border transition-all overflow-hidden ${
+                        isFiltered
+                          ? 'border-blue-500 bg-blue-500/5 dark:bg-[#1E2229]'
+                          : sub.status === 'vulnerabilidade'
+                          ? 'border-red-500/25 bg-white dark:bg-[#1E2022]'
+                          : 'border-slate-200 dark:border-[#32363A] bg-white dark:bg-[#1E2022]'
+                      }`}
                     >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                            <span className={`text-[10px] font-semibold uppercase tracking-[0.03em] px-2 py-0.5 rounded border ${blocoMeta.badgeClass}`}>
-                              {sub.bloco}
+                      {/* Linha Principal da Disciplina */}
+                      <div
+                        onClick={() => setExpandedSubject(isExpanded ? null : sub.name)}
+                        className="p-3 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-[#26292C]/70 transition-colors flex flex-col gap-2"
+                      >
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2 min-w-0">
+                            <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border shrink-0 ${blocoMeta.badgeClass}`}>
+                              {blocoMeta.short}
                             </span>
-                            <span className={`text-[10px] font-semibold uppercase tracking-[0.03em] px-2 py-0.5 rounded ${
-                              sub.status === 'vulnerabilidade'
-                                ? 'bg-red-500 text-white'
-                                : sub.status === 'blindagem'
-                                  ? 'bg-emerald-500 text-white'
-                                  : 'bg-amber-500 text-slate-950'
+                            <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-[#F1F5F9] truncate">
+                              {sub.name}
+                            </h3>
+                          </div>
+
+                          <div className="flex items-center gap-2 shrink-0">
+                            <span className="text-xs font-medium text-slate-400">
+                              <strong className="text-emerald-400">{sub.hits}C</strong> / <strong className="text-red-400">{sub.errors}E</strong>
+                              <span className="text-slate-500 ml-1">({sub.total}q • {sub.avgTime}s)</span>
+                            </span>
+
+                            <span className={`text-sm font-black min-w-[40px] text-right ${
+                              sub.grossPercent >= 75 ? 'text-emerald-400' : sub.grossPercent >= 50 ? 'text-amber-400' : 'text-red-400'
                             }`}>
-                              {sub.status === 'vulnerabilidade' ? 'Reforço' : sub.status === 'blindagem' ? 'Blindado' : 'Evolução'}
+                              {sub.grossPercent}%
                             </span>
+
+                            <button
+                              type="button"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setSelectedSubject(isFiltered ? 'all' : sub.name);
+                                setSelectedTopic('all');
+                              }}
+                              className={`text-[10px] font-bold uppercase px-2 py-1 rounded-lg border transition-all cursor-pointer ${
+                                isFiltered
+                                  ? 'bg-blue-600 text-white border-blue-500'
+                                  : 'bg-slate-100 dark:bg-[#26292C] text-slate-400 border-slate-300 dark:border-[#383C42] hover:text-white'
+                              }`}
+                            >
+                              {isFiltered ? '✓ Ativo' : 'Filtrar'}
+                            </button>
+
+                            <div className="text-slate-400">
+                              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                            </div>
                           </div>
-                          <h3 className="text-sm font-bold text-slate-800 dark:text-[#F1F5F9] truncate" title={sub.name}>
-                            {sub.name}
-                          </h3>
                         </div>
 
-                        <div className="text-right shrink-0">
-                          <span className={`text-lg font-bold leading-none block ${sub.grossPercent >= 75 ? 'text-emerald-500' : sub.grossPercent >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-                            {sub.grossPercent}%
-                          </span>
-                          <span className="text-[11px] font-medium text-slate-400">
-                            {sub.hits}C / {sub.errors}E
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="w-full bg-slate-200 dark:bg-[#26292C] h-1.5 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full transition-all ${
-                            sub.grossPercent >= 75 ? 'bg-emerald-500' : sub.grossPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'
-                          }`}
-                          style={{ width: `${Math.max(5, Math.min(100, sub.grossPercent))}%` }}
-                        />
-                      </div>
-
-                      <div className="flex items-center justify-between pt-1">
-                        <span className="text-xs text-slate-500 dark:text-[#A0AAB2] font-medium">
-                          {sub.total} {sub.total === 1 ? 'questão' : 'questões'} • ⏱️ {sub.avgTime}s
-                        </span>
-
-                        <div className="flex items-center gap-1.5">
-                          <button
-                            type="button"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setSelectedSubject(selectedSubject === sub.name ? 'all' : sub.name);
-                              setSelectedTopic('all');
-                            }}
-                            className={`text-[10px] font-semibold uppercase tracking-[0.03em] px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
-                              selectedSubject === sub.name
-                                ? 'bg-blue-600 text-white border-blue-500'
-                                : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:text-white'
+                        {/* Barra de Progresso Limpa */}
+                        <div className="w-full bg-slate-200 dark:bg-[#26292C] h-1.5 rounded-full overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all ${
+                              sub.grossPercent >= 75 ? 'bg-emerald-500' : sub.grossPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'
                             }`}
-                          >
-                            {selectedSubject === sub.name ? '✓ Filtrado' : 'Filtrar'}
-                          </button>
-                          <div className="w-6 h-6 rounded-lg bg-slate-200 dark:bg-[#26292C] flex items-center justify-center text-slate-400">
-                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                          </div>
+                            style={{ width: `${Math.max(4, Math.min(100, sub.grossPercent))}%` }}
+                          />
                         </div>
                       </div>
-                    </div>
 
-                    {/* SUB-TÓPICOS DETALHADOS DA MATÉRIA */}
-                    <AnimatePresence>
-                      {isExpanded && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          className="border-t border-slate-200 dark:border-[#2E3236] p-3.5 bg-white/40 dark:bg-[#181A1C] space-y-2.5"
-                        >
-                          <div className="flex items-center justify-between">
-                            <h4 className="text-xs font-semibold uppercase tracking-[0.03em] text-slate-400">
-                              Assuntos Mapeados ({sub.topicsList.length}):
-                            </h4>
-                            {selectedTopic !== 'all' && (
-                              <button
-                                onClick={() => setSelectedTopic('all')}
-                                className="text-xs font-semibold uppercase tracking-[0.03em] text-blue-400 hover:underline"
-                              >
-                                Limpar filtro de tópico
-                              </button>
-                            )}
-                          </div>
+                      {/* Sub-tópicos Expandidos */}
+                      <AnimatePresence>
+                        {isExpanded && (
+                          <motion.div
+                            initial={{ height: 0, opacity: 0 }}
+                            animate={{ height: 'auto', opacity: 1 }}
+                            exit={{ height: 0, opacity: 0 }}
+                            className="border-t border-slate-200 dark:border-[#2E3236] p-3 bg-slate-50 dark:bg-[#17191B] space-y-1.5"
+                          >
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
+                                Assuntos da Disciplina ({sub.topicsList.length}) — Clique para filtrar:
+                              </span>
+                              {selectedTopic !== 'all' && (
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedTopic('all')}
+                                  className="text-[10px] font-bold uppercase text-blue-400 hover:underline cursor-pointer"
+                                >
+                                  Mostrar todos
+                                </button>
+                              )}
+                            </div>
 
-                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
                             {sub.topicsList.map(topic => {
-                              const isTopicActive = selectedTopic === topic.name;
+                              const isTopicActive = selectedTopic === topic.name && selectedSubject === sub.name;
                               return (
                                 <div
                                   key={topic.name}
@@ -900,141 +943,140 @@ export default function RaioXCaveira() {
                                     setSelectedSubject(sub.name);
                                     setSelectedTopic(isTopicActive ? 'all' : topic.name);
                                   }}
-                                  className={`p-3 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
+                                  className={`px-3 py-2 rounded-lg border flex items-center justify-between gap-3 cursor-pointer transition-all ${
                                     isTopicActive
-                                      ? 'bg-blue-500/10 border-blue-500 ring-1 ring-blue-500/40'
-                                      : 'bg-slate-100 dark:bg-[#1E2022] border-slate-200/60 dark:border-[#32363A] hover:border-slate-600'
+                                      ? 'bg-blue-500/15 border-blue-500 text-white'
+                                      : 'bg-white dark:bg-[#1E2022] border-slate-200 dark:border-[#2E3236] hover:border-slate-500'
                                   }`}
                                 >
-                                  <div>
-                                    <div className="flex justify-between items-start gap-2">
-                                      <h5 className="text-xs font-medium text-slate-800 dark:text-[#F1F5F9] normal-case line-clamp-2 leading-snug">
-                                        {topic.name}
-                                      </h5>
-                                      <span className={`text-xs font-bold shrink-0 ${topic.grossPercent >= 75 ? 'text-emerald-500' : topic.grossPercent >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-                                        {topic.grossPercent}%
-                                      </span>
-                                    </div>
-                                    <div className="w-full bg-slate-200 dark:bg-[#26292C] h-1.5 rounded-full mt-2 overflow-hidden">
-                                      <div
-                                        className={`h-full rounded-full ${topic.grossPercent >= 75 ? 'bg-emerald-500' : topic.grossPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
-                                        style={{ width: `${Math.max(5, Math.min(100, topic.grossPercent))}%` }}
-                                      />
-                                    </div>
-                                  </div>
-
-                                  <div className="flex justify-between items-center text-[11px] font-medium text-slate-500 dark:text-[#A0AAB2] mt-2">
-                                    <span>{topic.total}q ({topic.hits}C / {topic.errors}E)</span>
-                                    {topic.errors > 0 ? (
-                                      <span className="text-red-400">⚠️ {topic.errors} erro(s)</span>
-                                    ) : (
-                                      <span className="text-emerald-400">✓ 100%</span>
-                                    )}
+                                  <span className="text-xs font-medium text-slate-700 dark:text-[#F1F5F9] leading-snug">
+                                    {topic.name}
+                                  </span>
+                                  <div className="flex items-center gap-2.5 shrink-0 text-xs">
+                                    <span className="text-slate-400 font-medium">
+                                      {topic.hits}C / {topic.errors}E
+                                    </span>
+                                    <span className={`font-black min-w-[34px] text-right ${
+                                      topic.grossPercent >= 75 ? 'text-emerald-400' : topic.grossPercent >= 50 ? 'text-amber-400' : 'text-red-400'
+                                    }`}>
+                                      {topic.grossPercent}%
+                                    </span>
                                   </div>
                                 </div>
                               );
                             })}
-                          </div>
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                );
-              })}
-            </div>
-          )}
+                          </motion.div>
+                        )}
+                      </AnimatePresence>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* PAINEL #11: RADAR DE LEI SECA (ARTIGOS, LEIS, SÚMULAS E RESOLUÇÕES MAIS ERRADOS / CHUTADOS) */}
-        {legalRadarList.length > 0 && (
-          <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] space-y-4">
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+        {/* COLUNA DIREITA: RADAR DE LEI SECA (LISTA HORIZONTAL SEM TRUNCAMENTO) */}
+        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] flex flex-col justify-between">
+          <div>
+            <div className="flex items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-200/70 dark:border-[#2E3236]">
               <div>
-                <h2 className="text-sm sm:text-base font-bold text-slate-800 dark:text-[#F1F5F9] uppercase tracking-[0.03em] flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-amber-400" /> Radar de Lei Seca • Artigos & Leis ({legalRadarList.length})
+                <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
+                  <Scale className="w-4 h-4 text-amber-400" /> Radar de Lei Seca ({legalRadarList.length})
                 </h2>
-                <p className="text-xs font-normal text-slate-500 dark:text-[#A0AAB2]">
-                  Dispositivos mais cobrados e errados. Clique para filtrar o Caderno.
+                <p className="text-xs text-slate-500 dark:text-[#A0AAB2]">
+                  Leis, artigos e súmulas mais cobrados ou errados. Clique para filtrar o Caderno.
                 </p>
               </div>
               {selectedLegalDevice && (
                 <button
                   type="button"
                   onClick={() => setSelectedLegalDevice(null)}
-                  className="px-2.5 py-1 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold uppercase tracking-wider cursor-pointer shrink-0"
+                  className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-bold uppercase cursor-pointer shrink-0"
                 >
-                  Filtro: {selectedLegalDevice.label} ✕
+                  Filtro Ativo ✕
                 </button>
               )}
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
-              {legalRadarList.slice(0, 10).map((dev, idx) => {
-                const isSelected = selectedLegalDevice?.key === dev.key;
-                const hasErrors = dev.errors > 0;
-                return (
-                  <button
-                    key={dev.key}
-                    type="button"
-                    onClick={() => setSelectedLegalDevice(isSelected ? null : dev)}
-                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
-                      isSelected
-                        ? 'bg-amber-500/15 border-amber-400 ring-2 ring-amber-500/30'
-                        : hasErrors
-                        ? 'bg-red-500/5 dark:bg-[#1E2022] border-red-500/30 hover:border-red-400'
-                        : 'bg-slate-50 dark:bg-[#1E2022] border-slate-200 dark:border-[#34383D] hover:border-slate-500'
-                    }`}
-                  >
-                    <div className="flex items-start justify-between gap-2 w-full">
-                      <div className="flex items-center gap-1.5 min-w-0">
-                        <span className="w-5 h-5 rounded-md bg-black/30 border border-white/10 text-[10px] font-mono font-black text-amber-400 flex items-center justify-center shrink-0">
+            {legalRadarList.length === 0 ? (
+              <div className="text-center py-10 text-slate-400">
+                <Scale className="w-9 h-9 mx-auto text-slate-600 mb-2" />
+                <p className="font-bold text-xs uppercase">Nenhum dispositivo legal detectado neste filtro</p>
+                <p className="text-xs mt-1 text-slate-500">
+                  Artigos, leis e resoluções citados nas questões aparecerão listados aqui automaticamente.
+                </p>
+              </div>
+            ) : (
+              <div className="space-y-2 max-h-[430px] overflow-y-auto custom-scrollbar pr-1">
+                {legalRadarList.slice(0, 15).map((dev, idx) => {
+                  const isSelected = selectedLegalDevice?.key === dev.key;
+                  const hasErrors = dev.errors > 0;
+                  return (
+                    <button
+                      key={dev.key}
+                      type="button"
+                      onClick={() => setSelectedLegalDevice(isSelected ? null : dev)}
+                      className={`w-full p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between gap-3 ${
+                        isSelected
+                          ? 'bg-amber-500/15 border-amber-400 ring-1 ring-amber-500/30'
+                          : hasErrors
+                          ? 'bg-white dark:bg-[#1E2022] border-red-500/25 hover:border-red-400/60'
+                          : 'bg-white dark:bg-[#1E2022] border-slate-200 dark:border-[#32363A] hover:border-slate-500'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <span className="w-6 h-6 rounded-lg bg-slate-900 border border-slate-700 text-[11px] font-mono font-black text-amber-400 flex items-center justify-center shrink-0">
                           #{idx + 1}
                         </span>
-                        <span className="text-xs font-bold text-slate-800 dark:text-[#F1F5F9] truncate" title={dev.label}>
-                          {dev.label}
-                        </span>
+                        <div className="min-w-0">
+                          <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-[#F1F5F9] block leading-snug">
+                            {dev.label}
+                          </span>
+                          <span className="text-[10px] font-semibold uppercase text-slate-400">
+                            {dev.category} • {dev.total} {dev.total === 1 ? 'questão' : 'questões'}
+                          </span>
+                        </div>
                       </div>
-                      <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-200 dark:bg-[#26292C] text-slate-600 dark:text-[#A0AAB2] shrink-0">
-                        {dev.category}
-                      </span>
-                    </div>
 
-                    <div className="flex items-center justify-between text-[11px] font-semibold w-full pt-1 border-t border-slate-200/50 dark:border-[#2E3236]">
-                      <div className="flex items-center gap-1.5 flex-wrap">
+                      <div className="flex items-center gap-2 shrink-0 text-xs font-bold">
                         {dev.errors > 0 ? (
-                          <span className="text-red-400 font-bold">✗ {dev.errors} {dev.errors === 1 ? 'erro' : 'erros'}</span>
+                          <span className="px-2 py-0.5 rounded-md bg-red-500/15 text-red-400 border border-red-500/25">
+                            ✗ {dev.errors} {dev.errors === 1 ? 'erro' : 'erros'}
+                          </span>
                         ) : (
-                          <span className="text-emerald-400">✓ 0 erros</span>
+                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
+                            ✓ 100%
+                          </span>
                         )}
                         {dev.guessesOrDoubts > 0 && (
-                          <span className="text-amber-300">🎲 {dev.guessesOrDoubts}</span>
+                          <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/25" title="Respondida com dúvida ou chute">
+                            🎲 {dev.guessesOrDoubts}
+                          </span>
                         )}
                       </div>
-                      <span className="text-slate-400 shrink-0">
-                        {dev.total} {dev.total === 1 ? 'q' : 'questões'} →
-                      </span>
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
-        )}
+        </div>
       </div>
 
-      {/* PAINEL 3: CADERNO DE QUESTÕES */}
+      {/* 4. CADERNO DE QUESTÕES (LAYOUT LIMPO, ESCANEÁVEL E SEM POLUIÇÃO VISUAL) */}
       <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-200/70 dark:border-[#2E3236]">
           <div>
-            <h2 className="text-sm sm:text-base font-bold text-slate-800 dark:text-[#F1F5F9] uppercase tracking-[0.03em] flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-purple-500" /> Caderno de Questões ({filteredQuestions.length})
+            <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
+              <BookOpen className="w-4 h-4 text-purple-400" /> Caderno Tático de Questões ({filteredQuestions.length})
             </h2>
-            <p className="text-xs font-normal text-slate-500 dark:text-[#A0AAB2]">
-              Histórico rastreado do Projeto Caveira com filtros rápidos e anotações.
+            <p className="text-xs text-slate-500 dark:text-[#A0AAB2]">
+              Enunciados completos, revisão de erros, bizus pessoais e envio para o FSRS.
             </p>
           </div>
 
-          {/* BUSCA RÁPIDA E SELETOR DE MATÉRIA */}
+          {/* Busca e Filtros Rápidos */}
           <div className="flex flex-wrap items-center gap-2">
             <div className="relative flex-1 sm:w-64">
               <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
@@ -1042,251 +1084,286 @@ export default function RaioXCaveira() {
                 type="text"
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar Q112415, assunto ou texto..."
-                className="w-full bg-slate-100 dark:bg-[#1E2022] border border-slate-200 dark:border-[#32363A] rounded-xl pl-8 pr-3 py-2 text-xs font-medium text-slate-800 dark:text-[#F1F5F9] outline-none focus:border-purple-500"
+                placeholder="Buscar código, lei ou palavra-chave..."
+                className="w-full bg-slate-100 dark:bg-[#1E2022] border border-slate-200 dark:border-[#32363A] rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium text-slate-800 dark:text-[#F1F5F9] outline-none focus:border-purple-500"
               />
             </div>
 
-            {(selectedBloco !== 'all' || selectedSubject !== 'all' || selectedTopic !== 'all' || filterType !== 'all' || searchQuery || selectedLegalDevice) && (
+            {[
+              { id: 'all', label: `Todas (${blockScopedQuestions.length})` },
+              { id: 'errors', label: `✗ Erros (${stats.errors})` },
+              { id: 'hits', label: `✓ Acertos (${stats.hits})` },
+              { id: 'guesses', label: `🎲 Dúvida/Chute (${stats.guessesOrDoubtsTotal})` }
+            ].map(f => (
               <button
-                onClick={() => {
-                  setSelectedBloco('all');
-                  setSelectedSubject('all');
-                  setSelectedTopic('all');
-                  setFilterType('all');
-                  setSearchQuery('');
-                  setSelectedLegalDevice(null);
-                }}
-                className="px-3 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-xs font-semibold uppercase tracking-[0.03em] text-amber-400 cursor-pointer"
+                key={f.id}
+                type="button"
+                onClick={() => setFilterType(f.id)}
+                className={`px-3 py-1.5 rounded-xl font-bold text-xs uppercase transition-all cursor-pointer border ${
+                  filterType === f.id
+                    ? 'bg-purple-600 text-white border-purple-500 shadow-sm'
+                    : 'bg-slate-100 dark:bg-[#1E2022] text-slate-500 dark:text-[#A0AAB2] border-slate-200 dark:border-[#32363A] hover:text-white'
+                }`}
               >
-                Limpar Filtros ✕
+                {f.label}
               </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Badges de Filtros Específicos Ativos */}
+        {(selectedSubject !== 'all' || selectedTopic !== 'all' || selectedLegalDevice) && (
+          <div className="flex flex-wrap items-center gap-2 bg-slate-100 dark:bg-[#191B1D] p-2.5 rounded-xl border border-slate-200 dark:border-[#2E3236]">
+            <span className="text-[11px] font-bold uppercase text-slate-400">Filtrando por:</span>
+            {selectedSubject !== 'all' && (
+              <span className="px-2.5 py-1 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-300 text-xs font-bold flex items-center gap-1.5">
+                Disciplina: {selectedSubject}
+                <button onClick={() => { setSelectedSubject('all'); setSelectedTopic('all'); }} className="hover:text-white cursor-pointer">✕</button>
+              </span>
+            )}
+            {selectedTopic !== 'all' && (
+              <span className="px-2.5 py-1 rounded-lg bg-sky-500/15 border border-sky-500/30 text-sky-300 text-xs font-bold flex items-center gap-1.5">
+                Assunto: {selectedTopic}
+                <button onClick={() => setSelectedTopic('all')} className="hover:text-white cursor-pointer">✕</button>
+              </span>
+            )}
+            {selectedLegalDevice && (
+              <span className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-1.5">
+                Dispositivo: {selectedLegalDevice.label}
+                <button onClick={() => setSelectedLegalDevice(null)} className="hover:text-white cursor-pointer">✕</button>
+              </span>
             )}
           </div>
-        </div>
+        )}
 
-        {/* CHIPS DE FILTRO OBJETIVOS */}
-        <div className="flex flex-wrap gap-2">
-          {[
-            { id: 'all', label: 'Todas' },
-            { id: 'errors', label: '✗ Erros' },
-            { id: 'hits', label: '✓ Acertos' },
-            { id: 'guesses', label: '🎲 Chutes' }
-          ].map(f => (
-            <button
-              key={f.id}
-              onClick={() => setFilterType(f.id)}
-              className={`px-3.5 py-1.5 rounded-xl font-semibold text-xs uppercase tracking-[0.03em] transition-all cursor-pointer ${
-                filterType === f.id
-                  ? 'bg-purple-600 text-white shadow-md'
-                  : 'bg-slate-100 dark:bg-[#26292C] text-slate-500 dark:text-[#A0AAB2] hover:text-white'
-              }`}
-            >
-              {f.label}
-            </button>
-          ))}
-        </div>
-
+        {/* Lista de Questões */}
         {filteredQuestions.length === 0 ? (
-          <div className="text-center py-8 text-slate-400">
+          <div className="text-center py-10 text-slate-400">
             <CheckCircle2 className="w-8 h-8 mx-auto text-slate-600 mb-2" />
-            <p className="font-semibold text-xs uppercase tracking-[0.03em]">Nenhuma questão encontrada para os filtros selecionados</p>
+            <p className="font-bold text-xs uppercase">Nenhuma questão encontrada para este filtro</p>
           </div>
         ) : (
-          <div className="space-y-6">
+          <div className="space-y-3.5">
             {filteredQuestions.slice(0, 80).map(q => {
               const blocoMeta = BLOCO_METADATA[q.bloco] || BLOCO_METADATA['Bloco I'];
               const isEditingThisNote = editingNoteId === q.id;
+              const isCommentOpen = Boolean(expandedComments[q.id]);
+              const cleanTopic = (q.topic && q.topic !== q.subject && q.topic !== q.canonicalSubject) ? q.topic : null;
+
               return (
                 <div
                   key={q.id + (q.timestamp || '')}
-                  className={`p-5 sm:p-6 rounded-2xl border shadow-lg transition-all flex flex-col justify-between gap-3.5 ${
-                    !q.hit && q.confidence === 'sabia'
-                      ? 'border-red-500/40 bg-red-500/5 dark:bg-[#1E2022] shadow-red-950/20'
-                      : 'border-slate-200 dark:border-[#383D43] bg-white dark:bg-[#1E2022] shadow-black/40'
+                  className={`rounded-2xl border transition-all overflow-hidden bg-white dark:bg-[#1E2022] border-slate-200 dark:border-[#32363A] border-l-4 ${
+                    q.hit ? 'border-l-emerald-500' : 'border-l-red-500'
                   }`}
                 >
-                  <div className="flex flex-col md:flex-row items-start md:items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-sans text-xs font-bold tracking-[0.03em] text-white bg-slate-800 dark:bg-[#26292C] border border-slate-700 dark:border-[#383C42] px-2.5 py-1 rounded-md">
-                        {q.id}
-                      </span>
-                      <span className={`text-[11px] font-semibold uppercase tracking-[0.03em] px-2.5 py-1 rounded-md border ${blocoMeta.badgeClass}`}>
-                        {q.bloco} • {q.canonicalSubject}
-                      </span>
-                      <span className={`text-[11px] font-semibold uppercase tracking-[0.03em] px-2.5 py-1 rounded-md ${
-                        q.hit ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
-                      }`}>
-                        {q.hit ? '✓ Acertou' : '✗ Errou'}
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const order = ['sabia', 'duvida', 'chute'];
-                          const curr = q.confidence || 'sabia';
-                          const next = order[(order.indexOf(curr) + 1) % order.length];
-                          updateCaveiraQuestion(q.id, {
-                            confidence: next,
-                            ...(next === 'chute' || next === 'duvida' ? { fsrsRequested: true } : {})
-                          });
-                        }}
-                        title="Clique para alternar a confiança (Dúvida ou Chute envia automaticamente para o FSRS)"
-                        className={`text-[11px] font-semibold uppercase tracking-[0.03em] px-2.5 py-1 rounded-md border transition-colors cursor-pointer ${
-                          q.confidence === 'chute'
-                            ? 'bg-amber-500/15 text-amber-300 border-amber-500/30 hover:bg-amber-500/25'
-                            : q.confidence === 'duvida'
-                            ? 'bg-yellow-500/15 text-yellow-300 border-yellow-500/30 hover:bg-yellow-500/25'
-                            : 'bg-slate-100 dark:bg-[#26292C] text-slate-500 dark:text-[#A0AAB2] border-slate-200 dark:border-[#383C42] hover:text-white'
-                        }`}
-                      >
-                        {q.confidence === 'chute' ? '🎲 Chute' : q.confidence === 'duvida' ? '🤔 Dúvida' : '🎯 Sabia'}
-                      </button>
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-slate-600 dark:text-[#A0AAB2] bg-slate-100 dark:bg-[#26292C] px-2.5 py-1 rounded-md">
-                        {q.banca} • {q.ano}
-                      </span>
-                      <span className="text-[11px] font-semibold tracking-[0.03em] text-slate-600 dark:text-[#A0AAB2] bg-slate-100 dark:bg-[#26292C] px-2.5 py-1 rounded-md">
-                        ⏱️ {q.durationSeconds}s
-                      </span>
-                    </div>
+                  <div className="p-4 sm:p-5 space-y-3">
+                    {/* Cabeçalho Conciso da Questão */}
+                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
+                      <div className="flex items-center gap-2 flex-wrap min-w-0">
+                        <span className={`text-[11px] font-black uppercase px-2 py-0.5 rounded-md ${
+                          q.hit ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
+                        }`}>
+                          {q.hit ? '✓ Acerto' : '✗ Erro'}
+                        </span>
 
-                    <div className="flex items-center gap-2 shrink-0 self-end md:self-auto">
-                      <span className="text-xs font-semibold uppercase tracking-[0.03em] text-slate-500 dark:text-[#A0AAB2] mr-1 whitespace-nowrap">
-                        Marcou: <strong className={q.hit ? 'text-emerald-400' : 'text-red-400'}>{q.userChoice}</strong> | Gabarito: <strong className="text-emerald-400">{q.correctChoice}</strong>
-                      </span>
+                        <span className="font-mono text-xs font-black text-white bg-slate-800 dark:bg-[#26292C] border border-slate-700 dark:border-[#383C42] px-2 py-0.5 rounded-md">
+                          {q.id}
+                        </span>
 
-                      <button
-                        onClick={() => {
-                          setEditingNoteId(isEditingThisNote ? null : q.id);
-                          setNoteDraft(q.userNote || '');
-                        }}
-                        className="p-2 text-slate-400 hover:text-amber-400 rounded-lg hover:bg-amber-500/10 transition-colors cursor-pointer"
-                        title="Adicionar/Editar Bizu ou Anotação na Questão"
-                      >
-                        <MessageSquarePlus className="w-4 h-4" />
-                      </button>
+                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md border ${blocoMeta.badgeClass}`}>
+                          {blocoMeta.short}
+                        </span>
 
-                      <button
-                        onClick={() => createFsrsCardFromCaveira(q)}
-                        className={`${
-                          q.fsrsCreated
-                            ? 'bg-emerald-600/20 text-emerald-400 border border-emerald-500/30'
-                            : 'bg-purple-600 hover:bg-purple-500 text-white'
-                        } font-semibold text-[11px] uppercase tracking-[0.03em] px-3 py-1.5 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0`}
-                        title="Criar Flashcard de Revisão no FSRS"
-                      >
-                        <BrainCircuit className="w-3.5 h-3.5" /> {q.fsrsCreated ? 'No FSRS ✓' : '+ FSRS'}
-                      </button>
+                        <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-[#F1F5F9]">
+                          {q.canonicalSubject}
+                        </span>
 
-                      <button
-                        onClick={() => deleteCaveiraQuestion(q.id)}
-                        className="p-2 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
-                        title="Excluir questão do histórico"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    </div>
-                  </div>
+                        {cleanTopic && (
+                          <span className="text-xs text-slate-500 dark:text-[#A0AAB2] truncate max-w-md" title={cleanTopic}>
+                            ➔ {cleanTopic}
+                          </span>
+                        )}
+                      </div>
 
-                  {/* Trilha Hierárquica do Assunto/Tópico (Caixa mista, peso 400, #A0AAB2, 14px) */}
-                  <p className="text-sm font-normal normal-case text-slate-600 dark:text-[#A0AAB2] leading-snug">
-                    📂 {q.subject} {q.topic && q.topic !== q.subject ? `➔ ${q.topic}` : ''}
-                  </p>
+                      {/* Direita: Gabarito + Tempo + Ações */}
+                      <div className="flex items-center gap-2 shrink-0 flex-wrap">
+                        <div className="text-xs font-semibold bg-slate-100 dark:bg-[#26292C] border border-slate-200 dark:border-[#383C42] px-2.5 py-1 rounded-lg">
+                          <span className="text-slate-400">Marcou: </span>
+                          <strong className={q.hit ? 'text-emerald-400' : 'text-red-400'}>{q.userChoice || '?'}</strong>
+                          <span className="text-slate-600 mx-1.5">|</span>
+                          <span className="text-slate-400">Gabarito: </span>
+                          <strong className="text-emerald-400">{q.correctChoice || '?'}</strong>
+                        </div>
 
-                  {/* Enunciado (16px/16.5px, peso 500, line-height 1.6, #F1F5F9, fundo #26292C, sem aspas) */}
-                  <p className="text-[16px] font-medium text-slate-800 dark:text-[#F1F5F9] leading-[1.6] bg-slate-100 dark:bg-[#26292C] p-4 rounded-xl border border-slate-200/70 dark:border-[#34383D]">
-                    {q.content}
-                  </p>
+                        <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 dark:bg-[#26292C] px-2 py-1 rounded-lg">
+                          ⏱️ {q.durationSeconds}s
+                        </span>
 
-                  {/* Comentário do Professor / Gabarito Comentado */}
-                  {q.teacherComment && (
-                    <div className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/25 text-xs sm:text-sm text-blue-100">
-                      <span className="font-bold text-blue-300 block mb-1">🎓 Comentário do Professor / Gabarito Comentado:</span>
-                      <div className="text-slate-200 leading-relaxed whitespace-pre-line max-h-40 overflow-y-auto custom-scrollbar pr-1">
-                        {q.teacherComment}
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setEditingNoteId(isEditingThisNote ? null : q.id);
+                            setNoteDraft(q.userNote || '');
+                          }}
+                          className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
+                            q.userNote
+                              ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
+                              : 'bg-slate-100 dark:bg-[#26292C] text-slate-400 border-slate-200 dark:border-[#383C42] hover:text-amber-400'
+                          }`}
+                          title="Adicionar ou editar Bizu Tático"
+                        >
+                          <MessageSquarePlus className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => createFsrsCardFromCaveira(q)}
+                          className={`${
+                            q.fsrsCreated
+                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
+                              : 'bg-purple-600 hover:bg-purple-500 text-white'
+                          } font-bold text-[11px] uppercase px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1`}
+                          title="Enviar questão para revisão espaçada FSRS"
+                        >
+                          <BrainCircuit className="w-3.5 h-3.5" /> {q.fsrsCreated ? 'FSRS ✓' : '+FSRS'}
+                        </button>
+
+                        <button
+                          type="button"
+                          onClick={() => deleteCaveiraQuestion(q.id)}
+                          className="p-1.5 text-slate-400 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
+                          title="Excluir questão"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
+                        </button>
                       </div>
                     </div>
-                  )}
 
-                  {/* Anotação Tática / Bizu Salvo */}
-                  {q.userNote && !isEditingThisNote && (
-                    <div className="p-3 rounded-xl bg-amber-500/10 border border-amber-500/25 text-sm text-amber-200 font-medium flex items-center justify-between">
-                      <span>💡 <strong>Bizu Tático:</strong> {q.userNote}</span>
-                      <button
-                        onClick={() => {
-                          setEditingNoteId(q.id);
-                          setNoteDraft(q.userNote || '');
-                        }}
-                        className="text-xs font-semibold uppercase tracking-[0.03em] text-amber-400 hover:underline ml-3"
-                      >
-                        Editar
-                      </button>
+                    {/* Enunciado de Alta Legibilidade */}
+                    <div className="text-[15px] font-medium text-slate-800 dark:text-[#F1F5F9] leading-relaxed bg-slate-50 dark:bg-[#26292C] p-3.5 sm:p-4 rounded-xl border border-slate-200/70 dark:border-[#34383D]">
+                      {q.content}
                     </div>
-                  )}
 
-                  {/* Campo de Edição de Nota */}
-                  {isEditingThisNote && (
-                    <div className="flex items-center gap-2">
-                      <input
-                        type="text"
-                        value={noteDraft}
-                        onChange={(e) => setNoteDraft(e.target.value)}
-                        placeholder="Digite a pegadinha da questão, artigo da lei ou bizu de revisão..."
-                        className="flex-1 bg-[#26292C] border border-amber-500/40 rounded-xl px-3.5 py-2 text-sm text-[#F1F5F9] outline-none"
-                      />
-                      <button
-                        onClick={() => handleSaveNote(q.id)}
-                        className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs uppercase tracking-[0.03em] px-4 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer"
-                      >
-                        <Save className="w-3.5 h-3.5" /> Salvar
-                      </button>
-                    </div>
-                  )}
-
-                  {/* Barra Interativa de Reclassificação Tática (Confiança e Motivo do Erro) */}
-                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2.5 border-t border-slate-200/60 dark:border-[#2E3236]">
-                    <div className="flex items-center gap-1.5 flex-wrap">
-                      <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-slate-500 dark:text-[#A0AAB2] mr-1">Confiança:</span>
-                      {[
-                        { id: 'sabia', label: '🎯 Sabia' },
-                        { id: 'duvida', label: '🤔 Dúvida' },
-                        { id: 'chute', label: '🎲 Chute' }
-                      ].map(c => (
+                    {/* Bizu Pessoal Salvo */}
+                    {q.userNote && !isEditingThisNote && (
+                      <div className="px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs sm:text-sm text-amber-200 flex items-center justify-between gap-2">
+                        <span>💡 <strong>Seu Bizu:</strong> {q.userNote}</span>
                         <button
-                          key={c.id}
-                          onClick={() => updateCaveiraQuestion(q.id, { confidence: c.id })}
-                          className={`px-3 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-[0.03em] transition-all cursor-pointer ${
-                            q.confidence === c.id
-                              ? 'bg-sky-500 text-slate-950 shadow-sm'
-                              : 'bg-slate-100 dark:bg-[#26292C] text-slate-500 dark:text-[#A0AAB2] hover:text-white'
-                          }`}
+                          type="button"
+                          onClick={() => {
+                            setEditingNoteId(q.id);
+                            setNoteDraft(q.userNote || '');
+                          }}
+                          className="text-xs font-bold uppercase text-amber-400 hover:underline shrink-0 cursor-pointer"
                         >
-                          {c.label}
+                          Editar
                         </button>
-                      ))}
-                    </div>
-
-                    {!q.hit && (
-                      <div className="flex items-center gap-1.5 flex-wrap">
-                        <span className="text-[11px] font-semibold uppercase tracking-[0.03em] text-rose-400 mr-1">Causa do Erro:</span>
-                        {[
-                          { id: 'conteudo', label: '📚 Teoria / Lei' },
-                          { id: 'atencao', label: '⚠️ Atenção' },
-                          { id: 'interpretacao', label: '🔍 Interpretação' }
-                        ].map(r => (
-                          <button
-                            key={r.id}
-                            onClick={() => updateCaveiraQuestion(q.id, { errorReason: r.id })}
-                            className={`px-3 py-1 rounded-lg text-[11px] font-semibold uppercase tracking-[0.03em] transition-all cursor-pointer ${
-                              (q.errorReason || 'conteudo') === r.id
-                                ? 'bg-rose-500 text-white shadow-sm'
-                                : 'bg-slate-100 dark:bg-[#26292C] text-slate-500 dark:text-[#A0AAB2] hover:text-white'
-                            }`}
-                          >
-                            {r.label}
-                          </button>
-                        ))}
                       </div>
                     )}
+
+                    {/* Editor de Bizu */}
+                    {isEditingThisNote && (
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="text"
+                          value={noteDraft}
+                          onChange={(e) => setNoteDraft(e.target.value)}
+                          placeholder="Anote a pegadinha, artigo de lei ou mnemônico desta questão..."
+                          className="flex-1 bg-slate-100 dark:bg-[#26292C] border border-amber-500/40 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-800 dark:text-[#F1F5F9] outline-none"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => handleSaveNote(q.id)}
+                          className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs uppercase px-3.5 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer"
+                        >
+                          <Save className="w-3.5 h-3.5" /> Salvar
+                        </button>
+                      </div>
+                    )}
+
+                    {/* Barra Inferior Unificada: Classificação Tática + Botão de Comentário do Professor */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/60 dark:border-[#2E3236]">
+                      <div className="flex flex-wrap items-center gap-3">
+                        {/* Seletor Único de Confiança */}
+                        <div className="flex items-center gap-1">
+                          <span className="text-[10px] font-bold uppercase text-slate-400 mr-1">Confiança:</span>
+                          {[
+                            { id: 'sabia', label: '🎯 Sabia' },
+                            { id: 'duvida', label: '🤔 Dúvida' },
+                            { id: 'chute', label: '🎲 Chute' }
+                          ].map(c => (
+                            <button
+                              key={c.id}
+                              type="button"
+                              onClick={() => updateCaveiraQuestion(q.id, {
+                                confidence: c.id,
+                                ...(c.id === 'chute' || c.id === 'duvida' ? { fsrsRequested: true } : {})
+                              })}
+                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                                (q.confidence || 'sabia') === c.id
+                                  ? 'bg-sky-500 text-slate-950 shadow-sm'
+                                  : 'bg-slate-100 dark:bg-[#26292C] text-slate-500 dark:text-[#A0AAB2] hover:text-white'
+                              }`}
+                            >
+                              {c.label}
+                            </button>
+                          ))}
+                        </div>
+
+                        {/* Seletor Único de Causa do Erro (se errou) */}
+                        {!q.hit && (
+                          <div className="flex items-center gap-1">
+                            <span className="text-[10px] font-bold uppercase text-red-400 mr-1">Causa:</span>
+                            {[
+                              { id: 'conteudo', label: '📚 Teoria' },
+                              { id: 'atencao', label: '⚠️ Atenção' },
+                              { id: 'interpretacao', label: '🔍 Interpr.' }
+                            ].map(r => (
+                              <button
+                                key={r.id}
+                                type="button"
+                                onClick={() => updateCaveiraQuestion(q.id, { errorReason: r.id })}
+                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
+                                  (q.errorReason || 'conteudo') === r.id
+                                    ? 'bg-red-500 text-white shadow-sm'
+                                    : 'bg-slate-100 dark:bg-[#26292C] text-slate-500 dark:text-[#A0AAB2] hover:text-white'
+                                }`}
+                              >
+                                {r.label}
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+
+                      {/* Botão para Expandir/Recolher Comentário do Professor */}
+                      {q.teacherComment && (
+                        <button
+                          type="button"
+                          onClick={() => toggleComment(q.id)}
+                          className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 cursor-pointer"
+                        >
+                          🎓 {isCommentOpen ? 'Ocultar Comentário do Professor' : 'Ver Comentário do Professor'}
+                          {isCommentOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                        </button>
+                      )}
+                    </div>
+
+                    {/* Comentário do Professor (Recolhível para manter leitura concisa) */}
+                    <AnimatePresence>
+                      {q.teacherComment && isCommentOpen && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/25 text-xs sm:text-sm text-slate-200 leading-relaxed whitespace-pre-line overflow-hidden"
+                        >
+                          <span className="font-bold text-blue-300 block mb-1">🎓 Comentário do Professor / Gabarito:</span>
+                          {q.teacherComment}
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
                   </div>
                 </div>
               );
