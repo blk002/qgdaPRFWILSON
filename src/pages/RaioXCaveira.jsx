@@ -818,8 +818,8 @@ export default function RaioXCaveira() {
                 </div>
               </div>
 
-              {/* Legenda inferior (Acertos & Erros com porcentagens e contagem) */}
-              <div className="w-full pt-3 mt-1 border-t border-slate-200/60 dark:border-[#2E3236] flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 text-xs sm:text-sm font-semibold">
+              {/* Legenda inferior (Acertos & Erros alinhados à esquerda) */}
+              <div className="w-full pt-3 mt-1 border-t border-slate-200/60 dark:border-[#2E3236] flex flex-col items-start justify-center gap-1.5 pl-8 sm:pl-12 text-xs sm:text-sm font-semibold">
                 <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#0891b2] dark:bg-[#06b6d4] shrink-0" />
                   <span>{hitPercent}% {stats.hits} acertos</span>

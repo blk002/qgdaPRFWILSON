@@ -284,6 +284,7 @@ export default function App() {
         <div className="fixed top-0 left-1/3 w-[500px] h-[500px] bg-white/[0.01] rounded-full blur-[140px] pointer-events-none -z-10 pulse-bg-glow"></div>
       )}
       <Toaster position="top-right" richColors closeButton />
+      <TacticalCountdownBanner />
 
       {/* MENU LATERAL ESQUERDO (DESKTOP) */}
       <aside className={`hidden md:flex flex-col fixed inset-y-0 left-0 w-60 z-50 border-r transition-colors ${
@@ -426,7 +427,6 @@ export default function App() {
       {/* ÁREA DE CONTEÚDO PRINCIPAL */}
       <div className="flex-1 md:pl-60 min-w-0 w-full">
         <main className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
-          <TacticalCountdownBanner />
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}

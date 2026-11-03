@@ -1,14 +1,13 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { 
   Clock, Calendar, Settings, ChevronDown, ChevronUp, 
-  Target, Flame, ShieldAlert, Check, X, Sparkles, AlertCircle 
+  Target, Sparkles, X 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const STORAGE_KEY = 'qg_tactical_countdown_config';
 
 function getDefaultTargetDate() {
-  // Padrão: 180 dias a partir de hoje às 08:00
   const d = new Date();
   d.setDate(d.getDate() + 180);
   d.setHours(8, 0, 0, 0);
@@ -24,7 +23,7 @@ export default function TacticalCountdownBanner() {
         return {
           title: parsed.title || 'OPERAÇÃO PRF • CONTAGEM REGRESSIVA',
           targetDate: parsed.targetDate || getDefaultTargetDate(),
-          isCollapsed: Boolean(parsed.isCollapsed)
+          isCollapsed: parsed.isCollapsed !== undefined ? Boolean(parsed.isCollapsed) : false
         };
       }
     } catch (_) {}
@@ -47,7 +46,6 @@ export default function TacticalCountdownBanner() {
     }
   });
 
-  // Tique do relógio a cada 1 segundo
   useEffect(() => {
     const timer = setInterval(() => setNow(Date.now()), 1000);
     return () => clearInterval(timer);
@@ -64,7 +62,8 @@ export default function TacticalCountdownBanner() {
     saveConfig({ ...config, isCollapsed: !config.isCollapsed });
   };
 
-  const handleOpenModal = () => {
+  const handleOpenModal = (e) => {
+    e?.stopPropagation();
     setDraftTitle(config.title);
     try {
       const d = new Date(config.targetDate);
@@ -95,7 +94,6 @@ export default function TacticalCountdownBanner() {
     setDraftDate(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
   };
 
-  // Cálculo da contagem regressiva
   const timeRemaining = useMemo(() => {
     const targetTime = new Date(config.targetDate).getTime();
     const diff = targetTime - now;
@@ -129,170 +127,154 @@ export default function TacticalCountdownBanner() {
 
   return (
     <>
-      <div className="mb-4 w-full">
-        <div className="relative overflow-hidden rounded-2xl border border-blue-500/25 dark:border-blue-500/30 bg-slate-900/90 dark:bg-[#121417]/95 shadow-lg shadow-blue-500/5 backdrop-blur-xl transition-all duration-300">
-          {/* Luz ambiente sutil de fundo */}
-          <div className="absolute top-0 right-1/4 w-72 h-16 bg-blue-500/10 blur-3xl pointer-events-none -z-0" />
-          <div className="absolute bottom-0 left-1/4 w-72 h-16 bg-emerald-500/10 blur-3xl pointer-events-none -z-0" />
-
-          {/* Barra Superior / Header */}
-          <div className="px-4 py-2.5 flex items-center justify-between border-b border-slate-800/80 bg-slate-950/40">
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="relative flex h-2.5 w-2.5 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2.5 w-2.5 bg-emerald-500" />
-              </span>
-              <span className="text-xs font-black tracking-wider uppercase text-blue-400 flex items-center gap-1.5 truncate">
-                <Target className="w-3.5 h-3.5 shrink-0 text-blue-400" />
-                <span className="truncate">{config.title}</span>
-              </span>
-            </div>
-
-            <div className="flex items-center gap-1.5 shrink-0">
-              <button
-                type="button"
-                onClick={handleOpenModal}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
-                title="Configurar Data da Prova / Meta"
-              >
-                <Settings className="w-3.5 h-3.5" />
-              </button>
-              <button
-                type="button"
-                onClick={toggleCollapsed}
-                className="p-1.5 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800/80 transition-colors"
-                title={config.isCollapsed ? 'Expandir Painel' : 'Minimizar'}
-              >
-                {config.isCollapsed ? <ChevronDown className="w-3.5 h-3.5" /> : <ChevronUp className="w-3.5 h-3.5" />}
-              </button>
-            </div>
-          </div>
-
-          {/* Corpo do Timer */}
-          <AnimatePresence initial={false}>
-            {!config.isCollapsed ? (
-              <motion.div
-                initial={{ height: 0, opacity: 0 }}
-                animate={{ height: 'auto', opacity: 1 }}
-                exit={{ height: 0, opacity: 0 }}
-                transition={{ duration: 0.25 }}
-                className="overflow-hidden"
-              >
-                <div className="p-4 sm:p-5 flex flex-col md:flex-row items-center justify-between gap-4">
-                  {/* Bloco de Dígitos Táticos */}
-                  {timeRemaining.isPassed ? (
-                    <div className="flex items-center gap-3 py-2 text-emerald-400">
-                      <Sparkles className="w-6 h-6 animate-pulse" />
-                      <div>
-                        <div className="text-lg font-black uppercase">O DIA DA MISSÃO CHEGOU!</div>
-                        <div className="text-xs text-slate-400">Hora de buscar a sua farda. Vá e vença!</div>
-                      </div>
-                    </div>
-                  ) : (
-                    <div className="grid grid-cols-4 gap-2 sm:gap-3 w-full md:w-auto">
-                      {/* DIAS */}
-                      <div className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-2.5 sm:p-3 text-center min-w-[70px] sm:min-w-[85px] shadow-inner">
-                        <div className="text-2xl sm:text-3xl font-black text-white tabular-nums tracking-tight font-mono">
-                          {String(timeRemaining.days).padStart(2, '0')}
-                        </div>
-                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 mt-0.5">
-                          Dias
-                        </div>
-                      </div>
-
-                      {/* HORAS */}
-                      <div className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-2.5 sm:p-3 text-center min-w-[70px] sm:min-w-[85px] shadow-inner">
-                        <div className="text-2xl sm:text-3xl font-black text-blue-400 tabular-nums tracking-tight font-mono">
-                          {String(timeRemaining.hours).padStart(2, '0')}
-                        </div>
-                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 mt-0.5">
-                          Horas
-                        </div>
-                      </div>
-
-                      {/* MINUTOS */}
-                      <div className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-2.5 sm:p-3 text-center min-w-[70px] sm:min-w-[85px] shadow-inner">
-                        <div className="text-2xl sm:text-3xl font-black text-white tabular-nums tracking-tight font-mono">
-                          {String(timeRemaining.minutes).padStart(2, '0')}
-                        </div>
-                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 mt-0.5">
-                          Minutos
-                        </div>
-                      </div>
-
-                      {/* SEGUNDOS */}
-                      <div className="bg-slate-950/70 border border-slate-800/90 rounded-xl p-2.5 sm:p-3 text-center min-w-[70px] sm:min-w-[85px] shadow-inner">
-                        <div className="text-2xl sm:text-3xl font-black text-amber-400 tabular-nums tracking-tight font-mono">
-                          {String(timeRemaining.seconds).padStart(2, '0')}
-                        </div>
-                        <div className="text-[10px] font-black uppercase tracking-wider text-slate-400 mt-0.5">
-                          Segundos
-                        </div>
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Informações da Meta e Botão de Ação */}
-                  <div className="flex flex-col sm:flex-row md:flex-col items-center md:items-end justify-between w-full md:w-auto gap-2 text-center md:text-right border-t md:border-t-0 border-slate-800/80 pt-3 md:pt-0">
-                    <div>
-                      <div className="text-xs font-bold text-slate-300 flex items-center justify-center md:justify-end gap-1.5">
-                        <Calendar className="w-3.5 h-3.5 text-blue-400" />
-                        <span>Alvo: {formattedTargetDate}</span>
-                      </div>
-                      <div className="text-[11px] font-semibold text-slate-400 mt-0.5">
-                        {timeRemaining.days > 0 
-                          ? `${timeRemaining.days} dias de preparação restante` 
-                          : 'Reta final da preparação!'}
-                      </div>
-                    </div>
-
-                    <button
-                      type="button"
-                      onClick={handleOpenModal}
-                      className="px-3 py-1.5 rounded-lg bg-blue-600/20 hover:bg-blue-600/30 text-blue-300 border border-blue-500/30 text-xs font-bold transition-all flex items-center gap-1.5"
-                    >
-                      <Settings className="w-3 h-3" />
-                      <span>Alterar Meta</span>
-                    </button>
-                  </div>
-                </div>
-              </motion.div>
-            ) : (
-              // Versão Compacta / Minimizada
-              <div className="px-4 py-2 flex items-center justify-between text-xs font-mono">
-                <div className="flex items-center gap-2 text-slate-300">
-                  <Clock className="w-3.5 h-3.5 text-blue-400" />
-                  <span>
-                    {timeRemaining.isPassed ? (
-                      <span className="text-emerald-400 font-bold">MISSÃO CHEGOU!</span>
-                    ) : (
-                      <>
-                        <strong className="text-white font-bold">{timeRemaining.days}d</strong>{' '}
-                        <strong className="text-blue-400 font-bold">{timeRemaining.hours}h</strong>{' '}
-                        <span className="text-slate-400">{timeRemaining.minutes}m</span>{' '}
-                        <span className="text-amber-400 font-bold">{timeRemaining.seconds}s</span>{' '}
-                        <span className="text-slate-500">restantes</span>
-                      </>
-                    )}
+      {/* WIDGET FIXO NO CANTO INFERIOR DIREITO */}
+      <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 pointer-events-auto select-none">
+        <AnimatePresence mode="wait">
+          {!config.isCollapsed ? (
+            /* PAINEL EXPANDIDO FLUTUANTE */
+            <motion.div
+              key="expanded"
+              initial={{ opacity: 0, y: 20, scale: 0.95 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              exit={{ opacity: 0, y: 20, scale: 0.95 }}
+              transition={{ duration: 0.2 }}
+              className="w-[320px] sm:w-[350px] overflow-hidden rounded-2xl border border-blue-500/30 bg-slate-900/95 dark:bg-[#121417]/95 shadow-[0_10px_35px_rgba(0,0,0,0.7)] backdrop-blur-xl"
+            >
+              {/* Barra de Título */}
+              <div className="px-3.5 py-2 flex items-center justify-between border-b border-slate-800 bg-slate-950/60">
+                <div className="flex items-center gap-2 min-w-0">
+                  <span className="relative flex h-2 w-2 shrink-0">
+                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+                  </span>
+                  <span className="text-[11px] font-black tracking-wider uppercase text-blue-400 flex items-center gap-1.5 truncate">
+                    <Target className="w-3 h-3 text-blue-400 shrink-0" />
+                    <span className="truncate">{config.title}</span>
                   </span>
                 </div>
-                <button
-                  type="button"
-                  onClick={toggleCollapsed}
-                  className="text-[11px] font-sans font-bold text-blue-400 hover:underline"
-                >
-                  Expandir ⌄
-                </button>
+
+                <div className="flex items-center gap-1 shrink-0">
+                  <button
+                    type="button"
+                    onClick={handleOpenModal}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                    title="Configurar Meta / Data"
+                  >
+                    <Settings className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={toggleCollapsed}
+                    className="p-1 rounded-lg text-slate-400 hover:text-white hover:bg-slate-800 transition-colors"
+                    title="Minimizar para o canto"
+                  >
+                    <ChevronDown className="w-3.5 h-3.5" />
+                  </button>
+                </div>
               </div>
-            )}
-          </AnimatePresence>
-        </div>
+
+              {/* Corpo com Dígitos do Timer */}
+              <div className="p-3.5">
+                {timeRemaining.isPassed ? (
+                  <div className="flex items-center gap-2 text-emerald-400 py-1 text-center justify-center">
+                    <Sparkles className="w-4 h-4 animate-pulse" />
+                    <span className="text-xs font-black uppercase">O DIA DA MISSÃO CHEGOU!</span>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-4 gap-1.5 text-center">
+                    {/* DIAS */}
+                    <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2 shadow-inner">
+                      <div className="text-xl sm:text-2xl font-black text-white tabular-nums tracking-tight font-mono leading-none">
+                        {String(timeRemaining.days).padStart(2, '0')}
+                      </div>
+                      <div className="text-[9px] font-black uppercase tracking-wider text-slate-400 mt-1">
+                        Dias
+                      </div>
+                    </div>
+
+                    {/* HORAS */}
+                    <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2 shadow-inner">
+                      <div className="text-xl sm:text-2xl font-black text-blue-400 tabular-nums tracking-tight font-mono leading-none">
+                        {String(timeRemaining.hours).padStart(2, '0')}
+                      </div>
+                      <div className="text-[9px] font-black uppercase tracking-wider text-slate-400 mt-1">
+                        Horas
+                      </div>
+                    </div>
+
+                    {/* MINUTOS */}
+                    <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2 shadow-inner">
+                      <div className="text-xl sm:text-2xl font-black text-white tabular-nums tracking-tight font-mono leading-none">
+                        {String(timeRemaining.minutes).padStart(2, '0')}
+                      </div>
+                      <div className="text-[9px] font-black uppercase tracking-wider text-slate-400 mt-1">
+                        Min
+                      </div>
+                    </div>
+
+                    {/* SEGUNDOS */}
+                    <div className="bg-slate-950/80 border border-slate-800/80 rounded-xl p-2 shadow-inner">
+                      <div className="text-xl sm:text-2xl font-black text-amber-400 tabular-nums tracking-tight font-mono leading-none">
+                        {String(timeRemaining.seconds).padStart(2, '0')}
+                      </div>
+                      <div className="text-[9px] font-black uppercase tracking-wider text-slate-400 mt-1">
+                        Seg
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Rodapé do Widget */}
+                <div className="mt-2.5 pt-2 border-t border-slate-800 flex items-center justify-between text-[10px] text-slate-400">
+                  <div className="flex items-center gap-1 truncate">
+                    <Calendar className="w-3 h-3 text-blue-400 shrink-0" />
+                    <span className="truncate">{formattedTargetDate}</span>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={handleOpenModal}
+                    className="text-blue-400 font-bold hover:underline shrink-0"
+                  >
+                    Editar Meta
+                  </button>
+                </div>
+              </div>
+            </motion.div>
+          ) : (
+            /* PÍLULA MINIMIZADA FLUTUANTE */
+            <motion.div
+              key="collapsed"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.2 }}
+              onClick={toggleCollapsed}
+              className="flex items-center gap-2 bg-slate-900/95 dark:bg-[#121417]/95 border border-blue-500/35 hover:border-blue-400 text-white px-3 py-2 rounded-2xl shadow-2xl backdrop-blur-xl cursor-pointer transition-all group"
+              title="Clique para expandir o contador tático"
+            >
+              <span className="relative flex h-2 w-2 shrink-0">
+                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
+                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
+              </span>
+
+              <div className="flex items-center gap-1.5 font-mono text-xs">
+                <span className="text-blue-400 font-sans font-black text-[10px] uppercase">PRF:</span>
+                <span className="font-black text-white">{timeRemaining.days}d</span>
+                <span className="font-black text-blue-400">{timeRemaining.hours}h</span>
+                <span className="font-bold text-slate-300">{timeRemaining.minutes}m</span>
+                <span className="font-black text-amber-400">{timeRemaining.seconds}s</span>
+              </div>
+
+              <ChevronUp className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-colors shrink-0 ml-1" />
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Modal de Configuração da Data da Prova / Meta */}
       <AnimatePresence>
         {isModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/70 backdrop-blur-sm">
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/75 backdrop-blur-sm">
             <motion.div
               initial={{ scale: 0.95, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
