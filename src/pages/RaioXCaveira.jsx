@@ -742,282 +742,285 @@ export default function RaioXCaveira() {
         })}
       </div>
 
-      {/* PAINEL 2: DESEMPENHO POR DISCIPLINA (EM GRID DE CARDS COMPACTOS) */}
-      <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
-          <div>
-            <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
-              <ShieldCheck className="w-4 h-4 text-blue-500" /> Desempenho por Disciplina ({subjectGroups.length})
-            </h2>
-            <p className="text-xs font-medium text-slate-400">
-              Clique em uma matéria para expandir os assuntos ou filtrar questões.
-            </p>
+      {/* SEÇÃO 2: DESEMPENHO POR DISCIPLINA + RADAR DE LEI SECA LADO A LADO */}
+      <div className={legalRadarList.length > 0 ? "grid grid-cols-1 lg:grid-cols-2 gap-4 items-start" : "space-y-4"}>
+        {/* PAINEL 2: DESEMPENHO POR DISCIPLINA (EM GRID DE CARDS COMPACTOS) */}
+        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div>
+              <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-blue-500" /> Desempenho por Disciplina ({subjectGroups.length})
+              </h2>
+              <p className="text-xs font-medium text-slate-400">
+                Clique em uma matéria para expandir os assuntos ou filtrar questões.
+              </p>
+            </div>
+
+            <div className="flex items-center gap-3 text-[11px] font-bold uppercase">
+              <span className="flex items-center gap-1 text-emerald-500">
+                <span className="w-2 h-2 rounded-full bg-emerald-500" /> &ge;75%
+              </span>
+              <span className="flex items-center gap-1 text-amber-500">
+                <span className="w-2 h-2 rounded-full bg-amber-500" /> 50–74%
+              </span>
+              <span className="flex items-center gap-1 text-red-500">
+                <span className="w-2 h-2 rounded-full bg-red-500" /> &lt;50%
+              </span>
+            </div>
           </div>
 
-          <div className="flex items-center gap-3 text-[11px] font-bold uppercase">
-            <span className="flex items-center gap-1 text-emerald-500">
-              <span className="w-2 h-2 rounded-full bg-emerald-500" /> &ge;75%
-            </span>
-            <span className="flex items-center gap-1 text-amber-500">
-              <span className="w-2 h-2 rounded-full bg-amber-500" /> 50–74%
-            </span>
-            <span className="flex items-center gap-1 text-red-500">
-              <span className="w-2 h-2 rounded-full bg-red-500" /> &lt;50%
-            </span>
-          </div>
+          {subjectGroups.length === 0 ? (
+            <div className="text-center py-8 text-slate-400">
+              <Skull className="w-10 h-10 mx-auto text-slate-600 mb-2" />
+              <p className="font-black text-xs uppercase">Nenhuma questão registrada neste filtro</p>
+              <p className="text-xs mt-1 text-slate-500">
+                Resolva questões no Projeto Caveira para alimentar as disciplinas automaticamente.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {subjectGroups.map(sub => {
+                const isExpanded = expandedSubject === sub.name;
+                const blocoMeta = BLOCO_METADATA[sub.bloco] || BLOCO_METADATA['Bloco I'];
+                return (
+                  <div
+                    key={sub.name}
+                    className={`rounded-xl border transition-all flex flex-col justify-between overflow-hidden ${
+                      isExpanded ? 'col-span-full' : ''
+                    } ${
+                      sub.status === 'vulnerabilidade'
+                        ? 'border-red-500/30 bg-red-500/5 dark:bg-[#1E2022]'
+                        : sub.status === 'blindagem'
+                          ? 'border-emerald-500/30 bg-emerald-500/5 dark:bg-[#1E2022]'
+                          : 'border-slate-200 dark:border-[#32363A] bg-white dark:bg-[#1E2022]'
+                    }`}
+                  >
+                    <div
+                      onClick={() => setExpandedSubject(isExpanded ? null : sub.name)}
+                      className="p-3.5 cursor-pointer hover:bg-slate-100/40 dark:hover:bg-[#26292C]/60 transition-colors flex flex-col gap-2.5"
+                    >
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <div className="flex items-center gap-1.5 flex-wrap mb-1">
+                            <span className={`text-[10px] font-semibold uppercase tracking-[0.03em] px-2 py-0.5 rounded border ${blocoMeta.badgeClass}`}>
+                              {sub.bloco}
+                            </span>
+                            <span className={`text-[10px] font-semibold uppercase tracking-[0.03em] px-2 py-0.5 rounded ${
+                              sub.status === 'vulnerabilidade'
+                                ? 'bg-red-500 text-white'
+                                : sub.status === 'blindagem'
+                                  ? 'bg-emerald-500 text-white'
+                                  : 'bg-amber-500 text-slate-950'
+                            }`}>
+                              {sub.status === 'vulnerabilidade' ? 'Reforço' : sub.status === 'blindagem' ? 'Blindado' : 'Evolução'}
+                            </span>
+                          </div>
+                          <h3 className="text-sm font-bold text-slate-800 dark:text-[#F1F5F9] truncate" title={sub.name}>
+                            {sub.name}
+                          </h3>
+                        </div>
+
+                        <div className="text-right shrink-0">
+                          <span className={`text-lg font-bold leading-none block ${sub.grossPercent >= 75 ? 'text-emerald-500' : sub.grossPercent >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                            {sub.grossPercent}%
+                          </span>
+                          <span className="text-[11px] font-medium text-slate-400">
+                            {sub.hits}C / {sub.errors}E
+                          </span>
+                        </div>
+                      </div>
+
+                      <div className="w-full bg-slate-200 dark:bg-[#26292C] h-1.5 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full transition-all ${
+                            sub.grossPercent >= 75 ? 'bg-emerald-500' : sub.grossPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'
+                          }`}
+                          style={{ width: `${Math.max(5, Math.min(100, sub.grossPercent))}%` }}
+                        />
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-xs text-slate-500 dark:text-[#A0AAB2] font-medium">
+                          {sub.total} {sub.total === 1 ? 'questão' : 'questões'} • ⏱️ {sub.avgTime}s
+                        </span>
+
+                        <div className="flex items-center gap-1.5">
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setSelectedSubject(selectedSubject === sub.name ? 'all' : sub.name);
+                              setSelectedTopic('all');
+                            }}
+                            className={`text-[10px] font-semibold uppercase tracking-[0.03em] px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
+                              selectedSubject === sub.name
+                                ? 'bg-blue-600 text-white border-blue-500'
+                                : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:text-white'
+                            }`}
+                          >
+                            {selectedSubject === sub.name ? '✓ Filtrado' : 'Filtrar'}
+                          </button>
+                          <div className="w-6 h-6 rounded-lg bg-slate-200 dark:bg-[#26292C] flex items-center justify-center text-slate-400">
+                            {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* SUB-TÓPICOS DETALHADOS DA MATÉRIA */}
+                    <AnimatePresence>
+                      {isExpanded && (
+                        <motion.div
+                          initial={{ height: 0, opacity: 0 }}
+                          animate={{ height: 'auto', opacity: 1 }}
+                          exit={{ height: 0, opacity: 0 }}
+                          className="border-t border-slate-200 dark:border-[#2E3236] p-3.5 bg-white/40 dark:bg-[#181A1C] space-y-2.5"
+                        >
+                          <div className="flex items-center justify-between">
+                            <h4 className="text-xs font-semibold uppercase tracking-[0.03em] text-slate-400">
+                              Assuntos Mapeados ({sub.topicsList.length}):
+                            </h4>
+                            {selectedTopic !== 'all' && (
+                              <button
+                                onClick={() => setSelectedTopic('all')}
+                                className="text-xs font-semibold uppercase tracking-[0.03em] text-blue-400 hover:underline"
+                              >
+                                Limpar filtro de tópico
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                            {sub.topicsList.map(topic => {
+                              const isTopicActive = selectedTopic === topic.name;
+                              return (
+                                <div
+                                  key={topic.name}
+                                  onClick={() => {
+                                    setSelectedSubject(sub.name);
+                                    setSelectedTopic(isTopicActive ? 'all' : topic.name);
+                                  }}
+                                  className={`p-3 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
+                                    isTopicActive
+                                      ? 'bg-blue-500/10 border-blue-500 ring-1 ring-blue-500/40'
+                                      : 'bg-slate-100 dark:bg-[#1E2022] border-slate-200/60 dark:border-[#32363A] hover:border-slate-600'
+                                  }`}
+                                >
+                                  <div>
+                                    <div className="flex justify-between items-start gap-2">
+                                      <h5 className="text-xs font-medium text-slate-800 dark:text-[#F1F5F9] normal-case line-clamp-2 leading-snug">
+                                        {topic.name}
+                                      </h5>
+                                      <span className={`text-xs font-bold shrink-0 ${topic.grossPercent >= 75 ? 'text-emerald-500' : topic.grossPercent >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                                        {topic.grossPercent}%
+                                      </span>
+                                    </div>
+                                    <div className="w-full bg-slate-200 dark:bg-[#26292C] h-1.5 rounded-full mt-2 overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full ${topic.grossPercent >= 75 ? 'bg-emerald-500' : topic.grossPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                        style={{ width: `${Math.max(5, Math.min(100, topic.grossPercent))}%` }}
+                                      />
+                                    </div>
+                                  </div>
+
+                                  <div className="flex justify-between items-center text-[11px] font-medium text-slate-500 dark:text-[#A0AAB2] mt-2">
+                                    <span>{topic.total}q ({topic.hits}C / {topic.errors}E)</span>
+                                    {topic.errors > 0 ? (
+                                      <span className="text-red-400">⚠️ {topic.errors} erro(s)</span>
+                                    ) : (
+                                      <span className="text-emerald-400">✓ 100%</span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </motion.div>
+                      )}
+                    </AnimatePresence>
+                  </div>
+                );
+              })}
+            </div>
+          )}
         </div>
 
-        {subjectGroups.length === 0 ? (
-          <div className="text-center py-8 text-slate-400">
-            <Skull className="w-10 h-10 mx-auto text-slate-600 mb-2" />
-            <p className="font-black text-xs uppercase">Nenhuma questão registrada neste filtro</p>
-            <p className="text-xs mt-1 text-slate-500">
-              Resolva questões no Projeto Caveira para alimentar as disciplinas automaticamente.
-            </p>
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-            {subjectGroups.map(sub => {
-              const isExpanded = expandedSubject === sub.name;
-              const blocoMeta = BLOCO_METADATA[sub.bloco] || BLOCO_METADATA['Bloco I'];
-              return (
-                <div
-                  key={sub.name}
-                  className={`rounded-xl border transition-all flex flex-col justify-between overflow-hidden ${
-                    isExpanded ? 'md:col-span-2 lg:col-span-3' : ''
-                  } ${
-                    sub.status === 'vulnerabilidade'
-                      ? 'border-red-500/30 bg-red-500/5 dark:bg-[#1E2022]'
-                      : sub.status === 'blindagem'
-                        ? 'border-emerald-500/30 bg-emerald-500/5 dark:bg-[#1E2022]'
-                        : 'border-slate-200 dark:border-[#32363A] bg-white dark:bg-[#1E2022]'
-                  }`}
+        {/* PAINEL #11: RADAR DE LEI SECA (ARTIGOS, LEIS, SÚMULAS E RESOLUÇÕES MAIS ERRADOS / CHUTADOS) */}
+        {legalRadarList.length > 0 && (
+          <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h2 className="text-sm sm:text-base font-bold text-slate-800 dark:text-[#F1F5F9] uppercase tracking-[0.03em] flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-amber-400" /> Radar de Lei Seca • Artigos & Leis ({legalRadarList.length})
+                </h2>
+                <p className="text-xs font-normal text-slate-500 dark:text-[#A0AAB2]">
+                  Dispositivos mais cobrados e errados. Clique para filtrar o Caderno.
+                </p>
+              </div>
+              {selectedLegalDevice && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedLegalDevice(null)}
+                  className="px-2.5 py-1 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold uppercase tracking-wider cursor-pointer shrink-0"
                 >
-                  <div
-                    onClick={() => setExpandedSubject(isExpanded ? null : sub.name)}
-                    className="p-3.5 cursor-pointer hover:bg-slate-100/40 dark:hover:bg-[#26292C]/60 transition-colors flex flex-col gap-2.5"
+                  Filtro: {selectedLegalDevice.label} ✕
+                </button>
+              )}
+            </div>
+
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5">
+              {legalRadarList.slice(0, 10).map((dev, idx) => {
+                const isSelected = selectedLegalDevice?.key === dev.key;
+                const hasErrors = dev.errors > 0;
+                return (
+                  <button
+                    key={dev.key}
+                    type="button"
+                    onClick={() => setSelectedLegalDevice(isSelected ? null : dev)}
+                    className={`p-3 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
+                      isSelected
+                        ? 'bg-amber-500/15 border-amber-400 ring-2 ring-amber-500/30'
+                        : hasErrors
+                        ? 'bg-red-500/5 dark:bg-[#1E2022] border-red-500/30 hover:border-red-400'
+                        : 'bg-slate-50 dark:bg-[#1E2022] border-slate-200 dark:border-[#34383D] hover:border-slate-500'
+                    }`}
                   >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-1.5 flex-wrap mb-1">
-                          <span className={`text-[10px] font-semibold uppercase tracking-[0.03em] px-2 py-0.5 rounded border ${blocoMeta.badgeClass}`}>
-                            {sub.bloco}
-                          </span>
-                          <span className={`text-[10px] font-semibold uppercase tracking-[0.03em] px-2 py-0.5 rounded ${
-                            sub.status === 'vulnerabilidade'
-                              ? 'bg-red-500 text-white'
-                              : sub.status === 'blindagem'
-                                ? 'bg-emerald-500 text-white'
-                                : 'bg-amber-500 text-slate-950'
-                          }`}>
-                            {sub.status === 'vulnerabilidade' ? 'Reforço' : sub.status === 'blindagem' ? 'Blindado' : 'Evolução'}
-                          </span>
-                        </div>
-                        <h3 className="text-sm font-bold text-slate-800 dark:text-[#F1F5F9] truncate" title={sub.name}>
-                          {sub.name}
-                        </h3>
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <span className={`text-lg font-bold leading-none block ${sub.grossPercent >= 75 ? 'text-emerald-500' : sub.grossPercent >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-                          {sub.grossPercent}%
+                    <div className="flex items-start justify-between gap-2 w-full">
+                      <div className="flex items-center gap-1.5 min-w-0">
+                        <span className="w-5 h-5 rounded-md bg-black/30 border border-white/10 text-[10px] font-mono font-black text-amber-400 flex items-center justify-center shrink-0">
+                          #{idx + 1}
                         </span>
-                        <span className="text-[11px] font-medium text-slate-400">
-                          {sub.hits}C / {sub.errors}E
+                        <span className="text-xs font-bold text-slate-800 dark:text-[#F1F5F9] truncate" title={dev.label}>
+                          {dev.label}
                         </span>
                       </div>
-                    </div>
-
-                    <div className="w-full bg-slate-200 dark:bg-[#26292C] h-1.5 rounded-full overflow-hidden">
-                      <div
-                        className={`h-full rounded-full transition-all ${
-                          sub.grossPercent >= 75 ? 'bg-emerald-500' : sub.grossPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'
-                        }`}
-                        style={{ width: `${Math.max(5, Math.min(100, sub.grossPercent))}%` }}
-                      />
-                    </div>
-
-                    <div className="flex items-center justify-between pt-1">
-                      <span className="text-xs text-slate-500 dark:text-[#A0AAB2] font-medium">
-                        {sub.total} {sub.total === 1 ? 'questão' : 'questões'} • ⏱️ {sub.avgTime}s
+                      <span className="text-[9px] font-bold uppercase px-1.5 py-0.5 rounded bg-slate-200 dark:bg-[#26292C] text-slate-600 dark:text-[#A0AAB2] shrink-0">
+                        {dev.category}
                       </span>
-
-                      <div className="flex items-center gap-1.5">
-                        <button
-                          type="button"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setSelectedSubject(selectedSubject === sub.name ? 'all' : sub.name);
-                            setSelectedTopic('all');
-                          }}
-                          className={`text-[10px] font-semibold uppercase tracking-[0.03em] px-2.5 py-1 rounded-lg border transition-all cursor-pointer ${
-                            selectedSubject === sub.name
-                              ? 'bg-blue-600 text-white border-blue-500'
-                              : 'bg-slate-800/80 text-slate-300 border-slate-700 hover:text-white'
-                          }`}
-                        >
-                          {selectedSubject === sub.name ? '✓ Filtrado' : 'Filtrar'}
-                        </button>
-                        <div className="w-6 h-6 rounded-lg bg-slate-200 dark:bg-[#26292C] flex items-center justify-center text-slate-400">
-                          {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                        </div>
-                      </div>
                     </div>
-                  </div>
 
-                  {/* SUB-TÓPICOS DETALHADOS DA MATÉRIA */}
-                  <AnimatePresence>
-                    {isExpanded && (
-                      <motion.div
-                        initial={{ height: 0, opacity: 0 }}
-                        animate={{ height: 'auto', opacity: 1 }}
-                        exit={{ height: 0, opacity: 0 }}
-                        className="border-t border-slate-200 dark:border-[#2E3236] p-3.5 bg-white/40 dark:bg-[#181A1C] space-y-2.5"
-                      >
-                        <div className="flex items-center justify-between">
-                          <h4 className="text-xs font-semibold uppercase tracking-[0.03em] text-slate-400">
-                            Assuntos Mapeados ({sub.topicsList.length}):
-                          </h4>
-                          {selectedTopic !== 'all' && (
-                            <button
-                              onClick={() => setSelectedTopic('all')}
-                              className="text-xs font-semibold uppercase tracking-[0.03em] text-blue-400 hover:underline"
-                            >
-                              Limpar filtro de tópico
-                            </button>
-                          )}
-                        </div>
-
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2.5">
-                          {sub.topicsList.map(topic => {
-                            const isTopicActive = selectedTopic === topic.name;
-                            return (
-                              <div
-                                key={topic.name}
-                                onClick={() => {
-                                  setSelectedSubject(sub.name);
-                                  setSelectedTopic(isTopicActive ? 'all' : topic.name);
-                                }}
-                                className={`p-3 rounded-xl border flex flex-col justify-between cursor-pointer transition-all ${
-                                  isTopicActive
-                                    ? 'bg-blue-500/10 border-blue-500 ring-1 ring-blue-500/40'
-                                    : 'bg-slate-100 dark:bg-[#1E2022] border-slate-200/60 dark:border-[#32363A] hover:border-slate-600'
-                                }`}
-                              >
-                                <div>
-                                  <div className="flex justify-between items-start gap-2">
-                                    <h5 className="text-xs font-medium text-slate-800 dark:text-[#F1F5F9] normal-case line-clamp-2 leading-snug">
-                                      {topic.name}
-                                    </h5>
-                                    <span className={`text-xs font-bold shrink-0 ${topic.grossPercent >= 75 ? 'text-emerald-500' : topic.grossPercent >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-                                      {topic.grossPercent}%
-                                    </span>
-                                  </div>
-                                  <div className="w-full bg-slate-200 dark:bg-[#26292C] h-1.5 rounded-full mt-2 overflow-hidden">
-                                    <div
-                                      className={`h-full rounded-full ${topic.grossPercent >= 75 ? 'bg-emerald-500' : topic.grossPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
-                                      style={{ width: `${Math.max(5, Math.min(100, topic.grossPercent))}%` }}
-                                    />
-                                  </div>
-                                </div>
-
-                                <div className="flex justify-between items-center text-[11px] font-medium text-slate-500 dark:text-[#A0AAB2] mt-2">
-                                  <span>{topic.total}q ({topic.hits}C / {topic.errors}E)</span>
-                                  {topic.errors > 0 ? (
-                                    <span className="text-red-400">⚠️ {topic.errors} erro(s)</span>
-                                  ) : (
-                                    <span className="text-emerald-400">✓ 100%</span>
-                                  )}
-                                </div>
-                              </div>
-                            );
-                          })}
-                        </div>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-                </div>
-              );
-            })}
+                    <div className="flex items-center justify-between text-[11px] font-semibold w-full pt-1 border-t border-slate-200/50 dark:border-[#2E3236]">
+                      <div className="flex items-center gap-1.5 flex-wrap">
+                        {dev.errors > 0 ? (
+                          <span className="text-red-400 font-bold">✗ {dev.errors} {dev.errors === 1 ? 'erro' : 'erros'}</span>
+                        ) : (
+                          <span className="text-emerald-400">✓ 0 erros</span>
+                        )}
+                        {dev.guessesOrDoubts > 0 && (
+                          <span className="text-amber-300">🎲 {dev.guessesOrDoubts}</span>
+                        )}
+                      </div>
+                      <span className="text-slate-400 shrink-0">
+                        {dev.total} {dev.total === 1 ? 'q' : 'questões'} →
+                      </span>
+                    </div>
+                  </button>
+                );
+              })}
+            </div>
           </div>
         )}
       </div>
-
-      {/* PAINEL #11: RADAR DE LEI SECA (ARTIGOS, LEIS, SÚMULAS E RESOLUÇÕES MAIS ERRADOS / CHUTADOS) */}
-      {legalRadarList.length > 0 && (
-        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] space-y-4">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
-            <div>
-              <h2 className="text-sm sm:text-base font-bold text-slate-800 dark:text-[#F1F5F9] uppercase tracking-[0.03em] flex items-center gap-2">
-                <ShieldCheck className="w-4 h-4 text-amber-400" /> Radar de Lei Seca • Artigos & Leis Mais Cobrados / Errados ({legalRadarList.length})
-              </h2>
-              <p className="text-xs font-normal text-slate-500 dark:text-[#A0AAB2]">
-                Dispositivos legais extraídos automaticamente dos enunciados, bizus e comentários das suas questões. Clique em qualquer dispositivo para filtrar o Caderno abaixo.
-              </p>
-            </div>
-            {selectedLegalDevice && (
-              <button
-                type="button"
-                onClick={() => setSelectedLegalDevice(null)}
-                className="px-3 py-1.5 rounded-xl bg-amber-500/20 border border-amber-500/40 text-amber-300 text-xs font-bold uppercase tracking-wider cursor-pointer shrink-0"
-              >
-                Filtro Ativo: {selectedLegalDevice.label} ✕
-              </button>
-            )}
-          </div>
-
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
-            {legalRadarList.slice(0, 12).map((dev, idx) => {
-              const isSelected = selectedLegalDevice?.key === dev.key;
-              const hasErrors = dev.errors > 0;
-              return (
-                <button
-                  key={dev.key}
-                  type="button"
-                  onClick={() => setSelectedLegalDevice(isSelected ? null : dev)}
-                  className={`p-3.5 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-2 ${
-                    isSelected
-                      ? 'bg-amber-500/15 border-amber-400 ring-2 ring-amber-500/30'
-                      : hasErrors
-                      ? 'bg-red-500/5 dark:bg-[#1E2022] border-red-500/30 hover:border-red-400'
-                      : 'bg-slate-50 dark:bg-[#1E2022] border-slate-200 dark:border-[#34383D] hover:border-slate-500'
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2 w-full">
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className="w-6 h-6 rounded-lg bg-black/30 border border-white/10 text-[11px] font-mono font-black text-amber-400 flex items-center justify-center shrink-0">
-                        #{idx + 1}
-                      </span>
-                      <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-[#F1F5F9] truncate" title={dev.label}>
-                        {dev.label}
-                      </span>
-                    </div>
-                    <span className="text-[10px] font-bold uppercase px-2 py-0.5 rounded-md bg-slate-200 dark:bg-[#26292C] text-slate-600 dark:text-[#A0AAB2] shrink-0">
-                      {dev.category}
-                    </span>
-                  </div>
-
-                  <div className="flex items-center justify-between text-[11px] font-semibold w-full pt-1 border-t border-slate-200/50 dark:border-[#2E3236]">
-                    <div className="flex items-center gap-2">
-                      {dev.errors > 0 ? (
-                        <span className="text-red-400 font-bold">✗ {dev.errors} {dev.errors === 1 ? 'erro' : 'erros'}</span>
-                      ) : (
-                        <span className="text-emerald-400">✓ 0 erros</span>
-                      )}
-                      {dev.guessesOrDoubts > 0 && (
-                        <span className="text-amber-300">🎲 {dev.guessesOrDoubts} dúvida/chute</span>
-                      )}
-                    </div>
-                    <span className="text-slate-400">
-                      {dev.total} {dev.total === 1 ? 'questão' : 'questões'} →
-                    </span>
-                  </div>
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
       {/* PAINEL 3: CADERNO DE QUESTÕES */}
       <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] space-y-4">
