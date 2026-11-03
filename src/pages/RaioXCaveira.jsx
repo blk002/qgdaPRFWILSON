@@ -745,9 +745,14 @@ export default function RaioXCaveira() {
           <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-[#F1F5F9]">
             Acertos
           </span>
-          <span className="text-3xl sm:text-4xl font-extrabold text-emerald-500 leading-tight">
-            {stats.hits}
-          </span>
+          <div className="flex items-baseline justify-center gap-2">
+            <span className="text-3xl sm:text-4xl font-extrabold text-emerald-500 leading-tight">
+              {stats.hits}
+            </span>
+            <span className="text-base sm:text-lg font-bold text-emerald-400">
+              ({stats.grossRate}%)
+            </span>
+          </div>
         </div>
 
         {/* Card 3: Erros */}
@@ -755,9 +760,14 @@ export default function RaioXCaveira() {
           <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-[#F1F5F9]">
             Erros
           </span>
-          <span className="text-3xl sm:text-4xl font-extrabold text-red-500 leading-tight">
-            {stats.errors}
-          </span>
+          <div className="flex items-baseline justify-center gap-2">
+            <span className="text-3xl sm:text-4xl font-extrabold text-red-500 leading-tight">
+              {stats.errors}
+            </span>
+            <span className="text-base sm:text-lg font-bold text-red-400">
+              ({stats.total > 0 ? Math.round((stats.errors / stats.total) * 100) : 0}%)
+            </span>
+          </div>
         </div>
       </div>
 
