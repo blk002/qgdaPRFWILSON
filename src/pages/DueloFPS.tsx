@@ -23,17 +23,20 @@ import {
   TrendingUp,
   ArrowRight,
   BarChart3,
-  Scale
+  Scale,
+  Search
 } from 'lucide-react';
 import {
-  QUESTIONS_BANK,
-  BaseLegalQuestion,
+  LEI_SECA_CTB,
+  ArtigoLeiSeca,
   ActiveRoundQuestion,
   QuestionCategory,
   PRF_TOPICS_CATALOG,
   getRandomPrfTopic,
+  getRandomCtbArticle,
   PRFTopicMetadata,
-  synthesizeUniqueCebraspeStatement,
+  generateProceduralQuestionFromCtbArticle,
+  generateProceduralQuestionFromContranTopic,
 } from '../data/questionsBank';
 import { TacticalRange3D, ShotTriggerCommand } from '../components/TacticalRange3D';
 import { soundFX } from '../utils/soundEffects';
@@ -78,6 +81,7 @@ export default function DueloFPS() {
   const [deathReason, setDeathReason] = useState<'WRONG_TARGET' | 'TIMEOUT' | null>(null);
   const [runHistory, setRunHistory] = useState<AnsweredHistoryItem[]>([]);
   const [vadeMecumFilter, setVadeMecumFilter] = useState<'ALL' | 'CTB' | 'CONTRAN'>('ALL');
+  const [vadeMecumSearch, setVadeMecumSearch] = useState<string>('');
 
   // Chave Gemini para geração via IA em tempo real
   const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
@@ -194,71 +198,77 @@ export default function DueloFPS() {
     []
   );
 
-  // Constrói questão procedural de contingência baseada no catálogo amplo
+  // Constrói questão procedural dinâmica diretamente da Lei Seca do CTB ou CONTRAN
   const buildUniqueQuestion = useCallback(
     (targetCategory: QuestionCategory, topicOverride?: PRFTopicMetadata): ActiveRoundQuestion => {
-      const pool = QUESTIONS_BANK.filter((q) => q.category === targetCategory);
-      const usedSet = usedBaseIdsInCycleRef.current[targetCategory];
-
-      let available = pool.filter((q) => !usedSet.has(q.id));
-      if (available.length === 0) {
-        usedSet.clear();
-        available = [...pool];
-      }
-
-      const chosenBase: BaseLegalQuestion =
-        available[Math.floor(Math.random() * available.length)];
-      usedSet.add(chosenBase.id);
-
       totalGeneratedCountRef.current += 1;
-      const statement = synthesizeUniqueCebraspeStatement(
-        chosenBase,
-        seenStatementsRef.current,
-        totalGeneratedCountRef.current
-      );
-      persistSeenStatement(statement);
-
-      const roundQ: ActiveRoundQuestion = {
-        id: chosenBase.id,
-        uniqueHash: `${chosenBase.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-        category: chosenBase.category,
-        topic: topicOverride ? topicOverride.name : chosenBase.topic,
-        legalBasis: topicOverride ? topicOverride.legalScope : chosenBase.legalBasis,
-        statement,
-        answer: chosenBase.answer,
-        explanation: chosenBase.explanation,
-        wasAiRewritten: false,
-      };
-
-      return roundQ;
+      if (targetCategory === 'CTB') {
+        const artigo = getRandomCtbArticle(topicOverride?.name);
+        const q = generateProceduralQuestionFromCtbArticle(artigo);
+        persistSeenStatement(q.statement);
+        return q;
+      } else {
+        const topic = topicOverride || getRandomPrfTopic('CONTRAN');
+        const q = generateProceduralQuestionFromContranTopic(topic);
+        persistSeenStatement(q.statement);
+        return q;
+      }
     },
     [persistSeenStatement]
   );
 
-  // Pré-aquece próxima questão com a IA Gemini gerando sobre QUALQUER ponto do CTB / CONTRAN
+  // Pré-aquece próxima questão com a IA Gemini baseada no artigo REAL da Lei Seca
   const prewarmCategoryQuestionWithAI = useCallback(
     async (category: QuestionCategory) => {
-      // 1. Sorteia aleatoriamente um tópico da matriz completa do Edital PRF
-      const topicMeta = getRandomPrfTopic(category);
+      let prompt = '';
+      let fallbackQ: ActiveRoundQuestion;
+      let targetTopicName = '';
+      let targetLegalBasis = '';
 
-      // Prepara contingência imediata caso a IA falhe ou esteja sem internet
-      const fallbackQ = buildUniqueQuestion(category, topicMeta);
-      prewarmedNextRef.current.set(category, fallbackQ);
+      if (category === 'CTB') {
+        // Seleciona um artigo real entre os 390 artigos vigentes do CTB
+        const artigo = getRandomCtbArticle();
+        fallbackQ = generateProceduralQuestionFromCtbArticle(artigo);
+        targetTopicName = artigo.capitulo;
+        targetLegalBasis = artigo.dispositivo;
 
-      const key = geminiApiKey || localStorage.getItem(GEMINI_KEY_STORAGE);
-      if (!key) return;
+        prompt = `Você é o examinador sênior da banca CEBRASPE elaborando a prova da Polícia Rodoviária Federal (PRF).
+Com base EXCLUSIVAMENTE no dispositivo legal da LEI SECA do CTB (Lei nº 9.503/1997) fornecido abaixo:
 
-      try {
-        const prompt = `Você é o examinador sênior da banca CEBRASPE criando a prova da Polícia Rodoviária Federal (PRF).
-Gere uma questão 100% INÉDITA (uma única assertiva para o candidato julgar como CERTO ou ERRADO) sobre o tema selecionado abaixo:
-- Categoria: ${category === 'CTB' ? 'Código de Trânsito Brasileiro (Lei nº 9.503/1997 e alterações vigentes)' : 'Resoluções do CONTRAN para a PRF'}
-- Assunto: ${topicMeta.name}
+DISPOSITIVO: ${artigo.dispositivo}
+CAPÍTULO: ${artigo.capitulo}
+TEXTO INTEGRAL DA LEI:
+"${artigo.texto}"
+
+Elabore uma questão 100% INÉDITA para o candidato julgar como CERTO ou ERRADO.
+DIRETRIZES MANDATÓRIAS CEBRASPE:
+1. Padrão CEBRASPE: Uma assertiva afirmativa direta sobre a regra legal ou uma breve situação hipotética de fiscalização pela PRF em rodovia federal.
+2. Gabarito equilibrado: Decida aleatoriamente se o gabarito será CERTO ou ERRADO (50% de chance para cada). Se for ERRADO, insira um detalhe técnico sutilmente incorreto com base no próprio artigo (ex: altere prazo, competência, exceção ou penalidade).
+3. Tamanho MÁXIMO da assertiva: 280 caracteres (essencial para caber na tela do jogo de tiro tático 3D).
+4. Fundamentação: Indique a base legal exata e justificativa sucinta.
+5. Retorne EXCLUSIVAMENTE um objeto JSON válido no formato:
+{
+  "statement": "texto da assertiva (máximo 280 caracteres)",
+  "answer": true, // use true para CERTO ou false para ERRADO
+  "legalBasis": "${artigo.dispositivo}",
+  "explanation": "explicação clara Cebraspe justificando a resposta com base no artigo",
+  "topic": "${artigo.capitulo}"
+}`;
+      } else {
+        const topicMeta = getRandomPrfTopic('CONTRAN');
+        fallbackQ = generateProceduralQuestionFromContranTopic(topicMeta);
+        targetTopicName = topicMeta.name;
+        targetLegalBasis = topicMeta.legalScope;
+
+        prompt = `Você é o examinador sênior da banca CEBRASPE criando a prova da Polícia Rodoviária Federal (PRF).
+Gere uma questão 100% INÉDITA (uma única assertiva para o candidato julgar como CERTO ou ERRADO) sobre a Resolução do CONTRAN selecionada abaixo:
+- Resolução: ${topicMeta.name}
 - Escopo Legal: ${topicMeta.legalScope}
 - Diretriz Temática: ${topicMeta.guideline}
 
 DIRETRIZES MANDATÓRIAS:
 1. Padrão CEBRASPE: Uma assertiva afirmativa direta ou um caso prático sucinto de fiscalização da PRF em rodovia federal.
-2. Gabarito equilibrado: Decida aleatoriamente se o gabarito será CERTO ou ERRADO (50% de chance para cada). Se for ERRADO, insira um detalhe técnico incorreto sutil e plausível (como prazo trocado, competência invertida ou valor adulterado).
+2. Gabarito equilibrado: Decida aleatoriamente se o gabarito será CERTO ou ERRADO (50% de chance para cada). Se for ERRADO, insira um detalhe técnico incorreto sutil e plausível.
 3. Tamanho MÁXIMO da assertiva: 280 caracteres (essencial para caber na tela do jogo de tiro 3D).
 4. Fundamentação: Indique a base legal exata e justificativa sucinta.
 5. Retorne EXCLUSIVAMENTE um objeto JSON válido no formato:
@@ -269,7 +279,15 @@ DIRETRIZES MANDATÓRIAS:
   "explanation": "explicação clara Cebraspe justificando a resposta",
   "topic": "${topicMeta.name}"
 }`;
+      }
 
+      // Prepara contingência imediata caso a IA falhe ou esteja sem internet
+      prewarmedNextRef.current.set(category, fallbackQ);
+
+      const key = geminiApiKey || localStorage.getItem(GEMINI_KEY_STORAGE);
+      if (!key) return;
+
+      try {
         const res = await fetch(
           `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
           {
@@ -298,14 +316,14 @@ DIRETRIZES MANDATÓRIAS:
             const stmt = parsed.statement.trim();
             persistSeenStatement(stmt);
             prewarmedNextRef.current.set(category, {
-              id: `ai-${topicMeta.id}-${Date.now()}`,
+              id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
               uniqueHash: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
               category,
-              topic: parsed.topic || topicMeta.name,
-              legalBasis: parsed.legalBasis || topicMeta.legalScope,
+              topic: parsed.topic || targetTopicName,
+              legalBasis: parsed.legalBasis || targetLegalBasis,
               statement: stmt,
               answer: parsed.answer,
-              explanation: parsed.explanation || 'Questão inédita elaborada por IA no padrão Cebraspe/PRF.',
+              explanation: parsed.explanation || 'Questão inédita elaborada por IA no padrão Cebraspe/PRF com base na lei.',
               wasAiRewritten: true,
             });
           }
@@ -529,9 +547,48 @@ DIRETRIZES MANDATÓRIAS:
     setShowKeyModal(false);
   };
 
-  const filteredVadeMecum = QUESTIONS_BANK.filter((item) =>
-    vadeMecumFilter === 'ALL' ? true : item.category === vadeMecumFilter
-  );
+  const filteredVadeMecum = useMemo(() => {
+    const list: Array<{
+      id: string;
+      category: 'CTB' | 'CONTRAN';
+      title: string;
+      subtitle: string;
+      content: string;
+    }> = [];
+
+    if (vadeMecumFilter === 'ALL' || vadeMecumFilter === 'CTB') {
+      LEI_SECA_CTB.forEach((a) => {
+        list.push({
+          id: a.id,
+          category: 'CTB',
+          title: a.dispositivo,
+          subtitle: a.capitulo,
+          content: a.texto,
+        });
+      });
+    }
+
+    if (vadeMecumFilter === 'ALL' || vadeMecumFilter === 'CONTRAN') {
+      PRF_TOPICS_CATALOG.filter((t) => t.category === 'CONTRAN').forEach((c) => {
+        list.push({
+          id: c.id,
+          category: 'CONTRAN',
+          title: c.name,
+          subtitle: c.legalScope,
+          content: c.guideline,
+        });
+      });
+    }
+
+    if (!vadeMecumSearch.trim()) return list;
+    const q = vadeMecumSearch.toLowerCase().trim();
+    return list.filter(
+      (item) =>
+        item.title.toLowerCase().includes(q) ||
+        item.subtitle.toLowerCase().includes(q) ||
+        item.content.toLowerCase().includes(q)
+    );
+  }, [vadeMecumFilter, vadeMecumSearch]);
 
   // Computa o ranking dos assuntos mais errados e mais acertados no Duelo FPS
   const fpsTopicReport = useMemo(() => {
@@ -624,7 +681,7 @@ DIRETRIZES MANDATÓRIAS:
               activeTab === 'vademecum' ? 'text-amber-400 underline underline-offset-8' : 'hover:text-zinc-100'
             }`}
           >
-            Base Legal ({QUESTIONS_BANK.length})
+            Base Legal ({filteredVadeMecum.length})
           </button>
           <button
             type="button"
@@ -1068,17 +1125,18 @@ DIRETRIZES MANDATÓRIAS:
           </div>
         )}
 
-        {/* ABA 3: BASE LEGAL (VADE MECUM CTB & CONTRAN) */}
+        {/* ABA 3: BASE LEGAL (VADE MECUM CTB & CONTRAN - LEI SECA OFICIAL) */}
         {activeTab === 'vademecum' && (
           <div className="absolute inset-0 z-20 bg-zinc-950 p-6 overflow-y-auto">
             <div className="max-w-4xl mx-auto space-y-4 pb-12">
               <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 border-b border-zinc-800 pb-4">
                 <div>
-                  <h2 className="text-lg font-black uppercase tracking-wider text-zinc-100">
-                    VADE MECUM TÁTICO: CTB & CONTRAN
+                  <h2 className="text-lg font-black uppercase tracking-wider text-zinc-100 flex items-center gap-2">
+                    <Scale className="w-5 h-5 text-amber-400" />
+                    VADE MECUM DA LEI SECA: CTB & CONTRAN
                   </h2>
                   <p className="text-xs text-zinc-400">
-                    Dispositivos e Resoluções integrados ao motor de disparo do jogo.
+                    Texto oficial compilado do Planalto (Lei nº 9.503/1997) e Resoluções CONTRAN que alimentam a IA.
                   </p>
                 </div>
 
@@ -1100,27 +1158,47 @@ DIRETRIZES MANDATÓRIAS:
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 gap-3">
-                {filteredVadeMecum.map((item) => (
-                  <div key={item.id} className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800 space-y-2">
-                    <div className="flex items-center justify-between text-xs font-bold">
-                      <span className={item.category === 'CTB' ? 'text-amber-400' : 'text-cyan-400'}>
-                        {item.category} · {item.legalBasis}
-                      </span>
-                      <span className={`px-2 py-0.5 rounded text-[10px] font-black ${
-                        item.answer ? 'bg-emerald-500/20 text-emerald-400' : 'bg-red-500/20 text-red-400'
-                      }`}>
-                        GABARITO: {item.answer ? 'CERTO' : 'ERRADO'}
-                      </span>
-                    </div>
-                    <div className="text-xs text-zinc-400 font-semibold">{item.topic}</div>
-                    <p className="text-xs text-zinc-200 italic">"{item.coreStatements[0]}"</p>
-                    <p className="text-xs text-zinc-400 pt-1 border-t border-zinc-800/60 leading-relaxed">
-                      {item.explanation}
-                    </p>
-                  </div>
-                ))}
+              {/* Barra de Busca Rápida na Lei Seca */}
+              <div className="relative">
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 w-4 h-4 text-zinc-500" />
+                <input
+                  type="text"
+                  placeholder="Pesquisar por artigo (ex: Art. 29, Art. 165), tema (álcool, velocidade, CNH) ou termo da lei..."
+                  value={vadeMecumSearch}
+                  onChange={(e) => setVadeMecumSearch(e.target.value)}
+                  className="w-full pl-10 pr-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs text-zinc-100 placeholder:text-zinc-500 focus:outline-none focus:border-amber-500 transition-colors"
+                />
               </div>
+
+              {filteredVadeMecum.length === 0 ? (
+                <div className="p-8 rounded-2xl bg-zinc-900/40 border border-zinc-800 text-center text-xs text-zinc-500">
+                  Nenhum dispositivo legal encontrado para a busca "{vadeMecumSearch}".
+                </div>
+              ) : (
+                <div className="grid grid-cols-1 gap-3">
+                  {filteredVadeMecum.slice(0, 100).map((item) => (
+                    <div key={item.id} className="p-4 rounded-2xl bg-zinc-900/80 border border-zinc-800 space-y-2.5">
+                      <div className="flex items-center justify-between text-xs font-bold">
+                        <span className={`px-2 py-0.5 rounded text-[11px] font-black ${
+                          item.category === 'CTB' ? 'bg-amber-500/20 text-amber-400' : 'bg-cyan-500/20 text-cyan-400'
+                        }`}>
+                          {item.category}
+                        </span>
+                        <span className="text-zinc-200 font-bold">{item.title}</span>
+                      </div>
+                      <div className="text-xs text-zinc-400 font-medium">{item.subtitle}</div>
+                      <div className="text-xs text-zinc-300 whitespace-pre-line bg-zinc-950/70 p-3.5 rounded-xl border border-zinc-800/60 leading-relaxed font-sans max-h-60 overflow-y-auto">
+                        {item.content}
+                      </div>
+                    </div>
+                  ))}
+                  {filteredVadeMecum.length > 100 && (
+                    <div className="text-center py-2 text-xs text-zinc-500">
+                      Mostrando os primeiros 100 de {filteredVadeMecum.length} artigos encontrados. Refine sua busca acima para encontrar artigos específicos.
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
           </div>
         )}
