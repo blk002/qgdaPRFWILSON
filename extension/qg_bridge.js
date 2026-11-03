@@ -6,6 +6,27 @@
   const STORAGE_KEY = 'qg_caveira_questions';
   const SESSION_KEY = 'qg_caveira_session';
 
+  function getTodaySessionDate() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  function normalizeSession(rawSession) {
+    const today = getTodaySessionDate();
+    if (!rawSession || rawSession.date !== today) {
+      return { date: today, total: 0, hits: 0, errors: 0 };
+    }
+    return {
+      date: today,
+      total: Number(rawSession.total) || 0,
+      hits: Number(rawSession.hits) || 0,
+      errors: Number(rawSession.errors) || 0
+    };
+  }
+
   // Marca que a extensão está instalada no navegador
   document.documentElement.setAttribute('data-qg-caveira-extension-installed', 'true');
   window.postMessage({ source: 'QG_CAVEIRA_EXTENSION', type: 'EXTENSION_DETECTED' }, '*');
@@ -52,7 +73,7 @@
               type: 'CAVEIRA_DATA_RESPONSE',
               payload: {
                 questions: response.questions,
-                session: response.session || { hits: 0, errors: 0, total: 0 }
+                session: normalizeSession(response.session)
               }
             }, '*');
             return;
@@ -63,7 +84,7 @@
       chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
         if (chrome.runtime.lastError) return;
         const questions = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
-        const session = res?.[SESSION_KEY] || { hits: 0, errors: 0, total: 0 };
+        const session = normalizeSession(res?.[SESSION_KEY]);
         window.postMessage({
           source: 'QG_CAVEIRA_EXTENSION',
           type: 'CAVEIRA_DATA_RESPONSE',

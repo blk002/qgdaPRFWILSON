@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v3.2 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.3 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -45,10 +45,48 @@
 
   // Estado da Sessão no HUD
   let sessionStats = {
+    date: getTodaySessionDate(),
     total: 0,
     hits: 0,
     errors: 0
   };
+
+  function getTodaySessionDate() {
+    const now = new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, '0');
+    const d = String(now.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  function normalizeSession(rawSession) {
+    const today = getTodaySessionDate();
+    if (!rawSession || rawSession.date !== today) {
+      return {
+        date: today,
+        total: 0,
+        hits: 0,
+        errors: 0
+      };
+    }
+    return {
+      date: today,
+      total: Number(rawSession.total) || 0,
+      hits: Number(rawSession.hits) || 0,
+      errors: Number(rawSession.errors) || 0
+    };
+  }
+
+  function checkDailySessionReset() {
+    const today = getTodaySessionDate();
+    if (sessionStats.date !== today) {
+      sessionStats = { date: today, total: 0, hits: 0, errors: 0 };
+      if (isExtensionContextValid()) {
+        chrome.storage.local.set({ [SESSION_KEY]: sessionStats });
+      }
+      updateHudStats();
+    }
+  }
 
   function isExtensionContextValid() {
     try {
@@ -74,8 +112,9 @@
     try {
       chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY], (res) => {
         if (chrome.runtime.lastError || isDestroyed) return;
+        const today = getTodaySessionDate();
         if (res[SCHEMA_KEY] !== 'v3_strict_clean') {
-          const cleanSession = { total: 0, hits: 0, errors: 0 };
+          const cleanSession = { date: today, total: 0, hits: 0, errors: 0 };
           chrome.storage.local.set({
             [STORAGE_KEY]: [],
             [SESSION_KEY]: cleanSession,
@@ -100,12 +139,11 @@
           }
         });
 
-        const session = res[SESSION_KEY] || { hits: 0, errors: 0, total: 0 };
-        sessionStats = {
-          total: Number(session.total) || 0,
-          hits: Number(session.hits) || 0,
-          errors: Number(session.errors) || 0
-        };
+        const rawSession = res[SESSION_KEY];
+        sessionStats = normalizeSession(rawSession);
+        if (!rawSession || rawSession.date !== today) {
+          chrome.storage.local.set({ [SESSION_KEY]: sessionStats });
+        }
         isStorageLoaded = true;
         updateHudStats();
         scanCards();
@@ -129,12 +167,7 @@
             updatedList.forEach(q => { if (q && q.id) savedQuestionIds.add(q.id); });
           }
           if (changes[SESSION_KEY]) {
-            const newSession = changes[SESSION_KEY].newValue || { total: 0, hits: 0, errors: 0 };
-            sessionStats = {
-              total: Number(newSession.total) || 0,
-              hits: Number(newSession.hits) || 0,
-              errors: Number(newSession.errors) || 0
-            };
+            sessionStats = normalizeSession(changes[SESSION_KEY].newValue);
             updateHudStats();
           }
         }
@@ -301,6 +334,7 @@
   function startTimerInterval() {
     if (timerInterval) return;
     timerInterval = setInterval(() => {
+      checkDailySessionReset();
       // Só cronometra se a aba estiver visível, o timer estiver ativo e houver questão ativa na tela
       if (document.visibilityState === 'visible' && isTimerRunning && currentQuestionId) {
         timerSeconds = (questionTimers.get(currentQuestionId) || 0) + 1;
@@ -335,7 +369,7 @@
     timerSeconds = 0;
     dismissPrompt();
     renderTimerDisplay();
-    renderQuestionHistory(null);
+    renderQuestionHistory(null, false);
     const currentQEl = document.getElementById('qg-current-q-id');
     if (currentQEl) {
       currentQEl.textContent = 'Aguardando questão...';
@@ -343,7 +377,7 @@
   }
 
   // --- MEMÓRIA TÁTICA / ALERTA DE QUESTÃO REPETIDA (#9) ---
-  function renderQuestionHistory(qId) {
+  function renderQuestionHistory(qId, isCurrentQuestionAnswered = false) {
     const box = document.getElementById('qg-hud-history-box');
     if (!box) return;
 
@@ -375,12 +409,22 @@
       ? `<div class="qg-history-bizu">💡 <strong>Seu Bizu:</strong> ${escapeHtml(previousData.userNote)}</div>`
       : '';
 
+    // Anti-spoiler: só exibe o que marcou e o gabarito quando a questão já estiver respondida nesta tentativa
+    let choicesHtml = '';
+    if (isCurrentQuestionAnswered) {
+      const activeChoice = (activeQuestionData && activeQuestionData.id === qId) ? activeQuestionData.userChoice : null;
+      const activeGabarito = (activeQuestionData && activeQuestionData.id === qId) ? activeQuestionData.correctChoice : null;
+      const userChoice = activeChoice || previousData.userChoice || '?';
+      const gabarito = activeGabarito || previousData.correctChoice || '?';
+      choicesHtml = `<div style="font-size: 9px; opacity: 0.85; margin-top: 1px;">Você marcou: <strong>${userChoice}</strong> | Gabarito: <strong>${gabarito}</strong></div>`;
+    }
+
     box.className = `qg-hud-history ${isHit ? 'hit-history' : 'error-history'}`;
     box.innerHTML = `
       <div>
         <span class="qg-history-badge">${isHit ? '✓ HISTÓRICO' : '⚠️ ATENÇÃO: REPETIDA'}</span>
         <div style="font-weight: 700;">${statusText} (${timeLabel})</div>
-        <div style="font-size: 9px; opacity: 0.85; margin-top: 1px;">Você marcou: <strong>${previousData.userChoice || '?'}</strong> | Gabarito: <strong>${previousData.correctChoice || '?'}</strong></div>
+        ${choicesHtml}
       </div>
       ${bizuHtml}
     `;
@@ -411,8 +455,10 @@
       if (!activeQuestionData || activeQuestionData.id !== newQId) {
         dismissPrompt();
       }
-      renderQuestionHistory(newQId);
     }
+
+    renderQuestionHistory(newQId, isAlreadyAnswered);
+    renderTimerDisplay();
 
     renderTimerDisplay();
 
@@ -875,6 +921,8 @@
       return;
     }
 
+    checkDailySessionReset();
+
     if (!isMetadataUpdateOnly) {
       sessionStats.total += 1;
       if (question.hit) sessionStats.hits += 1;
@@ -895,6 +943,7 @@
     }
 
     const updatedSession = {
+      date: sessionStats.date || getTodaySessionDate(),
       total: sessionStats.total,
       hits: sessionStats.hits,
       errors: sessionStats.errors
@@ -1032,7 +1081,7 @@
           if (questionData) {
             activeQuestionData = questionData;
             saveQuestion(questionData, false);
-            renderQuestionHistory(qId);
+            renderQuestionHistory(qId, true);
             showPrompt(questionData);
           }
         }

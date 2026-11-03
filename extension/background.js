@@ -3,6 +3,32 @@
 const STORAGE_KEY = 'qg_caveira_questions';
 const SESSION_KEY = 'qg_caveira_session';
 
+function getTodaySessionDate() {
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+function normalizeSession(rawSession) {
+  const today = getTodaySessionDate();
+  if (!rawSession || rawSession.date !== today) {
+    return {
+      date: today,
+      total: 0,
+      hits: 0,
+      errors: 0
+    };
+  }
+  return {
+    date: today,
+    total: Number(rawSession.total) || 0,
+    hits: Number(rawSession.hits) || 0,
+    errors: Number(rawSession.errors) || 0
+  };
+}
+
 // Reinjetar scripts automaticamente em abas já abertas ao instalar/atualizar a extensão
 async function reinjectOpenTabs() {
   if (!chrome.scripting || !chrome.tabs) return;
@@ -58,13 +84,13 @@ async function broadcastToQgTabs(questions, session) {
 
 // Inicializar armazenamento
 chrome.runtime.onInstalled.addListener(() => {
+  const today = getTodaySessionDate();
   chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
     if (!res[STORAGE_KEY]) {
       chrome.storage.local.set({ [STORAGE_KEY]: [] });
     }
-    if (!res[SESSION_KEY]) {
-      chrome.storage.local.set({ [SESSION_KEY]: { hits: 0, errors: 0, total: 0, wasExplicitlyReset: false } });
-    }
+    const session = normalizeSession(res[SESSION_KEY]);
+    chrome.storage.local.set({ [SESSION_KEY]: session });
   });
   reinjectOpenTabs();
 });
@@ -73,7 +99,7 @@ chrome.runtime.onInstalled.addListener(() => {
 chrome.storage.onChanged.addListener((changes, area) => {
   if (area === 'local') {
     if (changes[SESSION_KEY]) {
-      const session = changes[SESSION_KEY].newValue || { hits: 0, errors: 0, total: 0 };
+      const session = normalizeSession(changes[SESSION_KEY].newValue);
       const total = Number(session.total) || 0;
       const net = (Number(session.hits) || 0) - (Number(session.errors) || 0);
       if (total > 0) {
@@ -86,7 +112,8 @@ chrome.storage.onChanged.addListener((changes, area) => {
 
     if (changes[STORAGE_KEY]) {
       chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
-        broadcastToQgTabs(res[STORAGE_KEY] || [], res[SESSION_KEY] || { hits: 0, errors: 0, total: 0 });
+        const session = normalizeSession(res[SESSION_KEY]);
+        broadcastToQgTabs(res[STORAGE_KEY] || [], session);
       });
     }
   }
@@ -95,7 +122,7 @@ chrome.storage.onChanged.addListener((changes, area) => {
 // Ouvir mensagens de content scripts ou popup
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'UPDATE_BADGE_ONLY') {
-    const session = message.payload?.session || { hits: 0, errors: 0, total: 0 };
+    const session = normalizeSession(message.payload?.session);
     const total = Number(session.total) || 0;
     const net = (Number(session.hits) || 0) - (Number(session.errors) || 0);
     chrome.action.setBadgeText({ text: total > 0 ? `${total}` : '' });
@@ -130,9 +157,13 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
     setTimeout(() => {
       chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
+        const session = normalizeSession(res[SESSION_KEY]);
+        if (res[SESSION_KEY]?.date !== session.date) {
+          chrome.storage.local.set({ [SESSION_KEY]: session });
+        }
         sendResponse({
           questions: res[STORAGE_KEY] || [],
-          session: res[SESSION_KEY] || { hits: 0, errors: 0, total: 0 }
+          session
         });
       });
     }, 150);
@@ -140,7 +171,9 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   }
 
   if (message.type === 'CLEAR_CAVEIRA_SESSION') {
-    chrome.storage.local.set({ [SESSION_KEY]: { hits: 0, errors: 0, total: 0, wasExplicitlyReset: true } }, () => {
+    const today = getTodaySessionDate();
+    const cleanSession = { date: today, hits: 0, errors: 0, total: 0, wasExplicitlyReset: true };
+    chrome.storage.local.set({ [SESSION_KEY]: cleanSession }, () => {
       chrome.action.setBadgeText({ text: '' });
       sendResponse({ success: true });
     });
