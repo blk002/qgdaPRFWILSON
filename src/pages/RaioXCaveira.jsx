@@ -738,13 +738,6 @@ export default function RaioXCaveira() {
           <span className="text-3xl sm:text-4xl font-extrabold text-slate-800 dark:text-white leading-tight">
             {stats.total}
           </span>
-          <button
-            type="button"
-            onClick={handleResetAll}
-            className="text-xs text-blue-500 dark:text-blue-400 hover:underline cursor-pointer pt-0.5"
-          >
-            Zerar
-          </button>
         </div>
 
         {/* Card 2: Acertos */}
@@ -755,13 +748,6 @@ export default function RaioXCaveira() {
           <span className="text-3xl sm:text-4xl font-extrabold text-emerald-500 leading-tight">
             {stats.hits}
           </span>
-          <button
-            type="button"
-            onClick={handleResetHits}
-            className="text-xs text-blue-500 dark:text-blue-400 hover:underline cursor-pointer pt-0.5"
-          >
-            Zerar
-          </button>
         </div>
 
         {/* Card 3: Erros */}
@@ -772,13 +758,6 @@ export default function RaioXCaveira() {
           <span className="text-3xl sm:text-4xl font-extrabold text-red-500 leading-tight">
             {stats.errors}
           </span>
-          <button
-            type="button"
-            onClick={handleResetErrors}
-            className="text-xs text-blue-500 dark:text-blue-400 hover:underline cursor-pointer pt-0.5"
-          >
-            Zerar
-          </button>
         </div>
       </div>
 
