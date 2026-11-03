@@ -21,6 +21,7 @@ const Calendario = React.lazy(() => import('./pages/Calendario'));
 const Config = React.lazy(() => import('./pages/Config'));
 const Pet = React.lazy(() => import('./pages/Pet'));
 const RaioXCaveira = React.lazy(() => import('./pages/RaioXCaveira'));
+const DueloFPS = React.lazy(() => import('./pages/DueloFPS'));
 
 import { Routes, Route, Link, NavLink, useLocation } from 'react-router-dom';
 import { Toaster, toast } from 'sonner';
@@ -29,7 +30,7 @@ import {
   Search, Library, Clock, Calendar as CalendarIcon, Repeat, Dumbbell, 
   Target as TargetIcon, BarChart2, Store, Settings, Award, BrainCircuit, 
   X, Check, ArrowRight, ShieldCheck, Trophy, Sun, Moon, Coins, 
-  AlertTriangle, Info, LogOut, Shield, RefreshCw, Dog, Skull 
+  AlertTriangle, Info, LogOut, Shield, RefreshCw, Dog, Skull, Crosshair 
 } from 'lucide-react';
 import { PATENTES } from './hooks/useGamification';
 
@@ -255,6 +256,7 @@ export default function App() {
 
   const tabs = [
     { id: '/', label: 'Carreira', icon: Award },
+    { id: '/duelo', label: 'Duelo CTB', icon: Crosshair },
 
     { id: '/revisoes', label: 'Revisões', icon: BrainCircuit, count: allDueToday.length },
 
@@ -446,6 +448,7 @@ export default function App() {
               }>
                 <Routes location={location}>
                   <Route path="/" element={<Dashboard />} />
+                  <Route path="/duelo" element={<DueloFPS />} />
 
                   <Route path="/revisoes" element={<Revisoes />} />
 
