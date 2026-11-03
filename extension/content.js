@@ -316,6 +316,12 @@
     const mins = String(Math.floor(timerSeconds / 60)).padStart(2, '0');
     const secs = String(timerSeconds % 60).padStart(2, '0');
     timerEl.textContent = `${mins}:${secs}`;
+    if (isTimerRunning) {
+      timerEl.style.opacity = '1';
+      timerEl.style.color = '#fbbf24';
+    } else {
+      timerEl.style.opacity = '0.7';
+    }
   }
 
   function pauseTimer() {
@@ -498,24 +504,26 @@
     if (statsBox) {
       const text = (statsBox.textContent || '').toUpperCase();
       if (
-        Boolean(statsBox.querySelector('.bg-correct-1, .bg-incorrect-1, .title-stats')) ||
+        Boolean(statsBox.querySelector('.bg-correct-1, .bg-correct-2, .bg-incorrect-1, .bg-incorrect-2, .title-stats')) ||
         text.includes('PARABÉNS') ||
         text.includes('ERROU') ||
         text.includes('VOCÊ ACERTOU') ||
         text.includes('VOCÊ ERROU') ||
-        text.includes('RESPOSTA CORRETA')
+        text.includes('RESPOSTA CORRETA') ||
+        text.includes('GABARITO DEFINITIVO')
       ) {
         return true;
       }
     }
 
     // Regra 2: Alternativas marcadas com a cor verde ou vermelha do gabarito (dentro de .question-alternatives ou .alternative)
+    // ATENÇÃO: NÃO usar [class*="correct"] genérico porque classes do Quasar como "items-start" ou "justify-start" ou outras do Quasar podem dar falso positivo!
     const altScope = card.querySelector('.question-alternatives') || card;
     const hasColoredAlternative = Boolean(
       altScope.querySelector(
         '.alternative.bg-correct-1, .alternative.bg-correct-2, .alternative.bg-incorrect-1, .alternative.bg-incorrect-2, ' +
         '.alternative-letter.bg-correct-1, .alternative-letter.bg-correct-2, .alternative-letter.bg-incorrect-1, .alternative-letter.bg-incorrect-2, ' +
-        '.alternative [class*="bg-correct"], .alternative [class*="bg-incorrect"]'
+        '.bg-positive, .bg-negative, .text-positive, .text-negative'
       )
     );
     if (hasColoredAlternative) return true;
