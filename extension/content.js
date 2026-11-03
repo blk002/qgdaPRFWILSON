@@ -198,6 +198,8 @@
           <span id="qg-current-q-id">Aguardando questão...</span>
           <span class="qg-hud-timer" id="qg-timer">00:00</span>
         </div>
+
+        <div id="qg-hud-history-box" style="display: none;"></div>
       </div>
 
       <div class="qg-hud-prompt" id="qg-prompt-box" style="display: none;">
@@ -327,10 +329,65 @@
     timerSeconds = 0;
     dismissPrompt();
     renderTimerDisplay();
+    renderQuestionHistory(null);
     const currentQEl = document.getElementById('qg-current-q-id');
     if (currentQEl) {
       currentQEl.textContent = 'Aguardando questão...';
     }
+  }
+
+  // --- MEMÓRIA TÁTICA / ALERTA DE QUESTÃO REPETIDA (#9) ---
+  function renderQuestionHistory(qId) {
+    const box = document.getElementById('qg-hud-history-box');
+    if (!box) return;
+
+    if (!qId) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+
+    const previousData = questionsCache.find(q => q && q.id === qId);
+    if (!previousData || !previousData.timestamp) {
+      box.style.display = 'none';
+      box.innerHTML = '';
+      return;
+    }
+
+    const qDate = new Date(previousData.timestamp);
+    const now = new Date();
+    const diffMs = Math.max(0, now - qDate);
+    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+    const timeLabel = diffDays === 0 ? 'hoje' : diffDays === 1 ? 'ontem' : `há ${diffDays} dias`;
+
+    const isHit = Boolean(previousData.hit);
+    const statusText = isHit
+      ? (previousData.confidence === 'chute' ? 'ACERTOU NO CHUTE 🎲' : previousData.confidence === 'duvida' ? 'ACERTOU COM DÚVIDA 🤔' : 'ACERTOU ANTERIORMENTE ✓')
+      : `ERROU ANTERIORMENTE ✗ (${previousData.errorReason === 'atencao' ? 'Atenção' : previousData.errorReason === 'interpretacao' ? 'Interpretação' : 'Teoria'})`;
+
+    const bizuHtml = previousData.userNote
+      ? `<div class="qg-history-bizu">💡 <strong>Seu Bizu:</strong> ${escapeHtml(previousData.userNote)}</div>`
+      : '';
+
+    box.className = `qg-hud-history ${isHit ? 'hit-history' : 'error-history'}`;
+    box.innerHTML = `
+      <div>
+        <span class="qg-history-badge">${isHit ? '✓ HISTÓRICO' : '⚠️ ATENÇÃO: REPETIDA'}</span>
+        <div style="font-weight: 700;">${statusText} (${timeLabel})</div>
+        <div style="font-size: 9px; opacity: 0.85; margin-top: 1px;">Você marcou: <strong>${previousData.userChoice || '?'}</strong> | Gabarito: <strong>${previousData.correctChoice || '?'}</strong></div>
+      </div>
+      ${bizuHtml}
+    `;
+    box.style.display = 'block';
+  }
+
+  function escapeHtml(text) {
+    if (!text) return '';
+    return String(text)
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;');
   }
 
   function switchActiveQuestion(newQId, isAlreadyAnswered = false) {
@@ -348,6 +405,7 @@
       if (!activeQuestionData || activeQuestionData.id !== newQId) {
         dismissPrompt();
       }
+      renderQuestionHistory(newQId);
     }
 
     renderTimerDisplay();
@@ -920,6 +978,7 @@
           if (questionData) {
             activeQuestionData = questionData;
             saveQuestion(questionData, false);
+            renderQuestionHistory(qId);
             showPrompt(questionData);
           }
         }

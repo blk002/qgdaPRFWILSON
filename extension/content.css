@@ -147,6 +147,61 @@
   color: #fbbf24;
 }
 
+/* Alerta de Questão Repetida / Memória Tática (Funcionalidade #9) */
+.qg-hud-history {
+  margin-top: 8px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  font-size: 10px;
+  line-height: 1.4;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  animation: qgSlideUp 0.25s ease;
+}
+
+.qg-hud-history.error-history {
+  background: rgba(239, 68, 68, 0.12);
+  border-color: rgba(239, 68, 68, 0.35);
+  color: #fca5a5;
+}
+
+.qg-hud-history.hit-history {
+  background: rgba(16, 185, 129, 0.12);
+  border-color: rgba(16, 185, 129, 0.35);
+  color: #86efac;
+}
+
+.qg-history-badge {
+  font-weight: 900;
+  text-transform: uppercase;
+  font-size: 9px;
+  padding: 1px 5px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-bottom: 3px;
+}
+
+.error-history .qg-history-badge {
+  background: rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+}
+
+.hit-history .qg-history-badge {
+  background: rgba(16, 185, 129, 0.25);
+  color: #10b981;
+}
+
+.qg-history-bizu {
+  margin-top: 5px;
+  padding: 5px 7px;
+  background: rgba(0, 0, 0, 0.35);
+  border-left: 2px solid #fbbf24;
+  border-radius: 4px;
+  color: #fef08a;
+  font-weight: 600;
+  font-size: 9.5px;
+  word-break: break-word;
+}
+
 /* Prompt Tático de Avaliação Rápida */
 .qg-hud-prompt {
   background: #0f1014;
