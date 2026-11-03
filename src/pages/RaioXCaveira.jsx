@@ -142,6 +142,14 @@ const BLOCO_METADATA = {
   }
 };
 
+export function formatDurationHMS(totalSec) {
+  const safe = Math.max(0, Number(totalSec) || 0);
+  const h = Math.floor(safe / 3600);
+  const m = Math.floor((safe % 3600) / 60);
+  const s = safe % 60;
+  return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+}
+
 export default function RaioXCaveira() {
   const {
     caveiraQuestions = [],
@@ -247,7 +255,7 @@ export default function RaioXCaveira() {
     const netRate = Math.max(0, Math.round((netScore / total) * 100));
 
     const totalSeconds = list.reduce((acc, q) => acc + (q.durationSeconds || 0), 0);
-    const avgTimeSec = Math.round(totalSeconds / total);
+    const avgTimeSec = total > 0 ? Math.round(totalSeconds / total) : 0;
 
     const avgHitTimeSec = hits > 0
       ? Math.round(hitList.reduce((acc, q) => acc + (q.durationSeconds || 0), 0) / hits)
@@ -266,6 +274,7 @@ export default function RaioXCaveira() {
 
     return {
       total, hits, errors, netScore, grossRate, netRate,
+      totalSeconds,
       avgTimeSec, avgHitTimeSec, avgErrorTimeSec,
       guessesOrDoubtsTotal,
       errorReasons
@@ -728,48 +737,155 @@ export default function RaioXCaveira() {
         </div>
       </div>
 
-      {/* 2. FAIXA DE INDICADORES (MODELO PROJETO CAVEIRA: RESOLVIDAS • ACERTOS • ERROS) */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {/* Card 1: Questões Resolvidas */}
-        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] text-center flex flex-col items-center justify-center space-y-1">
-          <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-[#F1F5F9]">
-            Questões Resolvidas
-          </span>
-          <span className="text-3xl sm:text-4xl font-extrabold text-slate-800 dark:text-white leading-tight">
-            {stats.total}
-          </span>
-        </div>
+      {/* 2. DASHBOARD DE DESEMPENHO (LAYOUT PAINEL CAVEIRA: GRÁFICO CIRCULAR + MÉTRICAS) */}
+      {(() => {
+        const hitPercent = stats.total > 0 ? ((stats.hits / stats.total) * 100).toFixed(2) : '0.00';
+        const errorPercent = stats.total > 0 ? ((stats.errors / stats.total) * 100).toFixed(2) : '0.00';
 
-        {/* Card 2: Acertos */}
-        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] text-center flex flex-col items-center justify-center space-y-1">
-          <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-[#F1F5F9]">
-            Acertos
-          </span>
-          <div className="flex items-baseline justify-center gap-2">
-            <span className="text-3xl sm:text-4xl font-extrabold text-emerald-500 leading-tight">
-              {stats.hits}
-            </span>
-            <span className="text-base sm:text-lg font-bold text-emerald-400">
-              ({stats.grossRate}%)
-            </span>
-          </div>
-        </div>
+        const radius = 58;
+        const circumference = 2 * Math.PI * radius; // ~364.425
+        const hasBoth = stats.total > 0 && stats.hits > 0 && stats.errors > 0;
+        const gap = hasBoth ? 14 : 0;
+        const availableLength = circumference - (gap * 2);
 
-        {/* Card 3: Erros */}
-        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] text-center flex flex-col items-center justify-center space-y-1">
-          <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-[#F1F5F9]">
-            Erros
-          </span>
-          <div className="flex items-baseline justify-center gap-2">
-            <span className="text-3xl sm:text-4xl font-extrabold text-red-500 leading-tight">
-              {stats.errors}
-            </span>
-            <span className="text-base sm:text-lg font-bold text-red-400">
-              ({stats.total > 0 ? Math.round((stats.errors / stats.total) * 100) : 0}%)
-            </span>
+        const hitLength = stats.total > 0 && stats.hits > 0
+          ? (stats.errors > 0 ? Math.max(4, (stats.hits / stats.total) * availableLength) : circumference)
+          : 0;
+        const errorLength = stats.total > 0 && stats.errors > 0
+          ? (stats.hits > 0 ? Math.max(4, (stats.errors / stats.total) * availableLength) : circumference)
+          : 0;
+
+        const hitOffset = gap > 0 ? -(gap / 2) : 0;
+        const errorOffset = -(gap / 2 + hitLength + gap);
+
+        return (
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            {/* CARD 1 (ESQUERDA): GRÁFICO CIRCULAR DE DESEMPENHO */}
+            <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-[#2E3236] flex flex-col items-center justify-between min-h-[250px]">
+              {/* Gráfico Donut com texto central */}
+              <div className="relative flex items-center justify-center my-auto py-1">
+                <svg width="180" height="180" viewBox="0 0 160 160" className="transform -rotate-90">
+                  {/* Trilha de fundo */}
+                  <circle
+                    cx="80"
+                    cy="80"
+                    r={radius}
+                    fill="transparent"
+                    stroke="currentColor"
+                    strokeWidth="9"
+                    className="text-slate-100 dark:text-[#25282C]"
+                  />
+                  {/* Arco de Acertos (Teal / Ciano) */}
+                  {hitLength > 0 && (
+                    <circle
+                      cx="80"
+                      cy="80"
+                      r={radius}
+                      fill="transparent"
+                      stroke="#0891b2"
+                      className="dark:stroke-[#06b6d4] transition-all duration-700 ease-out"
+                      strokeWidth="9"
+                      strokeDasharray={`${hitLength} ${circumference - hitLength}`}
+                      strokeDashoffset={hitOffset}
+                      strokeLinecap={hasBoth ? 'round' : 'butt'}
+                    />
+                  )}
+                  {/* Arco de Erros (Vermelho) */}
+                  {errorLength > 0 && (
+                    <circle
+                      cx="80"
+                      cy="80"
+                      r={radius}
+                      fill="transparent"
+                      stroke="#dc2626"
+                      className="dark:stroke-[#ef4444] transition-all duration-700 ease-out"
+                      strokeWidth="9"
+                      strokeDasharray={`${errorLength} ${circumference - errorLength}`}
+                      strokeDashoffset={errorOffset}
+                      strokeLinecap={hasBoth ? 'round' : 'butt'}
+                    />
+                  )}
+                </svg>
+
+                {/* Conteúdo Central */}
+                <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none select-none">
+                  <span className="text-3xl sm:text-4xl font-black text-slate-800 dark:text-white leading-tight">
+                    {stats.total}
+                  </span>
+                  <span className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-300 leading-tight mt-0.5">
+                    Questões<br />Resolvidas
+                  </span>
+                </div>
+              </div>
+
+              {/* Legenda inferior (Acertos & Erros com porcentagens e contagem) */}
+              <div className="w-full pt-3 mt-1 border-t border-slate-200/60 dark:border-[#2E3236] flex flex-col sm:flex-row items-center justify-center gap-3 sm:gap-6 text-xs sm:text-sm font-semibold">
+                <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#0891b2] dark:bg-[#06b6d4] shrink-0" />
+                  <span>{hitPercent}% {stats.hits} acertos</span>
+                </div>
+                <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
+                  <span className="w-2.5 h-2.5 rounded-full bg-[#dc2626] dark:bg-[#ef4444] shrink-0" />
+                  <span>{errorPercent}% {stats.errors} erros</span>
+                </div>
+              </div>
+            </div>
+
+            {/* CARD 2 (DIREITA): MÉTRICAS DETALHADAS */}
+            <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-[#2E3236] flex flex-col justify-between min-h-[250px] space-y-3">
+              {/* Topo: QUESTÕES RESPONDIDAS */}
+              <div className="text-center py-1">
+                <span className="block text-xs sm:text-sm font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
+                  QUESTÕES RESPONDIDAS
+                </span>
+                <span className="block text-3xl sm:text-4xl font-black text-slate-800 dark:text-white mt-1 leading-tight">
+                  {stats.total}
+                </span>
+              </div>
+
+              {/* Meio: ACERTOS | ERROS */}
+              <div className="grid grid-cols-2 gap-3 text-center py-3 border-y border-slate-200/60 dark:border-[#2E3236]">
+                <div>
+                  <span className="block text-xs sm:text-sm font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
+                    ACERTOS
+                  </span>
+                  <span className="block text-2xl sm:text-3xl font-black text-[#0891b2] dark:text-[#06b6d4] mt-1 leading-tight">
+                    {stats.hits}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-xs sm:text-sm font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
+                    ERROS
+                  </span>
+                  <span className="block text-2xl sm:text-3xl font-black text-[#dc2626] dark:text-[#ef4444] mt-1 leading-tight">
+                    {stats.errors}
+                  </span>
+                </div>
+              </div>
+
+              {/* Fundo: Tempo total gasto | Tempo médio por questão */}
+              <div className="grid grid-cols-2 gap-3 text-center pt-1">
+                <div>
+                  <span className="block text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400">
+                    Tempo total gasto
+                  </span>
+                  <span className="block text-xl sm:text-2xl font-extrabold text-slate-800 dark:text-white tabular-nums mt-1 leading-tight">
+                    {formatDurationHMS(stats.totalSeconds)}
+                  </span>
+                </div>
+                <div>
+                  <span className="block text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400">
+                    Tempo médio por questão
+                  </span>
+                  <span className="block text-xl sm:text-2xl font-extrabold text-slate-800 dark:text-white tabular-nums mt-1 leading-tight">
+                    {formatDurationHMS(stats.avgTimeSec)}
+                  </span>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-      </div>
+        );
+      })()}
 
       {/* 3. PAINÉIS ANALÍTICOS LADO A LADO: DISCIPLINAS (ESQUERDA) + RADAR DE LEI SECA (DIREITA) */}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
