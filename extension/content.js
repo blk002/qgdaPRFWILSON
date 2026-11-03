@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.3 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.4 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -14,6 +14,8 @@
   const STORAGE_KEY = 'qg_caveira_questions';
   const SESSION_KEY = 'qg_caveira_session';
   const SCHEMA_KEY = 'qg_caveira_schema_v3';
+  const GOAL_KEY = 'qg_caveira_daily_goal';
+  let cachedDailyGoal = 50;
 
   let isDestroyed = false;
   let isStorageLoaded = false;
@@ -110,8 +112,11 @@
   function loadInitialState() {
     if (!isExtensionContextValid()) return;
     try {
-      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY], (res) => {
+      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, GOAL_KEY], (res) => {
         if (chrome.runtime.lastError || isDestroyed) return;
+        if (res && res[GOAL_KEY]) {
+          cachedDailyGoal = Number(res[GOAL_KEY]) || 50;
+        }
         const today = getTodaySessionDate();
         if (res[SCHEMA_KEY] !== 'v3_strict_clean') {
           const cleanSession = { date: today, total: 0, hits: 0, errors: 0 };
@@ -170,6 +175,10 @@
             sessionStats = normalizeSession(changes[SESSION_KEY].newValue);
             updateHudStats();
           }
+          if (changes[GOAL_KEY]) {
+            cachedDailyGoal = Number(changes[GOAL_KEY].newValue) || 50;
+            updateHudGoal();
+          }
         }
       });
     } catch (_) {}
@@ -224,6 +233,16 @@
           <div class="qg-hud-stat-box">
             <span class="qg-hud-stat-label">Acerto</span>
             <span class="qg-hud-stat-value gold" id="qg-stat-net">${sessionStats.total > 0 ? Math.round((sessionStats.hits / sessionStats.total) * 100) : 0}%</span>
+          </div>
+        </div>
+
+        <div class="qg-hud-goal-box" style="margin-top: 7px; margin-bottom: 7px; background: rgba(255,255,255,0.03); border: 1px solid rgba(255,255,255,0.06); border-radius: 8px; padding: 5px 8px;">
+          <div style="display: flex; justify-content: space-between; align-items: center; font-size: 9px; font-weight: 800; text-transform: uppercase; margin-bottom: 3px;">
+            <span style="color: #94a3b8; display: flex; align-items: center; gap: 3px;">🎯 <span>Meta Diária</span></span>
+            <span id="qg-hud-goal-ratio" style="color: #38bdf8;">${sessionStats.total} / ${cachedDailyGoal} (${Math.min(100, Math.round((sessionStats.total / cachedDailyGoal) * 100))}%)</span>
+          </div>
+          <div style="width: 100%; height: 4px; background: rgba(255,255,255,0.08); border-radius: 999px; overflow: hidden;">
+            <div id="qg-hud-goal-bar" style="width: ${Math.min(100, Math.round((sessionStats.total / cachedDailyGoal) * 100))}%; height: 100%; background: linear-gradient(90deg, #0284c7, #10b981); border-radius: 999px; transition: width 0.3s ease;"></div>
           </div>
         </div>
 
@@ -469,6 +488,26 @@
   }
 
   // --- 3. ATUALIZAÇÃO VISUAL DAS ESTATÍSTICAS ---
+  function updateHudGoal() {
+    const elRatio = document.getElementById('qg-hud-goal-ratio');
+    const elBar = document.getElementById('qg-hud-goal-bar');
+    if (!elRatio || !elBar) return;
+
+    const current = Number(sessionStats.total) || 0;
+    const goal = cachedDailyGoal || 50;
+    const pct = Math.min(100, Math.round((current / goal) * 100));
+
+    if (current >= goal) {
+      elRatio.innerHTML = `<span style="color:#10b981;">🏆 ${current}/${goal} (100%)</span>`;
+      elBar.style.background = '#10b981';
+      elBar.style.width = '100%';
+    } else {
+      elRatio.textContent = `${current} / ${goal} (${pct}%)`;
+      elBar.style.background = 'linear-gradient(90deg, #0284c7, #10b981)';
+      elBar.style.width = `${pct}%`;
+    }
+  }
+
   function updateHudStats() {
     const elTotal = document.getElementById('qg-stat-total');
     const elHits = document.getElementById('qg-stat-hits');
@@ -482,6 +521,8 @@
     const rate = sessionStats.total > 0 ? Math.round((sessionStats.hits / sessionStats.total) * 100) : 0;
     elNet.textContent = `${rate}%`;
     elNet.className = `qg-hud-stat-value ${rate >= 70 ? 'green' : rate >= 50 ? 'gold' : sessionStats.total === 0 ? 'gold' : 'red'}`;
+
+    updateHudGoal();
   }
 
   // --- 4. SELEÇÃO DE CARDS E DETECÇÃO POR VIEWPORT (SCROLL) ---

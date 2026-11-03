@@ -7,6 +7,7 @@ import Dashboard from './pages/Dashboard';
 import ClassCompletionModal from './components/ClassCompletionModal';
 import CaveiraReviewQuestionModal from './components/CaveiraReviewQuestionModal';
 import RankBadge from './components/RankBadge';
+import TacticalCountdownBanner from './components/TacticalCountdownBanner';
 import { useConfetti } from './hooks/useConfetti';
 
 // Code-splitting: páginas carregadas sob demanda
@@ -425,6 +426,7 @@ export default function App() {
       {/* ÁREA DE CONTEÚDO PRINCIPAL */}
       <div className="flex-1 md:pl-60 min-w-0 w-full">
         <main className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
+          <TacticalCountdownBanner />
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}
