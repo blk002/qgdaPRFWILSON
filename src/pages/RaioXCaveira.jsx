@@ -679,8 +679,8 @@ export default function RaioXCaveira() {
         </div>
       </div>
 
-      {/* 2. FAIXA EXECUTIVA DE INDICADORES (4 CARDS DE ALTA COMPREENSÃO) */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-4 gap-3">
+      {/* 2. FAIXA EXECUTIVA DE INDICADORES (3 CARDS DE ALTA COMPREENSÃO) */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {/* Card 1: Volume & Ritmo */}
         <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-[#2E3236] flex items-center justify-between gap-3">
           <div className="space-y-0.5">
@@ -732,32 +732,7 @@ export default function RaioXCaveira() {
           </div>
         </div>
 
-        {/* Card 3: Saldo Líquido Cebraspe */}
-        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-[#2E3236] flex items-center justify-between gap-3">
-          <div className="space-y-0.5">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
-              Saldo Cebraspe (1E anula 1C)
-            </span>
-            <div className="flex items-baseline gap-2">
-              <span className={`text-2xl font-black ${
-                stats.netScore > 0 ? 'text-emerald-400' : stats.netScore === 0 ? 'text-amber-400' : 'text-red-400'
-              }`}>
-                {stats.netScore > 0 ? `+${stats.netScore}` : stats.netScore} pts
-              </span>
-              <span className="text-xs font-semibold text-slate-400">
-                ({stats.netRate}% líq.)
-              </span>
-            </div>
-            <p className="text-[11px] text-slate-500 dark:text-[#A0AAB2]">
-              🎲 {stats.guessesOrDoubtsTotal} {stats.guessesOrDoubtsTotal === 1 ? 'questão com dúvida/chute' : 'questões com dúvida/chute'}
-            </p>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-amber-500/10 border border-amber-500/20 flex items-center justify-center shrink-0">
-            <Scale className="w-5 h-5 text-amber-400" />
-          </div>
-        </div>
-
-        {/* Card 4: Raio-X da Causa dos Erros */}
+        {/* Card 3: Raio-X da Causa dos Erros */}
         <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-[#2E3236] flex flex-col justify-between gap-1.5">
           <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
             Mapa da Causa dos Erros ({stats.errors})
