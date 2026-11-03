@@ -675,43 +675,89 @@
     let correctLetterFromDom = null;
     let incorrectLetterFromDom = null;
     const altScope = card.querySelector('.question-alternatives') || card;
-    const altItems = altScope.querySelectorAll('.alternative');
+    const altItems = altScope.querySelectorAll('.alternative, [class*="alternative"]');
 
     altItems.forEach(altEl => {
-      const letterEl = altEl.querySelector('.alternative-letter') || altEl;
-      const letter = (altEl.querySelector('.alternative-letter')?.textContent || '').trim().toUpperCase();
-      if (!letter || letter.length > 2) return;
+      const letterEl = altEl.querySelector('.alternative-letter, [class*="letter"]') || altEl;
+      let rawLetter = (altEl.querySelector('.alternative-letter, [class*="letter"]')?.textContent || '').trim().toUpperCase();
+      if (!rawLetter || rawLetter.length > 2) {
+        // Fallback: tenta pegar do início do texto ou atributo
+        const match = (altEl.textContent || '').trim().match(/^([A-E])\b/i);
+        if (match) rawLetter = match[1].toUpperCase();
+      }
+      if (!rawLetter || rawLetter.length > 2) return;
 
-      const combinedClasses = `${altEl.className || ''} ${letterEl.className || ''}`;
-      if (combinedClasses.includes('bg-incorrect-1') || combinedClasses.includes('bg-incorrect-2')) {
-        incorrectLetterFromDom = letter;
-      } else if (combinedClasses.includes('bg-correct-1') || combinedClasses.includes('bg-correct-2')) {
-        correctLetterFromDom = letter;
+      const combinedClasses = `${altEl.className || ''} ${letterEl.className || ''} ${altEl.parentElement?.className || ''}`;
+      const styleAttr = `${altEl.getAttribute('style') || ''} ${letterEl.getAttribute('style') || ''}`;
+
+      const isGreen =
+        combinedClasses.includes('bg-correct') ||
+        combinedClasses.includes('correct') ||
+        combinedClasses.includes('success') ||
+        combinedClasses.includes('is-correct') ||
+        styleAttr.includes('rgb(16, 185, 129)') ||
+        styleAttr.includes('#10b981') ||
+        styleAttr.includes('green');
+
+      const isRed =
+        combinedClasses.includes('bg-incorrect') ||
+        combinedClasses.includes('incorrect') ||
+        combinedClasses.includes('danger') ||
+        combinedClasses.includes('is-wrong') ||
+        combinedClasses.includes('negative') ||
+        styleAttr.includes('rgb(239, 68, 68)') ||
+        styleAttr.includes('#ef4444') ||
+        styleAttr.includes('red');
+
+      if (isRed) {
+        incorrectLetterFromDom = rawLetter;
+      } else if (isGreen) {
+        correctLetterFromDom = rawLetter;
       }
     });
+
+    // Também verifica se há indicação de resposta no texto do card ou box de estatísticas
+    const fullCardText = card.innerText || card.textContent || '';
+    const statsAnswerMatch = statsText.match(/(?:Resposta correta|Gabarito|Alternativa correta|Gabarito definitivo|Resposta)\s*[:=]?\s*\(?([A-E])\)?/i) ||
+                             fullCardText.match(/(?:Resposta correta|Gabarito|Alternativa correta|Gabarito definitivo|Resposta)\s*[:=]?\s*\(?([A-E])\)?/i);
 
     const isCorrect = incorrectLetterFromDom
       ? false
       : (
-          Boolean(statsBox?.querySelector('.bg-correct-1')) ||
+          Boolean(statsBox?.querySelector('.bg-correct-1, .bg-correct-2, [class*="correct"]')) ||
           statsText.toUpperCase().includes('PARABÉNS') ||
           statsText.toLowerCase().includes('acertou') ||
-          (Boolean(correctLetterFromDom) && !statsText.toUpperCase().includes('ERROU'))
+          (Boolean(correctLetterFromDom) && !statsText.toUpperCase().includes('ERROU') && !statsText.toUpperCase().includes('RESPOSTA CORRETA'))
         );
 
-    const userChoice = isCorrect
-      ? (correctLetterFromDom || lastUserClickedChoice || 'C')
-      : (incorrectLetterFromDom || lastUserClickedChoice || 'C');
+    // Identifica o que o usuário marcou
+    const userSelectedEl = altScope.querySelector('.q-radio[aria-checked="true"], .q-radio--active, [class*="selected"], [class*="active"], input:checked');
+    let userChoiceFromRadio = null;
+    if (userSelectedEl) {
+      const parentAlt = userSelectedEl.closest('.alternative, [class*="alternative"]') || userSelectedEl.parentElement;
+      const l = (parentAlt?.querySelector('.alternative-letter, [class*="letter"]')?.textContent || '').trim().toUpperCase();
+      if (l && l.length <= 2) userChoiceFromRadio = l;
+    }
 
-    let correctChoice = correctLetterFromDom || userChoice;
+    const userChoice = incorrectLetterFromDom ||
+                       (isCorrect ? correctLetterFromDom : null) ||
+                       userChoiceFromRadio ||
+                       lastUserClickedChoice ||
+                       (isCorrect ? (correctLetterFromDom || 'C') : 'E');
 
-    if (!isCorrect) {
-      const ansMatch = statsText.match(/Resposta correta:\s*([A-E])/i);
-      if (ansMatch) {
-        correctChoice = ansMatch[1].toUpperCase();
-      } else if (correctLetterFromDom) {
-        correctChoice = correctLetterFromDom;
+    let correctChoice = correctLetterFromDom;
+    if (statsAnswerMatch) {
+      correctChoice = statsAnswerMatch[1].toUpperCase();
+    } else if (isCorrect) {
+      correctChoice = userChoice;
+    } else if (!correctChoice) {
+      // Se errou e não achou a letra verde explícita no DOM, busca nas alternativas qual tem ícone de check ou classe correta
+      const checkIconAlt = altScope.querySelector('.material-icons:contains("check"), [class*="check"]')?.closest('.alternative');
+      const checkLetter = (checkIconAlt?.querySelector('.alternative-letter')?.textContent || '').trim().toUpperCase();
+      if (checkLetter && checkLetter.length <= 2) {
+        correctChoice = checkLetter;
       } else {
+        // Cebraspe padrão: se o usuário marcou C e errou, é E; se marcou E e errou, é C
         correctChoice = userChoice === 'C' ? 'E' : 'C';
       }
     }
