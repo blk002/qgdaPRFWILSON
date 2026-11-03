@@ -1,5 +1,13 @@
 export type QuestionCategory = 'CTB' | 'CONTRAN';
 
+export interface PRFTopicMetadata {
+  id: string;
+  category: QuestionCategory;
+  name: string;
+  legalScope: string;
+  guideline: string;
+}
+
 export interface BaseLegalQuestion {
   id: string;
   category: QuestionCategory;
@@ -22,16 +30,315 @@ export interface ActiveRoundQuestion {
   wasAiRewritten?: boolean;
 }
 
+// Catálogo Abrangente de Tópicos do Edital PRF (CTB + Todas as Resoluções CONTRAN)
+export const PRF_TOPICS_CATALOG: PRFTopicMetadata[] = [
+  // ================= CTB =================
+  {
+    id: 'ctb-snt',
+    category: 'CTB',
+    name: 'CTB - Sistema Nacional de Trânsito e Competências da PRF',
+    legalScope: 'Arts. 1º a 25 do CTB',
+    guideline: 'Composição do SNT, competências privativas da PRF em rodovias federais (fiscalização, lavratura de TCO, perícia de trânsito), CONTRAN, CETRAN e órgãos rodoviários.',
+  },
+  {
+    id: 'ctb-circulacao-regras',
+    category: 'CTB',
+    name: 'CTB - Normas Gerais de Circulação e Conduta',
+    legalScope: 'Arts. 26 a 67 do CTB',
+    guideline: 'Preferência de passagem em cruzamentos e rotatórias, circulação pela direita, ultrapassagens, distância de segurança, uso de luzes e faróis diurnos em pista simples.',
+  },
+  {
+    id: 'ctb-motorista-prof',
+    category: 'CTB',
+    name: 'CTB - Condução por Motoristas Profissionais',
+    legalScope: 'Arts. 67-A a 67-E do CTB',
+    guideline: 'Tempo máximo ininterrupto de direção (transporte de passageiros e carga), intervalo obrigatório de descanso (11h diárias, 30 min a cada 4h/5h30) e registro em tacógrafo.',
+  },
+  {
+    id: 'ctb-pedestres-ciclistas',
+    category: 'CTB',
+    name: 'CTB - Pedestres e Veículos Não Motorizados',
+    legalScope: 'Arts. 68 a 71 do CTB',
+    guideline: 'Prioridade do pedestre na faixa, travessia em rodovias, circulação de ciclistas e distância lateral mínima de 1,5m para ultrapassagem.',
+  },
+  {
+    id: 'ctb-sinalizacao',
+    category: 'CTB',
+    name: 'CTB - Sinalização de Trânsito e Engenharia Viária',
+    legalScope: 'Arts. 80 a 95 do CTB',
+    guideline: 'Ordem de prevalência das normas (ordens do agente de trânsito prevalecem sobre semáforo e placas), sinalização vertical e horizontal.',
+  },
+  {
+    id: 'ctb-veiculos-equipamentos',
+    category: 'CTB',
+    name: 'CTB - Classificação e Equipamentos dos Veículos',
+    legalScope: 'Arts. 96 a 113 do CTB',
+    guideline: 'Classificação quanto à tração, espécie e categoria. Equipamentos obrigatórios, exigências de segurança e registro das características do veículo.',
+  },
+  {
+    id: 'ctb-identificacao-placas',
+    category: 'CTB',
+    name: 'CTB - Identificação Veicular e Placas',
+    legalScope: 'Arts. 114 a 117 do CTB',
+    guideline: 'Gravação do chassi (VIN), placas dianteiras e traseiras, identificação de veículos de duas rodas e proibições de alterações.',
+  },
+  {
+    id: 'ctb-registro-licenciamento',
+    category: 'CTB',
+    name: 'CTB - Registro e Licenciamento de Veículos (CRV e CRLV)',
+    legalScope: 'Arts. 118 a 135 do CTB',
+    guideline: 'Emissão de novo CRV (transferência em 30 dias), porte do CRLV (físico ou digital), baixa de veículos irrecuperáveis e clonados.',
+  },
+  {
+    id: 'ctb-habilitacao-cnh',
+    category: 'CTB',
+    name: 'CTB - Habilitação, Categorias e Validade da CNH',
+    legalScope: 'Arts. 140 a 160 do CTB',
+    guideline: 'Categorias A, B, C, D e E. Validade do exame médico (10 anos <50, 5 anos 50-69, 3 anos 70+), exigências de idade e experiência para categorias D e E.',
+  },
+  {
+    id: 'ctb-toxicologico',
+    category: 'CTB',
+    name: 'CTB - Exame Toxicológico Periódico',
+    legalScope: 'Arts. 148-A e 165-B do CTB (Lei 14.599/2023)',
+    guideline: 'Periodicidade de 2 anos e 6 meses para condutores C, D e E com menos de 70 anos. Infração gravíssima por dirigir após 30 dias do vencimento.',
+  },
+  {
+    id: 'ctb-infracoes-alcool',
+    category: 'CTB',
+    name: 'CTB - Infrações: Alcoolemia e Recusa ao Teste',
+    legalScope: 'Arts. 165 e 165-A do CTB',
+    guideline: 'Dirigir sob efeito de álcool ou substância psicoativa. Recusa a bafômetro/etilômetro. Multa gravíssima (10x), suspensão de 12 meses e retenção do veículo.',
+  },
+  {
+    id: 'ctb-infracoes-velocidade',
+    category: 'CTB',
+    name: 'CTB - Infrações: Velocidade e Ultrapassagem',
+    legalScope: 'Arts. 202, 203 e 218 do CTB',
+    guideline: 'Excesso de velocidade (até 20% média, 20%-50% grave, acima de 50% gravíssima com suspensão imediata). Ultrapassagem pela contramão em linha contínua amarela.',
+  },
+  {
+    id: 'ctb-infracoes-especie',
+    category: 'CTB',
+    name: 'CTB - Infrações: Celular, Cinto e Capacete',
+    legalScope: 'Arts. 167, 244 e 252 do CTB',
+    guideline: 'Segurar ou manusear celular ao volante (infração gravíssima). Não usar cinto (grave). Conduzir moto transportando criança menor de 10 anos (gravíssima).',
+  },
+  {
+    id: 'ctb-penalidades',
+    category: 'CTB',
+    name: 'CTB - Penalidades, Pontuação e Suspensão da CNH',
+    legalScope: 'Arts. 256 a 268 do CTB',
+    guideline: 'Escalonamento de pontuação para suspensão da CNH (20, 30 ou 40 pontos conforme gravíssimas). Regra fixa de 40 pontos para condutor com EAR. Advertência por escrito.',
+  },
+  {
+    id: 'ctb-medidas-adm',
+    category: 'CTB',
+    name: 'CTB - Medidas Administrativas: Retenção e Remoção',
+    legalScope: 'Arts. 269 a 279-A do CTB',
+    guideline: 'Diferença entre penalidade e medida administrativa. Retenção do veículo, remoção para pátio, saneamento no local e recolhimento de documentos.',
+  },
+  {
+    id: 'ctb-processo-adm',
+    category: 'CTB',
+    name: 'CTB - Processo Administrativo e Recursos no SNT',
+    legalScope: 'Arts. 280 a 290 do CTB',
+    guideline: 'Auto de infração de trânsito (AIT), prazo de expedição da notificação da autuação (30 dias sob pena de arquivamento), defesa prévia, JARI e CETRAN.',
+  },
+  {
+    id: 'ctb-crimes-geral',
+    category: 'CTB',
+    name: 'CTB - Crimes de Trânsito: Parte Geral',
+    legalScope: 'Arts. 291 a 301 do CTB',
+    guideline: 'Aplicação subsidiária do Código Penal e Lei 9.099/95. Circunstâncias agravantes (faixa de pedestres, sem CNH). Vedação de prisão em flagrante se prestar socorro.',
+  },
+  {
+    id: 'ctb-crimes-homicidio',
+    category: 'CTB',
+    name: 'CTB - Crimes: Homicídio e Lesão Corporal Culposa',
+    legalScope: 'Arts. 302 e 303 do CTB',
+    guideline: 'Homicídio culposo na direção de veículo. Formas qualificadas por embriaguez ou drogas (reclusão de 5 a 8 anos). Vedação da substituição por penas restritivas de direitos.',
+  },
+  {
+    id: 'ctb-crimes-alcool-fuga',
+    category: 'CTB',
+    name: 'CTB - Crimes: Embriaguez ao Volante e Fuga de Local',
+    legalScope: 'Arts. 304, 305 e 306 do CTB',
+    guideline: 'Art. 306: Crime de perigo abstrato. Limite do etilômetro (>= 0,30 mg/L ar alveolar ou >= 6 dg/L sangue). Art. 305 (fuga do local) e tipificação penal.',
+  },
+  {
+    id: 'ctb-crimes-racha',
+    category: 'CTB',
+    name: 'CTB - Crimes: Racha, Velocidade e Violação de Suspensão',
+    legalScope: 'Arts. 307 a 312-B do CTB',
+    guideline: 'Art. 307 (violar suspensão). Art. 308 (racha / disputa não autorizada) qualificado por morte ou lesão grave. Art. 309 (dirigir sem CNH gerando perigo concreto de dano).',
+  },
+
+  // ================= CONTRAN =================
+  {
+    id: 'contran-268',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 268/2008 (Iluminação Intermitente e Alarme)',
+    legalScope: 'Resolução CONTRAN nº 268/2008',
+    guideline: 'Uso de luzes vermelhas e sirenes para socorro e polícia, luz âmbar intermitente para serviços de utilidade pública e socorro mecânico, prioridade no trânsito.',
+  },
+  {
+    id: 'contran-432',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 432/2013 (Fiscalização de Alcoolemia)',
+    legalScope: 'Resolução CONTRAN nº 432/2013',
+    guideline: 'Medição pelo etilômetro: valor considerado e erro máximo admissível. Constatação por sinais clínicos de alteração psicomotora (Anexo II).',
+  },
+  {
+    id: 'contran-789',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 789/2020 (Habilitação e Exames)',
+    legalScope: 'Resolução CONTRAN nº 789/2020',
+    guideline: 'Procedimentos de formação de condutores, exames teórico e prático, faltas eliminatórias, graves (3 pts), médias (2 pts) e leves (1 pt). Limite de 3 pontos para aprovação.',
+  },
+  {
+    id: 'contran-798',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 798/2020 (Radares e Medidores de Velocidade)',
+    legalScope: 'Resolução CONTRAN nº 798/2020',
+    guideline: 'Tipos de medidores (fixo, estático, móvel e portátil). Requisitos de sinalização R-19, estudo técnico obrigatório e proibição de radares escondidos/ocultos.',
+  },
+  {
+    id: 'contran-810',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 810/2020 (Classificação de Danos em Sinistros)',
+    legalScope: 'Resolução CONTRAN nº 810/2020',
+    guideline: 'Relatório de Avarias preenchido pela PRF: Pequena Monta (não bloqueia CRLV), Média Monta (bloqueia até vistoria CSV) e Grande Monta (irrecuperável/sucata).',
+  },
+  {
+    id: 'contran-819',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 819/2021 (Dispositivos de Retenção Infantil)',
+    legalScope: 'Resolução CONTRAN nº 819/2021',
+    guideline: 'Transporte de crianças até 10 anos: bebê conforto, cadeirinha, assento de elevação (booster) e dispensa de booster ao atingir 1,45m de altura.',
+  },
+  {
+    id: 'contran-882',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 882/2021 (Limites de Peso e Dimensões)',
+    legalScope: 'Resolução CONTRAN nº 882/2021',
+    guideline: 'Pesagem por balança rodoviária, tolerâncias (5% no PBT, 12,5% por eixo), limites de largura (2,60m), altura (4,40m) e comprimento para caminhões e ônibus.',
+  },
+  {
+    id: 'contran-906',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 906/2021 (Fiscalização do Descanso do Motorista)',
+    legalScope: 'Resolução CONTRAN nº 906/2021',
+    guideline: 'Fiscalização do tempo de direção através de tacógrafo ou meio eletrônico. Exigência do descanso diário de 11h e pausas em rodovias.',
+  },
+  {
+    id: 'contran-909',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 909/2022 (Videomonitoramento em Rodovias)',
+    legalScope: 'Resolução CONTRAN nº 909/2022',
+    guideline: 'Fiscalização de trânsito por câmeras de videomonitoramento operadas remotamente por agente da autoridade. Requisitos de sinalização prévia da rodovia e campo de observação no AIT.',
+  },
+  {
+    id: 'contran-911',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 911/2022 (Exame Toxicológico de Larga Janela)',
+    legalScope: 'Resolução CONTRAN nº 911/2022',
+    guideline: 'Exame de queratina com janela de detecção mínima de 90 dias. Contraprova, sigilo médico e cadastramento obrigatório no RENACH.',
+  },
+  {
+    id: 'contran-912',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 912/2022 (Equipamentos Obrigatórios)',
+    legalScope: 'Resolução CONTRAN nº 912/2022',
+    guideline: 'Equipamentos obrigatórios por tipo de veículo: cinto, espelhos retrovisores, triângulo, macaco, chave de roda, buzina, velocímetro e pneu sobressalente (estepe).',
+  },
+  {
+    id: 'contran-918',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 918/2022 (Autuação, Notificação e Multas)',
+    legalScope: 'Resolução CONTRAN nº 918/2022',
+    guideline: 'Procedimentos de notificação eletrônica (SNE com 40% de desconto), prazos de pagamento, parcelamento e competência recursal no âmbito do SNT.',
+  },
+  {
+    id: 'contran-919',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 919/2022 (Extintor de Incêndio Veicular)',
+    legalScope: 'Resolução CONTRAN nº 919/2022',
+    guideline: 'Uso facultativo para automóveis e utilitários particulares. Permanece obrigatório para caminhões, tratores, ônibus, transporte coletivo e inflamáveis.',
+  },
+  {
+    id: 'contran-925',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 925/2022 e 926/2022 (Amarração de Cargas e CVC)',
+    legalScope: 'Resoluções CONTRAN nº 925/2022 e 926/2022',
+    guideline: 'Proibição de cordas para fixação primária de carga (exigência de cintas, correntes ou cabos de aço). Requisitos para Combinações de Veículos de Carga (bitrem e rodotrem) e AET.',
+  },
+  {
+    id: 'contran-955',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 955/2022 (Capacete Motociclístico e Viseira)',
+    legalScope: 'Resolução CONTRAN nº 955/2022',
+    guideline: 'Uso de capacete com selo do Inmetro e dispositivo retrorrefletivo. Posição da viseira abaixada ou óculos de proteção. Proibição de película ou viseira fumê à noite.',
+  },
+  {
+    id: 'contran-960',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 960/2022 (Vidros e Películas / Insulfilm)',
+    legalScope: 'Resolução CONTRAN nº 960/2022',
+    guideline: 'Transmitância luminosa mínima: não inferior a 70% para para-brisa e vidros laterais dianteiros. Proibição de películas reflexivas ou espelhadas.',
+  },
+  {
+    id: 'contran-965',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 965/2022 (Vagas de Estacionamento Específico)',
+    legalScope: 'Resolução CONTRAN nº 965/2022',
+    guideline: 'Credenciamento e credencial visível no painel para vagas de Idoso e Pessoa com Deficiência (PCD). Estacionar em vaga reservada sem credencial: infração gravíssima.',
+  },
+  {
+    id: 'contran-967',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 967/2022 (Transporte de Produtos Perigosos)',
+    legalScope: 'Resolução CONTRAN nº 967/2022',
+    guideline: 'Painel de segurança retangular laranja (com nº de risco e nº ONU) e rótulo de risco losangular. Porte do curso MOPP, kit de emergência e extintor específico.',
+  },
+  {
+    id: 'contran-985',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 985/2022 (Manual de Fiscalização - MBFT)',
+    legalScope: 'Resolução CONTRAN nº 985/2022 (MBFT)',
+    guideline: 'Manual Brasileiro de Fiscalização de Trânsito: regras de autuação sem abordagem (quando possível e visível), preenchimento de observações, infrações concorrentes e sucessivas.',
+  },
+  {
+    id: 'contran-996',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 996/2023 (Ciclomotores e Bikes Elétricas)',
+    legalScope: 'Resolução CONTRAN nº 996/2023',
+    guideline: 'Ciclomotor (até 50cc ou 4kW, max 50 km/h, exige ACC ou CNH A, placa e capacete) vs Bicicleta Elétrica (pedalada assistida, até 32 km/h, sem acelerador manual).',
+  },
+  {
+    id: 'contran-1004',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 1004/2023 (Identificação Veicular e Placas Mercosul)',
+    legalScope: 'Resolução CONTRAN nº 1004/2023',
+    guideline: 'Padrão alfanumérico LLLNLNN (três letras, um número, uma letra e dois números), faixa azul com bandeira do Brasil e emblema do Mercosul, QR Code de segurança.',
+  },
+];
+
+export function getRandomPrfTopic(category?: QuestionCategory): PRFTopicMetadata {
+  const pool = category ? PRF_TOPICS_CATALOG.filter(t => t.category === category) : PRF_TOPICS_CATALOG;
+  return pool[Math.floor(Math.random() * pool.length)];
+}
+
 export const QUESTIONS_BANK: BaseLegalQuestion[] = [
-  // ==================== CTB (LEI Nº 9.503/1997 E ATUALIZAÇÕES) ====================
+  // ==================== CTB ====================
   {
     id: 'ctb-01',
     category: 'CTB',
-    topic: 'Normas Gerais de Circulação e Conduta',
+    topic: 'CTB - Normas Gerais de Circulação e Conduta',
     legalBasis: 'Art. 29, III, do CTB (Lei nº 9.503/1997)',
     answer: true,
     explanation:
-      'CORRETO. Pelo Art. 29, III, do CTB (com redação da Lei 14.071/2020), quando veículos, transitando por fluxos que se cruzem, se aproximarem de local não sinalizado, terá preferência de passagem: a) no caso de apenas um fluxo ser proveniente de rodovia, aquele que estiver circulando por ela; b) no caso de rotatória, aquele que estiver circulando por ela; c) nos demais casos, o que vier pela direita do condutor.',
+      'CORRETO. Pelo Art. 29, III, do CTB, quando veículos transitando por fluxos que se cruzem aproximarem-se de local não sinalizado, a preferência pertencerá: a) no caso de apenas um fluxo ser de rodovia, àquele que estiver circulando por ela; b) em rotatória, àquele que estiver circulando por ela; c) nos demais casos, ao que vier pela direita do condutor.',
     coreStatements: [
       'Em interseções desprovidas de sinalização específica, caso apenas um dos fluxos que se cruzam seja oriundo de rodovia, a preferência de passagem pertencerá ao veículo que nela estiver trafegando.',
       'Quando dois veículos se aproximam de um cruzamento não sinalizado e somente um deles circula por rodovia, este detém a preferência legal de passagem sobre o demais.',
@@ -41,7 +348,7 @@ export const QUESTIONS_BANK: BaseLegalQuestion[] = [
   {
     id: 'ctb-02',
     category: 'CTB',
-    topic: 'Habilitação e Validade da CNH',
+    topic: 'CTB - Habilitação, Categorias e Validade da CNH',
     legalBasis: 'Art. 147, § 2º, do CTB (Lei nº 14.071/2020)',
     answer: false,
     explanation:
@@ -55,25 +362,25 @@ export const QUESTIONS_BANK: BaseLegalQuestion[] = [
   {
     id: 'ctb-03',
     category: 'CTB',
-    topic: 'Penalidades e Suspensão do Direito de Dirigir',
-    legalBasis: 'Art. 261, § 1º, do CTB',
+    topic: 'CTB - Penalidades, Pontuação e Suspensão da CNH',
+    legalBasis: 'Art. 261, § 1º e § 5º, do CTB',
     answer: true,
     explanation:
-      'CORRETO. Nos termos do Art. 261, I, do CTB, no período de 12 meses, a suspensão por acúmulo de pontos ocorre com: 20 pontos (caso constem 2 ou mais infrações gravíssimas), 30 pontos (caso conste 1 infração gravíssima) ou 40 pontos (caso não conste nenhuma infração gravíssima). Para o condutor que exerce atividade remunerada (EAR), o limite é sempre de 40 pontos independentemente da natureza das infrações (§ 5º).',
+      'CORRETO. Nos termos do Art. 261, I, do CTB, a suspensão por pontos ocorre com 20 pts (2+ gravíssimas), 30 pts (1 gravíssima) ou 40 pts (nenhuma gravíssima). Para o motorista que exerce atividade remunerada (EAR), o teto é sempre fixo em 40 pontos, independentemente da gravidade das infrações.',
     coreStatements: [
       'O motorista que não exerce atividade remunerada ao veículo terá instaurado processo de suspensão do direito de dirigir ao atingir 30 pontos em 12 meses, caso haja exatamente uma infração de natureza gravíssima em seu prontuário nesse período.',
       'Na contagem de pontos em doze meses para condutor sem EAR na CNH, a existência de uma única infração gravíssima fixa o teto para suspensão do direito de dirigir em trinta pontos.',
-      'Para o condutor não profissional, acumular trinta pontos no intervalo de um ano acarreta a penalidade de suspensão da CNH quando figurar em seu registro apenas uma infração gravíssima.',
+      'Para o condutor que exerce atividade remunerada (EAR), o limite para suspensão do direito de dirigir por pontuação é sempre fixado em 40 pontos, independentemente da quantidade de infrações gravíssimas.',
     ],
   },
   {
     id: 'ctb-04',
     category: 'CTB',
-    topic: 'Crimes de Trânsito em Espécie',
+    topic: 'CTB - Crimes: Embriaguez ao Volante e Fuga de Local',
     legalBasis: 'Art. 306 do CTB',
     answer: false,
     explanation:
-      'ERRADO. O crime de embriaguez ao volante (Art. 306 do CTB) é crime de perigo abstrato, mas exige concentração igual ou superior a 6 decigramas de álcool por litro de sangue OU igual ou superior a 0,3 miligrama de álcool por litro de ar alveolar, ou ainda sinais que indiquem alteração da capacidade psicomotora. A marca de 0,15 mg/L configura apenas infração administrativa (Art. 165), salvo se houver sinais de alteração psicomotora.',
+      'ERRADO. O crime de embriaguez ao volante (Art. 306 do CTB) exige concentração igual ou superior a 6 decigramas de álcool por litro de sangue OU igual ou superior a 0,3 miligrama de álcool por litro de ar alveolar. Medições de 0,15 mg/L configuram apenas infração administrativa (Art. 165), salvo alteração psicomotora notória.',
     coreStatements: [
       'A simples constatação, por etilômetro, de concentração de 0,15 miligrama de álcool por litro de ar alveolar, sem outros sinais de alteração psicomotora, é suficiente para tipificar o crime de embriaguez ao volante previsto no Art. 306 do CTB.',
       'Configura crime de trânsito, independentemente de outros sintomas clínicos, o resultado de teste de alcoolemia que aponte exatamente 0,18 mg de álcool por litro de ar alveolar expelido pelos pulmões.',
@@ -83,7 +390,7 @@ export const QUESTIONS_BANK: BaseLegalQuestion[] = [
   {
     id: 'ctb-05',
     category: 'CTB',
-    topic: 'Uso de Luzes em Rodovias',
+    topic: 'CTB - Normas Gerais de Circulação e Conduta',
     legalBasis: 'Art. 40, I e § 2º, do CTB',
     answer: true,
     explanation:
@@ -97,11 +404,11 @@ export const QUESTIONS_BANK: BaseLegalQuestion[] = [
   {
     id: 'ctb-06',
     category: 'CTB',
-    topic: 'Transporte de Crianças em Motocicletas',
+    topic: 'CTB - Infrações: Celular, Cinto e Capacete',
     legalBasis: 'Art. 244, V, do CTB (Lei nº 14.071/2020)',
     answer: false,
     explanation:
-      'ERRADO. A Lei nº 14.071/2020 alterou o Art. 244, V, do CTB: constitui infração gravíssima (com suspensão do direito de dirigir) conduzir motocicleta, motoneta ou ciclomotor transportando criança menor de 10 (dez) anos de idade ou que não tenha, nas circunstâncias, condições de cuidar da própria segurança (antes era menor de 7 anos).',
+      'ERRADO. A Lei nº 14.071/2020 alterou o Art. 244, V, do CTB: constitui infração gravíssima (com suspensão do direito de dirigir) conduzir motocicleta transportando criança menor de 10 (dez) anos de idade ou que não tenha condições de cuidar de sua segurança (a regra antiga de 7 anos foi revogada).',
     coreStatements: [
       'É permitido pelo Código de Trânsito Brasileiro o transporte de criança de oito anos de idade em motocicleta, desde que ela utilize capacete certificado e alcance os pedais de apoio.',
       'A idade mínima legal para que uma criança possa ser transportada como passageira em motoneta ou motocicleta é de sete anos completos, conforme a redação atual do Art. 244 do CTB.',
@@ -111,11 +418,11 @@ export const QUESTIONS_BANK: BaseLegalQuestion[] = [
   {
     id: 'ctb-07',
     category: 'CTB',
-    topic: 'Exame Toxicológico Periódico',
+    topic: 'CTB - Exame Toxicológico Periódico',
     legalBasis: 'Art. 148-A e Art. 165-B do CTB (Lei nº 14.599/2023)',
     answer: true,
     explanation:
-      'CORRETO. Conforme os Arts. 148-A e 165-B do CTB (atualizados pela Lei nº 14.599/2023), os condutores das categorias C, D e E com idade inferior a 70 anos devem realizar exame toxicológico periódico a cada 2 anos e 6 meses. Conduzir qualquer veículo sem ter realizado o exame após 30 dias do vencimento do prazo constitui infração gravíssima.',
+      'CORRETO. Conforme os Arts. 148-A e 165-B do CTB (atualizados pela Lei nº 14.599/2023), condutores das categorias C, D e E com menos de 70 anos devem realizar exame toxicológico periódico a cada 2 anos e 6 meses. Dirigir após 30 dias do vencimento acarreta infração gravíssima.',
     coreStatements: [
       'Condutores habilitados nas categorias C, D ou E com menos de 70 anos de idade devem submeter-se a novo exame toxicológico a cada período de dois anos e seis meses, contados da obtenção ou renovação da CNH.',
       'A periodicidade do exame toxicológico intermediário para motoristas das categorias C, D e E com idade inferior a setenta anos é de trinta meses (dois anos e meio), independentemente de exercerem atividade remunerada.',
@@ -125,99 +432,44 @@ export const QUESTIONS_BANK: BaseLegalQuestion[] = [
   {
     id: 'ctb-08',
     category: 'CTB',
-    topic: 'Conversão à Direita diante de Semáforo Vermelho',
-    legalBasis: 'Art. 44-A do CTB (Lei nº 14.071/2020)',
+    topic: 'CTB - Sistema Nacional de Trânsito e Competências da PRF',
+    legalScope: 'Art. 20 do CTB',
+    legalBasis: 'Art. 20, IX e XI, do CTB',
     answer: true,
     explanation:
-      'CORRETO. O Art. 44-A do CTB estabelece que é livre o movimento de conversão à direita diante de sinal vermelho do semáforo onde houver sinalização indicativa que permita essa conversão, observados os Arts. 44, 45 e 70 (preferência do pedestre e dos demais veículos).',
+      'CORRETO. Compete à Polícia Rodoviária Federal, no âmbito das rodovias e estradas federais, fiscalizar o nível de emissão de poluentes e ruído, realizar perícia de trânsito e lavrar termo circunstanciado de ocorrência (TCO) nas hipóteses autorizadas por lei e decisões do STF.',
     coreStatements: [
-      'É lícita a manobra de conversão à direita mesmo com o foco semafórico na cor vermelha, desde que exista sinalização específica no local autorizando expressamente esse movimento e seja respeitada a preferência dos pedestres.',
-      'Diante de indicação luminosa vermelha do semáforo, o condutor poderá efetuar a conversão à direita se houver placa indicativa permitindo tal manobra, assegurada a prioridade de travessia de pedestres e ciclistas.',
-      'A livre conversão à direita sob sinal vermelho semafórico depende, segundo o Art. 44-A do CTB, da presença de sinalização regulamentadora ou indicativa no local e do respeito à segurança dos pedestres.',
+      'No âmbito das rodovias e estradas federais, compete à Polícia Rodoviária Federal executar a fiscalização de trânsito, autuar e aplicar as penalidades de advertência por escrito e multas por infrações de circulação.',
+      'A realização de perícia de sinistros de trânsito nas rodovias federais e a fiscalização de medidas administrativas constituem atribuições legalmente conferidas à Polícia Rodoviária Federal pelo CTB.',
+      'A PRF detém competência para fiscalizar veículos de carga e transporte de produtos perigosos ao longo de toda a malha rodoviária federal.',
     ],
   },
   {
     id: 'ctb-09',
     category: 'CTB',
-    topic: 'Velocidades Máximas em Vias Rurais sem Sinalização',
-    legalBasis: 'Art. 61, § 1º, II, do CTB',
-    answer: false,
+    topic: 'CTB - Crimes: Homicídio e Lesão Corporal Culposa',
+    legalBasis: 'Art. 302, § 3º, e Art. 312-B do CTB',
+    answer: true,
     explanation:
-      'ERRADO. Segundo o Art. 61, § 1º, II, do CTB, nas rodovias de pista simples onde não existir sinalização regulamentadora, a velocidade máxima é de 100 km/h para automóveis, camionetas, caminhonetes e motocicletas, e 90 km/h para os demais veículos. Nas estradas (vias rurais não pavimentadas), o limite é de 60 km/h para todos os veículos.',
+      'CORRETO. No crime de homicídio culposo ao volante praticado sob efeito de álcool (Art. 302, § 3º), a pena é de reclusão de 5 a 8 anos e o Art. 312-B do CTB proíbe a substituição da pena privativa de liberdade por restritivas de direitos.',
     coreStatements: [
-      'Nas rodovias de pista simples desprovidas de placas de regulamentação de velocidade, o limite máximo permitido para automóveis, camionetas e motocicletas é de 110 km/h.',
-      'Onde não houver sinalização regulamentadora em rodovia de pista simples, automóveis e caminhonetes podem desenvolver velocidade de até 110 km/h sem incorrer em infração.',
-      'O Código de Trânsito Brasileiro fixa em 80 km/h a velocidade máxima padrão nas estradas rurais não pavimentadas para automóveis e motocicletas quando ausente sinalização específica.',
+      'No crime de homicídio culposo na direção de veículo automotor qualificado pela embriaguez ao volante, é legalmente vedada a substituição da pena privativa de liberdade por restritivas de direitos.',
+      'O Art. 312-B do CTB impede que o magistrado converta a pena privativa de liberdade em restritiva de direitos nos delitos de homicídio culposo ou lesão grave qualificados por álcool ou drogas.',
+      'O condutor embriagado que praticar homicídio culposo ao volante sujeita-se à pena de reclusão e não faz jus à substituição por penas alternativas de direitos.',
     ],
   },
   {
     id: 'ctb-10',
     category: 'CTB',
-    topic: 'Advertência por Escrito',
-    legalBasis: 'Art. 267 do CTB (Lei nº 14.071/2020)',
-    answer: true,
-    explanation:
-      'CORRETO. Conforme a nova redação do Art. 267 do CTB dada pela Lei 14.071/2020, deverá ser imposta a penalidade de advertência por escrito à infração de natureza leve ou média, passível de ser punida com multa, caso o infrator não tenha cometido nenhuma outra infração nos últimos 12 (doze) meses (trata-se de ato vinculado, não mais discricionário).',
-    coreStatements: [
-      'A conversão da multa em penalidade de advertência por escrito para infrações de natureza leve ou média é obrigatória quando o condutor não registrar nenhuma outra infração nos doze meses anteriores.',
-      'Cometida infração leve ou média por motorista que não possua qualquer outro registro infracional nos últimos 12 meses, a autoridade de trânsito deverá impor a penalidade de advertência por escrito em substituição à multa.',
-      'Não há margem de discricionariedade para a autoridade de trânsito: preenchidos os requisitos de infração leve ou média e ausência de outras infrações nos últimos 12 meses, impõe-se obrigatoriamente a advertência por escrito.',
-    ],
-  },
-  {
-    id: 'ctb-11',
-    category: 'CTB',
-    topic: 'Retenção e Remoção do Veículo por Licenciamento',
-    legalBasis: 'Art. 271, § 9º-A, do CTB (Lei nº 14.229/2021)',
-    answer: true,
-    explanation:
-      'CORRETO. Pelo Art. 230, V, e Art. 271, § 9º-A, do CTB, quando a irregularidade puder ser sanada no local (inclusive mediante o pagamento dos débitos e encargos de licenciamento no próprio ato da abordagem por meio eletrônico), o veículo será liberado tão logo seja regularizada a situação, não cabendo sua remoção ao depósito.',
-    coreStatements: [
-      'Não caberá a medida administrativa de remoção do veículo ao pátio quando a irregularidade referente à falta de licenciamento anual for sanada no próprio local da fiscalização, inclusive mediante quitação eletrônica dos débitos.',
-      'Se o condutor abordado com licenciamento atrasado providenciar a regularização e o pagamento dos débitos pendentes ainda durante o ato de fiscalização, o veículo deverá ser liberado sem remoção ao depósito.',
-      'A remoção do veículo deixa de ser aplicada pela fiscalização quando o vício constatado — inclusive de caráter documental ou de licenciamento — for integralmente sanado no local da abordagem.',
-    ],
-  },
-  {
-    id: 'ctb-12',
-    category: 'CTB',
-    topic: 'Ultrapassagem pelo Acostamento e em Pontes',
-    legalBasis: 'Art. 202, I, e Art. 203, II, do CTB',
+    topic: 'CTB - Medidas Administrativas: Retenção e Remoção',
+    legalBasis: 'Art. 271, § 9º-A, do CTB',
     answer: false,
     explanation:
-      'ERRADO. Ultrapassar pelo acostamento (Art. 202, I) é infração gravíssima com multa multiplicada por 5 (R$ 1.467,35), mas NÃO prevê suspensão direta do direito de dirigir no preceito secundário. Já ultrapassar pela contramão em pontes, viadutos ou túneis (Art. 203, II) é infração gravíssima com multa multiplicada por 5.',
+      'ERRADO. Pelo Art. 271, § 9º-A, do CTB, quando a irregularidade puder ser sanada no local da infração, o veículo será liberado tão logo seja regularizada a situação, NÃO cabendo a remoção ao depósito.',
     coreStatements: [
-      'A conduta de efetuar ultrapassagem pelo acostamento constitui infração de natureza grave sujeita a multa simples, sem aplicação de fator multiplicador sobre o valor da penalidade.',
-      'Segundo o CTB, ultrapassar outro veículo pelo acostamento em rodovia acarreta multa de natureza gravíssima multiplicada por dez vezes e suspensão imediata da CNH por doze meses.',
-      'Realizar ultrapassagem utilizando a faixa de acostamento é classificado pelo Código de Trânsito Brasileiro como infração média, salvo se resultar em sinistro.',
-    ],
-  },
-  {
-    id: 'ctb-13',
-    category: 'CTB',
-    topic: 'Substituição de Pena Privativa de Liberdade em Crimes de Trânsito',
-    legalBasis: 'Art. 312-B do CTB (Lei nº 14.071/2020)',
-    answer: true,
-    explanation:
-      'CORRETO. O Art. 312-B do CTB estabelece que aos crimes previstos no § 3º do art. 302 (homicídio culposo na direção de veículo automotor sob influência de álcool ou outra substância psicoativa) e no § 2º do art. 303 (lesão corporal culposa grave ou gravíssima sob influência de álcool) NÃO se aplica o disposto no inciso I do caput do art. 44 do Código Penal (vedação de substituição por penas restritivas de direitos).',
-    coreStatements: [
-      'No crime de homicídio culposo na direção de veículo automotor praticado por condutor sob a influência de álcool, o CTB veda expressamente a substituição da pena privativa de liberdade por pena restritiva de direitos.',
-      'É incabível a conversão da pena de reclusão em penas restritivas de direitos para o motorista condenado por lesão corporal culposa de natureza grave ou gravíssima cometida sob efeito de álcool na direção de veículo.',
-      'O Art. 312-B do CTB proíbe que o juiz substitua a pena privativa de liberdade por restritiva de direitos nos casos de homicídio culposo ou lesão corporal grave/gravíssima no trânsito qualificados pela embriaguez ao volante.',
-    ],
-  },
-  {
-    id: 'ctb-14',
-    category: 'CTB',
-    topic: 'Requisitos para Habilitação nas Categorias D e E',
-    legalBasis: 'Art. 145 do CTB',
-    answer: false,
-    explanation:
-      'ERRADO. Para habilitar-se nas categorias D e E, o candidato deve ser maior de 21 (vinte e um) anos, e não 18 anos. Além disso, para a categoria D, exige-se estar habilitado no mínimo há 2 anos na categoria B ou no mínimo há 1 ano na categoria C.',
-    coreStatements: [
-      'O condutor que possua 19 anos de idade e esteja habilitado há um ano na categoria C preenche o requisito etário legal para requerer a mudança para a categoria D.',
-      'Basta ter completado 18 anos de idade e possuir dois anos de habilitação na categoria B para que o motorista possa habilitar-se na categoria D para transporte coletivo de passageiros.',
-      'A idade mínima exigida pelo Código de Trânsito Brasileiro para obtenção das categorias D e E é de 20 anos completos na data do requerimento.',
+      'Mesmo quando o condutor consegue sanar integralmente no local da abordagem a irregularidade que motivou a retenção do veículo, a autoridade de trânsito permanece obrigada a efetuar sua remoção ao depósito.',
+      'A constatação de licenciamento atrasado impõe a imediata remoção do veículo ao pátio da PRF, sendo vedada a liberação ainda que o proprietário efetue a quitação eletrônica dos débitos na hora da blitz.',
+      'A medida administrativa de remoção do veículo independe da possibilidade de saneamento do vício no próprio local da fiscalização.',
     ],
   },
 
@@ -225,25 +477,25 @@ export const QUESTIONS_BANK: BaseLegalQuestion[] = [
   {
     id: 'contran-01',
     category: 'CONTRAN',
-    topic: 'Ciclomotores, Bicicletas Elétricas e Autopropelidos',
+    topic: 'CONTRAN - Res. 996/2023 (Ciclomotores e Bikes Elétricas)',
     legalBasis: 'Resolução CONTRAN nº 996/2023',
     answer: true,
     explanation:
-      'CORRETO. De acordo com a Resolução CONTRAN nº 996/2023, os equipamentos de mobilidade individual autopropelidos (como patinetes e monociclos elétricos) devem ter velocidade máxima de fabricação não superior a 32 km/h, potência nominal máxima de até 1000 W (ou 4000 W para monociclos autoequilibrados) e largura não superior a 70 cm, estando dispensados de registro, licenciamento e CNH/ACC.',
+      'CORRETO. Conforme a Resolução CONTRAN nº 996/2023, os equipamentos de mobilidade autopropelidos (patinetes, monociclos) com velocidade máxima até 32 km/h estão dispensados de registro, licenciamento e CNH/ACC.',
     coreStatements: [
-      'Nos termos da Resolução CONTRAN nº 996/2023, os equipamentos de mobilidade individual autopropelidos com velocidade máxima de fabricação até 32 km/h estão dispensados de registro, emplacamento e habilitação (CNH ou ACC).',
-      'Segundo a regulamentação do CONTRAN sobre micromobilidade (Res. 996/2023), não se exige CNH, ACC nem licenciamento para a condução de equipamentos autopropelidos que respeitem o limite construtivo de 32 km/h e largura máxima de 70 cm.',
-      'Diferentemente dos ciclomotores, os veículos classificados como equipamentos de mobilidade individual autopropelidos pela Resolução nº 996/2023 do CONTRAN independem de registro no órgão de trânsito e de habilitação do condutor.',
+      'Nos termos da Resolução CONTRAN nº 996/2023, os equipamentos de mobilidade individual autopropelidos com velocidade máxima até 32 km/h estão dispensados de registro, emplacamento e habilitação.',
+      'Segundo a regulamentação do CONTRAN sobre micromobilidade (Res. 996/2023), não se exige CNH, ACC nem licenciamento para a condução de equipamentos autopropelidos que respeitem o limite de 32 km/h.',
+      'Diferentemente dos ciclomotores, os veículos classificados como equipamentos autopropelidos pela Resolução nº 996/2023 do CONTRAN independem de registro no órgão de trânsito.',
     ],
   },
   {
     id: 'contran-02',
     category: 'CONTRAN',
-    topic: 'Fiscalização da Alcoolemia e Etilômetro',
+    topic: 'CONTRAN - Res. 432/2013 (Fiscalização de Alcoolemia)',
     legalBasis: 'Resolução CONTRAN nº 432/2013 (Art. 5º e Anexo I)',
     answer: false,
     explanation:
-      'ERRADO. Pela Resolução CONTRAN nº 432/2013, o auto de infração (e eventual configuração de crime) considera o "Valor Considerado" (VC), que resulta da subtração do erro máximo admissível da medição realizada (MR). Porém, qualquer medição realizada igual ou superior a 0,05 mg/L já configura infração administrativa (pois descontado o erro de 0,04 mg/L resulta em VC >= 0,01 mg/L). Não há tolerância de 0,10 mg/L no bafômetro!',
+      'ERRADO. Pela Resolução CONTRAN nº 432/2013, o auto de infração considera o Valor Considerado (descontado o erro máximo admissível de 0,04 mg/L). Qualquer medição realizada igual ou superior a 0,05 mg/L já configura infração administrativa (VC >= 0,01 mg/L). Não existe tolerância de 0,10 mg/L no etilômetro!',
     coreStatements: [
       'Segundo a Resolução CONTRAN nº 432/2013, a infração administrativa por alcoolemia somente resta configurada quando a medição realizada pelo etilômetro for igual ou superior a 0,10 mg de álcool por litro de ar alveolar.',
       'A margem de tolerância técnica prevista pelo CONTRAN para o teste do etilômetro permite que o condutor apresente medição realizada de até 0,09 mg/L sem sofrer autuação administrativa.',
@@ -253,174 +505,118 @@ export const QUESTIONS_BANK: BaseLegalQuestion[] = [
   {
     id: 'contran-03',
     category: 'CONTRAN',
-    topic: 'Processo Administrativo de Trânsito e Notificações',
-    legalBasis: 'Resolução CONTRAN nº 918/2022',
+    topic: 'CONTRAN - Res. 798/2020 (Radares e Medidores de Velocidade)',
+    legalBasis: 'Resolução CONTRAN nº 798/2020',
     answer: true,
     explanation:
-      'CORRETO. De acordo com a Resolução CONTRAN nº 918/2022 (em consonância com o Art. 282, § 6º, do CTB), na hipótese de retorno de notificação por desatualização do endereço do proprietário do veículo ou por recusa em recebê-la, a notificação será considerada válida para todos os efeitos.',
+      'CORRETO. A Resolução CONTRAN nº 798/2020 veda expressamente a utilização de equipamentos medidores de velocidade ocultos ou escondidos, exigindo a visibilidade do instrumento e prévia sinalização vertical R-19.',
     coreStatements: [
-      'Conforme a Resolução CONTRAN nº 918/2022, caso a notificação da autuação ou da penalidade seja devolvida por estar desatualizado o endereço cadastral do proprietário do veículo, ela será considerada válida para todos os efeitos legais.',
-      'A devolução postal da notificação de trânsito motivada pela falta de atualização do endereço do proprietário junto ao órgão executivo de trânsito não invalida o ato, reputando-se válida a notificação nos termos da Resolução nº 918/2022 do CONTRAN.',
-      'Nos procedimentos regidos pela Resolução CONTRAN nº 918/2022, tanto a recusa no recebimento quanto a desatualização do endereço cadastral do proprietário tornam a notificação plenamente válida para fins de contagem de prazos.',
+      'A Resolução CONTRAN nº 798/2020 proíbe expressamente a operação de radares portáteis ou móveis em locais ocultos ou desprovidos de prévia visibilidade pelo condutor na rodovia.',
+      'É vedado pelo CONTRAN o uso de medidores de velocidade instalados de forma escondida ou camuflada, devendo a fiscalização ser visível e precedida de placa R-19.',
+      'A legalidade da fiscalização eletrônica de velocidade em rodovias federais pressupõe a observância do princípio da publicidade, sendo ilegal a utilização de radares ocultos sob a égide da Res. 798/2020.',
     ],
   },
   {
     id: 'contran-04',
     category: 'CONTRAN',
-    topic: 'Uso de Capacete de Segurança para Motociclistas',
-    legalBasis: 'Resolução CONTRAN nº 940/2022',
+    topic: 'CONTRAN - Res. 810/2020 (Classificação de Danos em Sinistros)',
+    legalBasis: 'Resolução CONTRAN nº 810/2020',
     answer: false,
     explanation:
-      'ERRADO. Segundo a Resolução CONTRAN nº 940/2022, no período noturno, a viseira ou os óculos de proteção utilizados pelo condutor e passageiro de motocicleta devem ser obrigatoriamente no padrão CRISTAL (transparente), sendo vedado o uso de viseira fumê, espelhada ou colorida à noite.',
+      'ERRADO. Pela Resolução CONTRAN nº 810/2020, o sinistro de "Pequena Monta" NÃO acarreta bloqueio administrativo no registro do veículo. É a "Média Monta" que gera bloqueio no RENAVAM até realização de vistoria para Certificado de Segurança Veicular (CSV).',
     coreStatements: [
-      'A Resolução CONTRAN nº 940/2022 autoriza a utilização de viseira fumê ou espelhada em capacetes motociclísticos durante o período noturno, desde que a via pública disponha de iluminação artificial contínua.',
-      'É permitido ao condutor de motocicleta trafegar à noite utilizando viseira levemente escurecida (fumê), contanto que o capacete possua selo do INMETRO e películas retrorrefletivas nas laterais.',
-      'De acordo com as normas do CONTRAN sobre equipamentos de proteção para motociclistas (Res. 940/2022), a restrição ao uso de viseira fumê limita-se às rodovias rurais desprovidas de iluminação pública.',
+      'De acordo com a Resolução CONTRAN nº 810/2020, a classificação do veículo sinistrado em Pequena Monta pelo policial rodoviário federal acarreta o bloqueio imediato do CRLV no sistema RENAVAM.',
+      'O laudo de avarias com enquadramento em Pequena Monta impede a circulação do veículo até a emissão de novo Certificado de Segurança Veicular (CSV).',
+      'Tanto na Pequena quanto na Média Monta, o veículo sofre restrição administrativa automática no órgão executivo de trânsito até aprovação em inspeção técnica de segurança.',
     ],
   },
   {
     id: 'contran-05',
     category: 'CONTRAN',
-    topic: 'Transporte de Crianças em Veículos Automotores (Dispositivos de Retenção)',
-    legalBasis: 'Resolução CONTRAN nº 819/2021',
+    topic: 'CONTRAN - Res. 955/2022 (Capacete Motociclístico e Viseira)',
+    legalBasis: 'Resolução CONTRAN nº 955/2022',
     answer: true,
     explanation:
-      'CORRETO. Pela Resolução CONTRAN nº 819/2021 (alinhada ao Art. 64 do CTB), as crianças com idade inferior a 10 anos que não tenham atingido 1,45 m de altura devem ser transportadas nos bancos traseiros usando dispositivo de retenção adequado. Excepcionalmente, crianças com mais de 4 anos e até 7 anos e meio devem utilizar o assento de elevação (booster); e acima de 7 anos e meio até 10 anos (com menos de 1,45 m) utilizam o cinto de segurança do veículo no banco traseiro.',
+      'CORRETO. Segundo a Resolução CONTRAN nº 955/2022, no período noturno, a viseira ou os óculos de proteção devem ser obrigatoriamente no padrão cristal (transparente), sendo proibida viseira fumê ou espelhada à noite.',
     coreStatements: [
-      'Segundo a regulamentação do CONTRAN sobre dispositivos de retenção infantil (Res. 819/2021), crianças com idade inferior a 10 anos que já tenham atingido 1,45 m de altura estão autorizadas a utilizar apenas o cinto de segurança do veículo.',
-      'O critério de estatura de 1,45 m dispensa o uso de dispositivos especiais de retenção (como cadeirinha ou assento de elevação) para menores de dez anos, permanecendo obrigatório o uso do cinto de segurança conforme a Resolução CONTRAN nº 819/2021.',
-      'Nos termos da Resolução nº 819/2021 do CONTRAN, a obrigatoriedade de transporte nos bancos traseiros com dispositivo de retenção específico cessa antes dos 10 anos caso a criança atinja a altura mínima de 1,45 metro.',
+      'Durante o período noturno, a viseira do capacete utilizado pelo condutor de motocicleta deve ser obrigatoriamente no padrão cristal (transparente), sendo vedado o uso de viseira fumê ou metalizada.',
+      'A regulamentação do CONTRAN proíbe a circulação noturna de motociclistas com viseira fumê ou película escura, mesmo em rodovias iluminadas.',
+      'Nos termos da Resolução CONTRAN nº 955/2022, o motociclista flagrado conduzindo veículo à noite com capacete de viseira escura comete infração de trânsito.',
     ],
   },
   {
     id: 'contran-06',
     category: 'CONTRAN',
-    topic: 'Aprendizagem, Habilitação e ACC',
-    legalBasis: 'Resolução CONTRAN nº 789/2020',
-    answer: false,
+    topic: 'CONTRAN - Res. 960/2022 (Vidros e Películas / Insulfilm)',
+    legalBasis: 'Resolução CONTRAN nº 960/2022',
+    answer: true,
     explanation:
-      'ERRADO. Conforme a Resolução CONTRAN nº 789/2020, a Licença de Aprendizagem de Direção Veicular (LADV) tem validade restrita à Unidade da Federação em que foi expedida e exige que o candidato esteja acompanhado por um instrutor de trânsito credenciado (não podendo ser acompanhado por qualquer condutor habilitado). Além disso, se o candidato for flagrado conduzindo desacompanhado do instrutor, a LADV será suspensa por 6 meses.',
+      'CORRETO. A Resolução CONTRAN nº 960/2022 exige transmitância luminosa não inferior a 70% para o para-brisa e vidros laterais dianteiros, e proíbe terminantemente películas espelhadas ou opacas.',
     coreStatements: [
-      'A Resolução CONTRAN nº 789/2020 permite que o candidato portador de Licença de Aprendizagem de Direção Veicular (LADV) realize aulas práticas acompanhado por qualquer condutor habilitado há mais de três anos na mesma categoria.',
-      'Durante a vigência da LADV, caso o aprendiz seja surpreendido conduzindo o veículo de aprendizagem sem a presença do instrutor credenciado, sofrerá apenas advertência verbal, sem suspensão da licença.',
-      'De acordo com a Resolução nº 789/2020 do CONTRAN, a Licença de Aprendizagem de Direção Veicular (LADV) possui validade em todo o território nacional, permitindo aulas práticas em qualquer estado da Federação.',
+      'Nos termos da Resolução CONTRAN nº 960/2022, a transmitância luminosa da película aplicada no para-brisa e nos vidros laterais dianteiros dos veículos não pode ser inferior a 70%.',
+      'É vedada expressamente pelo CONTRAN a aplicação de películas retrorrefletivas ou espelhadas nos vidros de veículos automotores em circulação.',
+      'Para a área indispensável à dirigibilidade (para-brisa e laterais dianteiros), a Resolução 960/2022 do CONTRAN fixou em 70% o índice mínimo de transmissão luminosa.',
     ],
   },
   {
     id: 'contran-07',
     category: 'CONTRAN',
-    topic: 'Áreas de Luminância e Películas nos Vidros (Insulfilm)',
-    legalBasis: 'Resolução CONTRAN nº 960/2022 (alterada pela Res. 989/2022)',
-    answer: true,
+    topic: 'CONTRAN - Res. 925/2022 e 926/2022 (Amarração de Cargas e CVC)',
+    legalBasis: 'Resolução CONTRAN nº 926/2022',
+    answer: false,
     explanation:
-      'CORRETO. Pela Resolução CONTRAN nº 960/2022 (com alterações da Res. 989/2022), a transmissão luminosa do conjunto vidro-película não pode ser inferior a 70% para o para-brisa e para os vidros laterais dianteiros (indispensáveis à dirigibilidade), sendo proibido o uso de películas com bolhas na área crítica de visão do condutor.',
+      'ERRADO. A Resolução CONTRAN nº 926/2022 PROÍBE expressamente a utilização de cordas como dispositivo primário de amarração e fixação de carga em caminhões e carrocerias abertas, sendo obrigatório o uso de cintas têxteis, correntes ou cabos de aço.',
     coreStatements: [
-      'Conforme a Resolução CONTRAN nº 960/2022 (atualizada pela Res. 989/2022), a transmitância luminosa mínima exigida para o conjunto vidro-película no para-brisa e nos vidros laterais dianteiros é de 70%, sendo vedada a existência de bolhas na área crítica de visão.',
-      'As normas atuais do CONTRAN sobre transparência de vidros automotivos exigem índice mínimo de 70% de transmissão luminosa nos vidros laterais dianteiros e proíbem películas que apresentem bolhas nas áreas indispensáveis à dirigibilidade.',
-      'Segundo a regulamentação do CONTRAN (Res. 960/2022), tanto o para-brisa incolor quanto os vidros das portas dianteiras devem assegurar no mínimo 70% de passagem de luz visível.',
+      'A Resolução CONTRAN nº 926/2022 autoriza o uso de cordas de polietileno como meio exclusivo e primário para a fixação de cargas pesadas em veículos de carroceria aberta.',
+      'Em caminhões que transportem madeira ou bobinas de aço em rodovias, é admitida a amarração principal da carga unicamente por meio de cordas de fibra sintética.',
+      'A fiscalização da PRF não pode autuar o transporte de carga fixado exclusivamente por cordas, haja vista que a Resolução CONTRAN 926/2022 considera as cordas equivalentes a cintas de poliéster.',
     ],
   },
   {
     id: 'contran-08',
     category: 'CONTRAN',
-    topic: 'Placas de Identificação Veicular (Padrão Mercosul)',
-    legalBasis: 'Resolução CONTRAN nº 969/2022',
-    answer: false,
+    topic: 'CONTRAN - Res. 985/2022 (Manual de Fiscalização - MBFT)',
+    legalBasis: 'Resolução CONTRAN nº 985/2022 (MBFT)',
+    answer: true,
     explanation:
-      'ERRADO. Segundo a Resolução CONTRAN nº 969/2022, os veículos que ainda possuem placas no modelo cinza anterior (três letras e quatro números) NÃO são obrigados a trocá-las imediatamente pelo padrão PIV (Mercosul), salvo nos casos de transferência de município/UF, mudança de categoria, furto, extravio, dano da placa ou quando houver necessidade de segunda placa traseira.',
+      'CORRETO. Segundo o Manual Brasileiro de Fiscalização de Trânsito (MBFT, Res. 985/2022), a abordagem do condutor é dispensada quando a infração puder ser constatada visualmente em movimento (como uso de celular, não uso de cinto ou excesso de velocidade por radar), devendo o agente justificar detalhadamente a não abordagem no campo observações do AIT.',
     coreStatements: [
-      'A Resolução CONTRAN nº 969/2022 impõe a substituição compulsória imediata de todas as placas cinzas do modelo antigo pelo padrão PIV (Mercosul) como condição para o licenciamento anual do veículo, mesmo sem mudança de município ou dano à placa.',
-      'Veículos equipados com placas no modelo anterior (cinza com tarjeta) estão impedidos de circular em rodovias federais até que realizem a migração voluntária para a Placa de Identificação Veicular padrão Mercosul, conforme a Res. 969/2022.',
-      'Pelas regras da Resolução nº 969/2022 do CONTRAN, a simples transferência de propriedade de um veículo dentro do mesmo município e da mesma categoria obriga sempre a troca das placas antigas em perfeito estado pelo padrão Mercosul.',
+      'De acordo com o Manual Brasileiro de Fiscalização de Trânsito (MBFT), nas infrações constatadas visualmente sem que seja viável a parada do veículo em rodovia, o policial pode lavrar o AIT registrando a justificativa no campo observações.',
+      'A ausência de abordagem do condutor não invalida o auto de infração quando a fiscalização ocorrer em movimento e o agente detalhar o motivo no campo observações, segundo a Res. 985/2022 do CONTRAN.',
+      'O MBFT autoriza a autuação sem abordagem do condutor para infrações de visibilidade externa, exigindo a declaração formal do agente sobre a impossibilidade da abordagem.',
     ],
   },
   {
     id: 'contran-09',
     category: 'CONTRAN',
-    topic: 'Fiscalização de Velocidade por Medidores (Radares)',
-    legalBasis: 'Resolução CONTRAN nº 798/2020',
+    topic: 'CONTRAN - Res. 967/2022 (Transporte de Produtos Perigosos)',
+    legalBasis: 'Resolução CONTRAN nº 967/2022',
     answer: true,
     explanation:
-      'CORRETO. De acordo com a Resolução CONTRAN nº 798/2020, é vedada a instalação e utilização de medidores de velocidade (fixos ou portáteis) de forma oculta, camuflada ou sem visibilidade para os condutores, devendo o agente de trânsito estar devidamente uniformizado ao operar medidor do tipo portátil.',
+      'CORRETO. Os veículos destinados ao transporte de produtos perigosos devem ostentar obrigatoriamente painéis de segurança de cor laranja (indicando número de risco e número ONU) e rótulos de risco losangulares correspondentes à classe do produto transportado.',
     coreStatements: [
-      'A Resolução CONTRAN nº 798/2020 proíbe que os equipamentos medidores de velocidade, inclusive os do tipo portátil operados por agentes de trânsito, sejam utilizados de modo oculto ou camuflado atrás de árvores, marquises ou passarelas.',
-      'Na fiscalização eletrônica de velocidade regida pela Resolução nº 798/2020 do CONTRAN, exige-se visibilidade ostensiva tanto dos medidores fixos quanto dos portáteis, sendo vedado ao agente ocultar-se para autuar condutores.',
-      'Nos termos da Resolução CONTRAN nº 798/2020, o uso de radar portátil demanda que o equipamento e o agente de fiscalização uniformizado estejam visíveis aos usuários da via.',
+      'Veículos transportadores de cargas perigosas em rodovias federais devem portar painel de segurança retangular laranja com número ONU e rótulo de risco conforme as normas do CONTRAN.',
+      'A ausência de painel de segurança laranja ou de rótulo de risco em caminhão transportando produto químico perigoso constitui infração grave com retenção do veículo.',
+      'Nos termos da Resolução CONTRAN nº 967/2022, o transporte fracionado ou a granel de produtos perigosos sujeita-se à identificação externa por placas retangulares laranjas e losangos de risco.',
     ],
   },
   {
     id: 'contran-10',
     category: 'CONTRAN',
-    topic: 'Transporte de Cargas Indivisíveis e AET',
-    legalBasis: 'Resolução CONTRAN nº 882/2021',
-    answer: true,
-    explanation:
-      'CORRETO. A Resolução CONTRAN nº 882/2021 fixa os limites de pesos e dimensões para veículos que transitem por vias terrestres: a largura máxima padrão é de 2,60 m e a altura máxima padrão é de 4,40 m (salvo exceções regulamentadas), exigindo-se Autorização Especial de Trânsito (AET) para cargas indivisíveis que excedam esses limites.',
-    coreStatements: [
-      'De acordo com a Resolução CONTRAN nº 882/2021, os veículos de carga em circulação regular nas vias terrestres sem Autorização Especial de Trânsito (AET) devem respeitar os limites máximos gerais de 2,60 metros de largura e 4,40 metros de altura.',
-      'A regulamentação de pesos e dimensões do CONTRAN (Res. 882/2021) estabelece, como regra geral para veículos não detentores de AET ou AE, a largura máxima de 2,60 m e a altura máxima de 4,40 m.',
-      'Salvo hipóteses específicas previstas em norma, o limite dimensional padrão de largura veicular nas vias públicas brasileiras é de 2,60 m e o de altura é de 4,40 m, conforme dispõe a Resolução CONTRAN nº 882/2021.',
-    ],
-  },
-  {
-    id: 'contran-11',
-    category: 'CONTRAN',
-    topic: 'Sinalização Viária e Semáforos',
-    legalBasis: 'Resolução CONTRAN nº 973/2022 (MBST)',
-    answer: false,
-    explanation:
-      'ERRADO. Segundo o Manual Brasileiro de Sinalização de Trânsito (Resolução CONTRAN nº 973/2022) e o Anexo II do CTB, as placas de Regulamentação têm a forma circular (com exceção de R-1 "Parada Obrigatória", que é octogonal, e R-2 "Dê a Preferência", que é triangular), fundo branco, tarja vermelha e símbolos pretos. As placas amarelas quadradas (em diagonal) são de Advertência, que têm caráter de alerta/recomendação, e não imperativo punitivo direto.',
-    coreStatements: [
-      'Conforme o Manual Brasileiro de Sinalização de Trânsito instituído pela Resolução CONTRAN nº 973/2022, a placa "Dê a Preferência" (R-2) classifica-se como sinalização vertical de advertência, possuindo fundo amarelo e orla preta.',
-      'Nos termos da Resolução CONTRAN nº 973/2022, todas as placas de regulamentação possuem formato estritamente circular, sem qualquer exceção geométrica no Sistema Nacional de Trânsito.',
-      'Pelas diretrizes da Resolução nº 973/2022 do CONTRAN, o desrespeito isolado a uma placa vertical de advertência de cor amarela constitui, por si só, infração administrativa autônoma por desobediência à sinalização.',
-    ],
-  },
-  {
-    id: 'contran-12',
-    category: 'CONTRAN',
-    topic: 'Transporte de Cargas ou Bicicletas em Veículos de Passageiros',
-    legalBasis: 'Resolução CONTRAN nº 955/2022',
-    answer: true,
-    explanation:
-      'CORRETO. De acordo com a Resolução CONTRAN nº 955/2022, o transporte de bicicletas na parte externa de veículos de passageiros (como em suporte traseiro/engate) exige a instalação de segunda placa traseira de identificação caso o equipamento ou a bicicleta encubra total ou parcialmente a placa original do veículo.',
-    coreStatements: [
-      'Nos termos da Resolução CONTRAN nº 955/2022, quando o transporte de bicicleta em suporte instalado na traseira de automóvel encobrir a visualização da placa de identificação original, torna-se obrigatório o uso de segunda placa traseira.',
-      'O transporte externo de bicicletas na parte posterior de veículos de passageiros é permitido pela Resolução nº 955/2022 do CONTRAN, exigindo-se régua de sinalização e segunda placa caso haja obstrução das luzes ou da placa original.',
-      'Segundo a Resolução CONTRAN nº 955/2022, a obstrução parcial ou total da placa traseira por suporte de bicicleta afixado no engate obriga o proprietário a utilizar segunda placa de identificação devidamente lacrada/registrada.',
-    ],
-  },
-  {
-    id: 'contran-13',
-    category: 'CONTRAN',
-    topic: 'Equipamentos Obrigatórios e Extintor de Incêndio',
+    topic: 'CONTRAN - Res. 919/2022 (Extintor de Incêndio Veicular)',
     legalBasis: 'Resolução CONTRAN nº 919/2022',
     answer: false,
     explanation:
-      'ERRADO. Pela Resolução CONTRAN nº 919/2022 (que consolidou a Res. 556/2015), o uso do extintor de incêndio é FACULTATIVO para automóveis, utilitários, camionetas, caminhonetes e triciclos de cabine fechada. Permanece OBRIGATÓRIO apenas para caminhões, caminhões-tratores, micro-ônibus, ônibus, veículos de transporte de produtos inflamáveis/perigosos e veículos utilizados no transporte coletivo de passageiros.',
+      'ERRADO. Pela Resolução CONTRAN nº 919/2022, o extintor de incêndio com carga de pó ABC é FACULTATIVO para automóveis, caminhonetes, utilitários e camionetas de uso particular. É obrigatório apenas para transporte coletivo, micro-ônibus, ônibus, caminhões e transporte de inflamáveis.',
     coreStatements: [
-      'De acordo com a Resolução CONTRAN nº 919/2022, o extintor de incêndio com carga de pó ABC voltou a ser equipamento obrigatório para todos os automóveis de passeio e caminhonetes que circulem em rodovias federais.',
-      'A ausência de extintor de incêndio em automóvel particular de passeio configura infração grave por falta de equipamento obrigatório, conforme estabelece a Resolução nº 919/2022 do CONTRAN.',
-      'Nos termos da Resolução CONTRAN nº 919/2022, tanto os caminhões quanto os automóveis de uso particular estão obrigados a portar extintor de incêndio dentro do prazo de validade.',
-    ],
-  },
-  {
-    id: 'contran-14',
-    category: 'CONTRAN',
-    topic: 'Exame de Direção Veicular e Faltas Eliminatórias',
-    legalBasis: 'Resolução CONTRAN nº 789/2020 (Art. 18 e 19)',
-    answer: true,
-    explanation:
-      'CORRETO. Segundo a Resolução CONTRAN nº 789/2020, no Exame de Direção Veicular, o candidato será reprovado se cometer uma falta eliminatória (como avançar a via preferencial, entrar na contramão, subir na calçada ou não usar o capacete/cinto) ou se a soma dos pontos negativos das faltas graves (3 pts), médias (2 pts) e leves (1 pt) ultrapassar 3 (três) pontos.',
-    coreStatements: [
-      'Conforme a Resolução CONTRAN nº 789/2020, o candidato à primeira habilitação será reprovado no exame prático de direção veicular caso a soma dos pontos negativos das faltas cometidas ultrapasse três pontos ou caso cometa uma falta eliminatória.',
-      'No exame prático regido pela Resolução nº 789/2020 do CONTRAN, atingir quatro pontos negativos em decorrência de faltas leves, médias ou graves implica a reprovação do candidato.',
-      'Pelas regras de avaliação prática da Resolução CONTRAN nº 789/2020, as faltas graves valem três pontos, as médias dois pontos e as leves um ponto, sendo aprovado o candidato que não cometer falta eliminatória nem exceder o limite de três pontos.',
+      'Conforme a Resolução CONTRAN nº 919/2022, é obrigatório o porte de extintor de incêndio com carga de pó ABC em todos os automóveis de passeio em circulação nas rodovias federais.',
+      'A fiscalização da PRF deve autuar o motorista de automóvel particular que estiver com o extintor de incêndio vencido ou desprovido do equipamento.',
+      'A obrigatoriedade do extintor veicular de pó ABC permanece vigente para todos os veículos automotores de quatro ou mais rodas no território nacional.',
     ],
   },
 ];
 
-// Combinatorial Cebraspe Legal Paraphraser to guarantee NO question is EVER 100% equal
+// Combinador Sintético Cebraspe para garantir 0% de repetição
 const CEBRASPE_PREFIXES_CTB = [
   'Julgue o item a seguir à luz do Código de Trânsito Brasileiro:',
   'Acerca das disposições da Lei nº 9.503/1997 (CTB) e suas atualizações, julgue:',
@@ -472,7 +668,6 @@ export function synthesizeUniqueCebraspeStatement(
 ): string {
   const prefixes = base.category === 'CTB' ? CEBRASPE_PREFIXES_CTB : CEBRASPE_PREFIXES_CONTRAN;
 
-  // Try up to 40 combinatorial permutations to guarantee 0% exact match
   for (let attempt = 0; attempt < 40; attempt++) {
     const core = pickRandom(base.coreStatements);
     const prefix = pickRandom(prefixes);
@@ -483,7 +678,6 @@ export function synthesizeUniqueCebraspeStatement(
       if (Math.random() > 0.35 || attempt > 5) {
         transformed = transformed.replace(regex, (match) => {
           const chosen = pickRandom(replacements);
-          // Preserve initial capitalization if needed
           if (match[0] === match[0].toUpperCase()) {
             return chosen.charAt(0).toUpperCase() + chosen.slice(1);
           }
@@ -499,7 +693,6 @@ export function synthesizeUniqueCebraspeStatement(
     }
   }
 
-  // Fallback with unique tactical case number so it is mathematically never 100% identical
   const fallbackCore = pickRandom(base.coreStatements);
   const fallbackPrefix = pickRandom(prefixes);
   const uniqueVariant = `${fallbackPrefix} [Caso Prático #${rewriteGenerationCount + Math.floor(Math.random() * 900 + 100)}] ${fallbackCore}`;

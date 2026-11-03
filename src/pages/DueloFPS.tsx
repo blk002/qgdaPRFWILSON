@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import {
   Crosshair,
   Volume2,
@@ -18,16 +18,26 @@ import {
   X,
   Maximize2,
   Minimize2,
+  Skull,
+  TrendingDown,
+  TrendingUp,
+  ArrowRight,
+  BarChart3,
+  Scale
 } from 'lucide-react';
 import {
   QUESTIONS_BANK,
   BaseLegalQuestion,
   ActiveRoundQuestion,
   QuestionCategory,
+  PRF_TOPICS_CATALOG,
+  getRandomPrfTopic,
+  PRFTopicMetadata,
   synthesizeUniqueCebraspeStatement,
 } from '../data/questionsBank';
 import { TacticalRange3D, ShotTriggerCommand } from '../components/TacticalRange3D';
 import { soundFX } from '../utils/soundEffects';
+import { useStore } from '../store/useStore';
 
 interface AnsweredHistoryItem {
   round: number;
@@ -40,10 +50,11 @@ interface AnsweredHistoryItem {
 const SEEN_STRINGS_STORAGE_KEY = 'alvo_legal_seen_statements_v1';
 const HIGH_SCORE_STORAGE_KEY = 'alvo_legal_high_score_v1';
 const GEMINI_KEY_STORAGE = 'qg_gemini_api_key';
+const FPS_TOPIC_STATS_KEY = 'qg_duelo_fps_topic_stats_v1';
 
 export default function DueloFPS() {
   const [gameState, setGameState] = useState<'menu' | 'playing' | 'executing' | 'gameover'>('menu');
-  const [activeTab, setActiveTab] = useState<'arena' | 'vademecum' | 'historico'>('arena');
+  const [activeTab, setActiveTab] = useState<'arena' | 'vademecum' | 'historico' | 'raiox'>('arena');
   const [roundNumber, setRoundNumber] = useState<number>(1);
   const [score, setScore] = useState<number>(0);
   const [highScore, setHighScore] = useState<number>(() => {
@@ -68,7 +79,7 @@ export default function DueloFPS() {
   const [runHistory, setRunHistory] = useState<AnsweredHistoryItem[]>([]);
   const [vadeMecumFilter, setVadeMecumFilter] = useState<'ALL' | 'CTB' | 'CONTRAN'>('ALL');
 
-  // Chave Gemini para geração/reescrita via IA em tempo real
+  // Chave Gemini para geração via IA em tempo real
   const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
     try {
       return localStorage.getItem(GEMINI_KEY_STORAGE) || (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
@@ -90,6 +101,9 @@ export default function DueloFPS() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
+  // Estatísticas de tópicos locais para a aba Raio-X
+  const [fpsTopicStatsVersion, setFpsTopicStatsVersion] = useState<number>(0);
+
   useEffect(() => {
     try {
       const raw = localStorage.getItem(SEEN_STRINGS_STORAGE_KEY);
@@ -109,9 +123,80 @@ export default function DueloFPS() {
     } catch {}
   }, []);
 
-  // Constrói questão única (com variação sintética garantida)
+  // Registra a questão respondida no useStore (Raio-X Caveira) e no agregador de tópicos
+  const recordQuestionAttempt = useCallback(
+    (
+      question: ActiveRoundQuestion,
+      playerChoice: boolean | null,
+      isHit: boolean,
+      spentSeconds: number,
+      reason?: 'WRONG_TARGET' | 'TIMEOUT'
+    ) => {
+      // 1. Envia ao Raio-X Caveira oficial (useStore)
+      try {
+        const addCaveira = (useStore.getState() as any).addCaveiraQuestion;
+        if (typeof addCaveira === 'function') {
+          addCaveira({
+            id: `fps-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+            subject: question.category === 'CTB' ? 'Legislação de Trânsito (CTB)' : 'Resoluções do CONTRAN',
+            canonicalSubject: question.category === 'CTB' ? 'Legislação de Trânsito (CTB)' : 'Resoluções do CONTRAN',
+            bloco: 'Bloco II',
+            topic: question.topic || (question.category === 'CTB' ? 'CTB - Geral' : 'CONTRAN - Geral'),
+            content: question.statement,
+            userAnswer: playerChoice === true ? 'CERTO' : playerChoice === false ? 'ERRADO' : 'TEMPO_ESGOTADO',
+            correctAnswer: question.answer ? 'CERTO' : 'ERRADO',
+            hit: isHit,
+            durationSeconds: Math.round(spentSeconds),
+            date: new Date().toISOString(),
+            confidence: playerChoice === null ? 'duvida' : 'alta',
+            errorReason: reason === 'TIMEOUT' ? 'atencao' : 'conteudo',
+            explanation: `${question.explanation} [Base Legal: ${question.legalBasis}]`,
+            teacherComment: question.explanation,
+            source: 'Duelo FPS (Alvo Legal)',
+            origin: 'Duelo FPS 3D',
+            legalBasis: question.legalBasis,
+          });
+        }
+      } catch (err) {
+        console.warn('Erro ao sincronizar questão com useStore:', err);
+      }
+
+      // 2. Persiste métricas por tópico no agregador de estatísticas do Duelo
+      try {
+        const raw = localStorage.getItem(FPS_TOPIC_STATS_KEY);
+        const stats = raw ? JSON.parse(raw) : { topics: {}, totalShots: 0, totalHits: 0, totalErrors: 0 };
+        stats.totalShots = (stats.totalShots || 0) + 1;
+        if (isHit) stats.totalHits = (stats.totalHits || 0) + 1;
+        else stats.totalErrors = (stats.totalErrors || 0) + 1;
+
+        const topicKey = question.topic || (question.category === 'CTB' ? 'CTB - Geral' : 'CONTRAN - Geral');
+        if (!stats.topics[topicKey]) {
+          stats.topics[topicKey] = {
+            topic: topicKey,
+            category: question.category,
+            legalBasis: question.legalBasis,
+            total: 0,
+            hits: 0,
+            errors: 0,
+            totalTime: 0,
+          };
+        }
+        const t = stats.topics[topicKey];
+        t.total += 1;
+        t.totalTime += spentSeconds;
+        if (isHit) t.hits += 1;
+        else t.errors += 1;
+
+        localStorage.setItem(FPS_TOPIC_STATS_KEY, JSON.stringify(stats));
+        setFpsTopicStatsVersion((v) => v + 1);
+      } catch (_) {}
+    },
+    []
+  );
+
+  // Constrói questão procedural de contingência baseada no catálogo amplo
   const buildUniqueQuestion = useCallback(
-    (targetCategory: QuestionCategory): ActiveRoundQuestion => {
+    (targetCategory: QuestionCategory, topicOverride?: PRFTopicMetadata): ActiveRoundQuestion => {
       const pool = QUESTIONS_BANK.filter((q) => q.category === targetCategory);
       const usedSet = usedBaseIdsInCycleRef.current[targetCategory];
 
@@ -137,8 +222,8 @@ export default function DueloFPS() {
         id: chosenBase.id,
         uniqueHash: `${chosenBase.id}-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
         category: chosenBase.category,
-        topic: chosenBase.topic,
-        legalBasis: chosenBase.legalBasis,
+        topic: topicOverride ? topicOverride.name : chosenBase.topic,
+        legalBasis: topicOverride ? topicOverride.legalScope : chosenBase.legalBasis,
         statement,
         answer: chosenBase.answer,
         explanation: chosenBase.explanation,
@@ -150,51 +235,77 @@ export default function DueloFPS() {
     [persistSeenStatement]
   );
 
-  // Pre-aquece próxima questão com a IA Gemini (ou mantém procedural)
+  // Pré-aquece próxima questão com a IA Gemini gerando sobre QUALQUER ponto do CTB / CONTRAN
   const prewarmCategoryQuestionWithAI = useCallback(
     async (category: QuestionCategory) => {
-      const initialQ = buildUniqueQuestion(category);
-      prewarmedNextRef.current.set(category, initialQ);
+      // 1. Sorteia aleatoriamente um tópico da matriz completa do Edital PRF
+      const topicMeta = getRandomPrfTopic(category);
+
+      // Prepara contingência imediata caso a IA falhe ou esteja sem internet
+      const fallbackQ = buildUniqueQuestion(category, topicMeta);
+      prewarmedNextRef.current.set(category, fallbackQ);
 
       const key = geminiApiKey || localStorage.getItem(GEMINI_KEY_STORAGE);
       if (!key) return;
 
       try {
-        const prompt = `Reescreva a seguinte assertiva de prova estilo CEBRASPE (Certo/Errado) sobre ${
-          category === 'CTB' ? 'Código de Trânsito Brasileiro (Lei nº 9.503/1997)' : 'Resolução do CONTRAN'
-        } de uma maneira inédita, mantendo rigorosamente o mesmo sentido jurídico e o mesmo gabarito (${
-          initialQ.answer ? 'CERTO' : 'ERRADO'
-        }).
-Base legal: ${initialQ.legalBasis}
-Assertiva base: "${initialQ.statement}"
-Regras:
-1. Use linguagem técnica Cebraspe (PRF).
-2. Mude a estrutura sintática, ordem das orações ou crie uma situação hipotética curta, mas NUNCA inverta o gabarito (${initialQ.answer ? 'CERTO' : 'ERRADO'}).
-3. Limite a no máximo 280 caracteres.
-Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
+        const prompt = `Você é o examinador sênior da banca CEBRASPE criando a prova da Polícia Rodoviária Federal (PRF).
+Gere uma questão 100% INÉDITA (uma única assertiva para o candidato julgar como CERTO ou ERRADO) sobre o tema selecionado abaixo:
+- Categoria: ${category === 'CTB' ? 'Código de Trânsito Brasileiro (Lei nº 9.503/1997 e alterações vigentes)' : 'Resoluções do CONTRAN para a PRF'}
+- Assunto: ${topicMeta.name}
+- Escopo Legal: ${topicMeta.legalScope}
+- Diretriz Temática: ${topicMeta.guideline}
 
-        const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            contents: [{ parts: [{ text: prompt }] }],
-            generationConfig: {
-              responseMimeType: 'application/json',
-              temperature: 0.7,
-            },
-          }),
-        });
+DIRETRIZES MANDATÓRIAS:
+1. Padrão CEBRASPE: Uma assertiva afirmativa direta ou um caso prático sucinto de fiscalização da PRF em rodovia federal.
+2. Gabarito equilibrado: Decida aleatoriamente se o gabarito será CERTO ou ERRADO (50% de chance para cada). Se for ERRADO, insira um detalhe técnico incorreto sutil e plausível (como prazo trocado, competência invertida ou valor adulterado).
+3. Tamanho MÁXIMO da assertiva: 280 caracteres (essencial para caber na tela do jogo de tiro 3D).
+4. Fundamentação: Indique a base legal exata e justificativa sucinta.
+5. Retorne EXCLUSIVAMENTE um objeto JSON válido no formato:
+{
+  "statement": "texto da assertiva (máximo 280 caracteres)",
+  "answer": true, // use true para CERTO ou false para ERRADO
+  "legalBasis": "${topicMeta.legalScope}",
+  "explanation": "explicação clara Cebraspe justificando a resposta",
+  "topic": "${topicMeta.name}"
+}`;
+
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
+          {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              contents: [{ parts: [{ text: prompt }] }],
+              generationConfig: {
+                responseMimeType: 'application/json',
+                temperature: 0.85,
+              },
+            }),
+          }
+        );
 
         if (!res.ok) return;
         const data = await res.json();
         const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (text) {
           const parsed = JSON.parse(text);
-          if (parsed?.rewrittenText && !seenStatementsRef.current.has(parsed.rewrittenText)) {
-            persistSeenStatement(parsed.rewrittenText);
+          if (
+            parsed?.statement &&
+            typeof parsed.answer === 'boolean' &&
+            !seenStatementsRef.current.has(parsed.statement)
+          ) {
+            const stmt = parsed.statement.trim();
+            persistSeenStatement(stmt);
             prewarmedNextRef.current.set(category, {
-              ...initialQ,
-              statement: parsed.rewrittenText.trim(),
+              id: `ai-${topicMeta.id}-${Date.now()}`,
+              uniqueHash: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
+              category,
+              topic: parsed.topic || topicMeta.name,
+              legalBasis: parsed.legalBasis || topicMeta.legalScope,
+              statement: stmt,
+              answer: parsed.answer,
+              explanation: parsed.explanation || 'Questão inédita elaborada por IA no padrão Cebraspe/PRF.',
               wasAiRewritten: true,
             });
           }
@@ -229,7 +340,7 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
     setTimeLeft(24.0);
     setGameState('playing');
 
-    // Pré-aquece as próximas rodadas em background
+    // Pré-aquece as próximas rodadas em background com temas aleatórios da matriz
     prewarmCategoryQuestionWithAI('CONTRAN');
     prewarmCategoryQuestionWithAI('CTB');
   }, [buildUniqueQuestion, prewarmCategoryQuestionWithAI]);
@@ -242,7 +353,7 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
       setDeathReason(reason);
       setGameState('executing');
 
-      const spent = Math.min(24, Math.max(0, 24 - timeLeft));
+      const spent = Math.min(24, Math.max(0.1, 24 - timeLeft));
       setRunHistory((prev) => [
         ...prev,
         {
@@ -254,11 +365,14 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
         },
       ]);
 
+      // Registra no Raio-X Caveira e no banco de tópicos
+      recordQuestionAttempt(currentQuestion, playerChoice, false, spent, reason);
+
       window.setTimeout(() => {
         setGameState('gameover');
       }, 1250);
     },
-    [currentQuestion, roundNumber, timeLeft]
+    [currentQuestion, roundNumber, timeLeft, recordQuestionAttempt]
   );
 
   // Disparo do jogador no alvo CERTO ou ERRADO
@@ -292,6 +406,9 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
           },
         ]);
 
+        // Registra acerto no Raio-X Caveira e estatísticas de tópicos
+        recordQuestionAttempt(currentQuestion, choice, true, spent);
+
         setLastFeedbackBanner({
           text: `ALVO CORRETO (${currentQuestion.answer ? 'CERTO' : 'ERRADO'})`,
           legalBasis: currentQuestion.legalBasis,
@@ -322,6 +439,7 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
       buildUniqueQuestion,
       prewarmCategoryQuestionWithAI,
       triggerNpcExecution,
+      recordQuestionAttempt,
     ]
   );
 
@@ -349,23 +467,23 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
     return () => window.clearInterval(interval);
   }, [gameState, roundNumber]);
 
-  // Checagem de tempo esgotado
+  // Checagem de estouro do tempo de 24s
   useEffect(() => {
     if (gameState === 'playing' && timeLeft <= 0) {
       triggerNpcExecution('TIMEOUT', null);
     }
   }, [gameState, timeLeft, triggerNpcExecution]);
 
-  // Atalhos de teclado: C/1 = CERTO, E/2 = ERRADO, H = Dock, F = Tela Cheia, Enter = Iniciar
+  // Teclas de atalho para atirar
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.target instanceof HTMLInputElement || e.target instanceof HTMLTextAreaElement) return;
       const key = e.key.toLowerCase();
 
       if (key === 'h') {
         setDockCollapsed((prev) => !prev);
         return;
       }
+
       if (key === 'f') {
         toggleFullscreen();
         return;
@@ -415,6 +533,44 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
     vadeMecumFilter === 'ALL' ? true : item.category === vadeMecumFilter
   );
 
+  // Computa o ranking dos assuntos mais errados e mais acertados no Duelo FPS
+  const fpsTopicReport = useMemo(() => {
+    try {
+      const raw = localStorage.getItem(FPS_TOPIC_STATS_KEY);
+      if (!raw) return { mostErrored: [], mostHit: [], totalShots: 0, totalHits: 0, totalErrors: 0 };
+      const stats = JSON.parse(raw);
+      const list = Object.values(stats.topics || {}).map((t: any) => {
+        const grossRate = t.total > 0 ? Math.round((t.hits / t.total) * 100) : 0;
+        const errorRate = 100 - grossRate;
+        const avgTime = t.total > 0 ? (t.totalTime / t.total).toFixed(1) : '0.0';
+        return {
+          ...t,
+          grossRate,
+          errorRate,
+          avgTime,
+        };
+      });
+
+      const mostErrored = [...list]
+        .filter((t) => t.errors > 0)
+        .sort((a, b) => b.errors - a.errors || b.errorRate - a.errorRate);
+
+      const mostHit = [...list]
+        .filter((t) => t.hits > 0)
+        .sort((a, b) => b.hits - a.hits || b.grossRate - a.grossRate);
+
+      return {
+        mostErrored,
+        mostHit,
+        totalShots: stats.totalShots || 0,
+        totalHits: stats.totalHits || 0,
+        totalErrors: stats.totalErrors || 0,
+      };
+    } catch {
+      return { mostErrored: [], mostHit: [], totalShots: 0, totalHits: 0, totalErrors: 0 };
+    }
+  }, [fpsTopicStatsVersion]);
+
   return (
     <div
       ref={containerRef}
@@ -432,15 +588,16 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
           <div>
             <h1 className="text-sm font-black tracking-wider uppercase text-zinc-100 flex items-center gap-2">
               ALVO LEGAL FPS
-              <span className="text-[10px] px-2 py-0.5 rounded-full bg-amber-500/15 text-amber-400 border border-amber-500/30 font-mono font-bold">
-                CTB & CONTRAN
+              <span className="text-[10px] font-mono px-1.5 py-0.5 rounded bg-zinc-800 border border-zinc-700 text-amber-400">
+                PRF 24s
               </span>
             </h1>
+            <p className="text-[11px] text-zinc-400">Duelo Tático: Todo o CTB & Resoluções CONTRAN</p>
           </div>
         </div>
 
-        {/* Navegação entre Abas do Jogo */}
-        <nav className="hidden sm:flex items-center gap-5 text-xs font-semibold text-zinc-400">
+        {/* Navegação entre Abas */}
+        <nav className="hidden sm:flex items-center gap-5 text-xs font-bold uppercase tracking-wider text-zinc-400">
           <button
             type="button"
             onClick={() => setActiveTab('arena')}
@@ -449,6 +606,16 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
             }`}
           >
             Estande 3D
+          </button>
+          <button
+            type="button"
+            onClick={() => setActiveTab('raiox')}
+            className={`transition-colors cursor-pointer flex items-center gap-1.5 ${
+              activeTab === 'raiox' ? 'text-amber-400 underline underline-offset-8' : 'hover:text-zinc-100'
+            }`}
+          >
+            <BarChart3 className="w-3.5 h-3.5" />
+            Raio-X de Assuntos
           </button>
           <button
             type="button"
@@ -466,7 +633,7 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
               activeTab === 'historico' ? 'text-amber-400 underline underline-offset-8' : 'hover:text-zinc-100'
             }`}
           >
-            Relatório ({runHistory.length})
+            Bateria Atual ({runHistory.length})
           </button>
         </nav>
 
@@ -481,7 +648,7 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
                 ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
                 : 'bg-zinc-800/80 text-zinc-400 border-zinc-700 hover:text-zinc-200'
             }`}
-            title="Configurar IA Gemini para gerar questões em tempo real"
+            title="Configurar IA Gemini para gerar questões inéditas em tempo real"
           >
             <Sparkles className="w-3.5 h-3.5" />
             <span className="hidden md:inline">{geminiApiKey ? 'IA Gemini Ativa' : 'Configurar IA'}</span>
@@ -518,234 +685,182 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
         </div>
       </header>
 
-      {/* ÁREA PRINCIPAL DO JOGO */}
-      <main className="relative flex-1 w-full h-full overflow-hidden">
-        {/* ARENA 3D THREE.JS (Permanece montada para preservar contexto WebGL) */}
-        <div className="absolute inset-0 z-0">
+      {/* ÁREA CENTRAL PRINCIPAL */}
+      <main className="flex-1 relative overflow-hidden bg-black">
+        {/* ABA 1: ESTANDE 3D */}
+        <div className={`absolute inset-0 z-0 ${activeTab === 'arena' ? 'block' : 'hidden'}`}>
           <TacticalRange3D
-            gameState={gameState}
-            currentQuestion={currentQuestion}
-            timeLeft={timeLeft}
-            roundNumber={roundNumber}
-            externalShotCommand={externalShotCommand}
+            isExecuting={gameState === 'executing'}
+            isPlayerAlive={gameState !== 'gameover'}
+            hoveredTarget={hoveredTarget}
             onShootTarget={handleShootTarget}
-            onHoverTargetChange={setHoveredTarget}
+            externalShotCommand={externalShotCommand}
           />
         </div>
 
-        {/* Overlay Balístico Carmesim quando o NPC elimina o jogador */}
-        {(gameState === 'executing' || gameState === 'gameover') && (
-          <div
-            className="absolute inset-0 pointer-events-none z-10 transition-opacity duration-300"
-            style={{
-              background:
-                'radial-gradient(circle at center, rgba(220,38,38,0.18) 0%, rgba(127,29,29,0.72) 70%, rgba(9,9,11,0.92) 100%)',
-            }}
-          />
-        )}
-
-        {/* ABA 1: ESTANDE 3D */}
         {activeTab === 'arena' && (
           <>
-            {/* Top HUD Compacto com Questão e Cronômetro de 24s */}
-            {gameState === 'playing' && currentQuestion && (
-              <div className="absolute top-3 left-1/2 -translate-x-1/2 z-20 w-[min(920px,94vw)] pointer-events-none">
-                <div className="bg-zinc-950/92 border border-zinc-800 rounded-2xl px-5 py-3 shadow-2xl backdrop-blur-md">
-                  {/* Linha de Metadados: Alternância Rigorosa CTB ↔ CONTRAN */}
-                  <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-zinc-400 mb-1.5">
-                    <div className="flex items-center gap-2 font-mono">
-                      <span className="font-bold text-zinc-200">
-                        Rodada {String(roundNumber).padStart(2, '0')}
-                      </span>
-                      <span>·</span>
-                      <span
-                        className={
-                          currentQuestion.category === 'CTB'
-                            ? 'text-amber-400 font-semibold'
-                            : 'text-cyan-400 font-semibold'
-                        }
-                      >
-                        {currentQuestion.category === 'CTB'
-                          ? '1º na Ordem: CTB (Lei 9.503/97)'
-                          : '2º na Ordem: Resolução CONTRAN'}
-                      </span>
-                      <span>·</span>
-                      <span className="text-zinc-300 truncate max-w-[200px]">{currentQuestion.topic}</span>
-                      {currentQuestion.wasAiRewritten && (
-                        <span className="text-[10px] px-1.5 py-0.2 rounded bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
-                          IA Live
-                        </span>
-                      )}
-                    </div>
-
-                    <div className="flex items-center gap-3 font-mono">
-                      <span>Streak: <strong className="text-amber-400 font-black">{score}</strong></span>
-                      <span>·</span>
-                      <span>Recorde: <strong className="text-emerald-400 font-black">{highScore}</strong></span>
-                    </div>
-                  </div>
-
-                  {/* Enunciado da Assertiva Cebraspe */}
-                  <p className="text-sm sm:text-base font-medium text-zinc-100 leading-relaxed text-justify sm:text-center">
-                    "{currentQuestion.statement}"
-                  </p>
-
-                  {/* Cronômetro Regressivo de 24 segundos */}
-                  <div className="mt-2.5 flex items-center justify-between gap-3 pt-2 border-t border-zinc-800/80">
-                    <span className="text-[11px] text-zinc-400 truncate">
-                      Base: <strong className="text-zinc-300">{currentQuestion.legalBasis}</strong>
-                    </span>
-
-                    <div className="flex items-center gap-2 font-mono">
-                      <span className="text-xs font-bold uppercase text-zinc-400">Tempo:</span>
-                      <span
-                        className={`text-xl sm:text-2xl font-black tabular-nums ${
-                          timeLeft <= 5.0
-                            ? 'text-red-500 animate-pulse'
-                            : timeLeft <= 10.0
-                            ? 'text-amber-400'
-                            : 'text-emerald-400'
-                        }`}
-                      >
-                        {timeLeft.toFixed(1)}s
-                      </span>
-                    </div>
-                  </div>
-                </div>
+            {/* HUD SUPERIOR: CRONÔMETRO DE 24S + PLACAR */}
+            <div className="absolute top-4 left-1/2 -translate-x-1/2 z-20 flex items-center gap-3">
+              {/* Placar de Rodadas */}
+              <div className="flex items-center gap-2 bg-zinc-950/90 backdrop-blur-md px-3.5 py-1.5 rounded-2xl border border-zinc-800 text-xs font-mono">
+                <span className="text-zinc-500 uppercase text-[10px] font-bold">Rodada</span>
+                <span className="text-amber-400 font-black">#{roundNumber}</span>
+                <span className="text-zinc-600">|</span>
+                <span className="text-zinc-400">Score: <strong className="text-zinc-100">{score}</strong></span>
               </div>
-            )}
 
-            {/* Banner de Feedback ao Acertar */}
+              {/* Cronômetro Central de 24 Segundos */}
+              <div
+                className={`px-4 py-1.5 rounded-2xl border font-mono font-black text-sm flex items-center gap-2 backdrop-blur-md transition-all shadow-lg ${
+                  timeLeft <= 5
+                    ? 'bg-red-500/20 border-red-500 text-red-400 animate-pulse shadow-red-500/30'
+                    : timeLeft <= 10
+                    ? 'bg-amber-500/20 border-amber-500 text-amber-400 shadow-amber-500/20'
+                    : 'bg-zinc-950/90 border-zinc-800 text-zinc-100'
+                }`}
+              >
+                <Clock className="w-4 h-4" />
+                <span className="tabular-nums text-base">{timeLeft.toFixed(1)}s</span>
+              </div>
+
+              {/* Categoria Atual (Alternância Estrita) */}
+              {currentQuestion && (
+                <div
+                  className={`px-3 py-1.5 rounded-2xl border text-[11px] font-bold uppercase backdrop-blur-md ${
+                    currentQuestion.category === 'CTB'
+                      ? 'bg-amber-500/15 border-amber-500/30 text-amber-400'
+                      : 'bg-cyan-500/15 border-cyan-500/30 text-cyan-400'
+                  }`}
+                >
+                  {currentQuestion.category}
+                </div>
+              )}
+            </div>
+
+            {/* FEEDBACK BANNER (QUANDO ACERTA) */}
             {lastFeedbackBanner && gameState === 'playing' && (
-              <div className="absolute top-28 left-1/2 -translate-x-1/2 z-20 pointer-events-none">
-                <div className="bg-emerald-950/90 border border-emerald-500/50 text-emerald-300 px-4 py-1.5 rounded-xl text-xs font-bold flex items-center gap-2 shadow-lg backdrop-blur-sm animate-fade-in">
-                  <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                  <span>{lastFeedbackBanner.text}</span>
-                  <span className="text-emerald-400/80 font-normal">· {lastFeedbackBanner.legalBasis}</span>
-                </div>
+              <div className="absolute top-16 left-1/2 -translate-x-1/2 z-20 bg-emerald-950/90 border border-emerald-500/40 text-emerald-300 px-4 py-1.5 rounded-xl text-xs font-bold shadow-lg shadow-emerald-950/50 flex items-center gap-2 animate-bounce">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400" />
+                <span>{lastFeedbackBanner.text}</span>
               </div>
             )}
 
-            {/* Dock Inferior com Controles e Botões Manuais de Disparo */}
-            <div className="absolute bottom-3 left-1/2 -translate-x-1/2 z-20 w-[min(740px,94vw)]">
-              <div className="bg-zinc-950/90 border border-zinc-800 rounded-2xl p-2.5 shadow-2xl backdrop-blur-md">
-                <div className="flex items-center justify-between text-xs text-zinc-400 px-2 pb-1.5 border-b border-zinc-800/60 mb-2">
-                  <span className="font-semibold text-zinc-300">
-                    Controles Táticos: Mire e clique nos alvos 3D ou use os atalhos
-                  </span>
+            {/* DOCK INFERIOR: PAINEL DA ASSERTIVA CEBRASPE */}
+            <div className="absolute bottom-4 left-1/2 -translate-x-1/2 w-[94%] max-w-3xl z-20">
+              <div className="bg-zinc-950/95 backdrop-blur-md border border-zinc-800/90 rounded-3xl p-4 shadow-2xl space-y-3">
+                {/* Cabeçalho do Card */}
+                <div className="flex items-center justify-between text-xs font-mono text-zinc-400">
+                  <div className="flex items-center gap-2">
+                    <span className="w-2 h-2 rounded-full bg-red-500 animate-ping" />
+                    <span className="font-bold text-zinc-300">
+                      {currentQuestion?.topic || 'SITUAÇÃO DE FISCALIZAÇÃO'}
+                    </span>
+                    {currentQuestion?.wasAiRewritten && (
+                      <span className="px-1.5 py-0.5 rounded bg-purple-500/20 text-purple-300 text-[10px] font-bold border border-purple-500/30">
+                        IA Inédita
+                      </span>
+                    )}
+                  </div>
                   <button
                     type="button"
-                    onClick={() => setDockCollapsed(!dockCollapsed)}
-                    className="text-zinc-500 hover:text-zinc-300 p-0.5"
-                    title="Minimizar barra"
+                    onClick={() => setDockCollapsed((prev) => !prev)}
+                    className="p-1 rounded-lg hover:bg-zinc-800 text-zinc-400 hover:text-zinc-200 cursor-pointer"
+                    title={dockCollapsed ? 'Expandir HUD' : 'Recolher HUD (H)'}
                   >
                     {dockCollapsed ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
                   </button>
                 </div>
 
                 {!dockCollapsed && (
-                  <div className="grid grid-cols-2 gap-3">
-                    <button
-                      type="button"
-                      disabled={gameState !== 'playing'}
-                      onClick={() => setExternalShotCommand({ choice: true, id: Date.now() })}
-                      className="py-2.5 px-4 rounded-xl border-2 border-emerald-500/60 bg-emerald-950/40 hover:bg-emerald-900/60 hover:border-emerald-400 text-emerald-200 font-mono text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 disabled:opacity-40"
-                    >
-                      <CheckCircle2 className="w-4 h-4 text-emerald-400" />
-                      <span>Atirar em CERTO [C / 1]</span>
-                    </button>
+                  <>
+                    {/* Enunciado Cebraspe */}
+                    <div className="p-3.5 rounded-2xl bg-zinc-900/90 border border-zinc-800/80">
+                      <p className="text-xs sm:text-sm font-medium text-zinc-100 leading-relaxed">
+                        {currentQuestion ? (
+                          currentQuestion.statement
+                        ) : (
+                          <span className="text-zinc-500 italic">
+                            Aguardando início. Pressione Enter ou clique em Iniciar para carregar o primeiro item...
+                          </span>
+                        )}
+                      </p>
+                    </div>
 
-                    <button
-                      type="button"
-                      disabled={gameState !== 'playing'}
-                      onClick={() => setExternalShotCommand({ choice: false, id: Date.now() })}
-                      className="py-2.5 px-4 rounded-xl border-2 border-red-500/60 bg-red-950/40 hover:bg-red-900/60 hover:border-red-400 text-red-200 font-mono text-xs font-black uppercase tracking-wider transition-all cursor-pointer flex items-center justify-center gap-2 active:scale-95 disabled:opacity-40"
-                    >
-                      <XCircle className="w-4 h-4 text-red-400" />
-                      <span>Atirar em ERRADO [E / 2]</span>
-                    </button>
-                  </div>
+                    {/* Botões Táticos de Tiro (Alvos Certo / Errado) */}
+                    <div className="grid grid-cols-2 gap-3 pt-1">
+                      <button
+                        type="button"
+                        disabled={gameState !== 'playing'}
+                        onMouseEnter={() => setHoveredTarget('CERTO')}
+                        onMouseLeave={() => setHoveredTarget(null)}
+                        onClick={() => handleShootTarget(true)}
+                        className={`py-3 px-4 rounded-2xl font-black text-xs sm:text-sm uppercase tracking-wider transition-all cursor-pointer border flex items-center justify-center gap-2 ${
+                          gameState === 'playing'
+                            ? 'bg-emerald-600/20 hover:bg-emerald-600 text-emerald-300 hover:text-white border-emerald-500/40 active:scale-95 shadow-lg shadow-emerald-950/40'
+                            : 'bg-zinc-900 text-zinc-600 border-zinc-800 cursor-not-allowed'
+                        }`}
+                      >
+                        <CheckCircle2 className="w-4 h-4 shrink-0" />
+                        <span>Disparar em CERTO (C / 1)</span>
+                      </button>
+
+                      <button
+                        type="button"
+                        disabled={gameState !== 'playing'}
+                        onMouseEnter={() => setHoveredTarget('ERRADO')}
+                        onMouseLeave={() => setHoveredTarget(null)}
+                        onClick={() => handleShootTarget(false)}
+                        className={`py-3 px-4 rounded-2xl font-black text-xs sm:text-sm uppercase tracking-wider transition-all cursor-pointer border flex items-center justify-center gap-2 ${
+                          gameState === 'playing'
+                            ? 'bg-red-600/20 hover:bg-red-600 text-red-300 hover:text-white border-red-500/40 active:scale-95 shadow-lg shadow-red-950/40'
+                            : 'bg-zinc-900 text-zinc-600 border-zinc-800 cursor-not-allowed'
+                        }`}
+                      >
+                        <XCircle className="w-4 h-4 shrink-0" />
+                        <span>Disparar em ERRADO (E / 2)</span>
+                      </button>
+                    </div>
+                  </>
                 )}
               </div>
             </div>
 
-            {/* Tela de Início / Menu */}
-            {gameState === 'menu' && (
-              <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-zinc-950/85 backdrop-blur-md">
-                <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
-                  <div className="w-16 h-16 rounded-2xl bg-amber-500/10 border border-amber-500/30 flex items-center justify-center mx-auto text-amber-400 shadow-lg shadow-amber-500/10">
-                    <Crosshair className="w-8 h-8 animate-pulse" />
+            {/* OVERLAY DE MORTE / GAME OVER */}
+            {gameState === 'gameover' && (
+              <div className="absolute inset-0 z-40 bg-red-950/85 backdrop-blur-md flex items-center justify-center p-4">
+                <div className="max-w-md w-full bg-zinc-950 border border-red-500/40 rounded-3xl p-6 text-center shadow-2xl space-y-4">
+                  <div className="w-14 h-14 mx-auto rounded-2xl bg-red-500/20 border border-red-500/40 text-red-400 flex items-center justify-center">
+                    <ShieldAlert className="w-8 h-8 animate-pulse" />
                   </div>
 
                   <div>
-                    <h2 className="text-xl font-black uppercase tracking-wider text-zinc-100">
-                      ESTANDE TÁTICO: CTB & CONTRAN
+                    <h2 className="text-xl font-black uppercase tracking-wider text-red-400">
+                      {deathReason === 'TIMEOUT' ? 'TEMPO ESGOTADO: VOCÊ FOI ABATIDO!' : 'ALVO ERRADO: DISPARO FATAL DO NPC!'}
                     </h2>
                     <p className="text-xs text-zinc-400 mt-1">
-                      O suspeito armado está com a pistola na sua direção. Você tem <strong>24 segundos</strong> para identificar o gabarito Cebraspe e atirar na placa certa.
-                    </p>
-                  </div>
-
-                  <div className="grid grid-cols-3 gap-2 text-left text-xs bg-zinc-950/60 border border-zinc-800 p-3 rounded-2xl">
-                    <div>
-                      <span className="block text-[10px] font-bold text-amber-400 uppercase">Tempo</span>
-                      <strong className="text-zinc-200">24s por tiro</strong>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] font-bold text-cyan-400 uppercase">Ordem</span>
-                      <strong className="text-zinc-200">CTB ↔ CONTRAN</strong>
-                    </div>
-                    <div>
-                      <span className="block text-[10px] font-bold text-red-400 uppercase">Falha</span>
-                      <strong className="text-zinc-200">Tiro do NPC</strong>
-                    </div>
-                  </div>
-
-                  <button
-                    type="button"
-                    onClick={startNewGame}
-                    className="w-full py-3.5 rounded-2xl bg-amber-500 hover:bg-amber-400 text-zinc-950 font-black text-xs uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-amber-500/20 flex items-center justify-center gap-2"
-                  >
-                    <Play className="w-4 h-4 fill-current" />
-                    <span>ENTRAR NO ESTANDE & INICIAR (ENTER)</span>
-                  </button>
-                </div>
-              </div>
-            )}
-
-            {/* Tela de GAME OVER / ELIMINADO */}
-            {gameState === 'gameover' && currentQuestion && (
-              <div className="absolute inset-0 z-30 flex items-center justify-center p-4 bg-zinc-950/90 backdrop-blur-md overflow-y-auto">
-                <div className="max-w-xl w-full bg-zinc-900 border border-red-500/40 rounded-3xl p-6 text-center space-y-4 shadow-2xl">
-                  <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/30 flex items-center justify-center mx-auto text-red-500">
-                    <ShieldAlert className="w-7 h-7" />
-                  </div>
-
-                  <div>
-                    <h2 className="text-2xl font-black uppercase tracking-widest text-red-500 font-mono">
-                      FIM DA LINHA, POLICIAL
-                    </h2>
-                    <p className="text-xs text-zinc-400 mt-1 font-semibold">
                       {deathReason === 'TIMEOUT'
-                        ? 'O tempo de 24 segundos se esgotou e o suspeito disparou.'
-                        : 'Você disparou na placa errada e foi neutralizado.'}
+                        ? 'Os 24 segundos esgotaram antes que você realizasse o disparo.'
+                        : 'O operador tático reagiu instantaneamente ao seu tiro incorreto.'}
                     </p>
                   </div>
 
-                  {/* Gabarito Comentado Oficial */}
-                  <div className="p-4 rounded-2xl bg-zinc-950 border border-zinc-800 text-left text-xs space-y-2">
-                    <div className="flex items-center justify-between font-bold border-b border-zinc-800 pb-2">
-                      <span className="text-amber-400 uppercase">
-                        Gabarito Oficial: {currentQuestion.answer ? 'CERTO' : 'ERRADO'}
-                      </span>
-                      <span className="text-zinc-400">{currentQuestion.legalBasis}</span>
+                  {currentQuestion && (
+                    <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 text-left text-xs space-y-1.5">
+                      <div className="flex items-center justify-between font-mono text-[11px]">
+                        <span className="text-amber-400 font-bold">{currentQuestion.category} · {currentQuestion.legalBasis}</span>
+                        <span className="px-1.5 py-0.5 rounded bg-zinc-800 text-zinc-200 font-bold">
+                          Gabarito: {currentQuestion.answer ? 'CERTO' : 'ERRADO'}
+                        </span>
+                      </div>
+                      <p className="text-zinc-300 italic">"{currentQuestion.statement}"</p>
+                      <p className="text-zinc-400 text-[11px] pt-1 border-t border-zinc-800/80">
+                        {currentQuestion.explanation}
+                      </p>
                     </div>
-                    <p className="text-zinc-300 italic">"{currentQuestion.statement}"</p>
-                    <p className="text-emerald-400 leading-relaxed pt-1">{currentQuestion.explanation}</p>
-                  </div>
+                  )}
 
-                  {/* Placar da Bateria */}
-                  <div className="flex items-center justify-center gap-8 py-1 font-mono text-xs">
+                  <div className="grid grid-cols-2 gap-3 py-1 font-mono text-center">
                     <div>
                       <span className="text-zinc-500 block uppercase text-[10px]">Sobreviveu</span>
                       <strong className="text-xl text-zinc-100 font-black">{score} rodadas</strong>
@@ -756,18 +871,19 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
                     </div>
                   </div>
 
-                  <div className="flex items-center justify-center gap-3 pt-2">
+                  <div className="flex items-center justify-center gap-2 pt-2">
                     <button
                       type="button"
-                      onClick={() => setActiveTab('historico')}
-                      className="px-4 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-zinc-300 text-xs font-bold transition-all cursor-pointer"
+                      onClick={() => setActiveTab('raiox')}
+                      className="px-3.5 py-2.5 rounded-xl bg-zinc-800 hover:bg-zinc-700 text-amber-400 text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5"
                     >
-                      Ver Relatório Completo
+                      <BarChart3 className="w-3.5 h-3.5" />
+                      Raio-X
                     </button>
                     <button
                       type="button"
                       onClick={startNewGame}
-                      className="px-6 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-amber-500/20 flex items-center gap-2"
+                      className="px-5 py-2.5 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-black uppercase tracking-wider transition-all cursor-pointer shadow-lg shadow-amber-500/20 flex items-center gap-2"
                     >
                       <RotateCcw className="w-4 h-4" />
                       <span>Tentar Novamente (Enter)</span>
@@ -779,7 +895,175 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
           </>
         )}
 
-        {/* ABA 2: BASE LEGAL (VADE MECUM CTB & CONTRAN) */}
+        {/* ABA 2: RAIO-X DE ASSUNTOS (MAIS ERRADOS vs MAIS ACERTADOS NO DUELO) */}
+        {activeTab === 'raiox' && (
+          <div className="absolute inset-0 z-20 bg-zinc-950 p-6 overflow-y-auto">
+            <div className="max-w-5xl mx-auto space-y-6 pb-16">
+              {/* Cabeçalho */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 border-b border-zinc-800 pb-4">
+                <div>
+                  <h2 className="text-lg font-black uppercase tracking-wider text-zinc-100 flex items-center gap-2">
+                    <Skull className="w-5 h-5 text-red-500" />
+                    RAIO-X DE ASSUNTOS: DUELO FPS 3D
+                  </h2>
+                  <p className="text-xs text-zinc-400">
+                    Mapeamento tático dos assuntos que você mais erra e mais acerta no CTB e Resoluções CONTRAN.
+                  </p>
+                </div>
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      window.location.hash = '#/raiox';
+                    }}
+                    className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-blue-600/20"
+                  >
+                    <span>Ver Raio-X Caveira Global</span>
+                    <ArrowRight className="w-3.5 h-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setActiveTab('arena')}
+                    className="px-3.5 py-2 rounded-xl bg-amber-500 hover:bg-amber-400 text-zinc-950 text-xs font-black uppercase cursor-pointer"
+                  >
+                    Voltar ao Tiro
+                  </button>
+                </div>
+              </div>
+
+              {/* KPIs de Desempenho do Duelo */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+                <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 text-center">
+                  <span className="text-[10px] uppercase font-bold text-zinc-400 block">Total de Disparos</span>
+                  <span className="text-2xl font-black text-zinc-100">{fpsTopicReport.totalShots}</span>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 text-center">
+                  <span className="text-[10px] uppercase font-bold text-zinc-400 block">Precisão Geral</span>
+                  <span className="text-2xl font-black text-emerald-400">
+                    {fpsTopicReport.totalShots > 0
+                      ? `${Math.round((fpsTopicReport.totalHits / fpsTopicReport.totalShots) * 100)}%`
+                      : '0%'}
+                  </span>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 text-center">
+                  <span className="text-[10px] uppercase font-bold text-zinc-400 block">Assuntos Críticos</span>
+                  <span className="text-2xl font-black text-red-400">{fpsTopicReport.mostErrored.length}</span>
+                </div>
+                <div className="p-3.5 rounded-2xl bg-zinc-900 border border-zinc-800 text-center">
+                  <span className="text-[10px] uppercase font-bold text-zinc-400 block">Assuntos Blindados</span>
+                  <span className="text-2xl font-black text-cyan-400">{fpsTopicReport.mostHit.length}</span>
+                </div>
+              </div>
+
+              {/* Duas Colunas: Mais Errados vs Mais Acertados */}
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+                {/* Coluna 1: Assuntos Mais Errados (Zona Crítica) */}
+                <div className="p-4 rounded-3xl bg-zinc-900/80 border border-red-500/20 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+                    <h3 className="text-xs font-black uppercase text-red-400 flex items-center gap-2">
+                      <TrendingDown className="w-4 h-4" />
+                      ZONA CRÍTICA: ASSUNTOS MAIS ERRADOS ({fpsTopicReport.mostErrored.length})
+                    </h3>
+                    <span className="text-[10px] text-zinc-400">Alerta de Eliminação</span>
+                  </div>
+
+                  {fpsTopicReport.mostErrored.length === 0 ? (
+                    <div className="py-12 text-center text-zinc-500 text-xs">
+                      Nenhum erro registrado ainda. Continue disparando para mapear seus pontos fracos!
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
+                      {fpsTopicReport.mostErrored.map((t: any, idx: number) => (
+                        <div
+                          key={t.topic}
+                          className="p-3 rounded-2xl bg-zinc-950 border border-red-500/20 space-y-1.5 text-xs"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-zinc-200 flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-lg bg-red-500/20 text-red-400 font-mono text-[10px] flex items-center justify-center font-black">
+                                #{idx + 1}
+                              </span>
+                              {t.topic}
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-red-500/20 text-red-400 font-mono font-bold text-[10px]">
+                              {t.errors} {t.errors === 1 ? 'erro' : 'erros'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                            <span>{t.category} · {t.legalBasis || 'Dispositivo Legal'}</span>
+                            <span className="font-mono text-red-400 font-bold">{t.errorRate}% letal</span>
+                          </div>
+
+                          {/* Barra de erro */}
+                          <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                            <div
+                              className="bg-red-500 h-full rounded-full transition-all"
+                              style={{ width: `${Math.min(100, t.errorRate)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Coluna 2: Assuntos Mais Acertados (Zona Blindada) */}
+                <div className="p-4 rounded-3xl bg-zinc-900/80 border border-emerald-500/20 space-y-3">
+                  <div className="flex items-center justify-between pb-2 border-b border-zinc-800">
+                    <h3 className="text-xs font-black uppercase text-emerald-400 flex items-center gap-2">
+                      <TrendingUp className="w-4 h-4" />
+                      ZONA BLINDADA: ASSUNTOS MAIS ACERTADOS ({fpsTopicReport.mostHit.length})
+                    </h3>
+                    <span className="text-[10px] text-zinc-400">Pontaria Afiada</span>
+                  </div>
+
+                  {fpsTopicReport.mostHit.length === 0 ? (
+                    <div className="py-12 text-center text-zinc-500 text-xs">
+                      Nenhum acerto registrado ainda. Inicie sua bateria no Estande 3D!
+                    </div>
+                  ) : (
+                    <div className="space-y-2.5 max-h-[460px] overflow-y-auto pr-1">
+                      {fpsTopicReport.mostHit.map((t: any, idx: number) => (
+                        <div
+                          key={t.topic}
+                          className="p-3 rounded-2xl bg-zinc-950 border border-emerald-500/20 space-y-1.5 text-xs"
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className="font-bold text-zinc-200 flex items-center gap-2">
+                              <span className="w-5 h-5 rounded-lg bg-emerald-500/20 text-emerald-400 font-mono text-[10px] flex items-center justify-center font-black">
+                                #{idx + 1}
+                              </span>
+                              {t.topic}
+                            </span>
+                            <span className="px-2 py-0.5 rounded bg-emerald-500/20 text-emerald-400 font-mono font-bold text-[10px]">
+                              {t.hits} {t.hits === 1 ? 'acerto' : 'acertos'}
+                            </span>
+                          </div>
+
+                          <div className="flex items-center justify-between text-[11px] text-zinc-400">
+                            <span>{t.category} · {t.legalBasis || 'Dispositivo Legal'}</span>
+                            <span className="font-mono text-emerald-400 font-bold">{t.grossRate}% precisão</span>
+                          </div>
+
+                          {/* Barra de acerto */}
+                          <div className="w-full bg-zinc-800 h-1.5 rounded-full overflow-hidden">
+                            <div
+                              className="bg-emerald-500 h-full rounded-full transition-all"
+                              style={{ width: `${Math.min(100, t.grossRate)}%` }}
+                            />
+                          </div>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ABA 3: BASE LEGAL (VADE MECUM CTB & CONTRAN) */}
         {activeTab === 'vademecum' && (
           <div className="absolute inset-0 z-20 bg-zinc-950 p-6 overflow-y-auto">
             <div className="max-w-4xl mx-auto space-y-4 pb-12">
@@ -836,7 +1120,7 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
           </div>
         )}
 
-        {/* ABA 3: RELATÓRIO DE DISPAROS */}
+        {/* ABA 4: HISTÓRICO DA BATERIA */}
         {activeTab === 'historico' && (
           <div className="absolute inset-0 z-20 bg-zinc-950 p-6 overflow-y-auto">
             <div className="max-w-4xl mx-auto space-y-4 pb-12">
@@ -892,7 +1176,7 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
             <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
               <div className="flex items-center gap-2 text-amber-400 font-black uppercase text-sm">
                 <Sparkles className="w-4 h-4" />
-                <span>IA Gemini: Geração ao Vivo</span>
+                <span>IA Gemini: Questões Infinitas ao Vivo</span>
               </div>
               <button
                 type="button"
@@ -904,7 +1188,7 @@ Retorne estritamente um JSON no formato: {"rewrittenText": "..."}`;
             </div>
 
             <p className="text-xs text-zinc-400 leading-relaxed">
-              Insira sua chave gratuita da <strong>Google Gemini API</strong> (do Google AI Studio). Com ela ativa, a IA reescreve enunciados em segundo plano em tempo real com vocabulário inédito Cebraspe.
+              Insira sua chave gratuita da <strong>Google Gemini API</strong> (do Google AI Studio). Com ela ativa, a IA gera questões inéditas de todo o CTB e de todas as Resoluções do CONTRAN para a PRF sem depender de banco fixo!
             </p>
 
             <form onSubmit={saveGeminiKey} className="space-y-4">
