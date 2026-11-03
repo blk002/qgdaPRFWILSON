@@ -537,6 +537,55 @@ export default function RaioXCaveira() {
     setSelectedLegalDevice(null);
   };
 
+  const handleResetAll = () => {
+    if (caveiraQuestions.length === 0) return;
+    useStore.getState().setGlobalModal({
+      title: 'Zerar Questões Resolvidas?',
+      message: 'Esta ação removerá todas as questões resolvidas do histórico do Raio-X Caveira.',
+      onConfirm: () => clearCaveiraQuestions()
+    });
+  };
+
+  const handleResetHits = () => {
+    if (stats.hits === 0) return;
+    useStore.getState().setGlobalModal({
+      title: 'Zerar Acertos?',
+      message: `Deseja zerar os ${stats.hits} acertos registrados no histórico?`,
+      onConfirm: () => {
+        const remaining = caveiraQuestions.filter(q => {
+          const classified = classifyPRFCategory(q.subject, q.topic, q.content);
+          const qBloco = q.bloco || classified.bloco;
+          if (selectedBloco !== 'all' && qBloco !== selectedBloco) return true;
+          return !q.hit;
+        });
+        useStore.setState({ caveiraQuestions: remaining });
+        try { localStorage.setItem('prf_caveira_questions', JSON.stringify(remaining)); } catch (_) {}
+        try { window.postMessage({ source: 'QG_WEB_APP', type: 'REPLACE_CAVEIRA_QUESTIONS', payload: { questions: remaining } }, '*'); } catch (_) {}
+        toast.info('Acertos zerados.');
+      }
+    });
+  };
+
+  const handleResetErrors = () => {
+    if (stats.errors === 0) return;
+    useStore.getState().setGlobalModal({
+      title: 'Zerar Erros?',
+      message: `Deseja zerar os ${stats.errors} erros registrados no histórico?`,
+      onConfirm: () => {
+        const remaining = caveiraQuestions.filter(q => {
+          const classified = classifyPRFCategory(q.subject, q.topic, q.content);
+          const qBloco = q.bloco || classified.bloco;
+          if (selectedBloco !== 'all' && qBloco !== selectedBloco) return true;
+          return Boolean(q.hit);
+        });
+        useStore.setState({ caveiraQuestions: remaining });
+        try { localStorage.setItem('prf_caveira_questions', JSON.stringify(remaining)); } catch (_) {}
+        try { window.postMessage({ source: 'QG_WEB_APP', type: 'REPLACE_CAVEIRA_QUESTIONS', payload: { questions: remaining } }, '*'); } catch (_) {}
+        toast.info('Erros zerados.');
+      }
+    });
+  };
+
   return (
     <div className="fade-in w-full pb-12 font-sans space-y-4">
 
@@ -679,94 +728,57 @@ export default function RaioXCaveira() {
         </div>
       </div>
 
-      {/* 2. FAIXA EXECUTIVA DE INDICADORES (3 CARDS DE ALTA COMPREENSÃO) */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-        {/* Card 1: Volume & Ritmo */}
-        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-[#2E3236] flex items-center justify-between gap-3">
-          <div className="space-y-0.5">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
-              Volume & Ritmo
-            </span>
-            <div className="flex items-baseline gap-2">
-              <span className="text-2xl font-black text-slate-800 dark:text-white">{stats.total}</span>
-              <span className="text-xs font-semibold text-slate-400">questões</span>
-            </div>
-            <p className="text-[11px] text-slate-500 dark:text-[#A0AAB2]">
-              ⏱️ Média: <strong>{stats.avgTimeSec}s/q</strong> ({stats.avgHitTimeSec}s C • {stats.avgErrorTimeSec}s E)
-            </p>
-          </div>
-          <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/20 flex items-center justify-center shrink-0">
-            <Target className="w-5 h-5 text-blue-400" />
-          </div>
-        </div>
-
-        {/* Card 2: Taxa de Acerto Bruta */}
-        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-[#2E3236] flex flex-col justify-between gap-2">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
-                Taxa de Acerto Bruta
-              </span>
-              <div className="flex items-baseline gap-2 mt-0.5">
-                <span className={`text-2xl font-black ${
-                  stats.grossRate >= 75 ? 'text-emerald-400' : stats.grossRate >= 50 ? 'text-amber-400' : 'text-red-400'
-                }`}>
-                  {stats.grossRate}%
-                </span>
-                <span className="text-xs font-bold text-slate-400">
-                  <span className="text-emerald-400">{stats.hits}C</span> • <span className="text-red-400">{stats.errors}E</span>
-                </span>
-              </div>
-            </div>
-            <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center shrink-0">
-              <TrendingUp className="w-5 h-5 text-emerald-400" />
-            </div>
-          </div>
-          <div className="w-full bg-slate-200 dark:bg-[#26292C] h-1.5 rounded-full overflow-hidden">
-            <div
-              className={`h-full rounded-full transition-all ${
-                stats.grossRate >= 75 ? 'bg-emerald-500' : stats.grossRate >= 50 ? 'bg-amber-500' : 'bg-red-500'
-              }`}
-              style={{ width: `${stats.total > 0 ? Math.max(4, Math.min(100, stats.grossRate)) : 0}%` }}
-            />
-          </div>
-        </div>
-
-        {/* Card 3: Raio-X da Causa dos Erros */}
-        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-[#2E3236] flex flex-col justify-between gap-1.5">
-          <span className="text-[11px] font-bold uppercase tracking-wider text-slate-400 block">
-            Mapa da Causa dos Erros ({stats.errors})
+      {/* 2. FAIXA DE INDICADORES (MODELO PROJETO CAVEIRA: RESOLVIDAS • ACERTOS • ERROS) */}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {/* Card 1: Questões Resolvidas */}
+        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] text-center flex flex-col items-center justify-center space-y-1">
+          <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-[#F1F5F9]">
+            Questões Resolvidas
           </span>
-          <div className="grid grid-cols-3 gap-1.5 pt-0.5">
-            <button
-              type="button"
-              onClick={() => setFilterType(filterType === 'theory' ? 'all' : 'theory')}
-              className={`px-2 py-1.5 rounded-lg border text-left transition-all cursor-pointer ${
-                filterType === 'theory'
-                  ? 'bg-red-500/20 border-red-400 text-white'
-                  : 'bg-slate-100 dark:bg-[#1E2022] border-slate-200 dark:border-[#32363A] hover:border-red-500/40'
-              }`}
-            >
-              <span className="text-[10px] font-bold text-slate-400 block truncate">📚 Teoria</span>
-              <span className="text-sm font-black text-red-400">{stats.errorReasons.conteudo}</span>
-            </button>
-            <button
-              type="button"
-              onClick={() => setFilterType(filterType === 'attention' ? 'all' : 'attention')}
-              className={`px-2 py-1.5 rounded-lg border text-left transition-all cursor-pointer ${
-                filterType === 'attention'
-                  ? 'bg-amber-500/20 border-amber-400 text-white'
-                  : 'bg-slate-100 dark:bg-[#1E2022] border-slate-200 dark:border-[#32363A] hover:border-amber-500/40'
-              }`}
-            >
-              <span className="text-[10px] font-bold text-slate-400 block truncate">⚠️ Atenção</span>
-              <span className="text-sm font-black text-amber-400">{stats.errorReasons.atencao}</span>
-            </button>
-            <div className="px-2 py-1.5 rounded-lg border bg-slate-100 dark:bg-[#1E2022] border-slate-200 dark:border-[#32363A]">
-              <span className="text-[10px] font-bold text-slate-400 block truncate">🔍 Interpr.</span>
-              <span className="text-sm font-black text-purple-400">{stats.errorReasons.interpretacao}</span>
-            </div>
-          </div>
+          <span className="text-3xl sm:text-4xl font-extrabold text-slate-800 dark:text-white leading-tight">
+            {stats.total}
+          </span>
+          <button
+            type="button"
+            onClick={handleResetAll}
+            className="text-xs text-blue-500 dark:text-blue-400 hover:underline cursor-pointer pt-0.5"
+          >
+            Zerar
+          </button>
+        </div>
+
+        {/* Card 2: Acertos */}
+        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] text-center flex flex-col items-center justify-center space-y-1">
+          <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-[#F1F5F9]">
+            Acertos
+          </span>
+          <span className="text-3xl sm:text-4xl font-extrabold text-emerald-500 leading-tight">
+            {stats.hits}
+          </span>
+          <button
+            type="button"
+            onClick={handleResetHits}
+            className="text-xs text-blue-500 dark:text-blue-400 hover:underline cursor-pointer pt-0.5"
+          >
+            Zerar
+          </button>
+        </div>
+
+        {/* Card 3: Erros */}
+        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] text-center flex flex-col items-center justify-center space-y-1">
+          <span className="text-xs sm:text-sm font-bold text-slate-700 dark:text-[#F1F5F9]">
+            Erros
+          </span>
+          <span className="text-3xl sm:text-4xl font-extrabold text-red-500 leading-tight">
+            {stats.errors}
+          </span>
+          <button
+            type="button"
+            onClick={handleResetErrors}
+            className="text-xs text-blue-500 dark:text-blue-400 hover:underline cursor-pointer pt-0.5"
+          >
+            Zerar
+          </button>
         </div>
       </div>
 

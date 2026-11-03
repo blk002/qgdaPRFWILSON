@@ -156,11 +156,25 @@
         } catch (_) {}
       }
 
+      if (event.data.type === 'REPLACE_CAVEIRA_QUESTIONS' && Array.isArray(event.data.payload?.questions)) {
+        const newQuestions = event.data.payload.questions;
+        const today = getTodaySessionDate();
+        const hits = newQuestions.filter(q => q && q.hit).length;
+        const errors = newQuestions.length - hits;
+        try {
+          chrome.storage.local.set({
+            [STORAGE_KEY]: newQuestions,
+            [SESSION_KEY]: { date: today, total: newQuestions.length, hits, errors }
+          });
+        } catch (_) {}
+      }
+
       if (event.data.type === 'CLEAR_SESSION') {
+        const today = getTodaySessionDate();
         try {
           chrome.storage.local.set({
             [STORAGE_KEY]: [],
-            [SESSION_KEY]: { hits: 0, errors: 0, total: 0 }
+            [SESSION_KEY]: { date: today, hits: 0, errors: 0, total: 0 }
           }, () => {
             window.postMessage({
               source: 'QG_CAVEIRA_EXTENSION',
