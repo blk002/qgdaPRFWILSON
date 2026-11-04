@@ -57,7 +57,6 @@ interface AnsweredHistoryItem {
 
 const SEEN_STRINGS_STORAGE_KEY = 'alvo_legal_seen_statements_v1';
 const HIGH_SCORE_STORAGE_KEY = 'alvo_legal_high_score_v1';
-const GEMINI_KEY_STORAGE = 'qg_gemini_api_key';
 const FPS_TOPIC_STATS_KEY = 'qg_duelo_fps_topic_stats_v1';
 
 export default function DueloFPS() {
@@ -88,17 +87,6 @@ export default function DueloFPS() {
   const [vadeMecumFilter, setVadeMecumFilter] = useState<'ALL' | 'CTB' | 'CONTRAN'>('ALL');
   const [vadeMecumSearch, setVadeMecumSearch] = useState<string>('');
 
-  // Chave Gemini para geração via IA em tempo real
-  const [geminiApiKey, setGeminiApiKey] = useState<string>(() => {
-    try {
-      return localStorage.getItem(GEMINI_KEY_STORAGE) || (import.meta as any).env?.VITE_GEMINI_API_KEY || '';
-    } catch {
-      return '';
-    }
-  });
-  const [showKeyModal, setShowKeyModal] = useState<boolean>(false);
-  const [draftKey, setDraftKey] = useState<string>(geminiApiKey);
-
   // Registro de assertivas já vistas para evitar repetição 100% igual
   const seenStatementsRef = useRef<Set<string>>(new Set());
   const seenCuratedIdsRef = useRef<Set<string>>(new Set());
@@ -107,7 +95,6 @@ export default function DueloFPS() {
     CONTRAN: new Set(),
   });
   const totalGeneratedCountRef = useRef<number>(1);
-  const prewarmedNextRef = useRef<Map<QuestionCategory, ActiveRoundQuestion>>(new Map());
   const containerRef = useRef<HTMLDivElement | null>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
 
@@ -204,22 +191,22 @@ export default function DueloFPS() {
     []
   );
 
-  // Constrói questão procedural dinâmica diretamente da Lei Seca do CTB ou CONTRAN
+  // Constrói questão priorizando o banco de questões de elite Cebraspe PRF
   const buildUniqueQuestion = useCallback(
     (targetCategory: QuestionCategory, topicOverride?: PRFTopicMetadata): ActiveRoundQuestion => {
       totalGeneratedCountRef.current += 1;
 
-      // 1. Prioriza banco curado de elite Cebraspe PRF
+      // 1. Prioriza banco curado de elite Cebraspe PRF dos 10 tópicos mais cobrados
       if (!topicOverride) {
         const curated = getRandomCuratedQuestion(targetCategory, seenCuratedIdsRef.current);
-        if (curated && !seenStatementsRef.current.has(curated.statement)) {
+        if (curated) {
           seenCuratedIdsRef.current.add(curated.id);
           persistSeenStatement(curated.statement);
           return curated;
         }
       }
 
-      // 2. Gerador inteligente contextual (infração completa, crime ou parent-child inciso)
+      // 2. Gerador inteligente contextual como contingência (infração completa, crime ou parent-child inciso)
       if (targetCategory === 'CTB') {
         const artigo = getRandomCtbArticle(topicOverride?.name);
         const q = generateProceduralQuestionFromCtbArticle(artigo);
@@ -233,137 +220,6 @@ export default function DueloFPS() {
       }
     },
     [persistSeenStatement]
-  );
-
-  // Pré-aquece próxima questão com a IA Gemini baseada no artigo REAL da Lei Seca
-  const prewarmCategoryQuestionWithAI = useCallback(
-    async (category: QuestionCategory) => {
-      let prompt = '';
-      let fallbackQ: ActiveRoundQuestion;
-      let targetTopicName = '';
-      let targetLegalBasis = '';
-
-      if (category === 'CTB') {
-        // Seleciona um artigo real entre os 363 artigos vigentes do CTB
-        const artigo = getRandomCtbArticle();
-        fallbackQ = generateProceduralQuestionFromCtbArticle(artigo);
-        targetTopicName = artigo.capitulo;
-        targetLegalBasis = artigo.dispositivo;
-
-        prompt = `Você é o examinador sênior da banca CEBRASPE elaborando a prova da Polícia Rodoviária Federal (PRF).
-Com base EXCLUSIVAMENTE no dispositivo legal da LEI SECA do CTB (Lei nº 9.503/1997) fornecido abaixo:
-
-DISPOSITIVO: ${artigo.dispositivo}
-CAPÍTULO: ${artigo.capitulo}
-TEXTO INTEGRAL DA LEI:
-"${artigo.texto}"
-
-Elabore uma questão 100% INÉDITA para o candidato julgar como CERTO ou ERRADO.
-DIRETRIZES MANDATÓRIAS CEBRASPE:
-1. Padrão CEBRASPE: Uma assertiva afirmativa direta sobre a regra legal ou uma breve situação hipotética de fiscalização pela PRF em rodovia federal.
-2. NUNCA mencione nem elabore assertiva sobre parágrafo ou artigo vetado ou revogado; baseie-se estritamente nas regras vigentes do artigo.
-3. Gabarito equilibrado: Decida aleatoriamente se o gabarito será CERTO ou ERRADO (50% de chance para cada). Se for ERRADO, insira um detalhe técnico sutilmente incorreto com base no próprio artigo (ex: altere prazo, competência, exceção ou penalidade).
-4. Tamanho MÁXIMO da assertiva: 280 caracteres (essencial para caber na tela do jogo de tiro tático 3D). A assertiva DEVE ser uma proposição afirmativa COMPLETA e gramaticalmente acabada, NUNCA terminando com reticências (...) nem com dois-pontos (:), e NUNCA cortada no meio.
-5. Fundamentação: Indique a base legal exata e justificativa sucinta.
-6. Retorne EXCLUSIVAMENTE um objeto JSON válido no formato:
-{
-  "statement": "texto da assertiva (máximo 280 caracteres)",
-  "answer": true, // use true para CERTO ou false para ERRADO
-  "legalBasis": "${artigo.dispositivo}",
-  "explanation": "explicação clara Cebraspe justificando a resposta com base no artigo",
-  "topic": "${artigo.capitulo}"
-}`;
-      } else {
-        // Seleciona um artigo real entre os 585 artigos vigentes das Resoluções CONTRAN
-        const artigo = getRandomContranArticle();
-        fallbackQ = generateProceduralQuestionFromContranArticle(artigo);
-        targetTopicName = artigo.resolucao;
-        targetLegalBasis = artigo.dispositivo;
-
-        prompt = `Você é o examinador sênior da banca CEBRASPE criando a prova da Polícia Rodoviária Federal (PRF).
-Com base EXCLUSIVAMENTE no dispositivo da RESOLUÇÃO DO CONTRAN fornecido abaixo:
-
-DISPOSITIVO: ${artigo.dispositivo} (${artigo.resolucao})
-ASSUNTO: ${artigo.assunto}
-TEXTO INTEGRAL DA RESOLUÇÃO:
-"${artigo.texto}"
-
-Elabore uma questão 100% INÉDITA para o candidato julgar como CERTO ou ERRADO.
-DIRETRIZES MANDATÓRIAS CEBRASPE:
-1. Padrão CEBRASPE: Uma assertiva afirmativa direta sobre a regra técnica ou uma breve situação hipotética de fiscalização pela PRF em rodovia federal.
-2. NUNCA mencione nem elabore assertiva sobre norma revogada; baseie-se estritamente nas regras vigentes do texto fornecido.
-3. Gabarito equilibrado: Decida aleatoriamente se o gabarito será CERTO ou ERRADO (50% de chance para cada). Se for ERRADO, insira um detalhe técnico sutilmente incorreto com base no próprio artigo (ex: altere prazo, limite, tolerância, equipamento obrigatório, infração ou procedimento).
-4. Tamanho MÁXIMO da assertiva: 280 caracteres (essencial para caber na tela do jogo de tiro tático 3D). A assertiva DEVE ser uma proposição afirmativa COMPLETA e gramaticalmente acabada, NUNCA terminando com reticências (...) nem com dois-pontos (:), e NUNCA cortada no meio.
-5. Fundamentação: Indique a base legal exata (${artigo.dispositivo}) e justificativa sucinta.
-6. Retorne EXCLUSIVAMENTE um objeto JSON válido no formato:
-{
-  "statement": "texto da assertiva (máximo 280 caracteres)",
-  "answer": true, // use true para CERTO ou false para ERRADO
-  "legalBasis": "${artigo.dispositivo}",
-  "explanation": "explicação clara Cebraspe justificando a resposta com base na resolução",
-  "topic": "${artigo.resolucao}"
-}`;
-      }
-
-      // Prepara contingência imediata caso a IA falhe ou esteja sem internet
-      prewarmedNextRef.current.set(category, fallbackQ);
-
-      const key = geminiApiKey || localStorage.getItem(GEMINI_KEY_STORAGE);
-      if (!key) return;
-
-      try {
-        const res = await fetch(
-          `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent?key=${key}`,
-          {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              contents: [{ parts: [{ text: prompt }] }],
-              generationConfig: {
-                responseMimeType: 'application/json',
-                temperature: 0.85,
-              },
-            }),
-          }
-        );
-
-        if (!res.ok) return;
-        const data = await res.json();
-        const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
-        if (text) {
-          const parsed = JSON.parse(text);
-          const stmt = typeof parsed?.statement === 'string' ? parsed.statement.trim() : '';
-          if (
-            stmt &&
-            stmt.length <= 280 &&
-            !stmt.endsWith('...') &&
-            !stmt.endsWith(':') &&
-            !stmt.endsWith(';') &&
-            typeof parsed.answer === 'boolean' &&
-            !/vetado/i.test(stmt) &&
-            !/revogad[oa]/i.test(stmt) &&
-            !/Imprensa Nacional|in\.gov\.br/i.test(stmt) &&
-            !seenStatementsRef.current.has(stmt)
-          ) {
-            persistSeenStatement(stmt);
-            prewarmedNextRef.current.set(category, {
-              id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-              uniqueHash: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
-              category,
-              topic: parsed.topic || targetTopicName,
-              legalBasis: parsed.legalBasis || targetLegalBasis,
-              statement: stmt,
-              answer: parsed.answer,
-              explanation: parsed.explanation || 'Questão inédita elaborada por IA no padrão Cebraspe/PRF com base na lei.',
-              wasAiRewritten: true,
-            });
-          }
-        }
-      } catch (err) {
-        // Fallback procedural já está salvo em prewarmedNextRef
-      }
-    },
-    [buildUniqueQuestion, persistSeenStatement, geminiApiKey]
   );
 
   // Alternância Estrita: Rodada 1 = CTB, Rodada 2 = CONTRAN...
@@ -382,18 +238,12 @@ DIRETRIZES MANDATÓRIAS CEBRASPE:
     seenCuratedIdsRef.current.clear();
 
     const firstCategory: QuestionCategory = 'CTB';
-    const firstQ =
-      prewarmedNextRef.current.get(firstCategory) || buildUniqueQuestion(firstCategory);
-    prewarmedNextRef.current.delete(firstCategory);
+    const firstQ = buildUniqueQuestion(firstCategory);
 
     setCurrentQuestion(firstQ);
     setTimeLeft(24.0);
     setGameState('playing');
-
-    // Pré-aquece as próximas rodadas em background com temas aleatórios da matriz
-    prewarmCategoryQuestionWithAI('CONTRAN');
-    prewarmCategoryQuestionWithAI('CTB');
-  }, [buildUniqueQuestion, prewarmCategoryQuestionWithAI]);
+  }, [buildUniqueQuestion]);
 
   // Execução do NPC quando o jogador erra ou estoura o tempo
   const triggerNpcExecution = useCallback(
@@ -466,15 +316,11 @@ DIRETRIZES MANDATÓRIAS CEBRASPE:
 
         const nextRound = roundNumber + 1;
         const nextCat = getCategoryForRound(nextRound);
-        const nextQ =
-          prewarmedNextRef.current.get(nextCat) || buildUniqueQuestion(nextCat);
-        prewarmedNextRef.current.delete(nextCat);
+        const nextQ = buildUniqueQuestion(nextCat);
 
         setRoundNumber(nextRound);
         setCurrentQuestion(nextQ);
         setTimeLeft(24.0);
-
-        prewarmCategoryQuestionWithAI(nextCat);
       } else {
         triggerNpcExecution('WRONG_TARGET', choice);
       }
@@ -487,7 +333,6 @@ DIRETRIZES MANDATÓRIAS CEBRASPE:
       highScore,
       roundNumber,
       buildUniqueQuestion,
-      prewarmCategoryQuestionWithAI,
       triggerNpcExecution,
       recordQuestionAttempt,
     ]
@@ -567,16 +412,6 @@ DIRETRIZES MANDATÓRIAS CEBRASPE:
     } else {
       document.exitFullscreen?.().then(() => setIsFullscreen(false)).catch(() => {});
     }
-  };
-
-  const saveGeminiKey = (e: React.FormEvent) => {
-    e.preventDefault();
-    const cleanKey = draftKey.trim();
-    setGeminiApiKey(cleanKey);
-    try {
-      localStorage.setItem(GEMINI_KEY_STORAGE, cleanKey);
-    } catch {}
-    setShowKeyModal(false);
   };
 
   const filteredVadeMecum = useMemo(() => {
@@ -738,21 +573,6 @@ DIRETRIZES MANDATÓRIAS CEBRASPE:
 
         {/* Controles & Botões da Direita */}
         <div className="flex items-center gap-2.5 shrink-0">
-          {/* Status / Configuração da IA Gemini */}
-          <button
-            type="button"
-            onClick={() => setShowKeyModal(true)}
-            className={`px-2.5 py-1.5 rounded-xl text-xs font-bold transition-all border flex items-center gap-1.5 cursor-pointer ${
-              geminiApiKey
-                ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/25'
-                : 'bg-zinc-800/80 text-zinc-400 border-zinc-700 hover:text-zinc-200'
-            }`}
-            title="Configurar IA Gemini para gerar questões inéditas em tempo real"
-          >
-            <Sparkles className="w-3.5 h-3.5" />
-            <span className="hidden md:inline">{geminiApiKey ? 'IA Gemini Ativa' : 'Configurar IA'}</span>
-          </button>
-
           {/* Áudio Mudo */}
           <button
             type="button"
@@ -1590,62 +1410,6 @@ DIRETRIZES MANDATÓRIAS CEBRASPE:
           </div>
         )}
       </main>
-
-      {/* MODAL DE CONFIGURAÇÃO DA CHAVE GEMINI IA */}
-      {showKeyModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/80 backdrop-blur-sm">
-          <div className="max-w-md w-full bg-zinc-900 border border-zinc-800 rounded-3xl p-6 shadow-2xl text-zinc-100 space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-zinc-800">
-              <div className="flex items-center gap-2 text-amber-400 font-black uppercase text-sm">
-                <Sparkles className="w-4 h-4" />
-                <span>IA Gemini: Questões Infinitas ao Vivo</span>
-              </div>
-              <button
-                type="button"
-                onClick={() => setShowKeyModal(false)}
-                className="p-1 rounded-lg text-zinc-400 hover:text-white"
-              >
-                <X className="w-4 h-4" />
-              </button>
-            </div>
-
-            <p className="text-xs text-zinc-400 leading-relaxed">
-              Insira sua chave gratuita da <strong>Google Gemini API</strong> (do Google AI Studio). Com ela ativa, a IA gera questões inéditas de todo o CTB e de todas as Resoluções do CONTRAN para a PRF sem depender de banco fixo!
-            </p>
-
-            <form onSubmit={saveGeminiKey} className="space-y-4">
-              <div>
-                <label className="block text-[11px] font-bold uppercase text-zinc-400 mb-1">
-                  Chave Gemini API (AI Studio)
-                </label>
-                <input
-                  type="password"
-                  value={draftKey}
-                  onChange={(e) => setDraftKey(e.target.value)}
-                  placeholder="AIzaSy..."
-                  className="w-full bg-zinc-950 border border-zinc-800 rounded-xl px-3 py-2 text-xs text-zinc-100 focus:outline-none focus:border-amber-500 font-mono"
-                />
-              </div>
-
-              <div className="flex items-center justify-end gap-2 pt-2 border-t border-zinc-800">
-                <button
-                  type="button"
-                  onClick={() => setShowKeyModal(false)}
-                  className="px-4 py-2 text-xs font-bold text-zinc-400 hover:text-white"
-                >
-                  Cancelar
-                </button>
-                <button
-                  type="submit"
-                  className="px-5 py-2 bg-amber-500 hover:bg-amber-400 text-zinc-950 rounded-xl text-xs font-black uppercase tracking-wider shadow-md shadow-amber-500/20"
-                >
-                  Salvar Chave
-                </button>
-              </div>
-            </form>
-          </div>
-        </div>
-      )}
     </div>
   );
 }
