@@ -33,6 +33,7 @@ import {
   AlertTriangle, Info, LogOut, Shield, RefreshCw, Dog, Skull, Crosshair 
 } from 'lucide-react';
 import { PATENTES } from './hooks/useGamification';
+import { APP_VERSION } from './version';
 
 const availableColors = [
   { id: 'slate', color: 'bg-slate-200 text-slate-900', label: 'Cinza' },
@@ -356,22 +357,31 @@ export default function App() {
         </nav>
 
         {/* Rodapé da Sidebar: Tema & Logout */}
-        <div className="p-3 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center gap-2">
-          <button
-            onClick={() => setIsDarkMode(!isDarkMode)}
-            className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition-all text-slate-700 dark:text-white text-xs font-bold uppercase cursor-pointer"
-          >
-            {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
-            <span>{isDarkMode ? 'Claro' : 'Escuro'}</span>
-          </button>
+        <div className="p-3 border-t border-slate-200/60 dark:border-slate-800/80 flex flex-col gap-2">
+          <div className="flex items-center gap-2">
+            <button
+              onClick={() => setIsDarkMode(!isDarkMode)}
+              className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition-all text-slate-700 dark:text-white text-xs font-bold uppercase cursor-pointer"
+            >
+              {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
+              <span>{isDarkMode ? 'Claro' : 'Escuro'}</span>
+            </button>
 
-          <button
-            onClick={signOut}
-            className="p-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl border border-red-500/20 transition-all cursor-pointer"
-            title="Sair do QG"
-          >
-            <LogOut className="w-4 h-4" />
-          </button>
+            <button
+              onClick={signOut}
+              className="p-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl border border-red-500/20 transition-all cursor-pointer"
+              title="Sair do QG"
+            >
+              <LogOut className="w-4 h-4" />
+            </button>
+          </div>
+
+          <div className="flex items-center justify-between px-1 text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+            <span className="tracking-wide">Versão</span>
+            <span className="font-mono font-bold text-slate-600 dark:text-slate-400 bg-slate-200/60 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-300/60 dark:border-slate-700 text-[10px]">
+              {APP_VERSION}
+            </span>
+          </div>
         </div>
       </aside>
 
@@ -387,6 +397,9 @@ export default function App() {
             </Link>
 
             <div className="flex items-center gap-2">
+              <span className="font-mono text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
+                {APP_VERSION}
+              </span>
               <div className="flex items-center gap-1 bg-yellow-500/10 dark:bg-yellow-500/15 px-2.5 py-1 rounded-full border border-yellow-500/20">
                 <Coins className="text-yellow-600 dark:text-yellow-400 w-3.5 h-3.5" />
                 <span className="font-black text-xs text-yellow-600 dark:text-yellow-400">{coins}</span>
