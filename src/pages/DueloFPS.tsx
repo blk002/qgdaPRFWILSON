@@ -323,6 +323,7 @@ DIRETRIZES MANDATÓRIAS CEBRASPE:
             typeof parsed.answer === 'boolean' &&
             !/vetado/i.test(parsed.statement) &&
             !/revogad[oa]/i.test(parsed.statement) &&
+            !/Imprensa Nacional|in\.gov\.br/i.test(parsed.statement) &&
             !seenStatementsRef.current.has(parsed.statement)
           ) {
             const stmt = parsed.statement.trim();

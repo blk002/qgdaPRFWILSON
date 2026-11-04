@@ -30,10 +30,14 @@ def download_pdf(url, dest_path):
 
 def clean_pdf_text(full_text):
     # Substitui ligaduras comuns
-    text = full_text.replace('\ufb01', 'fi').replace('\ufb02', 'fl').replace('\ufb00', 'ff')
+    text = full_text.replace('\ufb01', 'fi').replace('\ufb02', 'fl').replace('\ufb00', 'ff').replace('\u0000', 'ti')
     # Normaliza quebras de linha e hifenização no fim da linha
     text = re.sub(r'(\w+)-\n(\w+)', r'\1\2', text)
-    # Remove cabeçalhos e rodapés de página do Gov.br
+    # Remove cabeçalhos e rodapés de página do Gov.br e DOU / Imprensa Nacional
+    text = re.sub(r'\d{2}/\d{2}/\d{4}(?:,?\s*\d{2}:\d{2})?\s+RESOLUÇÃO\s+CONTRAN\s+Nº[^\n]*?- DOU - Imprensa Nacional\s+https?://\S+\s+\d+/\d+', ' ', text, flags=re.I)
+    text = re.sub(r'\d{2}/\d{2}/\d{4}\s+SEI/MINFRA\s+-\s+\d+\s+-\s+Resolução\s+CONTRAN\s+https?://\S+\s+\d+/\d+', ' ', text, flags=re.I)
+    text = re.sub(r'https?://(?:www\.)?in\.gov\.br\S*', ' ', text, flags=re.I)
+    text = re.sub(r'https?://sei\.infraestrutura\.gov\.br\S*', ' ', text, flags=re.I)
     text = re.sub(r'Documento assinado eletronicamente[\s\S]*?\n', '', text)
     text = re.sub(r'Ministério dos Transportes[\s\S]*?\n', '', text)
     text = re.sub(r'Conselho Nacional de Trânsito[\s\S]*?\n', '', text)

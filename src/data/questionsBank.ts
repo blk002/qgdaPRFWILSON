@@ -474,7 +474,7 @@ export function generateProceduralQuestionFromCtbArticle(
     .trim();
 
   // Se por qualquer razão ainda contiver "VETADO" ou for muito curto, tenta outro
-  if (/vetado/i.test(cleanSnippet) || /revogad[oa]/i.test(cleanSnippet) || cleanSnippet.length < 25) {
+  if (/vetado/i.test(cleanSnippet) || /revogad[oa]/i.test(cleanSnippet) || /Imprensa Nacional/i.test(cleanSnippet) || cleanSnippet.length < 25) {
     const nextArt = getRandomCtbArticle();
     return generateProceduralQuestionFromCtbArticle(nextArt, forceAnswer, recursionDepth + 1);
   }
@@ -629,7 +629,7 @@ export function generateProceduralQuestionFromContranArticle(
     .replace(/\s+/g, ' ')
     .trim();
 
-  if (/vetado/i.test(cleanSnippet) || /revogad[oa]/i.test(cleanSnippet) || cleanSnippet.length < 25) {
+  if (/vetado/i.test(cleanSnippet) || /revogad[oa]/i.test(cleanSnippet) || /Imprensa Nacional|in\.gov\.br/i.test(cleanSnippet) || cleanSnippet.length < 25) {
     const nextArt = getRandomContranArticle();
     return generateProceduralQuestionFromContranArticle(nextArt, forceAnswer, recursionDepth + 1);
   }
