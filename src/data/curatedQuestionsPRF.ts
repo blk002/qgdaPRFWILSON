@@ -3610,6 +3610,906 @@ export const CURATED_PRF_QUESTIONS: CuratedPRFQuestion[] = [
     "statement": "O uso de cortinas ou persianas nos vidros traseiros de automóveis em movimento é permitido mesmo sem a presença dos espelhos retrovisores externos.",
     "answer": false,
     "explanation": "ERRADO. O uso de cortinas ou persianas nos vidros traseiros só é permitido se o veículo possuir espelhos retrovisores externos em ambos os lados."
+  },
+  {
+    "id": "contran-prf-301",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 3º",
+    "statement": "Conforme a Resolução CONTRAN nº 882/2021, a altura máxima permitida para qualquer veículo com ou sem carga em circulação viária ordinária é de 4,40 metros.",
+    "answer": true,
+    "explanation": "CERTO. Art. 3º, III da Res. 882/2021 estabelece expressamente a altura máxima de 4,40 metros para veículos em circulação nas vias públicas terrestres."
+  },
+  {
+    "id": "contran-prf-302",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 3º",
+    "statement": "A largura máxima regulamentar admitida para veículos com carroceria isotérmica ou frigorífica é de 3,20 metros para acomodar isolamento térmico.",
+    "answer": false,
+    "explanation": "ERRADO. Para carrocerias frigoríficas ou isotérmicas, a largura máxima regulamentar permitida é de 2,70 metros (e não 3,20 metros)."
+  },
+  {
+    "id": "contran-prf-303",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 3º",
+    "statement": "Para veículos de transporte com carroceria frigorífica ou isotérmica, a largura máxima regulamentar admitida pelo CONTRAN é ampliada para 2,70 metros.",
+    "answer": true,
+    "explanation": "CERTO. Art. 3º, I, \"b\" da Res. 882/2021: A largura máxima é de 2,60 m como regra geral, admitindo-se até 2,70 m para veículos com caçamba frigorífica ou isotérmica."
+  },
+  {
+    "id": "contran-prf-304",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 3º",
+    "statement": "O peso bruto total máximo regulamentar para Combinações de Veículos de Carga (CVC) tipo bitrem com 7 eixos em circulação sem AET é de 74 toneladas.",
+    "answer": false,
+    "explanation": "ERRADO. O limite de PBT para combinação de 7 eixos sem necessidade de AET é de 57,0 toneladas; 74 toneladas é o teto máximo de rodotrem com 9 eixos com AET."
+  },
+  {
+    "id": "contran-prf-305",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 3º",
+    "statement": "O limite regulamentar de peso bruto total (PBT) admitido para combinações de veículos de carga com sete eixos sem necessidade de AET é de 57 toneladas.",
+    "answer": true,
+    "explanation": "CERTO. Art. 3º, IX da Res. 882/2021: O limite de PBT para veículo articulado com sete eixos de rodagem dupla é de 57,0 toneladas métricas."
+  },
+  {
+    "id": "contran-prf-306",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 3º",
+    "statement": "O limite de peso por eixo em tandem duplo com quatro pneumáticos em cada eixo (rodagem dupla) é fixado em 22 toneladas métricas sem tolerância.",
+    "answer": false,
+    "explanation": "ERRADO. O limite máximo de peso transmitido por eixo tandem duplo com rodagem dupla é de 17,0 toneladas métricas (Res. 882/2021, Art. 3º, V)."
+  },
+  {
+    "id": "contran-prf-307",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 3º",
+    "statement": "O peso bruto máximo transmitido por eixo tandem duplo dotado de rodagem dupla (dois eixos com quatro pneus cada) é de dezessete toneladas métricas.",
+    "answer": true,
+    "explanation": "CERTO. Art. 3º, V da Res. 882/2021: Dois eixos em tandem com rodagem dupla possuem limite de peso de 17,0 toneladas métricas."
+  },
+  {
+    "id": "contran-prf-308",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 3º",
+    "statement": "Veículos de carga equipados com eixo direcional dianteiro podem transmitir até doze toneladas métricas no eixo dianteiro com rodagem simples.",
+    "answer": false,
+    "explanation": "ERRADO. O eixo simples direcional dianteiro com rodagem simples tem limite regulamentar máximo de 6,0 toneladas métricas."
+  },
+  {
+    "id": "contran-prf-309",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 3º",
+    "statement": "O peso máximo transmitido por conjunto de dois eixos direcionais dianteiros com rodagem simples é de doze toneladas (seis toneladas por eixo).",
+    "answer": true,
+    "explanation": "CERTO. Dois eixos direcionais dianteiros independentes com dois pneus cada transmitem até 12,0 toneladas no total (6,0 t em cada eixo)."
+  },
+  {
+    "id": "contran-prf-310",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 3º",
+    "statement": "Veículos articulados para transporte de passageiros (ônibus biarticulados) podem atingir até quarenta metros de comprimento em qualquer rodovia.",
+    "answer": false,
+    "explanation": "ERRADO. O comprimento máximo estabelecido pelo CONTRAN para ônibus biarticulado de transporte coletivo de passageiros é de até 30,0 metros."
+  },
+  {
+    "id": "contran-prf-311",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 3º",
+    "statement": "O comprimento máximo permitido para ônibus biarticulado de passageiros com três unidades articuladas é de até trinta metros conforme o CONTRAN.",
+    "answer": true,
+    "explanation": "CERTO. Art. 3º, II, \"c\" da Res. 882/2021: Para veículos de transporte coletivo biarticulados com três unidades, o limite de comprimento é de até 30,00 metros."
+  },
+  {
+    "id": "contran-prf-312",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 25",
+    "statement": "A Autorização Especial de Trânsito (AET) emitida para transporte de carga superdimensionada autoriza o trânsito com velocidade de até 120 km/h.",
+    "answer": false,
+    "explanation": "ERRADO. A AET impõe limites de velocidade reduzidos (em geral entre 30 km/h e 80 km/h) dependendo das dimensões da carga, relevo da via e necessidade de escolta."
+  },
+  {
+    "id": "contran-prf-313",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 25",
+    "statement": "A AET para carga indivisível superdimensionada pode estabelecer restrições operacionais de velocidade máxima compatível com a estabilidade do conjunto.",
+    "answer": true,
+    "explanation": "CERTO. A autoridade de trânsito fixa na AET velocidade máxima controlada, horários restritos e requisitos de escolta policial ou credenciada."
+  },
+  {
+    "id": "contran-prf-314",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 18",
+    "statement": "A suspensão de eixo por acionamento pneumático em caminhão vazio isenta o transportador da comprovação do peso total bruto do veículo na balança.",
+    "answer": false,
+    "explanation": "ERRADO. O caminhão vazio com eixo erguido deve passar pela fiscalização da balança normalmente para conferência da tara e do estado de descarregamento."
+  },
+  {
+    "id": "contran-prf-315",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 18",
+    "statement": "A fiscalização da PRF pode exigir o abaixamento do eixo suspenso caso o veículo esteja com carga e apresente peso transmitido incompatível nos eixos.",
+    "answer": true,
+    "explanation": "CERTO. Art. 18: Se o veículo estiver carregado, todos os eixos auxiliares devem estar operantes e abaixados para distribuir adequadamente o peso no pavimento."
+  },
+  {
+    "id": "contran-prf-316",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 19",
+    "statement": "A tolerância de 5% sobre o peso bruto total pode ser acumulada com mais 20% de tolerância adicional sobre os eixos em qualquer rodovia concedida.",
+    "answer": false,
+    "explanation": "ERRADO. As tolerâncias não se somam de forma cumulativa; aplica-se 5% estritamente sobre o PBT e 12,5% estritamente sobre cada eixo isolado."
+  },
+  {
+    "id": "contran-prf-317",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 19",
+    "statement": "A tolerância metrológica de 12,5% na pesagem por eixo visa absorver deslocamentos dinâmicos de carga durante o tráfego do caminhão na via.",
+    "answer": true,
+    "explanation": "CERTO. A margem de 12,5% compensa movimentações naturais da carga em curvas e frenagens, acomodação de líquidos e margem dos sensores de pesagem."
+  },
+  {
+    "id": "contran-prf-318",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 22",
+    "statement": "O remanejamento de carga dentro da própria carroceria do caminhão é expressamente proibido pela PRF para sanar excesso de peso por eixo em balança.",
+    "answer": false,
+    "explanation": "ERRADO. O Art. 22 autoriza expressamente o remanejamento interno da carga na carroceria para sanar o sobrepeso por eixo, dispensando o transbordo."
+  },
+  {
+    "id": "contran-prf-319",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 22",
+    "statement": "Havendo excesso de peso em eixo mas o PBT estando dentro da tolerância, o condutor pode efetuar o remanejamento interno da carga para liberação.",
+    "answer": true,
+    "explanation": "CERTO. Art. 22 da Res. 882/2021: Constatado excesso em eixo sem excesso no PBT, admite-se o remanejamento da carga no próprio veículo antes do transbordo."
+  },
+  {
+    "id": "contran-prf-320",
+    "category": "CONTRAN",
+    "topic": "Pesos e Dimensões Veiculares (Res. 882)",
+    "legalBasis": "Resolução CONTRAN 882 c/c 231 CTB",
+    "statement": "Caminhões que transportem produtos perigosos a granel são imunes à pesagem rodoviária obrigatória por motivos de segurança contra explosões.",
+    "answer": false,
+    "explanation": "ERRADO. Veículos de produtos perigosos são submetidos a controle estrito de peso e dimensões, seja por conferência em balança homologada ou nota fiscal."
+  },
+  {
+    "id": "contran-prf-321",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 2º",
+    "statement": "Conforme a Resolução CONTRAN nº 938/2022, o cronotacógrafo é equipamento obrigatório para veículos de carga com Peso Bruto Total superior a 4.536 kg.",
+    "answer": true,
+    "explanation": "CERTO. Art. 2º, I, \"b\" da Res. 938/2022: O registrador instantâneo inalterável é de uso obrigatório para veículos de carga com PBT superior a 4.536 kg."
+  },
+  {
+    "id": "contran-prf-322",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 2º",
+    "statement": "Veículos de passageiros com capacidade para 8 ocupantes são obrigados a possuir registrador instantâneo de velocidade (cronotacógrafo) certificado.",
+    "answer": false,
+    "explanation": "ERRADO. O cronotacógrafo só é obrigatório para veículos de transporte coletivo com mais de dez lugares para passageiros (Art. 2º, I, \"a\")."
+  },
+  {
+    "id": "contran-prf-323",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 2º",
+    "statement": "Os veículos de transporte coletivo com capacidade superior a dez lugares de passageiros devem possuir cronotacógrafo devidamente lacrado e operando.",
+    "answer": true,
+    "explanation": "CERTO. Art. 2º, I, \"a\": Todos os veículos de transporte coletivo de passageiros com mais de dez lugares devem ser equipados com cronotacógrafo."
+  },
+  {
+    "id": "contran-prf-324",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 2º",
+    "statement": "Os tratores de rodas e máquinas agrícolas que transitam esporadicamente em rodovias federais são obrigados a instalar cronotacógrafo digital.",
+    "answer": false,
+    "explanation": "ERRADO. Tratores de rodas, tratores de esteiras e aparelhos automotores agrícolas são expressamente dispensados do cronotacógrafo (Art. 2º, § 1º)."
+  },
+  {
+    "id": "contran-prf-325",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 2º",
+    "statement": "São dispensados do uso de cronotacógrafo os veículos de uso bélico das Forças Armadas e as viaturas destinadas a salvamento ou socorro de incêndio.",
+    "answer": true,
+    "explanation": "CERTO. Art. 2º, § 1º, \"c\" da Res. 938/2022 dispensa de tacógrafo viaturas de salvamento, combate a incêndio e veículos de uso militar operacional."
+  },
+  {
+    "id": "contran-prf-326",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 5º",
+    "statement": "A leitura das informações gravadas no disco do tacógrafo só pode ser realizada em laboratório especializado mediante ordem judicial expressa.",
+    "answer": false,
+    "explanation": "ERRADO. A fiscalização e interpretação do disco do cronotacógrafo são feitas diretamente no local da abordagem pelo policial rodoviário federal."
+  },
+  {
+    "id": "contran-prf-327",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 5º",
+    "statement": "O policial rodoviário federal tem competência para abrir o cronotacógrafo e inspecionar o disco diagrama ou retirar fita de impressão no ato da blitz.",
+    "answer": true,
+    "explanation": "CERTO. Art. 5º: O agente da autoridade de trânsito inspeciona o tacógrafo no ato da blitz, extraindo a fita ou analisando o disco com régua milimetrada."
+  },
+  {
+    "id": "contran-prf-328",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 4º",
+    "statement": "A ausência de dados do condutor e da placa do veículo preenchidos no centro do disco diagrama de papel constitui conduta atípica perante a PRF.",
+    "answer": false,
+    "explanation": "ERRADO. O preenchimento do centro do disco com nome, placa, local, data e quilometragem é OBRIGATÓRIO; a omissão enseja autuação de trânsito."
+  },
+  {
+    "id": "contran-prf-329",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 4º",
+    "statement": "O condutor ou transportador deve preencher no disco do cronotacógrafo o nome do motorista, a placa do veículo, o local e a quilometragem inicial e final.",
+    "answer": true,
+    "explanation": "CERTO. Art. 4º: São campos de preenchimento obrigatório no disco: nome do condutor, local, data, identificação do veículo e quilometragens."
+  },
+  {
+    "id": "contran-prf-330",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 4º",
+    "statement": "O disco diagrama do tacógrafo pode ser reutilizado por sucessivas semanas caso os traçados gráficos de agulha não se sobreponham visualmente.",
+    "answer": false,
+    "explanation": "ERRADO. É terminantemente proibido reutilizar disco de tacógrafo vencido; a sobreposição de traçados impede a aferição pericial do tempo de direção."
+  },
+  {
+    "id": "contran-prf-331",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 4º",
+    "statement": "A cada período regulamentar de registro (24 horas no disco diário ou 7 dias no disco semanal), o disco do cronotacógrafo deve ser substituído por novo.",
+    "answer": true,
+    "explanation": "CERTO. O disco diário registra até 24 horas ininterruptas e o semanal até 7 dias, devendo ser retirado e arquivado para inserção de novo disco limpo."
+  },
+  {
+    "id": "contran-prf-332",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN 938 c/c 230 CTB",
+    "statement": "A alteração proposital do relógio do cronotacógrafo para simular cumprimento de horário de descanso não acarreta autuação de trânsito pela autoridade.",
+    "answer": false,
+    "explanation": "ERRADO. Fraudar ou desregular o relógio do tacógrafo para burlar a fiscalização de tempo de direção constitui infração grave com retenção do veículo."
+  },
+  {
+    "id": "contran-prf-333",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN 938 c/c 230 CTB",
+    "statement": "A falsificação ou adulteração dos registros do cronotacógrafo enseja a lavratura de auto de infração gravíssima e encaminhamento à polícia judiciária.",
+    "answer": true,
+    "explanation": "CERTO. Adulterar o registrador é crime de falsidade documental e infração de trânsito, exigindo apreensão do disco para perícia criminal."
+  },
+  {
+    "id": "contran-prf-334",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN 938 c/c 136 CTB",
+    "statement": "Em veículos de transporte escolar, o cronotacógrafo é dispensado caso o trajeto realizado pelo transporte seja restrito a menos de 50 quilômetros.",
+    "answer": false,
+    "explanation": "ERRADO. O Art. 136 do CTB e a Res. 938 não preveem dispensa por quilometragem; o tacógrafo é OBRIGATÓRIO em qualquer veículo de transporte escolar."
+  },
+  {
+    "id": "contran-prf-335",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN 938 c/c 136 CTB",
+    "statement": "No transporte de escolares, o cronotacógrafo é equipamento obrigatório incondicional, essencial para a verificação de limites de velocidade.",
+    "answer": true,
+    "explanation": "CERTO. Art. 136, IV do CTB e Res. 938: Equipamento registrador instantâneo e inalterável de velocidade e tempo é compulsório em escolares."
+  },
+  {
+    "id": "contran-prf-336",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 3º",
+    "statement": "O Certificado de Verificação Metrológica do cronotacógrafo emitido pelo Inmetro possui validade de cinco anos a contar de sua calibração inicial.",
+    "answer": false,
+    "explanation": "ERRADO. A validade da verificação metrológica periódica do cronotacógrafo é de 2 (dois) anos (24 meses) e não cinco anos."
+  },
+  {
+    "id": "contran-prf-337",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 3º",
+    "statement": "O prazo de validade da verificação metrológica periódica do cronotacógrafo junto à rede credenciada do Inmetro é de no máximo 24 (vinte e quatro) meses.",
+    "answer": true,
+    "explanation": "CERTO. Art. 3º: O cronotacógrafo deve ser submetido à verificação metrológica obrigatória bienal com validade máxima de 2 anos."
+  },
+  {
+    "id": "contran-prf-338",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 3º",
+    "statement": "O tacógrafo com selagem violada pode transitar regularmente mediante apresentação de nota fiscal de agendamento de manutenção em oficina mecânica.",
+    "answer": false,
+    "explanation": "ERRADO. A violação dos lacres do tacógrafo impede a circulação legal do veículo, exigindo retenção até nova lacração em posto homologado."
+  },
+  {
+    "id": "contran-prf-339",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN 938 c/c 230 CTB",
+    "statement": "Conduzir veículo com o lacre do cronotacógrafo violado ou rompido atrai a aplicação de medida administrativa de retenção do veículo para regularização.",
+    "answer": true,
+    "explanation": "CERTO. Art. 230, XIV do CTB: Conduzir veículo com equipamento obrigatório defeituoso ou com lacre violado acarreta retenção do veículo."
+  },
+  {
+    "id": "contran-prf-340",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo e Jornada do Motorista (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 4º",
+    "statement": "O descarte imediato dos discos de tacógrafo logo após a conclusão da viagem é recomendado pelo CONTRAN para desocupação da cabine do condutor.",
+    "answer": false,
+    "explanation": "ERRADO. O transportador tem a obrigação de arquivar e guardar os discos por 90 dias (ou 1 ano em sinistro) para efeito de fiscalização da PRF e MPT."
+  },
+  {
+    "id": "contran-prf-341",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 2º",
+    "statement": "Conforme a Resolução CONTRAN nº 946/2022, é proibida a amarração de cargas com dispositivos de fixação ancorados em pontos de madeira da carroceria.",
+    "answer": true,
+    "explanation": "CERTO. Art. 2º da Res. 946/2022: É expressamente proibida a fixação de dispositivos de amarração em travessas ou partes de madeira da carroceria."
+  },
+  {
+    "id": "contran-prf-342",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 4º",
+    "statement": "As cordas de polipropileno podem ser empregadas para prender tubos metálicos pesados desde que amarradas em nós duplos de segurança aprovados.",
+    "answer": false,
+    "explanation": "ERRADO. O uso de cordas para fixação primária de carga é proibido para qualquer tipo de carga, admitindo-se cordas unicamente para prender a lona."
+  },
+  {
+    "id": "contran-prf-343",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 4º",
+    "statement": "A utilização de cordas na fixação de cargas em veículos é permitida exclusivamente para a amarração de lona de proteção que cubra a carga transportada.",
+    "answer": true,
+    "explanation": "CERTO. Art. 4º, parágrafo único: O uso de cordas é admitido unicamente para a fixação de lona de cobertura de cargas granel ou perecíveis."
+  },
+  {
+    "id": "contran-prf-344",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 945/2022, Art. 3º",
+    "statement": "No transporte de blocos de rochas ornamentais, a fixação por cunhas de madeira simples no assoalho dispensa o uso de correntes ou travas de aço.",
+    "answer": false,
+    "explanation": "ERRADO. A Resolução 945/2022 exige obrigatoriamente correntes de aço liga de alta tenacidade ou cintas de alta capacidade ancoradas no chassi metálico."
+  },
+  {
+    "id": "contran-prf-345",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 945/2022, Art. 3º",
+    "statement": "No transporte de granito e mármore em blocos, o veículo deve contar com travas de contenção lateral e dispositivo de ancoragem de correntes de alta resistência.",
+    "answer": true,
+    "explanation": "CERTO. Art. 3º da Res. 945/2022: Exige-se berço de apoio de aço, travas de segurança laterais e correntes com esticadores dimensionados."
+  },
+  {
+    "id": "contran-prf-346",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 3º",
+    "statement": "A amarração de cargas do tipo direta (diagonal) não impede o deslocamento transversal da carga caso o veículo realize curvas acentuadas na via.",
+    "answer": false,
+    "explanation": "ERRADO. A amarração direta diagonal ou cruzada é projetada para bloquear simultaneamente deslocamentos longitudinais e transversais em curvas."
+  },
+  {
+    "id": "contran-prf-347",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 3º",
+    "statement": "Na amarração direta, os dispositivos de ancoragem são fixados diretamente entre a carga e o chassi, travando movimentos para frente, para trás e laterais.",
+    "answer": true,
+    "explanation": "CERTO. Art. 3º da Res. 946/2022: A amarração direta conecta os olhais da carga aos pontos de fixação do chassi para imobilizar em todos os eixos."
+  },
+  {
+    "id": "contran-prf-348",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 945/2022, Art. 2º",
+    "statement": "O transporte de toras de madeira permite que as toras da camada superior ultrapassem a altura dos fueiros verticais em até 1 metro livre sem amarração.",
+    "answer": false,
+    "explanation": "ERRADO. É expressamente vedado que qualquer tora de madeira ultrapasse o topo dos fueiros laterais de retenção mecânica."
+  },
+  {
+    "id": "contran-prf-349",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 945/2022, Art. 2º",
+    "statement": "No transporte de madeira bruta em toras, nenhuma tora pode ultrapassar a altura útil dos fueiros verticais metálicos de contenção da carroceria.",
+    "answer": true,
+    "explanation": "CERTO. Art. 2º, § 2º da Res. 945/2022: As toras devem estar alinhadas e contidas integralmente dentro da altura limite dos fueiros laterais."
+  },
+  {
+    "id": "contran-prf-350",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 4º",
+    "statement": "Cintas têxteis de poliéster utilizadas na amarração de carga podem continuar em uso mesmo que apresentem cortes laterais em até 30% de sua largura.",
+    "answer": false,
+    "explanation": "ERRADO. Qualquer rasgo, corte ou desfiamento estrutural na cinta compromete sua integridade e capacidade nominal (LC), exigindo descarte imediato."
+  },
+  {
+    "id": "contran-prf-351",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 4º",
+    "statement": "Cintas de amarração que apresentem desfiamentos, cortes, nós ou deformações mecânicas devem ser prontamente descartadas e retiradas de operação.",
+    "answer": true,
+    "explanation": "CERTO. Art. 4º: É expressamente proibido o uso de cintas têxteis com nós, cortes, avarias mecânicas ou com costuras desfeitas."
+  },
+  {
+    "id": "contran-prf-352",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 4º",
+    "statement": "A etiqueta de identificação técnica costurada na cinta têxtil com a capacidade de amarração (LC) é dispensada para fiscalização em rodovias federais.",
+    "answer": false,
+    "explanation": "ERRADO. A etiqueta indelével com a capacidade de amarração (LC) é OBRIGATÓRIA; sem ela, a PRF não tem como atestar a conformidade técnica do dispositivo."
+  },
+  {
+    "id": "contran-prf-353",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 4º",
+    "statement": "A cinta de amarração de carga deve conter etiqueta indelével legível com a capacidade de carga (LC) e norma técnica de certificação para ser admitida.",
+    "answer": true,
+    "explanation": "CERTO. Art. 4º, § 1º: É obrigatória a etiqueta com a capacidade nominal (LC - Lashing Capacity), nome do fabricante e norma ABNT NBR 15883."
+  },
+  {
+    "id": "contran-prf-354",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 5º",
+    "statement": "O transporte de contêineres pode ser realizado em caminhão tipo caçamba basculante sem qualquer trava mecânica adicional caso a tampa traseira feche.",
+    "answer": false,
+    "explanation": "ERRADO. O transporte de contêiner exige implemento apropriado com travas twist-lock operantes nos quatro cantos da caixa de carga."
+  },
+  {
+    "id": "contran-prf-355",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 5º",
+    "statement": "O transporte de contêineres exige chassi porta-contêiner com dispositivo de engate mecânico tipo twist-lock travado nos quatro cantos da unidade de carga.",
+    "answer": true,
+    "explanation": "CERTO. Art. 5º: Os contêineres marítimos devem ser transportados exclusivamente com travas giratórias twist-lock encaixadas nas sapatas de canto."
+  },
+  {
+    "id": "contran-prf-356",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Anexo I",
+    "statement": "Bobinas de chapa metálica enrolada podem ser transportadas deitadas transversalmente sem berços de contenção caso estejam calçadas com pedras soltas.",
+    "answer": false,
+    "explanation": "ERRADO. Bobinas de aço exigem berços côncavos de assentamento fixados na estrutura do chassi e cintas/correntes especiais; pedras soltas são proibidas."
+  },
+  {
+    "id": "contran-prf-357",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Anexo I",
+    "statement": "As bobinas metálicas devem ser acomodadas em berços estruturais longitudinais ou transversais dimensionados e travadas com calços e cintas de alta tenacidade.",
+    "answer": true,
+    "explanation": "CERTO. Anexo I da Res. 946/2022: O transporte de bobinas exige berços com cunhas de fixação e amarração em \"X\" com correntes de alta resistência."
+  },
+  {
+    "id": "contran-prf-358",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 3º",
+    "statement": "O transporte de cargas indivisíveis dispensa o travamento longitudinal para a ré, pois a força de inércia da aceleração nunca desloca a carga para trás.",
+    "answer": false,
+    "explanation": "ERRADO. A aceleração e arrancada em aclives geram força para trás; a amarração deve suportar no mínimo 0,5 vezes o peso da carga no sentido traseiro."
+  },
+  {
+    "id": "contran-prf-359",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 3º",
+    "statement": "O sistema de retenção da carga deve resistir a esforços de pelo menos 0,5 vezes o peso da carga no sentido traseiro para suportar arrancadas e aclives.",
+    "answer": true,
+    "explanation": "CERTO. Art. 3º, II: Os dispositivos de amarração devem ser dimensionados para conter forças de inércia para trás de 0,5g (50% do peso da carga)."
+  },
+  {
+    "id": "contran-prf-360",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN 946 c/c 235 CTB",
+    "statement": "A ausência de dispositivo de fixação em carga volumosa transportada em semirreboque aberto acarreta exclusivamente penalidade de advertência verbal.",
+    "answer": false,
+    "explanation": "ERRADO. Conduzir veículo com carga desprovida de amarração legal é infração de trânsito grave, sujeita a multa e retenção do veículo até a regularização."
+  },
+  {
+    "id": "contran-prf-361",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 4º",
+    "statement": "Conforme a Resolução CONTRAN nº 1031/2025, o etilômetro passivo é utilizado como instrumento preliminar de triagem rápida para direcionar a fiscalização.",
+    "answer": true,
+    "explanation": "CERTO. Res. 1031/2025: O etilômetro passivo (de bastão) funciona como teste de triagem rápida e não invasiva na aproximação do condutor."
+  },
+  {
+    "id": "contran-prf-362",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 4º",
+    "statement": "O resultado positivo em teste de etilômetro passivo por si só é prova suficiente para embasar a prisão em flagrante por crime de embriaguez ao volante.",
+    "answer": false,
+    "explanation": "ERRADO. O etilômetro passivo não quantifica o teor com validade probatória; a autuação e a prisão exigem teste no etilômetro ativo ou perícia."
+  },
+  {
+    "id": "contran-prf-363",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 4º",
+    "statement": "A constatação da infração de trânsito exige que a triagem positiva no etilômetro passivo seja confirmada por teste quantitativo no etilômetro ativo.",
+    "answer": true,
+    "explanation": "CERTO. Havendo acendimento da luz vermelha/alerta no etilômetro passivo, o agente convida o motorista a soprar o etilômetro ativo homologado."
+  },
+  {
+    "id": "contran-prf-364",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 5º",
+    "statement": "O condutor que recusar o teste do etilômetro não pode ser submetido à avaliação de sinais de alteração da capacidade psicomotora pelo policial da PRF.",
+    "answer": false,
+    "explanation": "ERRADO. O policial deve avaliar e descrever os sinais visíveis de alteração psicomotora independentemente da recusa do sopro (Art. 5º)."
+  },
+  {
+    "id": "contran-prf-365",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 5º",
+    "statement": "Na recusa do etilômetro, se o condutor apresentar conjunto de sinais de embriaguez, responderá pelo crime do art. 306 comprovado pelo Termo de Constatação.",
+    "answer": true,
+    "explanation": "CERTO. Art. 306, § 1º, II do CTB e Res. 1031: A alteração da capacidade psicomotora por sinais visíveis atestados em termo oficial comprova o crime."
+  },
+  {
+    "id": "contran-prf-366",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 4º",
+    "statement": "A margem de erro metrológica deduzida do etilômetro serve para autorizar o condutor a ingerir um copo de bebida alcoólica antes de assumir o volante.",
+    "answer": false,
+    "explanation": "ERRADO. O Brasil adota TOLERÂNCIA ZERO; a margem de erro da tabela serve unicamente para proteger o cidadão de falsos positivos do aparelho."
+  },
+  {
+    "id": "contran-prf-367",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 4º",
+    "statement": "A legislação brasileira adota tolerância zero ao consumo de álcool; a margem de desconto da medição é técnica e atende ao erro admissível do Inmetro.",
+    "answer": true,
+    "explanation": "CERTO. A tolerância é estritamente instrumental e metrológica, sendo ilegal qualquer nível deliberado de álcool consumido antes da direção veicular."
+  },
+  {
+    "id": "contran-prf-368",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Art. 165-A do CTB e Resolução 1031",
+    "statement": "A recusa em realizar o teste em etilômetro acarreta a aplicação de multa multiplicada por 5 vezes e suspensão da CNH por seis meses.",
+    "answer": false,
+    "explanation": "ERRADO. O Art. 165-A impõe multa multiplicada por 10 vezes (R$ 2.934,70) e suspensão do direito de dirigir por 12 (doze) meses."
+  },
+  {
+    "id": "contran-prf-369",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Art. 165-A do CTB e Resolução 1031",
+    "statement": "A recusa aos testes de alcoolemia é punida com multa multiplicada por 10 (dez) vezes e suspensão do direito de dirigir pelo prazo de doze meses.",
+    "answer": true,
+    "explanation": "CERTO. Art. 165-A do CTB: Recusar-se a ser submetido a teste é infração gravíssima, com multa (10x) e suspensão do direito de dirigir por 12 meses."
+  },
+  {
+    "id": "contran-prf-370",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN 1031 c/c 270 CTB",
+    "statement": "O condutor autuado por recusa ao etilômetro está dispensado de apresentar condutor habilitado para retirar seu veículo retido no local da blitz.",
+    "answer": false,
+    "explanation": "ERRADO. O veículo permanece retido e só pode ser liberado a outro condutor habilitado que realize o teste e comprove estar sóbrio."
+  },
+  {
+    "id": "contran-prf-371",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 6º",
+    "statement": "O veículo do condutor autuado por embriaguez ou recusa permanece retido no posto da PRF até a apresentação de outro motorista sóbrio e habilitado.",
+    "answer": true,
+    "explanation": "CERTO. Não sendo apresentado condutor habilitado e sóbrio no prazo legal, o veículo retido é recolhido ao depósito credenciado da PRF."
+  },
+  {
+    "id": "contran-prf-372",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 5º",
+    "statement": "O condutor socorrido em hospital em decorrência de sinistro é imune a qualquer fiscalização de alcoolemia por meio de prontuários clínicos da equipe médica.",
+    "answer": false,
+    "explanation": "ERRADO. O Art. 5º da Res. 1031 admite a constatação de embriaguez por meio de relatórios de prontuários médicos hospitalares de urgência."
+  },
+  {
+    "id": "contran-prf-373",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 5º",
+    "statement": "O laudo de médico perito oficial ou relatório de atendimento de urgência hospitalar serve para comprovar a embriaguez em condutor acidentado hospitalizado.",
+    "answer": true,
+    "explanation": "CERTO. Na impossibilidade de teste de ar alveolar devido à internação do paciente, o relatório da equipe médica emergencial comprova a embriaguez."
+  },
+  {
+    "id": "contran-prf-374",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN 1031 c/c 306 CTB",
+    "statement": "O crime de trânsito de embriaguez ao volante por etilômetro se configura a partir do valor considerado de 0,10 mg/L de ar alveolar.",
+    "answer": false,
+    "explanation": "ERRADO. 0,10 mg/L é apenas infração administrativa; o crime do Art. 306 do CTB exige valor considerado igual ou superior a 0,34 mg/L."
+  },
+  {
+    "id": "contran-prf-375",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Anexo I",
+    "statement": "Para configuração do crime de trânsito do art. 306 do CTB, a medição no etilômetro deve atingir valor considerado igual ou superior a 0,34 mg/L de ar.",
+    "answer": true,
+    "explanation": "CERTO. Pela tabela de equivalência da Resolução 1031/2025, o patamar criminal inicia-se a partir de 0,34 mg/L de ar alveolar considerado."
+  },
+  {
+    "id": "contran-prf-376",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 4º",
+    "statement": "O etilômetro verificado pelo Inmetro há mais de 18 meses pode ser utilizado na fiscalização da PRF caso esteja com bateria e sensor calibrados.",
+    "answer": false,
+    "explanation": "ERRADO. A verificação do Inmetro para etilômetros tem validade estrita e improrrogável de 12 (doze) meses; verificação vencida invalida a autuação."
+  },
+  {
+    "id": "contran-prf-377",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 4º",
+    "statement": "A verificação metrológica periódica do etilômetro pelo Inmetro é válida por 12 meses; aparelho com calibração vencida não pode ser utilizado na blitz.",
+    "answer": true,
+    "explanation": "CERTO. Art. 4º, § 2º da Res. 1031/2025: A verificação periódica anual (12 meses) pelo Inmetro é condição obrigatória de validade jurídica do teste."
+  },
+  {
+    "id": "contran-prf-378",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN 1031 c/c 165 CTB",
+    "statement": "O uso comprovado de medicamentos que causem torpor ou sonolência ao volante não constitui infração caso o motorista apresente receita médica particular.",
+    "answer": false,
+    "explanation": "ERRADO. A receita médica não autoriza dirigir com a capacidade psicomotora alterada; a conduta configura infração do Art. 165 se afetar a condução."
+  },
+  {
+    "id": "contran-prf-379",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN 1031 c/c 165 CTB",
+    "statement": "Dirigir sob efeito de substância psicoativa que altere a coordenação motora é infração gravíssima com multa (10x), mesmo se prescrita por profissional.",
+    "answer": true,
+    "explanation": "CERTO. Se o medicamento comprometer as funções psicomotoras vitais da direção, o ato de dirigir atrai a sanção administrativa do Art. 165."
+  },
+  {
+    "id": "contran-prf-380",
+    "category": "CONTRAN",
+    "topic": "Fiscalização de Alcoolemia e Substâncias (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 4º",
+    "statement": "O comprovante de impressão do etilômetro que indicar resultado 0,00 mg/L deve ser retido pelo policial e jamais ser entregue ao motorista fiscalizado.",
+    "answer": false,
+    "explanation": "ERRADO. O comprovante impresso de resultado negativo pode ser fornecido ao condutor fiscalizado para atestar sua plena regularidade na abordagem."
+  },
+  {
+    "id": "contran-prf-381",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 4º",
+    "statement": "Conforme a Resolução CONTRAN nº 960/2022, a transmitância luminosa dos vidros das áreas indispensáveis à dirigibilidade não pode ser inferior a setenta por cento.",
+    "answer": true,
+    "explanation": "CERTO. Art. 4º da Res. 960/2022: O limite mínimo legal de transparência para para-brisa e vidros laterais dianteiros é de 70%."
+  },
+  {
+    "id": "contran-prf-382",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 4º",
+    "statement": "A transmitância luminosa mínima permitida pelo CONTRAN para o para-brisa frontal é de 50% caso o condutor possua ar-condicionado de fábrica no veículo.",
+    "answer": false,
+    "explanation": "ERRADO. O índice mínimo de transparência do para-brisa frontal é fixado em 70% independentemente de itens de conforto do veículo."
+  },
+  {
+    "id": "contran-prf-383",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 4º",
+    "statement": "A faixa periférica superior do para-brisa (degradê) é permitida para proteção contra o ofuscamento solar, respeitadas as dimensões homologadas do veículo.",
+    "answer": true,
+    "explanation": "CERTO. A faixa degradê superior no para-brisa é admitida de fábrica para atenuação solar fora da área crítica de visão do motorista."
+  },
+  {
+    "id": "contran-prf-384",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 6º",
+    "statement": "A aplicação de película automotiva tipo espelhada ou metalizada é autorizada nos vidros laterais traseiros de veículos utilitários e vans comerciais.",
+    "answer": false,
+    "explanation": "ERRADO. Art. 6º da Res. 960/2022: É expressamente PROIBIDA a aplicação de películas refletivas ou espelhadas em qualquer área envidraçada do veículo."
+  },
+  {
+    "id": "contran-prf-385",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 6º",
+    "statement": "A aposição de películas refletivas ou opacas é terminantemente proibida em qualquer área envidraçada do veículo automotor, inclusive nos vidros traseiros.",
+    "answer": true,
+    "explanation": "CERTO. Películas espelhadas causam ofuscamento nos demais motoristas e comprometem a segurança visual, sendo banidas de todos os vidros."
+  },
+  {
+    "id": "contran-prf-386",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 4º",
+    "statement": "A presença de bolhas de ar na película automotiva do para-brisa sobre o campo de visão direto do motorista não constitui motivo para retenção do veículo.",
+    "answer": false,
+    "explanation": "ERRADO. A presença de bolhas de ar na área crítica de visão do para-brisa é expressamente proibida pela Resolução 960, gerando retenção."
+  },
+  {
+    "id": "contran-prf-387",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 4º",
+    "statement": "A presença de bolhas na película na área crítica de visão do para-brisa e nos vidros laterais dianteiros atrai autuação e retenção do veículo para remoção.",
+    "answer": true,
+    "explanation": "CERTO. Art. 4º, § 2º: É vedada a presença de bolhas na película que recubra as áreas indispensáveis à dirigibilidade."
+  },
+  {
+    "id": "contran-prf-388",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 7º",
+    "statement": "A gravação indelével da marca do instalador e do percentual de transparência na película pode ser substituída por declaração em nota fiscal eletrônica.",
+    "answer": false,
+    "explanation": "ERRADO. A chancela impressa na película é requisito INDISPENSÁVEL para atestar a autenticidade e conformidade técnica no momento da blitz."
+  },
+  {
+    "id": "contran-prf-389",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 7º",
+    "statement": "A chancela gravada na película deve ser indelével e legível a partir do lado externo do vidro, atestando a transparência regulamentar do conjunto.",
+    "answer": true,
+    "explanation": "CERTO. Art. 7º, § 1º: A chancela deve ser visível e legível pelo lado externo do vidro, identificando o instalador e o índice de transmitância."
+  },
+  {
+    "id": "contran-prf-390",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 7º",
+    "statement": "Caso a película instalada no para-brisa esteja sem chancela mas pareça clara aos olhos do policial, o veículo é dispensado de qualquer exigência técnica.",
+    "answer": false,
+    "explanation": "ERRADO. Película sem chancela do instalador é irregular por violação expressa aos requisitos formais de identificação veicular da Resolução 960."
+  },
+  {
+    "id": "contran-prf-391",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 7º",
+    "statement": "A ausência da chancela de identificação na película instalada sujeita o veículo à autuação por estar em desacordo com as normas de segurança veicular.",
+    "answer": true,
+    "explanation": "CERTO. A película deve conter gravação indelével; sua omissão atrai a infração prevista no Art. 230, XVI do CTB."
+  },
+  {
+    "id": "contran-prf-392",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN 960 c/c 230 CTB",
+    "statement": "O policial rodoviário federal pode apreender a CNH do condutor pelo simples fato de o vidro lateral dianteiro do veículo apresentar transmitância de 65%.",
+    "answer": false,
+    "explanation": "ERRADO. Infração por película escura (Art. 230, XVI) é GRAVE com multa e retenção do veículo para regularização, NÃO gerando apreensão ou suspensão da CNH."
+  },
+  {
+    "id": "contran-prf-393",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN 960 c/c 230 CTB",
+    "statement": "A infração por conduzir veículo com película fora dos padrões de transparência é de natureza grave, sujeita a multa e retenção do veículo para regularização.",
+    "answer": true,
+    "explanation": "CERTO. Art. 230, XVI do CTB: Conduzir veículo com vidros total ou parcialmente cobertos por películas não autorizadas é infração GRAVE com retenção."
+  },
+  {
+    "id": "contran-prf-394",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN 960 c/c 270 CTB",
+    "statement": "A regularização da infração de película escura no local da fiscalização exige obrigatoriamente a troca física do vidro por um novo na concessionária.",
+    "answer": false,
+    "explanation": "ERRADO. A regularização é cumprida com a simples retirada da película irregular colada no vidro no próprio local da abordagem."
+  },
+  {
+    "id": "contran-prf-395",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN 960 c/c 270 CTB",
+    "statement": "A retenção do veículo por película irregular é sanada no local da abordagem mediante a remoção manual da película pelo próprio condutor ou preposto.",
+    "answer": true,
+    "explanation": "CERTO. Arrancada a película escura e restabelecida a transparência original do vidro com segurança, a medida de retenção é desfeita e o veículo é liberado."
+  },
+  {
+    "id": "contran-prf-396",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 4º",
+    "statement": "Nos vidros traseiros que não interfiram na área indispensável à condução, a transmitância luminosa pode ser reduzida até zero sem necessidade de espelhos.",
+    "answer": false,
+    "explanation": "ERRADO. A permissão de escurecimento nos vidros traseiros é condicionada à existência e perfeito funcionamento dos espelhos retrovisores externos em ambos os lados."
+  },
+  {
+    "id": "contran-prf-397",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 4º",
+    "statement": "A redução de transmitância em vidros não vitais (como laterais traseiros) é condicionada à existência de espelhos retrovisores externos em ambos os lados.",
+    "answer": true,
+    "explanation": "CERTO. Art. 4º, § 1º: A transmitância pode ser menor nos vidros que não interferem na visão indispensável, desde que o veículo possua retrovisor em ambos os lados."
+  },
+  {
+    "id": "contran-prf-398",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 7º",
+    "statement": "O Medidor de Transmitância Luminosa (MTL) utilizado na fiscalização pela PRF é dispensado de passar por verificação metrológica ou calibração periódica.",
+    "answer": false,
+    "explanation": "ERRADO. O MTL é instrumento metrológico sujeito à aprovação de modelo pelo Senatran e verificação metrológica periódica obrigatória pelo Inmetro."
+  },
+  {
+    "id": "contran-prf-399",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 7º",
+    "statement": "O Medidor de Transmitância Luminosa (MTL) deve ser de modelo homologado pelo Senatran e certificado pelo Inmetro para respaldar a lavratura do auto.",
+    "answer": true,
+    "explanation": "CERTO. Art. 7º: A medição de transmitância luminosa deve ser realizada por equipamento metrológico homologado pelo Senatran e verificado pelo Inmetro."
+  },
+  {
+    "id": "contran-prf-400",
+    "category": "CONTRAN",
+    "topic": "Vidros e Películas Automotivas (Res. 960)",
+    "legalBasis": "Resolução CONTRAN 960 c/c 111 CTB",
+    "statement": "Painéis luminosos decorativos instalados no vidro traseiro de automóveis são autorizados pelo CONTRAN caso exibam frases de incentivo à segurança viária.",
+    "answer": false,
+    "explanation": "ERRADO. O Art. 111 do CTB e Res. 960 proíbem a aposição de inscrições, painéis luminosos ou pinturas que perturbem a visão ou distraiam os condutores."
   }
 ];
 
