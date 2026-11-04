@@ -39,37 +39,37 @@ export const PRF_TOPICS_CATALOG: PRFTopicMetadata[] = [
   {
     id: 'ctb-snt',
     category: 'CTB',
-    name: 'CTB - Sistema Nacional de Trânsito e Competências da PRF',
-    legalScope: 'Arts. 1º a 25 do CTB',
-    guideline: 'Composição do SNT, competências privativas da PRF em rodovias federais (fiscalização, lavratura de TCO, perícia de trânsito), CONTRAN, CETRAN e órgãos rodoviários.',
+    name: 'CTB - Sistema Nacional de Trânsito e Competências da PRF (Art. 20)',
+    legalScope: 'Arts. 1º a 25 do CTB (destaque Art. 20)',
+    guideline: 'Art. 20: Competências privativas da PRF em rodovias federais: patrulhamento ostensivo, lavratura de TCO, fiscalizar, multar e aplicar medidas administrativas, levantamento de local de sinistro, suspensão do direito de dirigir quando prevista na infração (Lei 14.071/2020) e perícia administrativa no local do sinistro (Lei 14.229/2021).',
   },
   {
     id: 'ctb-circulacao-regras',
     category: 'CTB',
     name: 'CTB - Normas Gerais de Circulação e Conduta',
     legalScope: 'Arts. 26 a 67 do CTB',
-    guideline: 'Preferência de passagem em cruzamentos e rotatórias, circulação pela direita, ultrapassagens, distância de segurança, uso de luzes e faróis diurnos em pista simples.',
+    guideline: 'Preferência de passagem em cruzamentos e rotatórias (Art. 29), circulação pela direita, ultrapassagens pela contramão, distância de segurança lateral (1,5m) e frontal, uso de luzes e faróis diurnos em pista simples.',
   },
   {
     id: 'ctb-motorista-prof',
     category: 'CTB',
     name: 'CTB - Condução por Motoristas Profissionais',
     legalScope: 'Arts. 67-A a 67-E do CTB',
-    guideline: 'Tempo máximo ininterrupto de direção (transporte de passageiros e carga), intervalo obrigatório de descanso (11h diárias, 30 min a cada 4h/5h30) e registro em tacógrafo.',
+    guideline: 'Tempo máximo ininterrupto de direção (transporte de passageiros e carga), intervalo obrigatório de descanso (11h diárias, 30 min a cada 4h/5h30) e registro em cronotacógrafo.',
   },
   {
     id: 'ctb-pedestres-ciclistas',
     category: 'CTB',
     name: 'CTB - Pedestres e Veículos Não Motorizados',
     legalScope: 'Arts. 68 a 71 do CTB',
-    guideline: 'Prioridade do pedestre na faixa, travessia em rodovias, circulação de ciclistas e distância lateral mínima de 1,5m para ultrapassagem.',
+    guideline: 'Prioridade do pedestre na faixa, travessia em rodovias, circulação de ciclistas e distância lateral mínima de 1,5m para ultrapassagem de bicicleta.',
   },
   {
     id: 'ctb-sinalizacao',
     category: 'CTB',
     name: 'CTB - Sinalização de Trânsito e Engenharia Viária',
     legalScope: 'Arts. 80 a 95 do CTB',
-    guideline: 'Ordem de prevalência das normas (ordens do agente de trânsito prevalecem sobre semáforo e placas), sinalização vertical e horizontal.',
+    guideline: 'Ordem de prevalência das normas (ordens do agente de trânsito prevalecem sobre semáforo e placas), sinalização vertical de regulamentação, advertência e horizontal.',
   },
   {
     id: 'ctb-veiculos-equipamentos',
@@ -88,30 +88,44 @@ export const PRF_TOPICS_CATALOG: PRFTopicMetadata[] = [
   {
     id: 'ctb-registro-licenciamento',
     category: 'CTB',
-    name: 'CTB - Registro e Licenciamento de Veículos (CRV e CRLV)',
+    name: 'CTB - Registro, Licenciamento e Transferência Eletrônica (Art. 123)',
     legalScope: 'Arts. 118 a 135 do CTB',
-    guideline: 'Emissão de novo CRV (transferência em 30 dias), porte do CRLV (físico ou digital), baixa de veículos irrecuperáveis e clonados.',
+    guideline: 'Art. 123: Expedição de novo CRV e transferência de propriedade 100% eletrônica pela Lei 15.153/2025. Porte de CRLV digital (CRLV-e / ATPV-e). Baixa de veículos irrecuperáveis e clonados.',
   },
   {
     id: 'ctb-habilitacao-cnh',
     category: 'CTB',
-    name: 'CTB - Habilitação, Categorias e Validade da CNH',
+    name: 'CTB - Habilitação, Categorias, Validade e Identidade (Arts. 140 a 160)',
     legalScope: 'Arts. 140 a 160 do CTB',
-    guideline: 'Categorias A, B, C, D e E. Validade do exame médico (10 anos <50, 5 anos 50-69, 3 anos 70+), exigências de idade e experiência para categorias D e E.',
+    guideline: 'Art. 140 requisitos; Art. 143: categoria B autorizada a conduzir veículo elétrico ou híbrido com PBT de até 4.250 kg pela Lei 15.503/2026; Art. 147 exame médico (10 anos <50, 5 anos 50-69, 3 anos 70+); Art. 148 Permissão para Dirigir (PPD); Art. 159 CNH física ou digital válida expressamente como identidade oficial pela Lei 15.428/2026.',
   },
   {
     id: 'ctb-toxicologico',
     category: 'CTB',
-    name: 'CTB - Exame Toxicológico Periódico',
-    legalScope: 'Arts. 148-A e 165-B do CTB (Lei 14.599/2023)',
-    guideline: 'Periodicidade de 2 anos e 6 meses para condutores C, D e E com menos de 70 anos. Infração gravíssima por dirigir após 30 dias do vencimento.',
+    name: 'CTB - Exame Toxicológico Periódico e 1ª Habilitação (Art. 148-A)',
+    legalScope: 'Arts. 148-A e 165-B do CTB',
+    guideline: 'Art. 148-A: Exame toxicológico de larga janela obrigatório a cada 2 anos e meio para C, D e E com menos de 70 anos, e agora exigido também na 1ª habilitação para categorias A e B pela Lei 15.153/2025. Infração gravíssima (Arts. 165-B e 165-D).',
+  },
+  {
+    id: 'ctb-penalidades',
+    category: 'CTB',
+    name: 'CTB - Penalidades, Pontuação e Suspensão da CNH',
+    legalScope: 'Arts. 256 a 268 do CTB',
+    guideline: 'Diferença entre penalidade e medida administrativa. Escalonamento de pontuação para suspensão da CNH (20, 30 ou 40 pontos conforme gravíssimas). Regra fixa de 40 pontos para condutor com EAR. Advertência por escrito para infrações leves ou médias.',
+  },
+  {
+    id: 'ctb-medidas-adm',
+    category: 'CTB',
+    name: 'CTB - Medidas Administrativas: Retenção e Remoção',
+    legalScope: 'Arts. 269 a 279-A do CTB',
+    guideline: 'Medidas administrativas aplicáveis pelo agente da PRF: retenção do veículo (saneamento da irregularidade no local), remoção para depósito, recolhimento de documentos e transbordo de carga.',
   },
   {
     id: 'ctb-infracoes-alcool',
     category: 'CTB',
     name: 'CTB - Infrações: Alcoolemia e Recusa ao Teste',
     legalScope: 'Arts. 165 e 165-A do CTB',
-    guideline: 'Dirigir sob efeito de álcool ou substância psicoativa. Recusa a bafômetro/etilômetro. Multa gravíssima (10x), suspensão de 12 meses e retenção do veículo.',
+    guideline: 'Dirigir sob efeito de álcool ou substância psicoativa (Art. 165) e recusa ao etilômetro ou perícia (Art. 165-A). Multa gravíssima (10x), suspensão do direito de dirigir por 12 meses e retenção do veículo.',
   },
   {
     id: 'ctb-infracoes-velocidade',
@@ -123,200 +137,200 @@ export const PRF_TOPICS_CATALOG: PRFTopicMetadata[] = [
   {
     id: 'ctb-infracoes-especie',
     category: 'CTB',
-    name: 'CTB - Infrações: Celular, Cinto e Capacete',
-    legalScope: 'Arts. 167, 244 e 252 do CTB',
-    guideline: 'Segurar ou manusear celular ao volante (infração gravíssima). Não usar cinto (grave). Conduzir moto transportando criança menor de 10 anos (gravíssima).',
-  },
-  {
-    id: 'ctb-penalidades',
-    category: 'CTB',
-    name: 'CTB - Penalidades, Pontuação e Suspensão da CNH',
-    legalScope: 'Arts. 256 a 268 do CTB',
-    guideline: 'Escalonamento de pontuação para suspensão da CNH (20, 30 ou 40 pontos conforme gravíssimas). Regra fixa de 40 pontos para condutor com EAR. Advertência por escrito.',
-  },
-  {
-    id: 'ctb-medidas-adm',
-    category: 'CTB',
-    name: 'CTB - Medidas Administrativas: Retenção e Remoção',
-    legalScope: 'Arts. 269 a 279-A do CTB',
-    guideline: 'Diferença entre penalidade e medida administrativa. Retenção do veículo, remoção para pátio, saneamento no local e recolhimento de documentos.',
+    name: 'CTB - Infrações: Celular, Cinto, Capacete e Crianças',
+    legalScope: 'Arts. 167, 168, 244 e 252 do CTB',
+    guideline: 'Segurar ou manusear celular ao volante (infração gravíssima). Não usar cinto (grave). Conduzir moto transportando criança menor de 10 anos (gravíssima). Transporte de crianças sem cadeirinha (gravíssima).',
   },
   {
     id: 'ctb-processo-adm',
     category: 'CTB',
     name: 'CTB - Processo Administrativo e Recursos no SNT',
     legalScope: 'Arts. 280 a 290 do CTB',
-    guideline: 'Auto de infração de trânsito (AIT), prazo de expedição da notificação da autuação (30 dias sob pena de arquivamento), defesa prévia, JARI e CETRAN.',
+    guideline: 'Auto de infração de trânsito (AIT), prazo decadencial de expedição da notificação da autuação (30 dias sob pena de arquivamento), defesa prévia, JARI e CETRAN.',
   },
   {
     id: 'ctb-crimes-geral',
     category: 'CTB',
-    name: 'CTB - Crimes de Trânsito: Parte Geral',
+    name: 'CTB - Crimes de Trânsito: Parte Geral e Agravantes (Art. 298)',
     legalScope: 'Arts. 291 a 301 do CTB',
-    guideline: 'Aplicação subsidiária do Código Penal e Lei 9.099/95. Circunstâncias agravantes (faixa de pedestres, sem CNH). Vedação de prisão em flagrante se prestar socorro.',
+    guideline: 'Aplicação subsidiária do Código Penal e Lei 9.099/95. Art. 298: Circunstâncias agravantes (faixa de pedestres, sem CNH, veículo de transporte coletivo, adulterado). Vedação de prisão em flagrante se prestar socorro imediato (Art. 301).',
   },
   {
     id: 'ctb-crimes-homicidio',
     category: 'CTB',
-    name: 'CTB - Crimes: Homicídio e Lesão Corporal Culposa',
+    name: 'CTB - Crimes: Homicídio Culposo e Lesão Corporal (Arts. 302 e 303)',
     legalScope: 'Arts. 302 e 303 do CTB',
-    guideline: 'Homicídio culposo na direção de veículo. Formas qualificadas por embriaguez ou drogas (reclusão de 5 a 8 anos). Vedação da substituição por penas restritivas de direitos.',
+    guideline: 'Art. 302: Homicídio culposo na direção de veículo (aumento na faixa de pedestres, calçada e sem CNH). Formas qualificadas por embriaguez ou drogas (reclusão de 5 a 8 anos). Art. 303: Lesão corporal culposa.',
   },
   {
     id: 'ctb-crimes-alcool-fuga',
     category: 'CTB',
-    name: 'CTB - Crimes: Embriaguez ao Volante e Fuga de Local',
+    name: 'CTB - Crimes: Embriaguez ao Volante e Fuga de Local (Arts. 304, 305 e 306)',
     legalScope: 'Arts. 304, 305 e 306 do CTB',
-    guideline: 'Art. 306: Crime de perigo abstrato. Limite do etilômetro (>= 0,30 mg/L ar alveolar ou >= 6 dg/L sangue). Art. 305 (fuga do local) e tipificação penal.',
+    guideline: 'Art. 306: Crime de embriaguez ao volante (perigo abstrato, >= 0,30 mg/L ar alveolar ou >= 6 dg/L sangue). Art. 304: Omissão de socorro, mesmo se terceiro prestou socorro. Art. 305: Fuga do local do sinistro para fugir à responsabilidade penal/civil.',
   },
   {
     id: 'ctb-crimes-racha',
     category: 'CTB',
-    name: 'CTB - Crimes: Racha, Velocidade e Violação de Suspensão',
-    legalScope: 'Arts. 307 a 312-B do CTB',
-    guideline: 'Art. 307 (violar suspensão). Art. 308 (racha / disputa não autorizada) qualificado por morte ou lesão grave. Art. 309 (dirigir sem CNH gerando perigo concreto de dano).',
+    name: 'CTB - Crimes: Racha, Perigo de Dano e Fraude no Sinistro (Arts. 308 a 312)',
+    legalScope: 'Arts. 308 a 312-B do CTB',
+    guideline: 'Art. 308: Racha / disputa automobilística não autorizada; Art. 309: Dirigir sem CNH gerando perigo concreto de dano; Art. 310: Entregar veículo a pessoa não habilitada; Art. 311: Velocidade incompatível junto a escolas e hospitais gerando perigo de dano; Art. 312: Inovação artificiosa no local de sinistro para enganar a perícia policial.',
   },
 
-  // ================= CONTRAN =================
+  // ================= CONTRAN (RESOLUÇÕES VIGENTES CONSOLIDADAS) =================
   {
-    id: 'contran-268',
+    id: 'contran-1031',
     category: 'CONTRAN',
-    name: 'CONTRAN - Res. 268/2008 (Iluminação Intermitente e Alarme)',
-    legalScope: 'Resolução CONTRAN nº 268/2008',
-    guideline: 'Uso de luzes vermelhas e sirenes para socorro e polícia, luz âmbar intermitente para serviços de utilidade pública e socorro mecânico, prioridade no trânsito.',
+    name: 'CONTRAN - Res. 1.031/2026 (Fiscalização de Alcoolemia e Substâncias)',
+    legalScope: 'Resolução CONTRAN nº 1.031/2026 (Revogou a Res. 432/2013)',
+    guideline: 'Procedimentos de fiscalização do consumo de álcool e substâncias psicoativas pela PRF: medição por etilômetro (limites, margem de erro e valor considerado), constatação por sinais de alteração da capacidade psicomotora e recusa ao teste.',
   },
   {
-    id: 'contran-432',
+    id: 'contran-1020',
     category: 'CONTRAN',
-    name: 'CONTRAN - Res. 432/2013 (Fiscalização de Alcoolemia)',
-    legalScope: 'Resolução CONTRAN nº 432/2013',
-    guideline: 'Medição pelo etilômetro: valor considerado e erro máximo admissível. Constatação por sinais clínicos de alteração psicomotora (Anexo II).',
+    name: 'CONTRAN - Res. 1.020/2025 (Processo de Habilitação e Condutor Estrangeiro)',
+    legalScope: 'Resolução CONTRAN nº 1.020/2025 (Revogou a Res. 789/2020 e Res. 360/2010)',
+    guideline: 'Diretrizes consolidadas para processo de formação, habilitação e exames de condutores no SNT, faltas eliminatórias, requisitos para categorias e direção por condutores estrangeiros em território nacional.',
   },
   {
-    id: 'contran-789',
+    id: 'contran-1027',
     category: 'CONTRAN',
-    name: 'CONTRAN - Res. 789/2020 (Habilitação e Exames)',
-    legalScope: 'Resolução CONTRAN nº 789/2020',
-    guideline: 'Procedimentos de formação de condutores, exames teórico e prático, faltas eliminatórias, graves (3 pts), médias (2 pts) e leves (1 pt). Limite de 3 pontos para aprovação.',
+    name: 'CONTRAN - Res. 1.027/2026 (Registro, Licenciamento e Transferência Digital)',
+    legalScope: 'Resolução CONTRAN nº 1.027/2026 (Revogou a Res. 809/2020)',
+    guideline: 'Procedimentos 100% digitais para emissão do Certificado de Registro de Veículo (CRV-e), Certificado de Licenciamento Anual (CRLV-e) e Autorização para Transferência de Propriedade (ATPV-e), extinguindo o documento em papel.',
+  },
+  {
+    id: 'contran-970',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 970/2022 (Sistemas de Iluminação e Faróis)',
+    legalScope: 'Resolução CONTRAN nº 970/2022 (Substituiu as Res. 227/2007 e 667/2017)',
+    guideline: 'Requisitos técnicos dos sistemas de iluminação e sinalização de veículos: uso de DRL (luz de rodagem diurna), farol baixo em rodovias de pista simples, cores de lâmpadas permitidas e proibição de substituição de lâmpadas dos faróis por outras que não atendam às normas.',
+  },
+  {
+    id: 'contran-993',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 993/2023 (Equipamentos Obrigatórios dos Veículos)',
+    legalScope: 'Resolução CONTRAN nº 993/2023 (Substituiu a Res. 14/1998)',
+    guideline: 'Rol consolidado de equipamentos obrigatórios para a frota de veículos automotores, reboques e semirreboques: cinto de segurança, espelhos retrovisores, triângulo, chave de roda, extintor e encosto de cabeça.',
+  },
+  {
+    id: 'contran-945',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 945/2022 (Amarração e Fixação de Cargas)',
+    legalScope: 'Resolução CONTRAN nº 945/2022 (Substituiu a Res. 552/2015)',
+    guideline: 'Requisitos de segurança para amarração de cargas em caminhões e semirreboques: uso de cintas têxteis, correntes ou cabos de aço com trava de segurança; proibição expressa de cordas de fibra sintética para fixação da carga.',
+  },
+  {
+    id: 'contran-946',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 946/2022 (Transporte de Cargas Sólidas a Granel)',
+    legalScope: 'Resolução CONTRAN nº 946/2022 (Substituiu a Res. 441/2013)',
+    guideline: 'Exigência de cobertura total por lona ou dispositivo similar nos veículos que transportem cargas sólidas a granel (grãos, terra, areia, minério), devidamente tensionadas para evitar derramamento na rodovia.',
+  },
+  {
+    id: 'contran-882',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 882/2021 (Pesos, Dimensões e Combinações de Carga - CVC)',
+    legalScope: 'Resolução CONTRAN nº 882/2021 (Consolidou Res. 210, 211, 290, 520 e 803)',
+    guideline: 'Limites de peso bruto total (PBT), peso por eixo e dimensões (largura 2,60m, altura 4,40m), tolerâncias legais na pesagem por balança rodoviária (5% PBT e 12,5% por eixo), inscrições obrigatórias (tara, lotação, CMT) e regras para CVC.',
+  },
+  {
+    id: 'contran-960',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 960/2022 (Vidros de Segurança e Transmitância / Insulfilm)',
+    legalScope: 'Resolução CONTRAN nº 960/2022 (Consolidou Res. 216, 253 e 254)',
+    guideline: 'Transmitância luminosa mínima permitida: 70% para o para-brisa e vidros laterais dianteiros indispensáveis à dirigibilidade; proibição total de películas opacas ou refletivas/espelhadas; fiscalização por medidor de transmitância luminosa (luxímetro).',
+  },
+  {
+    id: 'contran-968',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 968/2022 (Identificação Veicular e Gravação do Chassi / VIN)',
+    legalScope: 'Resolução CONTRAN nº 968/2022 (Substituiu a Res. 24/1998)',
+    guideline: 'Critérios para identificação veicular, gravação do número de identificação do veículo (VIN) no chassi ou monobloco, plaquetas destrutíveis na remoção e identificação em vidros.',
+  },
+  {
+    id: 'contran-969',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 969/2022 (Placas de Identificação Veicular - Padrão Mercosul)',
+    legalScope: 'Resolução CONTRAN nº 969/2022 (Substituiu a Res. 780/2019)',
+    guideline: 'Padrão alfanumérico LLLNLNN com faixa azul, bandeira do Brasil e emblema do Mercosul, código bidimensional QR Code de rastreabilidade, critérios para instalação e substituição de placas.',
+  },
+  {
+    id: 'contran-938',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 938/2022 (Cronotacógrafo / Registrador Inalterável de Velocidade)',
+    legalScope: 'Resolução CONTRAN nº 938/2022 (Substituiu a Res. 92/1999)',
+    guideline: 'Fiscalização do registrador instantâneo e inalterável de velocidade e tempo (cronotacógrafo): veículos obrigados (transporte escolar, passageiros > 10 lugares e carga > 4.536 kg), certificado de verificação do INMETRO e leitura do disco/fita diagrama.',
+  },
+  {
+    id: 'contran-909',
+    category: 'CONTRAN',
+    name: 'CONTRAN - Res. 909/2022 (Fiscalização por Videomonitoramento Remoto)',
+    legalScope: 'Resolução CONTRAN nº 909/2022 (Substituiu a Res. 471/2013)',
+    guideline: 'Fiscalização de trânsito em rodovias mediante câmeras de videomonitoramento operadas remotamente por agente da autoridade. Exigência de sinalização prévia da rodovia e descrição obrigatória no campo de observações do AIT.',
   },
   {
     id: 'contran-798',
     category: 'CONTRAN',
     name: 'CONTRAN - Res. 798/2020 (Radares e Medidores de Velocidade)',
     legalScope: 'Resolução CONTRAN nº 798/2020',
-    guideline: 'Tipos de medidores (fixo, estático, móvel e portátil). Requisitos de sinalização R-19, estudo técnico obrigatório e proibição de radares escondidos/ocultos.',
+    guideline: 'Tipos de medidores (fixo, estático, móvel e portátil). Requisitos de sinalização R-19, estudo técnico obrigatório e proibição categórica de radares escondidos/ocultos.',
   },
   {
     id: 'contran-810',
     category: 'CONTRAN',
-    name: 'CONTRAN - Res. 810/2020 (Classificação de Danos em Sinistros)',
+    name: 'CONTRAN - Res. 810/2020 (Classificação de Danos em Sinistros de Trânsito)',
     legalScope: 'Resolução CONTRAN nº 810/2020',
-    guideline: 'Relatório de Avarias preenchido pela PRF: Pequena Monta (não bloqueia CRLV), Média Monta (bloqueia até vistoria CSV) e Grande Monta (irrecuperável/sucata).',
+    guideline: 'Relatório de Avarias preenchido pelo policial rodoviário federal: Pequena Monta (não bloqueia CRLV), Média Monta (bloqueia registro até aprovação em vistoria e CSV) e Grande Monta (veículo irrecuperável / sucata com baixa compulsória).',
   },
   {
     id: 'contran-819',
     category: 'CONTRAN',
     name: 'CONTRAN - Res. 819/2021 (Dispositivos de Retenção Infantil)',
     legalScope: 'Resolução CONTRAN nº 819/2021',
-    guideline: 'Transporte de crianças até 10 anos: bebê conforto, cadeirinha, assento de elevação (booster) e dispensa de booster ao atingir 1,45m de altura.',
-  },
-  {
-    id: 'contran-882',
-    category: 'CONTRAN',
-    name: 'CONTRAN - Res. 882/2021 (Limites de Peso e Dimensões)',
-    legalScope: 'Resolução CONTRAN nº 882/2021',
-    guideline: 'Pesagem por balança rodoviária, tolerâncias (5% no PBT, 12,5% por eixo), limites de largura (2,60m), altura (4,40m) e comprimento para caminhões e ônibus.',
+    guideline: 'Transporte de crianças de até 10 anos de idade: bebê conforto (até 1 ano), cadeirinha (1 a 4 anos), assento de elevação / booster (4 a 7 anos e meio ou que não tenham atingido 1,45m de altura) e cinto de segurança traseiro.',
   },
   {
     id: 'contran-906',
     category: 'CONTRAN',
-    name: 'CONTRAN - Res. 906/2021 (Fiscalização do Descanso do Motorista)',
+    name: 'CONTRAN - Res. 906/2021 (Fiscalização do Descanso do Motorista Profissional)',
     legalScope: 'Resolução CONTRAN nº 906/2021',
-    guideline: 'Fiscalização do tempo de direção através de tacógrafo ou meio eletrônico. Exigência do descanso diário de 11h e pausas em rodovias.',
-  },
-  {
-    id: 'contran-909',
-    category: 'CONTRAN',
-    name: 'CONTRAN - Res. 909/2022 (Videomonitoramento em Rodovias)',
-    legalScope: 'Resolução CONTRAN nº 909/2022',
-    guideline: 'Fiscalização de trânsito por câmeras de videomonitoramento operadas remotamente por agente da autoridade. Requisitos de sinalização prévia da rodovia e campo de observação no AIT.',
+    guideline: 'Fiscalização do tempo ininterrupto de direção e dos intervalos de descanso de motoristas profissionais de carga e passageiros por meio de cronotacógrafo ou controle eletrônico.',
   },
   {
     id: 'contran-911',
     category: 'CONTRAN',
-    name: 'CONTRAN - Res. 911/2022 (Exame Toxicológico de Larga Janela)',
+    name: 'CONTRAN - Res. 911/2022 (Diretrizes do Exame Toxicológico de Larga Janela)',
     legalScope: 'Resolução CONTRAN nº 911/2022',
-    guideline: 'Exame de queratina com janela de detecção mínima de 90 dias. Contraprova, sigilo médico e cadastramento obrigatório no RENACH.',
-  },
-  {
-    id: 'contran-912',
-    category: 'CONTRAN',
-    name: 'CONTRAN - Res. 912/2022 (Extintores e Equipamentos Obrigatórios)',
-    legalScope: 'Resolução CONTRAN nº 912/2022',
-    guideline: 'Extintor de incêndio ABC: facultativo para automóveis e utilitários de passeio; obrigatório para caminhão, ônibus, micro-ônibus e transporte remunerado.',
+    guideline: 'Exame de queratina com janela de detecção mínima de 90 dias para drogas psicoativas. Cadastramento obrigatório do resultado no RENACH, sigilo médico e direito a contraprova.',
   },
   {
     id: 'contran-918',
     category: 'CONTRAN',
-    name: 'CONTRAN - Res. 918/2022 (Fiscalização e Procedimento de Multas)',
+    name: 'CONTRAN - Res. 918/2022 (Procedimento de Notificação, Multas e SNE)',
     legalScope: 'Resolução CONTRAN nº 918/2022',
-    guideline: 'Procedimentos de autuação, prazos de envio de notificações, pagamento de multa com 40% de desconto pelo SNE (renúncia a recurso).',
-  },
-  {
-    id: 'contran-922',
-    category: 'CONTRAN',
-    name: 'CONTRAN - Res. 922/2022 (Insulfilm e Transmitância Luminosa)',
-    legalScope: 'Resolução CONTRAN nº 922/2022',
-    guideline: 'Transmitância luminosa mínima: 70% para o para-brisa e vidros laterais dianteiros (indispensáveis à dirigibilidade); proibição total de películas espelhadas ou opacas.',
-  },
-  {
-    id: 'contran-923',
-    category: 'CONTRAN',
-    name: 'CONTRAN - Res. 923/2022 (Fiscalização com Câmera Corporal e OCR)',
-    legalScope: 'Resolução CONTRAN nº 923/2022',
-    guideline: 'Uso de sistemas de leitura automática de placas (OCR) e equipamentos audiovisuais portáteis pelos policiais rodoviários federais.',
-  },
-  {
-    id: 'contran-924',
-    category: 'CONTRAN',
-    name: 'CONTRAN - Res. 924/2022 (Transporte Escolar e Inspeção Semestral)',
-    legalScope: 'Resolução CONTRAN nº 924/2022',
-    guideline: 'Exigências para condutor escolar (idade mínima 21 anos, CNH D, curso especializado) e veículos escolares (faixa amarela, tacógrafo, inspeção semestral).',
-  },
-  {
-    id: 'contran-965',
-    category: 'CONTRAN',
-    name: 'CONTRAN - Res. 965/2022 (Áreas de Estacionamento Específico)',
-    legalScope: 'Resolução CONTRAN nº 965/2022',
-    guideline: 'Regulamentação de vagas especiais para idosos, pessoas com deficiência (PCD), carga e descarga, ambulâncias e viaturas policiais.',
+    guideline: 'Procedimentos de autuação, expedição de notificações da autuação e da penalidade, e pagamento de multa com 40% de desconto pelo Sistema de Notificação Eletrônica (SNE) mediante renúncia ao recurso.',
   },
   {
     id: 'contran-967',
     category: 'CONTRAN',
-    name: 'CONTRAN - Res. 967/2022 (Transporte de Produtos Perigosos)',
+    name: 'CONTRAN - Res. 967/2022 (Transporte Rodoviário de Produtos Perigosos)',
     legalScope: 'Resolução CONTRAN nº 967/2022',
-    guideline: 'Painel de segurança retangular laranja (com nº de risco e nº ONU) e rótulo de risco losangular. Porte do curso MOPP, kit de emergência e extintor específico.',
+    guideline: 'Painel de segurança retangular laranja (com número de risco e número ONU) e rótulo de risco losangular com símbolo da classe. Porte do certificado de curso MOPP, kit de emergência e extintor específico.',
   },
   {
     id: 'contran-985',
     category: 'CONTRAN',
-    name: 'CONTRAN - Res. 985/2022 (Manual de Fiscalização - MBFT)',
+    name: 'CONTRAN - Res. 985/2022 (Manual Brasileiro de Fiscalização de Trânsito - MBFT)',
     legalScope: 'Resolução CONTRAN nº 985/2022 (MBFT)',
-    guideline: 'Manual Brasileiro de Fiscalização de Trânsito: regras de autuação sem abordagem (quando possível e visível), preenchimento de observações, infrações concorrentes e sucessivas.',
+    guideline: 'Manual Brasileiro de Fiscalização de Trânsito: regras de autuação sem abordagem (quando possível e visível), preenchimento de observações obrigatórias, infrações concorrentes e sucessivas.',
   },
   {
     id: 'contran-996',
     category: 'CONTRAN',
-    name: 'CONTRAN - Res. 996/2023 (Ciclomotores e Bikes Elétricas)',
+    name: 'CONTRAN - Res. 996/2023 (Ciclomotores, Autopropelidos e Bicicletas Elétricas)',
     legalScope: 'Resolução CONTRAN nº 996/2023',
-    guideline: 'Ciclomotor (até 50cc ou 4kW, max 50 km/h, exige ACC ou CNH A, placa e capacete) vs Bicicleta Elétrica (pedalada assistida, até 32 km/h, sem acelerador manual).',
-  },
-  {
-    id: 'contran-1004',
-    category: 'CONTRAN',
-    name: 'CONTRAN - Res. 1004/2023 (Identificação Veicular e Placas Mercosul)',
-    legalScope: 'Resolução CONTRAN nº 1004/2023',
-    guideline: 'Padrão alfanumérico LLLNLNN (três letras, um número, uma letra e dois números), faixa azul com bandeira do Brasil e emblema do Mercosul, QR Code de segurança.',
+    guideline: 'Diferença técnica: Ciclomotor (até 50cc ou 4kW, velocidade máxima até 50 km/h, exige registro, emplacamento, CNH A ou ACC e capacete) vs Bicicleta Elétrica (potência até 1.000W, até 32 km/h, pedalada assistida sem acelerador) vs Autopropelido (patinete, skate até 32 km/h).',
   },
 ];
 
@@ -484,18 +498,38 @@ export function generateProceduralQuestionFromContranTopic(
   topicMeta: PRFTopicMetadata
 ): ActiveRoundQuestion {
   const isCorrect = Math.random() >= 0.5;
-  const intro = CEBRASPE_INTROS[Math.floor(Math.random() * CEBRASPE_INTROS.length)];
   let statement = '';
   let explanation = '';
 
   if (isCorrect) {
-    statement = `Segundo a ${topicMeta.legalScope}, no exercício da fiscalização pela PRF, ${topicMeta.guideline.toLowerCase()}`;
-    if (statement.length > 275) statement = statement.slice(0, 272) + '...';
-    explanation = `CERTO. A assertiva reflete fielmente as diretrizes técnicas da ${topicMeta.legalScope}: ${topicMeta.guideline}`;
+    statement = `Nos termos da ${topicMeta.legalScope}, ${topicMeta.guideline}`;
+    if (statement.length > 275) statement = statement.slice(0, 272).replace(/[,;:\s]+$/, '') + '...';
+    explanation = `CERTO. Conforme a ${topicMeta.legalScope}: ${topicMeta.guideline}`;
   } else {
-    statement = `Em contradição ao estabelecido na ${topicMeta.legalScope}, é dispensada a observância das regras de ${topicMeta.name.toLowerCase()} nas rodovias federais.`;
-    if (statement.length > 275) statement = statement.slice(0, 272) + '...';
-    explanation = `ERRADO. A ${topicMeta.legalScope} impõe expressamente a aplicação de tais diretrizes: ${topicMeta.guideline}`;
+    let modified = topicMeta.guideline;
+    let inverted = false;
+
+    for (const [regex, replacement] of INVERSION_PAIRS) {
+      if (regex.test(modified)) {
+        modified = modified.replace(regex, replacement);
+        inverted = true;
+        break;
+      }
+    }
+
+    if (!inverted) {
+      if (modified.includes('100% digital')) {
+        modified = modified.replace('100% digital', 'exclusivamente em formato físico impresso');
+      } else if (modified.includes('proibição')) {
+        modified = modified.replace(/proibição/gi, 'permissão irrestrita');
+      } else {
+        modified = `é dispensada na fiscalização a exigência de que ${modified.toLowerCase()}`;
+      }
+    }
+
+    statement = `Nos termos da ${topicMeta.legalScope}, ${modified}`;
+    if (statement.length > 275) statement = statement.slice(0, 272).replace(/[,;:\s]+$/, '') + '...';
+    explanation = `ERRADO. Na verdade, a ${topicMeta.legalScope} preconiza expressamente que: "${topicMeta.guideline}"`;
   }
 
   return {
