@@ -249,7 +249,7 @@ DIRETRIZES MANDATÓRIAS CEBRASPE:
 1. Padrão CEBRASPE: Uma assertiva afirmativa direta sobre a regra legal ou uma breve situação hipotética de fiscalização pela PRF em rodovia federal.
 2. NUNCA mencione nem elabore assertiva sobre parágrafo ou artigo vetado ou revogado; baseie-se estritamente nas regras vigentes do artigo.
 3. Gabarito equilibrado: Decida aleatoriamente se o gabarito será CERTO ou ERRADO (50% de chance para cada). Se for ERRADO, insira um detalhe técnico sutilmente incorreto com base no próprio artigo (ex: altere prazo, competência, exceção ou penalidade).
-4. Tamanho MÁXIMO da assertiva: 280 caracteres (essencial para caber na tela do jogo de tiro tático 3D).
+4. Tamanho MÁXIMO da assertiva: 280 caracteres (essencial para caber na tela do jogo de tiro tático 3D). A assertiva DEVE ser uma proposição afirmativa COMPLETA e gramaticalmente acabada, NUNCA terminando com reticências (...) nem com dois-pontos (:), e NUNCA cortada no meio.
 5. Fundamentação: Indique a base legal exata e justificativa sucinta.
 6. Retorne EXCLUSIVAMENTE um objeto JSON válido no formato:
 {
@@ -260,7 +260,7 @@ DIRETRIZES MANDATÓRIAS CEBRASPE:
   "topic": "${artigo.capitulo}"
 }`;
       } else {
-        // Seleciona um artigo real entre os 584 artigos vigentes das Resoluções CONTRAN
+        // Seleciona um artigo real entre os 585 artigos vigentes das Resoluções CONTRAN
         const artigo = getRandomContranArticle();
         fallbackQ = generateProceduralQuestionFromContranArticle(artigo);
         targetTopicName = artigo.resolucao;
@@ -279,7 +279,7 @@ DIRETRIZES MANDATÓRIAS CEBRASPE:
 1. Padrão CEBRASPE: Uma assertiva afirmativa direta sobre a regra técnica ou uma breve situação hipotética de fiscalização pela PRF em rodovia federal.
 2. NUNCA mencione nem elabore assertiva sobre norma revogada; baseie-se estritamente nas regras vigentes do texto fornecido.
 3. Gabarito equilibrado: Decida aleatoriamente se o gabarito será CERTO ou ERRADO (50% de chance para cada). Se for ERRADO, insira um detalhe técnico sutilmente incorreto com base no próprio artigo (ex: altere prazo, limite, tolerância, equipamento obrigatório, infração ou procedimento).
-4. Tamanho MÁXIMO da assertiva: 280 caracteres (essencial para caber na tela do jogo de tiro tático 3D).
+4. Tamanho MÁXIMO da assertiva: 280 caracteres (essencial para caber na tela do jogo de tiro tático 3D). A assertiva DEVE ser uma proposição afirmativa COMPLETA e gramaticalmente acabada, NUNCA terminando com reticências (...) nem com dois-pontos (:), e NUNCA cortada no meio.
 5. Fundamentação: Indique a base legal exata (${artigo.dispositivo}) e justificativa sucinta.
 6. Retorne EXCLUSIVAMENTE um objeto JSON válido no formato:
 {
@@ -318,15 +318,19 @@ DIRETRIZES MANDATÓRIAS CEBRASPE:
         const text = data?.candidates?.[0]?.content?.parts?.[0]?.text;
         if (text) {
           const parsed = JSON.parse(text);
+          const stmt = typeof parsed?.statement === 'string' ? parsed.statement.trim() : '';
           if (
-            parsed?.statement &&
+            stmt &&
+            stmt.length <= 280 &&
+            !stmt.endsWith('...') &&
+            !stmt.endsWith(':') &&
+            !stmt.endsWith(';') &&
             typeof parsed.answer === 'boolean' &&
-            !/vetado/i.test(parsed.statement) &&
-            !/revogad[oa]/i.test(parsed.statement) &&
-            !/Imprensa Nacional|in\.gov\.br/i.test(parsed.statement) &&
-            !seenStatementsRef.current.has(parsed.statement)
+            !/vetado/i.test(stmt) &&
+            !/revogad[oa]/i.test(stmt) &&
+            !/Imprensa Nacional|in\.gov\.br/i.test(stmt) &&
+            !seenStatementsRef.current.has(stmt)
           ) {
-            const stmt = parsed.statement.trim();
             persistSeenStatement(stmt);
             prewarmedNextRef.current.set(category, {
               id: `ai-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,

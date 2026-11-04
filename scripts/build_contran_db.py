@@ -3,11 +3,11 @@ import sys
 import re
 import json
 import urllib.request
+import io
 from pypdf import PdfReader
 
 sys.stdout.reconfigure(encoding='utf-8')
 
-# Diretório de download temporário
 cache_dir = "temp_contran"
 os.makedirs(cache_dir, exist_ok=True)
 
@@ -29,39 +29,51 @@ def download_pdf(url, dest_path):
         return False
 
 def clean_pdf_text(full_text):
-    # Substitui ligaduras comuns
+    # Substitui ligaduras tipográficas
     text = full_text.replace('\ufb01', 'fi').replace('\ufb02', 'fl').replace('\ufb00', 'ff').replace('\u0000', 'ti')
-    # Normaliza quebras de linha e hifenização no fim da linha
+    # Normaliza quebras de hifenização no fim de linha
     text = re.sub(r'(\w+)-\n(\w+)', r'\1\2', text)
-    # Remove cabeçalhos e rodapés de página do Gov.br e DOU / Imprensa Nacional
-    text = re.sub(r'\d{2}/\d{2}/\d{4}(?:,?\s*\d{2}:\d{2})?\s+RESOLUÇÃO\s+CONTRAN\s+Nº[^\n]*?- DOU - Imprensa Nacional\s+https?://\S+\s+\d+/\d+', ' ', text, flags=re.I)
-    text = re.sub(r'\d{2}/\d{2}/\d{4}\s+SEI/MINFRA\s+-\s+\d+\s+-\s+Resolução\s+CONTRAN\s+https?://\S+\s+\d+/\d+', ' ', text, flags=re.I)
-    text = re.sub(r'https?://(?:www\.)?in\.gov\.br\S*', ' ', text, flags=re.I)
-    text = re.sub(r'https?://sei\.infraestrutura\.gov\.br\S*', ' ', text, flags=re.I)
+    # Remove cabeçalhos DOU e links de rodapé
+    text = re.sub(r'\d{2}/\d{2}/\d{4}(?:,?\s*\d{2}:\d{2})?\s+RESOLUÇÃO\s+CONTRAN\s+Nº[^\n]*?- DOU - Imprensa Nacional\s+https?://\S+\s+\d+/\d+', '\n', text, flags=re.I)
+    text = re.sub(r'\d{2}/\d{2}/\d{4}\s+SEI/MINFRA\s+-\s+\d+\s+-\s+Resolução\s+CONTRAN\s+https?://\S+\s+\d+/\d+', '\n', text, flags=re.I)
+    text = re.sub(r'https?://(?:www\.)?in\.gov\.br\S*', '', text, flags=re.I)
+    text = re.sub(r'https?://sei\.infraestrutura\.gov\.br\S*', '', text, flags=re.I)
     text = re.sub(r'Documento assinado eletronicamente[\s\S]*?\n', '', text)
-    text = re.sub(r'Ministério dos Transportes[\s\S]*?\n', '', text)
-    text = re.sub(r'Conselho Nacional de Trânsito[\s\S]*?\n', '', text)
     text = re.sub(r'Fl\.\s*\d+[\s\S]*?\n', '', text)
     return text
 
-def is_revoked_or_invalid_paragraph(p):
-    clean = p.strip()
-    if not clean or len(clean) < 15:
+def is_stray_title_or_header(b):
+    s = b.strip()
+    # Se já é um dispositivo normativo legal reconhecido (Art, §, Parágrafo, Inciso ou Alínea), preserva
+    if re.match(r'^(?:Art\.?\s*\d+|§\s*\d+|Parágrafo\s+único|[IVXLCDM]+\s*[\-–—\.]|[a-z]\)\s*)', s, re.I):
+        return False
+    # Se não termina com pontuação e é curto ou todo em maiúsculas, é cabeçalho de seção espúrio
+    if not re.search(r'[.\?!;:]$', s):
         return True
-    # Remove identificador do inciso/parágrafo
-    clean_no_prefix = re.sub(r'^[§\dº°oIVXLCDM\.\-\s–—\(\)]+', '', clean).strip()
-    if re.search(r'^\(?\s*(?:REVOGADO|Revogad[oa]|VETADO)\s*\)?', clean_no_prefix, re.I):
-        return True
-    if re.search(r'^\(?\s*(?:REVOGADO|Revogad[oa])\s+pela\s+Resolução', clean, re.I):
+    if re.match(r'^[A-ZÁ-Ú\s\-\–—/]{4,}$', s):
         return True
     return False
 
-def is_purely_revocatory_article(art_text):
-    # Artigos do tipo "Art. X Ficam revogadas as Resoluções..."
-    first_line = art_text.split('\n')[0]
-    if re.search(r'Ficam?\s+revogadas?\b', art_text, re.I):
+def is_section_header(line):
+    s = line.strip()
+    if re.match(r'^(?:CAPÍTULO|Capítulo|Seção|SEÇÃO)\s+[IVXLCDM\d]+', s, re.I):
         return True
-    if re.search(r'Esta\s+Resolução\s+entra\s+em\s+vigor\b', art_text, re.I):
+    if re.match(r'^(?:Do[s]?|Da[s]?|De)\s+[A-Za-zÀ-ÿ\s\-\–—/]{4,}$', s, re.I) and not s.endswith('.'):
+        return True
+    if re.match(r'^(?:DISPOSIÇÕES\s+FINAIS|DISPOSIÇÕES\s+PRELIMINARES|DAS\s+DISPOSIÇÕES\s+GERAIS|Disposições\s+Gerais|Disposições\s+Finais|Disposições\s+Transitórias)$', s, re.I):
+        return True
+    if re.match(r'^(?:ANEXO|Anexo)\s+[IVXLCDM\d]+', s, re.I) and not s.endswith('.'):
+        return True
+    return False
+
+def is_revoked_block(text):
+    clean = text.strip()
+    if not clean or len(clean) < 5:
+        return True
+    clean_core = re.sub(r'^[§\dº°oIVXLCDM\.\-\s–—\(\)]+', '', clean).strip()
+    if re.search(r'^\(?\s*(?:REVOGADO|Revogad[oa]|VETADO)\s*\)?', clean_core, re.I):
+        return True
+    if re.search(r'^\(?\s*(?:REVOGADO|Revogad[oa])\s+pela\s+Resolução', clean, re.I):
         return True
     return False
 
@@ -74,7 +86,6 @@ for item in resolutions:
     url = item['url']
     
     if not url:
-        print(f"Skipping {nome_res} - no URL")
         continue
 
     dest_pdf = os.path.join(cache_dir, f"{res_num}.pdf")
@@ -96,66 +107,84 @@ for item in resolutions:
 
     cleaned = clean_pdf_text(raw_text)
 
-    # Identifica a ementa (texto antes do Art. 1º)
-    ementa_match = re.search(r'(?:RESOLVE|Resolve):?\s*\n([\s\S]*?)(?=Art\.?\s*1[º°o]?\b)', cleaned)
-    ementa = ementa_match.group(1).strip() if ementa_match else assunto
-
-    # Quebra os artigos
-    article_chunks = re.split(r'\n(?=Art\.?\s*\d+[º°o]?(?:-[A-Za-z])?\.?\s*)', cleaned)
+    # Divide por 'Art. X'
+    raw_articles = re.split(r'\n(?=Art\.?\s*\d+[º°o]?(?:-[A-Za-z])?\.?\s*)', cleaned)
 
     valid_res_articles = 0
-    for chunk in article_chunks:
-        chunk = chunk.strip()
-        m_num = re.match(r'^(Art\.?\s*\d+[º°o]?(?:-[A-Za-z])?)', chunk, re.I)
-        if not m_num:
+    for raw in raw_articles:
+        raw = raw.strip()
+        m = re.match(r'^Art\.?\s*(\d+[º°o]?(?:-[A-Za-z])?)\.?\s*', raw, re.I)
+        if not m:
             continue
 
-        raw_art_num = m_num.group(1).replace('o', 'º').replace('°', 'º')
-        # Normaliza número
-        num_clean = re.sub(r'Art\.?\s*', 'Art. ', raw_art_num)
+        art_clean_num = m.group(1).replace('o', 'º').replace('°', 'º')
+        art_num = f"Art. {art_clean_num}"
 
-        # Se for artigo de vigência ou revogação pura de normas antigas, pula
-        if is_purely_revocatory_article(chunk):
+        # Pula artigos revogatórios puros ou vigência
+        if re.search(r'Ficam?\s+revogadas?\b', raw, re.I) or re.search(r'Esta\s+Resolução\s+entra\s+em\s+vigor\b', raw, re.I):
             continue
 
-        # Quebra em parágrafos e filtra os revogados
-        paragraphs = chunk.split('\n')
-        active_paragraphs = []
-        for p in paragraphs:
-            p = p.strip()
-            if not p:
+        lines = raw.split('\n')
+        blocks = []
+        current_block = []
+
+        def flush_block():
+            if current_block:
+                b_text = ' '.join(current_block).strip()
+                b_text = re.sub(r'\s+', ' ', b_text)
+                if not is_section_header(b_text) and not is_stray_title_or_header(b_text) and not is_revoked_block(b_text):
+                    blocks.append(b_text)
+                current_block.clear()
+
+        for line in lines:
+            line_str = line.strip()
+            if not line_str:
                 continue
-            if is_revoked_or_invalid_paragraph(p):
+
+            if is_section_header(line_str):
+                flush_block()
                 continue
-            active_paragraphs.append(p)
 
-        if not active_paragraphs:
+            # Início de novo dispositivo: Artigo, Parágrafo, Inciso ou Alínea
+            is_new_device = (
+                re.match(r'^Art\.?\s*\d+', line_str, re.I) or
+                re.match(r'^(?:§\s*\d+|Parágrafo\s+único)', line_str, re.I) or
+                re.match(r'^[IVXLCDM]+\s*[\-–—\.]', line_str) or
+                re.match(r'^[a-z]\)\s*', line_str)
+            )
+
+            if is_new_device:
+                flush_block()
+                current_block.append(line_str)
+            else:
+                current_block.append(line_str)
+
+        flush_block()
+
+        if not blocks:
             continue
 
-        final_article_text = " ".join(active_paragraphs)
-        # Normaliza espaços múltiplos
-        final_article_text = re.sub(r'\s+', ' ', final_article_text).strip()
-
-        # Verifica se sobrou texto substantivo
-        if len(final_article_text) < 35:
+        # Verifica se o primeiro bloco (caput) é revogado
+        if is_revoked_block(blocks[0]):
             continue
 
-        # Verifica se o próprio caput era revogado
-        caput_check = re.sub(r'^Art\.?\s*\d+[º°o]?\.?\s*', '', final_article_text).strip()
-        if is_revoked_or_invalid_paragraph(caput_check):
+        # Junta os blocos individuais com \n\n
+        final_text = '\n\n'.join(blocks)
+        if len(final_text) < 35:
             continue
 
-        dispositivo = f"{num_clean} da {nome_res}"
-        art_id = f"contran-{res_num}-{num_clean.lower().replace(' ', '-').replace('º', '')}"
+        dispositivo = f"{art_num} da {nome_res}"
+        clean_id_suffix = art_clean_num.lower().replace(' ', '-').replace('º', '')
+        art_id = f"contran-{res_num}-{clean_id_suffix}"
 
         all_contran_articles.append({
             "id": art_id,
             "resolucao": nome_res,
             "numeroRes": res_num,
-            "numero": num_clean,
+            "numero": art_num,
             "assunto": assunto,
             "dispositivo": dispositivo,
-            "texto": final_article_text
+            "texto": final_text
         })
         valid_res_articles += 1
 

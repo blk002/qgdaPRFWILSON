@@ -482,6 +482,8 @@ const INVERSION_PAIRS: [RegExp, string][] = [
   [/\bautorizado\b/gi, 'expressamente proibido'],
   [/\bindepende\b/gi, 'depende obrigatoriamente'],
   [/\bdever[áa]\b/gi, 'poderá, a seu livre critério,'],
+  [/\bdevem\b/gi, 'não precisam'],
+  [/\bdeve\b/gi, 'não necessita'],
   [/\bsempre\b/gi, 'em nenhuma hipótese'],
   [/\bobjetivamente\b/gi, 'subjetivamente'],
   [/\bgrav[ií]ssima\b/gi, 'grave'],
@@ -491,36 +493,99 @@ const INVERSION_PAIRS: [RegExp, string][] = [
   [/\bsuspens[aã]o\b/gi, 'mera advertência por escrito'],
   [/\b30 \(trinta\) dias\b/gi, '15 (quinze) dias'],
   [/\b10 \(dez\) anos\b/gi, '5 (cinco) anos'],
+  [/\bexclusivamente\b/gi, 'facultativamente'],
+  [/\bsomente\b/gi, 'mesmo que não'],
+  [/\bprivativa\b/gi, 'concorrente'],
+  [/\bdispensad[oa]\b/gi, 'obrigatório(a)'],
+  [/\bexigid[oa]\b/gi, 'dispensado(a)'],
+  [/\baplica-se\b/gi, 'não se aplica'],
+  [/\bnão se aplica\b/gi, 'aplica-se irrestritamente'],
+  [/\binexistirem\b/gi, 'ainda que existam'],
+  [/\bmínim[oa]\b/gi, 'máximo(a)'],
+  [/\bmáxim[oa]\b/gi, 'mínimo(a)'],
+  [/\bexigência\b/gi, 'dispensa'],
+  [/\bretém\b/gi, 'libera de imediato'],
+  [/\bretenção\b/gi, 'imediata liberação'],
+  [/\bremoção\b/gi, 'mera liberação após autuação'],
+  [/\bapreensão\b/gi, 'devolução imediata'],
+  [/\binadmissível\b/gi, 'plenamente admitido(a)'],
 ];
 
-const CEBRASPE_INTROS = [
-  'A respeito da legislação de trânsito brasileira e das competências de fiscalização, julgue o item seguinte:',
-  'Considerando as normas que regem o trânsito em vias terrestres nacionais, julgue a assertiva a seguir:',
-  'No que concerne aos preceitos legais e regulamentares de trânsito, julgue o item subsecutivo:',
-  'Com base na jurisprudência administrativa e nas disposições legais pertinentes, julgue o item:',
-];
+const INTRO_LIST_REGEX = /(?:seguintes\s+(?:etapas|requisitos|preceitos|diretrizes|critérios|órgãos|documentos|condições|hipóteses|casos)|são\s+(?:requisitos|competências|etapas|diretrizes|infrações)|observar[áa]o?\s+(?:o\s+seguinte|as\s+seguintes)|caber[áa]\s+ao\s+seguinte)/i;
+
+interface ValidNormativeBlock {
+  clean: string;
+  isInciso: boolean;
+  raw: string;
+}
+
+function getValidBlocksForArticle(rawText: string, isContran: boolean): ValidNormativeBlock[] {
+  const rawBlocks = (rawText || '').split(/\n\n+/).map(b => b.trim());
+  const valid: ValidNormativeBlock[] = [];
+
+  for (const b of rawBlocks) {
+    if (b.length < 25) continue;
+    // Ignora cabeçalhos vazios introdutórios que apenas anunciam listas de incisos
+    if (INTRO_LIST_REGEX.test(b) && b.endsWith(':')) continue;
+    if (/^(?:CAPÍTULO|Seção|DO[S]?\s|DA[S]?\s|TÍTULO)/i.test(b)) continue;
+    if (/vetado|\(Revogad[oa]|^Fica[m]?\s+revogad[oa]/i.test(b)) continue;
+    if (/Imprensa Nacional|in\.gov\.br/i.test(b)) continue;
+
+    const isInciso = /^[IVXLCDM]+\s*[\-–—\.]/i.test(b) || /^[a-z]\)\s*/i.test(b);
+
+    let clean = b
+      .replace(/^Art\.?\s*\d+[º°o]?(?:-[A-Za-z])?\.?\s*/i, '')
+      .replace(/^§\s*\d+[º°o]?\.?\s*/i, '')
+      .replace(/^[IVXLCDM]+\s*[\-–—\.]\s*/i, '')
+      .replace(/^[a-z]\)\s*/i, '')
+      .replace(/^Parágrafo\s+único\.?\s*/i, '')
+      .replace(/\(Redação dada[^\)]*\)/gi, '')
+      .replace(/\(Incluído[^\)]*\)/gi, '')
+      .replace(/\(Vigência[^\)]*\)/gi, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    // Transforma blocos de penas e penalidades de trânsito em orações completas
+    clean = clean
+      .replace(/^Penas?\s*[-–—]\s*/i, 'a conduta é cominada com pena de ')
+      .replace(/^Infraç[ãa]o\s*[-–—]\s*/i, 'a infração cominada é de natureza ')
+      .replace(/^Penalidade\s*[-–—]\s*/i, 'a penalidade aplicável é de ')
+      .replace(/^Medida\s+administrativa\s*[-–—]\s*/i, 'a medida administrativa cabível é de ')
+      .replace(/[;,:\s]+(?:ou|e)?\s*$/i, '')
+      .replace(/\.$/, '')
+      .trim();
+
+    if (clean.length < 25 || clean.endsWith(':') || clean.endsWith('...')) continue;
+    if (/vetado|\(Revogad[oa]|^Fica[m]?\s+revogad[oa]/i.test(clean)) continue;
+
+    const maxSnippetLen = isContran ? 210 : 220;
+    if (clean.length > maxSnippetLen) {
+      // Divisão segura de orações respeitando abreviações jurídicas (art., arts., nº, inc., etc.)
+      const parts = clean.split(/(?<!\b(?:art|arts|n|inc|fls|par|ex|p))\.\s+(?=[A-Z0-9])/i);
+      if (parts.length > 1 && parts[0].length >= 30 && parts[0].length <= maxSnippetLen) {
+        clean = parts[0].replace(/\.$/, '').trim();
+      } else {
+        // Se a oração inteira não cabe sem corte, descarta o bloco para nunca truncar
+        continue;
+      }
+    }
+
+    valid.push({ clean, isInciso, raw: b });
+  }
+
+  return valid;
+}
 
 export function generateProceduralQuestionFromCtbArticle(
   artigo: ArtigoLeiSeca,
   forceAnswer?: boolean,
   recursionDepth: number = 0
 ): ActiveRoundQuestion {
-  // Filtra rigorosamente parágrafos sem vetos, revogações ou cabeçalhos
-  const paragraphs = (artigo.texto || '')
-    .split(/\n\n+/)
-    .map(p => p.trim())
-    .filter(p => {
-      if (p.length < 25) return false;
-      if (/vetado/i.test(p)) return false;
-      if (/revogad[oa]/i.test(p)) return false;
-      if (/^CAPÍTULO\b/i.test(p) || /^Seção\b/i.test(p)) return false;
-      return true;
-    });
+  const validBlocks = getValidBlocksForArticle(artigo.texto || '', false);
 
-  // Se o artigo não possui parágrafos válidos ou atingiu recursão
-  if (paragraphs.length === 0 || recursionDepth > 5) {
+  if (validBlocks.length === 0 || recursionDepth > 6) {
     const fallbackArt = getRandomCtbArticle();
-    if (recursionDepth > 5) {
+    if (recursionDepth > 6) {
       return {
         id: `ctb-safe-${Date.now()}`,
         uniqueHash: `ctb-safe-${Date.now()}`,
@@ -536,28 +601,16 @@ export function generateProceduralQuestionFromCtbArticle(
     return generateProceduralQuestionFromCtbArticle(fallbackArt, forceAnswer, recursionDepth + 1);
   }
 
-  const chosenParagraph = paragraphs[Math.floor(Math.random() * paragraphs.length)];
+  const chosen = validBlocks[Math.floor(Math.random() * validBlocks.length)];
+  let snippet = chosen.clean;
 
-  // Limpa prefixos e notas de rodapé do Planalto (ex.: Redação dada, Incluído, Vigência)
-  let cleanSnippet = chosenParagraph
-    .replace(/^Art\.?\s*\d+[º°o]?(?:-[A-Za-z])?\.?\s*/i, '')
-    .replace(/^§\s*\d+[º°o]?\.?\s*/i, '')
-    .replace(/^[IVXLCDM]+\s*[\-–—\.]\s*/i, '')
-    .replace(/^Parágrafo\s+único\.?\s*/i, '')
-    .replace(/\(Redação dada[^\)]*\)/gi, '')
-    .replace(/\(Incluído[^\)]*\)/gi, '')
-    .replace(/\(Vigência[^\)]*\)/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  // Se por qualquer razão ainda contiver "VETADO" ou for muito curto, tenta outro
-  if (/vetado/i.test(cleanSnippet) || /revogad[oa]/i.test(cleanSnippet) || /Imprensa Nacional/i.test(cleanSnippet) || cleanSnippet.length < 25) {
-    const nextArt = getRandomCtbArticle();
-    return generateProceduralQuestionFromCtbArticle(nextArt, forceAnswer, recursionDepth + 1);
+  // Ajusta a primeira letra para minúscula se não for sigla (ex.: CONTRAN, PRF)
+  if (!/^[A-Z]{2,}/.test(snippet)) {
+    snippet = snippet.charAt(0).toLowerCase() + snippet.slice(1);
   }
 
-  // Decide se será CERTO ou ERRADO
   const willBeCorrect = forceAnswer !== undefined ? forceAnswer : Math.random() >= 0.5;
+  const prefix = `Nos termos do ${artigo.numero} do CTB, `;
 
   let statement = '';
   let answer = true;
@@ -565,14 +618,15 @@ export function generateProceduralQuestionFromCtbArticle(
 
   if (willBeCorrect) {
     answer = true;
-    statement = `Nos termos do ${artigo.numero} do CTB, ${cleanSnippet}`;
-    if (statement.length > 275) {
-      statement = statement.slice(0, 272).replace(/[,;:\s]+$/, '') + '...';
+    if (chosen.isInciso) {
+      statement = `${prefix}constitui preceito ou competência prevista ${snippet}.`;
+    } else {
+      statement = `${prefix}${snippet}.`;
     }
-    explanation = `CERTO. Conforme o ${artigo.dispositivo}: "${chosenParagraph.slice(0, 200)}..."`;
+    explanation = `CERTO. Conforme o ${artigo.dispositivo}: "${chosen.clean}."`;
   } else {
     answer = false;
-    let modified = cleanSnippet;
+    let modified = snippet;
     let inverted = false;
 
     for (const [regex, replacement] of INVERSION_PAIRS) {
@@ -584,14 +638,24 @@ export function generateProceduralQuestionFromCtbArticle(
     }
 
     if (!inverted) {
-      modified = `é expressamente vedado que ${cleanSnippet.toLowerCase()}`;
+      if (chosen.isInciso) {
+        statement = `${prefix}é expressamente vedado ou dispensado ${snippet}.`;
+      } else {
+        statement = `${prefix}não se aplica a regra de que ${snippet}.`;
+      }
+    } else {
+      if (chosen.isInciso) {
+        statement = `${prefix}constitui preceito ou competência prevista ${modified}.`;
+      } else {
+        statement = `${prefix}${modified}.`;
+      }
     }
+    explanation = `ERRADO. O dispositivo original do ${artigo.dispositivo} estabelece que: "${chosen.clean}."`;
+  }
 
-    statement = `Nos termos do ${artigo.numero} do CTB, ${modified}`;
-    if (statement.length > 275) {
-      statement = statement.slice(0, 272).replace(/[,;:\s]+$/, '') + '...';
-    }
-    explanation = `ERRADO. O dispositivo original do ${artigo.dispositivo} estabelece que: "${chosenParagraph.slice(0, 200)}..."`;
+  // Se por qualquer variação ultrapassar 275 caracteres, tenta outro bloco de forma limpa sem cortar com "..."
+  if (statement.length > 275) {
+    return generateProceduralQuestionFromCtbArticle(getRandomCtbArticle(), forceAnswer, recursionDepth + 1);
   }
 
   return {
@@ -604,7 +668,7 @@ export function generateProceduralQuestionFromCtbArticle(
     answer,
     explanation,
     wasAiRewritten: false,
-    articleText: chosenParagraph,
+    articleText: chosen.raw,
   };
 }
 
@@ -615,12 +679,19 @@ export function generateProceduralQuestionFromContranTopic(
   let statement = '';
   let explanation = '';
 
+  let guide = (topicMeta.guideline || '').trim().replace(/\.$/, '');
+  if (guide.length > 210) {
+    const parts = guide.split(/(?<!\b(?:art|arts|n|inc|fls|par|ex|p))\.\s+(?=[A-Z0-9])/i);
+    if (parts.length > 1 && parts[0].length >= 30 && parts[0].length <= 210) {
+      guide = parts[0].replace(/\.$/, '').trim();
+    }
+  }
+
   if (isCorrect) {
-    statement = `Nos termos da ${topicMeta.legalScope}, ${topicMeta.guideline}`;
-    if (statement.length > 275) statement = statement.slice(0, 272).replace(/[,;:\s]+$/, '') + '...';
-    explanation = `CERTO. Conforme a ${topicMeta.legalScope}: ${topicMeta.guideline}`;
+    statement = `Nos termos da ${topicMeta.legalScope}, ${guide}.`;
+    explanation = `CERTO. Conforme a ${topicMeta.legalScope}: ${guide}.`;
   } else {
-    let modified = topicMeta.guideline;
+    let modified = guide;
     let inverted = false;
 
     for (const [regex, replacement] of INVERSION_PAIRS) {
@@ -641,9 +712,8 @@ export function generateProceduralQuestionFromContranTopic(
       }
     }
 
-    statement = `Nos termos da ${topicMeta.legalScope}, ${modified}`;
-    if (statement.length > 275) statement = statement.slice(0, 272).replace(/[,;:\s]+$/, '') + '...';
-    explanation = `ERRADO. Na verdade, a ${topicMeta.legalScope} preconiza expressamente que: "${topicMeta.guideline}"`;
+    statement = `Nos termos da ${topicMeta.legalScope}, ${modified}.`;
+    explanation = `ERRADO. Na verdade, a ${topicMeta.legalScope} preconiza expressamente que: "${guide}."`;
   }
 
   return {
@@ -664,20 +734,11 @@ export function generateProceduralQuestionFromContranArticle(
   forceAnswer?: boolean,
   recursionDepth: number = 0
 ): ActiveRoundQuestion {
-  const paragraphs = (artigo.texto || '')
-    .split(/\n\n+/)
-    .map(p => p.trim())
-    .filter(p => {
-      if (p.length < 25) return false;
-      if (/vetado/i.test(p)) return false;
-      if (/revogad[oa]/i.test(p)) return false;
-      if (/^CAPÍTULO\b/i.test(p) || /^Seção\b/i.test(p)) return false;
-      return true;
-    });
+  const validBlocks = getValidBlocksForArticle(artigo.texto || '', true);
 
-  if (paragraphs.length === 0 || recursionDepth > 5) {
+  if (validBlocks.length === 0 || recursionDepth > 6) {
     const fallbackArt = getRandomContranArticle();
-    if (recursionDepth > 5) {
+    if (recursionDepth > 6) {
       return {
         id: `contran-safe-${Date.now()}`,
         uniqueHash: `contran-safe-${Date.now()}`,
@@ -693,25 +754,16 @@ export function generateProceduralQuestionFromContranArticle(
     return generateProceduralQuestionFromContranArticle(fallbackArt, forceAnswer, recursionDepth + 1);
   }
 
-  const chosenParagraph = paragraphs[Math.floor(Math.random() * paragraphs.length)];
+  const chosen = validBlocks[Math.floor(Math.random() * validBlocks.length)];
+  let snippet = chosen.clean;
 
-  let cleanSnippet = chosenParagraph
-    .replace(/^Art\.?\s*\d+[º°o]?(?:-[A-Za-z])?\.?\s*/i, '')
-    .replace(/^§\s*\d+[º°o]?\.?\s*/i, '')
-    .replace(/^[IVXLCDM]+\s*[\-–—\.]\s*/i, '')
-    .replace(/^Parágrafo\s+único\.?\s*/i, '')
-    .replace(/\(Redação dada[^\)]*\)/gi, '')
-    .replace(/\(Incluído[^\)]*\)/gi, '')
-    .replace(/\(Vigência[^\)]*\)/gi, '')
-    .replace(/\s+/g, ' ')
-    .trim();
-
-  if (/vetado/i.test(cleanSnippet) || /revogad[oa]/i.test(cleanSnippet) || /Imprensa Nacional|in\.gov\.br/i.test(cleanSnippet) || cleanSnippet.length < 25) {
-    const nextArt = getRandomContranArticle();
-    return generateProceduralQuestionFromContranArticle(nextArt, forceAnswer, recursionDepth + 1);
+  // Ajusta a primeira letra para minúscula se não for sigla (ex.: CONTRAN, PRF, RENAVAM)
+  if (!/^[A-Z]{2,}/.test(snippet)) {
+    snippet = snippet.charAt(0).toLowerCase() + snippet.slice(1);
   }
 
   const willBeCorrect = forceAnswer !== undefined ? forceAnswer : Math.random() >= 0.5;
+  const prefix = `Conforme o ${artigo.dispositivo}, `;
 
   let statement = '';
   let answer = true;
@@ -719,14 +771,15 @@ export function generateProceduralQuestionFromContranArticle(
 
   if (willBeCorrect) {
     answer = true;
-    statement = `Conforme o ${artigo.dispositivo}, ${cleanSnippet}`;
-    if (statement.length > 275) {
-      statement = statement.slice(0, 272).replace(/[,;:\s]+$/, '') + '...';
+    if (chosen.isInciso) {
+      statement = `${prefix}constitui preceito ou etapa legal que ${snippet}.`;
+    } else {
+      statement = `${prefix}${snippet}.`;
     }
-    explanation = `CERTO. Conforme o ${artigo.dispositivo}: "${chosenParagraph.slice(0, 200)}..."`;
+    explanation = `CERTO. Conforme o ${artigo.dispositivo}: "${chosen.clean}."`;
   } else {
     answer = false;
-    let modified = cleanSnippet;
+    let modified = snippet;
     let inverted = false;
 
     for (const [regex, replacement] of INVERSION_PAIRS) {
@@ -738,14 +791,24 @@ export function generateProceduralQuestionFromContranArticle(
     }
 
     if (!inverted) {
-      modified = `é expressamente vedado que ${cleanSnippet.toLowerCase()}`;
+      if (chosen.isInciso) {
+        statement = `${prefix}é expressamente dispensada a exigência de que ${snippet}.`;
+      } else {
+        statement = `${prefix}não se aplica a regra de que ${snippet}.`;
+      }
+    } else {
+      if (chosen.isInciso) {
+        statement = `${prefix}constitui preceito ou etapa legal que ${modified}.`;
+      } else {
+        statement = `${prefix}${modified}.`;
+      }
     }
+    explanation = `ERRADO. O dispositivo original do ${artigo.dispositivo} estabelece que: "${chosen.clean}."`;
+  }
 
-    statement = `Conforme o ${artigo.dispositivo}, ${modified}`;
-    if (statement.length > 275) {
-      statement = statement.slice(0, 272).replace(/[,;:\s]+$/, '') + '...';
-    }
-    explanation = `ERRADO. O dispositivo original do ${artigo.dispositivo} estabelece que: "${chosenParagraph.slice(0, 200)}..."`;
+  // Se por qualquer variação ultrapassar 275 caracteres, tenta outro bloco de forma limpa sem cortar com "..."
+  if (statement.length > 275) {
+    return generateProceduralQuestionFromContranArticle(getRandomContranArticle(), forceAnswer, recursionDepth + 1);
   }
 
   return {
@@ -758,6 +821,6 @@ export function generateProceduralQuestionFromContranArticle(
     answer,
     explanation,
     wasAiRewritten: false,
-    articleText: chosenParagraph,
+    articleText: chosen.raw,
   };
 }
