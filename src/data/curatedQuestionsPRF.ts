@@ -2710,6 +2710,906 @@ export const CURATED_PRF_QUESTIONS: CuratedPRFQuestion[] = [
     "statement": "A presença de bolhas na película localizada dentro da área crítica de visão do para-brisa é permitida pelo CONTRAN se a área total de bolhas for menor que 20 cm².",
     "answer": false,
     "explanation": "ERRADO. O Art. 4º, § 2º veda expressamente a presença de bolhas na película sobre a área crítica de visão do condutor e nas áreas indispensáveis à dirigibilidade."
+  },
+  {
+    "id": "contran-prf-201",
+    "category": "CONTRAN",
+    "topic": "Manual Brasileiro de Fiscalização (Res. 985)",
+    "legalBasis": "Resolução CONTRAN nº 985/2022",
+    "statement": "Conforme o Manual Brasileiro de Fiscalização de Trânsito (Resolução 985/2022), a lavratura do auto de infração sem abordagem é admitida nas hipóteses expressamente previstas na ficha.",
+    "answer": true,
+    "explanation": "CERTO. O MBFT estabelece que a lavratura do auto sem abordagem é permitida sempre que expressamente indicada na ficha técnica de enquadramento da infração."
+  },
+  {
+    "id": "contran-prf-202",
+    "category": "CONTRAN",
+    "topic": "Manual Brasileiro de Fiscalização (Res. 985)",
+    "legalBasis": "Resolução CONTRAN nº 985/2022",
+    "statement": "O agente de fiscalização da PRF pode aplicar penalidade de multa no momento da blitz, emitindo o boleto de cobrança com vencimento imediato no local.",
+    "answer": false,
+    "explanation": "ERRADO. O policial lavra o AUTO DE INFRAÇÃO (ato acusatório); a PENALIDADE de multa é aplicada pela autoridade de trânsito após o devido processo legal."
+  },
+  {
+    "id": "contran-prf-203",
+    "category": "CONTRAN",
+    "topic": "Manual Brasileiro de Fiscalização (Res. 985)",
+    "legalBasis": "Resolução CONTRAN nº 985/2022",
+    "statement": "No preenchimento do auto de infração de trânsito, a ausência de abordagem do condutor deve ser justificada de forma motivada pelo policial no campo de observações.",
+    "answer": true,
+    "explanation": "CERTO. Pelo MBFT, quando a abordagem for viável na teoria mas inviabilizada no caso concreto, o agente deve justificar a não abordagem no campo próprio."
+  },
+  {
+    "id": "contran-prf-204",
+    "category": "CONTRAN",
+    "topic": "Manual Brasileiro de Fiscalização (Res. 985)",
+    "legalBasis": "Resolução CONTRAN nº 985/2022",
+    "statement": "O agente de trânsito pode lavrar duas autuações distintas pelo mesmo fato quando a conduta violar simultaneamente regra de trânsito e resolução administrativa.",
+    "answer": false,
+    "explanation": "ERRADO. O MBFT consagra o princípio do non bis in idem: pela mesma conduta infracional não se lavram autos múltiplos cumulativos de idêntico enquadramento."
+  },
+  {
+    "id": "contran-prf-205",
+    "category": "CONTRAN",
+    "topic": "Manual Brasileiro de Fiscalização (Res. 985)",
+    "legalBasis": "Resolução CONTRAN nº 985/2022",
+    "statement": "Conforme o MBFT, as medidas administrativas de retenção e remoção possuem caráter acautelatório e visam à proteção da segurança viária e à regularização do veículo.",
+    "answer": true,
+    "explanation": "CERTO. O MBFT define medidas administrativas como ações acautelatórias e coercitivas imediatas voltadas à segurança viária e saneamento de irregularidades."
+  },
+  {
+    "id": "contran-prf-206",
+    "category": "CONTRAN",
+    "topic": "Manual Brasileiro de Fiscalização (Res. 985)",
+    "legalBasis": "Resolução CONTRAN nº 985/2022",
+    "statement": "O auto de infração lavrado eletronicamente por policial rodoviário federal exige assinatura digital física do motorista para ser convalidado pela autoridade.",
+    "answer": false,
+    "explanation": "ERRADO. O AIT eletrônico é chancelado pelo login e certificado funcional do policial; a assinatura do infrator é facultativa e sua ausência não invalida o auto."
+  },
+  {
+    "id": "contran-prf-207",
+    "category": "CONTRAN",
+    "topic": "Manual Brasileiro de Fiscalização (Res. 985)",
+    "legalBasis": "Resolução CONTRAN nº 985/2022",
+    "statement": "A fiscalização por instrumento eletrônico homologado dispensa a presença física de agente da autoridade de trânsito no local para a constatação da infração.",
+    "answer": true,
+    "explanation": "CERTO. Equipamentos metrológicos automáticos homologados (como radares eletrônicos e câmeras de videomonitoramento) dispensam a presença física do agente na via."
+  },
+  {
+    "id": "contran-prf-208",
+    "category": "CONTRAN",
+    "topic": "Manual Brasileiro de Fiscalização (Res. 985)",
+    "legalBasis": "Resolução CONTRAN nº 985/2022",
+    "statement": "O erro substancial de tipificação do código de enquadramento da infração pode ser corrigido de ofício pela JARI sem anulação do auto de infração lavrado.",
+    "answer": false,
+    "explanation": "ERRADO. O erro substancial na tipificação do fato no auto de infração gera nulidade insanável, devendo o auto ser arquivado pela autoridade ou pela JARI."
+  },
+  {
+    "id": "contran-prf-209",
+    "category": "CONTRAN",
+    "topic": "Manual Brasileiro de Fiscalização (Res. 985)",
+    "legalBasis": "Resolução CONTRAN nº 985/2022",
+    "statement": "Conforme as diretrizes do MBFT, as infrações de competência concorrente podem ser fiscalizadas e autuadas tanto pela PRF quanto pelos órgãos estaduais e municipais.",
+    "answer": true,
+    "explanation": "CERTO. Nas infrações de competência concorrente, qualquer autoridade de trânsito com atribuição no local pode exercer a fiscalização e a autuação do infrator."
+  },
+  {
+    "id": "contran-prf-210",
+    "category": "CONTRAN",
+    "topic": "Manual Brasileiro de Fiscalização (Res. 985)",
+    "legalBasis": "Resolução CONTRAN nº 985/2022",
+    "statement": "Em caso de veículo flagrado sem placa de identificação, o policial é proibido de efetuar a remoção do veículo se o condutor apresentar a nota fiscal da compra.",
+    "answer": false,
+    "explanation": "ERRADO. Transitar sem placa fora das estritas hipóteses de prazo legal para emplacamento é infração gravíssima com medida de remoção ao depósito."
+  },
+  {
+    "id": "contran-prf-211",
+    "category": "CONTRAN",
+    "topic": "Cargas e Bicicletas em Veículos (Res. 819)",
+    "legalBasis": "Resolução CONTRAN nº 819/2021, Art. 4º",
+    "statement": "Conforme a Resolução CONTRAN nº 819/2021, o transporte de bicicletas na parte traseira do veículo não pode ocultar as luzes e a placa de identificação veicular.",
+    "answer": true,
+    "explanation": "CERTO. Art. 4º da Res. 819/2021: O transporte de bicicletas na traseira não pode encobrir nem total nem parcialmente as luzes do veículo ou sua placa traseira."
+  },
+  {
+    "id": "contran-prf-212",
+    "category": "CONTRAN",
+    "topic": "Cargas e Bicicletas em Veículos (Res. 819)",
+    "legalBasis": "Resolução CONTRAN nº 819/2021, Art. 5º",
+    "statement": "Caso o suporte de bicicleta na traseira do veículo cubra a placa original, o condutor é autorizado a escrever os caracteres da placa em papelão adesivado visível.",
+    "answer": false,
+    "explanation": "ERRADO. É terminantemente vedada placa improvisada em papelão; havendo oclusão da placa original, é obrigatório o uso de segunda placa oficial na régua de luzes."
+  },
+  {
+    "id": "contran-prf-213",
+    "category": "CONTRAN",
+    "topic": "Cargas e Bicicletas em Veículos (Res. 819)",
+    "legalBasis": "Resolução CONTRAN nº 819/2021, Art. 5º",
+    "statement": "Na hipótese de encobrimento da placa traseira pelo suporte de bicicleta, é obrigatório o uso de segunda placa de identificação afixada na régua de sinalização.",
+    "answer": true,
+    "explanation": "CERTO. Art. 5º: Caso a bicicleta encubra a placa traseira, deve-se utilizar régua de sinalização com a segunda placa de identificação veicular homologada."
+  },
+  {
+    "id": "contran-prf-214",
+    "category": "CONTRAN",
+    "topic": "Cargas e Bicicletas em Veículos (Res. 819)",
+    "legalBasis": "Resolução CONTRAN nº 819/2021, Art. 6º",
+    "statement": "A carga transportada sobre o teto de automóvel de passeio pode ultrapassar a largura total da carroceria em até 30 cm de cada lado sem qualquer autorização.",
+    "answer": false,
+    "explanation": "ERRADO. A carga transportada no bagageiro ou teto do automóvel não pode ultrapassar a largura e o comprimento totais da carroceria do veículo."
+  },
+  {
+    "id": "contran-prf-215",
+    "category": "CONTRAN",
+    "topic": "Cargas e Bicicletas em Veículos (Res. 819)",
+    "legalBasis": "Resolução CONTRAN nº 819/2021, Art. 6º",
+    "statement": "A carga transportada no teto do veículo não pode exceder a altura de cinquenta centímetros, respeitada a estabilidade do veículo, ressalvadas as bicicletas.",
+    "answer": true,
+    "explanation": "CERTO. Art. 6º, § 1º: A carga transportada no teto não pode ultrapassar a altura de 50 cm, ressalvadas as bicicletas transportadas em suportes verticais."
+  },
+  {
+    "id": "contran-prf-216",
+    "category": "CONTRAN",
+    "topic": "Cargas e Bicicletas em Veículos (Res. 819)",
+    "legalBasis": "Resolução CONTRAN nº 819/2021, Art. 6º",
+    "statement": "O transporte de bicicletas fixadas em suportes de teto é limitado à altura máxima de cinquenta centímetros contada a partir da base do rack do veículo.",
+    "answer": false,
+    "explanation": "ERRADO. O Art. 6º, § 2º ressalva expressamente o transporte de bicicletas da regra do limite de 50 cm de altura sobre o teto."
+  },
+  {
+    "id": "contran-prf-217",
+    "category": "CONTRAN",
+    "topic": "Cargas e Bicicletas em Veículos (Res. 819)",
+    "legalBasis": "Resolução CONTRAN nº 819/2021, Art. 5º",
+    "statement": "A régua de sinalização instalada na traseira do veículo deve possuir lanternas de freio, indicadores de direção e luz de placa perfeitamente operacionais.",
+    "answer": true,
+    "explanation": "CERTO. Art. 5º, § 2º: A régua deve reproduzir lanternas de posição, luzes de freio, indicadores de mudança de direção e luz da placa devidamente iluminada."
+  },
+  {
+    "id": "contran-prf-218",
+    "category": "CONTRAN",
+    "topic": "Cargas e Bicicletas em Veículos (Res. 819)",
+    "legalBasis": "Resolução CONTRAN nº 819/2021, Art. 3º",
+    "statement": "O transporte eventual de cargas volumosas em porta-malas aberto dispensa qualquer amarração caso o peso da carga seja suficiente para mantê-la imóvel.",
+    "answer": false,
+    "explanation": "ERRADO. Nenhuma carga pode ser transportada solta; a carga deve estar perfeitamente ancorada e fixada de modo a não se arrastar nem cair na via pública."
+  },
+  {
+    "id": "contran-prf-219",
+    "category": "CONTRAN",
+    "topic": "Cargas e Bicicletas em Veículos (Res. 819)",
+    "legalBasis": "Resolução CONTRAN nº 819/2021, Art. 3º",
+    "statement": "É vedado o transporte de carga ou bicicleta de forma que arraste na via ou comprometa a visibilidade frontal e lateral do condutor do veículo automotor.",
+    "answer": true,
+    "explanation": "CERTO. Art. 3º da Res. 819/2021 proíbe transporte de cargas que coloquem em perigo pessoas, arrastem na via ou atrapalhem a visibilidade do motorista."
+  },
+  {
+    "id": "contran-prf-220",
+    "category": "CONTRAN",
+    "topic": "Cargas e Bicicletas em Veículos (Res. 819)",
+    "legalBasis": "Resolução CONTRAN nº 819/2021, Art. 5º",
+    "statement": "A segunda placa de identificação veicular utilizada na régua de sinalização dispensa lacre, QR Code ou qualquer vinculação cadastral ao órgão de trânsito.",
+    "answer": false,
+    "explanation": "ERRADO. A segunda placa traseira deve ser oficial, homologada e vinculada ao prontuário do veículo com os mesmos mecanismos de controle da PIV Mercosul."
+  },
+  {
+    "id": "contran-prf-221",
+    "category": "CONTRAN",
+    "topic": "Identificação Veicular e VIN (Res. 968)",
+    "legalBasis": "Resolução CONTRAN nº 968/2022, Art. 2º",
+    "statement": "Conforme a Resolução CONTRAN nº 968/2022, o Número de Identificação Veicular (VIN) é composto por dezessete caracteres alfanuméricos gravados conforme norma técnica.",
+    "answer": true,
+    "explanation": "CERTO. Res. 968/2022, Art. 2º: O VIN obedece ao padrão ISO 3779 e compreende exatamente dezessete caracteres alfanuméricos estruturados."
+  },
+  {
+    "id": "contran-prf-222",
+    "category": "CONTRAN",
+    "topic": "Identificação Veicular e VIN (Res. 968)",
+    "legalBasis": "Resolução CONTRAN nº 968/2022, Art. 2º",
+    "statement": "Na composição alfanumérica do chassi (VIN), é permitido utilizar livremente as letras I, O e Q sem restrição metrológica ou de padronização internacional.",
+    "answer": false,
+    "explanation": "ERRADO. As letras I, O e Q são terminantemente PROIBIDAS na composição do VIN pela norma técnica internacional e pela Resolução 968/2022."
+  },
+  {
+    "id": "contran-prf-223",
+    "category": "CONTRAN",
+    "topic": "Identificação Veicular e VIN (Res. 968)",
+    "legalBasis": "Resolução CONTRAN nº 968/2022, Art. 2º",
+    "statement": "As letras I, O e Q não podem ser utilizadas na gravação do VIN para evitar confusão visual com os algarismos arábicos 1 e 0 nas fiscalizações de trânsito.",
+    "answer": true,
+    "explanation": "CERTO. O banimento das letras I, O e Q evita equívocos periciais e fraudes na identificação veicular com os algarismos 1 (um) e 0 (zero)."
+  },
+  {
+    "id": "contran-prf-224",
+    "category": "CONTRAN",
+    "topic": "Identificação Veicular e VIN (Res. 968)",
+    "legalBasis": "Resolução CONTRAN nº 968/2022, Art. 3º",
+    "statement": "A gravação do número do chassi em vidros automotivos é facultativa e pode ser removida pelo proprietário para instalação de película escurecida.",
+    "answer": false,
+    "explanation": "ERRADO. A gravação nos vidros principais do veículo é OBRIGATÓRIA (identificação secundária VIS) e sua supressão é infração e indício de adulteração criminosa."
+  },
+  {
+    "id": "contran-prf-225",
+    "category": "CONTRAN",
+    "topic": "Identificação Veicular e VIN (Res. 968)",
+    "legalBasis": "Resolução CONTRAN nº 968/2022, Art. 3º",
+    "statement": "A identificação gravada nos vidros do veículo deve conter, no mínimo, os seis últimos caracteres da identificação do VIN (seção VIS) em locais de fácil visualização.",
+    "answer": true,
+    "explanation": "CERTO. Res. 968/2022, Art. 3º: Os vidros do para-brisa, traseiro e laterais devem conter a gravação de pelo menos os caracteres da seção VIS do VIN."
+  },
+  {
+    "id": "contran-prf-226",
+    "category": "CONTRAN",
+    "topic": "Identificação Veicular e VIN (Res. 968)",
+    "legalBasis": "Resolução CONTRAN nº 968/2022, Art. 6º",
+    "statement": "A empresa que comercializar peças veiculares usadas pode remarcar o chassi de veículos avariados sem prévia autorização do órgão executivo de trânsito.",
+    "answer": false,
+    "explanation": "ERRADO. A regravação de chassi sem autorização expressa do DETRAN configura o crime tipificado no Art. 311 do Código Penal (adulteração de sinal identificador)."
+  },
+  {
+    "id": "contran-prf-227",
+    "category": "CONTRAN",
+    "topic": "Identificação Veicular e VIN (Res. 968)",
+    "legalBasis": "Resolução CONTRAN nº 968/2022, Art. 6º",
+    "statement": "A regravação do número do VIN em caso de corrosão ou sinistro depende de prévia autorização do DETRAN, devendo ser precedida de vistoria veicular oficial.",
+    "answer": true,
+    "explanation": "CERTO. Art. 6º: A regravação do VIN por oxidação ou sinistro só pode ocorrer mediante processo administrativo prévio do DETRAN com laudo pericial."
+  },
+  {
+    "id": "contran-prf-228",
+    "category": "CONTRAN",
+    "topic": "Identificação Veicular e VIN (Res. 968)",
+    "legalBasis": "Resolução CONTRAN 968 c/c 311 CP",
+    "statement": "O veículo que apresentar gravação do VIN com sinais de adulteração física por lixamento deve ser liberado pela PRF caso o condutor possua o CRLV original.",
+    "answer": false,
+    "explanation": "ERRADO. Constatada adulteração do chassi, a PRF deve apreender o veículo e apresentar a ocorrência imediatamente à Polícia Judiciária (flagrante delito)."
+  },
+  {
+    "id": "contran-prf-229",
+    "category": "CONTRAN",
+    "topic": "Identificação Veicular e VIN (Res. 968)",
+    "legalBasis": "Resolução CONTRAN nº 968/2022, Art. 3º",
+    "statement": "As plaquetas e etiquetas destrutíveis com gravação de segurança complementam a identificação veicular e devem se autodestruir em qualquer tentativa de remoção.",
+    "answer": true,
+    "explanation": "CERTO. Art. 3º, § 2º: As etiquetas adesivas de segurança aplicadas nas colunas das portas e compartimento do motor se desintegram se violadas."
+  },
+  {
+    "id": "contran-prf-230",
+    "category": "CONTRAN",
+    "topic": "Identificação Veicular e VIN (Res. 968)",
+    "legalBasis": "Resolução CONTRAN nº 968/2022, Art. 2º",
+    "statement": "Veículos de carga rebocados (carretas e semirreboques) são dispensados de possuir número de chassi gravado na estrutura mecânica do monobloco.",
+    "answer": false,
+    "explanation": "ERRADO. Semirreboques e reboques são veículos automotores e rebocados sujeitos obrigatoriamente a registro, licenciamento e gravação primária do VIN."
+  },
+  {
+    "id": "contran-prf-231",
+    "category": "CONTRAN",
+    "topic": "Ciclomotores e Autopropelidos (Res. 996)",
+    "legalBasis": "Resolução CONTRAN nº 996/2023, Art. 4º",
+    "statement": "Conforme a Resolução CONTRAN nº 996/2023, os equipamentos de mobilidade individual autopropelidos podem circular em calçadas com velocidade limitada a 6 km/h.",
+    "answer": true,
+    "explanation": "CERTO. Art. 4º da Res. 996/2023: Em áreas de circulação de pedestres (calçadas e passeios), a velocidade máxima admitida para autopropelidos é de 6 km/h."
+  },
+  {
+    "id": "contran-prf-232",
+    "category": "CONTRAN",
+    "topic": "Ciclomotores e Autopropelidos (Res. 996)",
+    "legalBasis": "Resolução CONTRAN nº 996/2023, Art. 4º",
+    "statement": "Patinetes elétricos autopropelidos podem transitar em rodovias federais pela faixa central de tráfego rápido, desde que utilizem luz dianteira.",
+    "answer": false,
+    "explanation": "ERRADO. Equipamentos autopropelidos são terminantemente proibidos de circular em pistas de rolamento de rodovias e vias de trânsito rápido."
+  },
+  {
+    "id": "contran-prf-233",
+    "category": "CONTRAN",
+    "topic": "Ciclomotores e Autopropelidos (Res. 996)",
+    "legalBasis": "Resolução CONTRAN nº 996/2023, Art. 4º",
+    "statement": "Nas ciclovias e ciclofaixas, a velocidade máxima regulamentar admitida para os equipamentos de mobilidade individual autopropelidos é de 20 km/h.",
+    "answer": true,
+    "explanation": "CERTO. Art. 4º, II: Nas ciclovias, ciclofaixas e vias compartilhadas com ciclistas, a velocidade máxima de autopropelidos é de até 20 km/h."
+  },
+  {
+    "id": "contran-prf-234",
+    "category": "CONTRAN",
+    "topic": "Ciclomotores e Autopropelidos (Res. 996)",
+    "legalBasis": "Resolução CONTRAN nº 996/2023, Art. 2º",
+    "statement": "Para conduzir bicicletas elétricas com acelerador de punho manual em ciclovias é obrigatória a posse de CNH na categoria B e emplacamento Mercosul.",
+    "answer": false,
+    "explanation": "ERRADO. Bicicletas elétricas dispensam CNH, ACC e emplacamento; se possuir acelerador manual sem pedal e potência > 1.000W é ciclomotor (exige ACC ou A)."
+  },
+  {
+    "id": "contran-prf-235",
+    "category": "CONTRAN",
+    "topic": "Ciclomotores e Autopropelidos (Res. 996)",
+    "legalBasis": "Resolução CONTRAN nº 996/2023, Art. 3º",
+    "statement": "Os ciclomotores devem dispor de espelhos retrovisores em ambos os lados, farol dianteiro de luz branca, lanterna traseira e buzina para poderem circular.",
+    "answer": true,
+    "explanation": "CERTO. Art. 3º: Ciclomotores devem ser equipados obrigatoriamente com retrovisores em ambos os lados, farol branco, lanterna traseira vermelha, buzina e velocímetro."
+  },
+  {
+    "id": "contran-prf-236",
+    "category": "CONTRAN",
+    "topic": "Ciclomotores e Autopropelidos (Res. 996)",
+    "legalBasis": "Resolução CONTRAN nº 996/2023, Art. 5º",
+    "statement": "O uso de capacete motociclístico é facultativo para condutores de ciclomotores quando trafegarem em vias urbanas de velocidade até 40 km/h.",
+    "answer": false,
+    "explanation": "ERRADO. Para ciclomotores, o uso de capacete motociclístico com viseira ou óculos de proteção é OBRIGATÓRIO em qualquer via pública."
+  },
+  {
+    "id": "contran-prf-237",
+    "category": "CONTRAN",
+    "topic": "Ciclomotores e Autopropelidos (Res. 996)",
+    "legalBasis": "Resolução CONTRAN 996 c/c 140 CTB",
+    "statement": "Para conduzir ciclomotores em vias públicas terrestres é indispensável que o condutor tenha idade igual ou superior a 18 anos e possua habilitação válida.",
+    "answer": true,
+    "explanation": "CERTO. A condução de ciclomotor exige maioridade penal (18 anos) e documento de habilitação oficial (ACC ou CNH categoria A)."
+  },
+  {
+    "id": "contran-prf-238",
+    "category": "CONTRAN",
+    "topic": "Ciclomotores e Autopropelidos (Res. 996)",
+    "legalBasis": "Resolução CONTRAN 996 c/c 57 CTB",
+    "statement": "Os ciclomotores podem circular em rodovias federais que não possuam acostamento pavimentado desde que mantenham os faróis altos ligados.",
+    "answer": false,
+    "explanation": "ERRADO. O Art. 57 do CTB proíbe terminantemente a circulação de ciclomotores nas rodovias que não disponham de acostamento transitável."
+  },
+  {
+    "id": "contran-prf-239",
+    "category": "CONTRAN",
+    "topic": "Ciclomotores e Autopropelidos (Res. 996)",
+    "legalBasis": "Resolução CONTRAN nº 996/2023, Art. 2º",
+    "statement": "As bicicletas elétricas com pedal assistido possuem motor elétrico auxiliar que é acionado somente quando o condutor pedala, desligando-se a 32 km/h.",
+    "answer": true,
+    "explanation": "CERTO. Art. 2º, § 1º: A propulsão elétrica deve cessar quando o ciclista interromper a pedalada ou quando o veículo atingir a velocidade máxima de 32 km/h."
+  },
+  {
+    "id": "contran-prf-240",
+    "category": "CONTRAN",
+    "topic": "Ciclomotores e Autopropelidos (Res. 996)",
+    "legalBasis": "Resolução CONTRAN nº 996/2023, Art. 2º",
+    "statement": "Os equipamentos de mobilidade autopropelidos (como monociclos elétricos) são sujeitos ao recolhimento compulsório do imposto IPVA e emplacamento.",
+    "answer": false,
+    "explanation": "ERRADO. Equipamentos autopropelidos não são considerados veículos automotores registráveis e dispensam IPVA, emplacamento e habilitação."
+  },
+  {
+    "id": "contran-prf-241",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo Operacional (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 1º",
+    "statement": "Conforme a Resolução CONTRAN nº 938/2022, o cronotacógrafo registra simultaneamente de forma inalterável a velocidade, a distância percorrida e o tempo de direção.",
+    "answer": true,
+    "explanation": "CERTO. Art. 1º da Res. 938/2022: O cronotacógrafo registra velocidade, distância percorrida e tempos de marcha e repouso de modo inalterável e contínuo."
+  },
+  {
+    "id": "contran-prf-242",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo Operacional (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 2º",
+    "statement": "O registrador eletrônico de tacógrafo que utilize bobina de papel térmico é dispensado de indicar a velocidade instantânea desenvolvida pelo veículo.",
+    "answer": false,
+    "explanation": "ERRADO. O registro gráfico ou digital da velocidade instantânea ponto a ponto é requisito primário indispensável em qualquer modelo de tacógrafo."
+  },
+  {
+    "id": "contran-prf-243",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo Operacional (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 4º",
+    "statement": "A guarda dos discos diagramas ou relatórios eletrônicos do cronotacógrafo pelo proprietário ou transportador é obrigatória pelo prazo mínimo de 90 dias.",
+    "answer": true,
+    "explanation": "CERTO. Art. 4º: O transportador deve guardar os discos diagramas ou registros eletrônicos do cronotacógrafo pelo prazo mínimo ordinário de 90 (noventa) dias."
+  },
+  {
+    "id": "contran-prf-244",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo Operacional (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 4º",
+    "statement": "Em caso de sinistro de trânsito grave com vítimas, o transportador é autorizado a descartar os discos de tacógrafo após trinta dias da colisão.",
+    "answer": false,
+    "explanation": "ERRADO. Na ocorrência de sinistro de trânsito com vítima, o dever de guarda dos discos ou arquivos eletrônicos é ampliado para 1 (um) ano inteiro."
+  },
+  {
+    "id": "contran-prf-245",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo Operacional (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 4º",
+    "statement": "Na ocorrência de sinistro de trânsito com vítima, os registros do cronotacógrafo devem ser conservados pelo proprietário do veículo pelo período de um ano.",
+    "answer": true,
+    "explanation": "CERTO. Art. 4º, parágrafo único: Havendo sinistro com vítima, o transportador é obrigado a manter os registros à disposição das autoridades por um ano."
+  },
+  {
+    "id": "contran-prf-246",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo Operacional (Res. 938)",
+    "legalBasis": "Resolução CONTRAN 938 c/c 230 CTB",
+    "statement": "A ausência de fita de lacre ou a violação mecânica do lacre do cronotacógrafo constitui mera infração leve com isenção de penalidade de multa.",
+    "answer": false,
+    "explanation": "ERRADO. Tacógrafo violado, sem lacre ou com defeito constitui infração GRAVE prevista no Art. 230, XIV do CTB, gerando multa e retenção do veículo."
+  },
+  {
+    "id": "contran-prf-247",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo Operacional (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 3º",
+    "statement": "A verificação metrológica do cronotacógrafo é atestada por Certificado de Verificação emitido pelo Inmetro com validade máxima de vinte e quatro meses.",
+    "answer": true,
+    "explanation": "CERTO. Art. 3º: O cronotacógrafo deve ser submetido à verificação metrológica periódica bienal (24 meses) pelo Inmetro ou rede credenciada."
+  },
+  {
+    "id": "contran-prf-248",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo Operacional (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 3º",
+    "statement": "O condutor pode apresentar laudo de revisão preventiva de mecânica particular em substituição ao Certificado de Verificação Metrológica do Inmetro.",
+    "answer": false,
+    "explanation": "ERRADO. Apenas a verificação oficial metrológica do Inmetro (ou Posto Autorizado credenciado) tem validade probatória legal de conformidade técnica."
+  },
+  {
+    "id": "contran-prf-249",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo Operacional (Res. 938)",
+    "legalBasis": "Resolução CONTRAN nº 938/2022, Art. 5º",
+    "statement": "A fiscalização do cumprimento dos tempos de direção e descanso de motoristas profissionais da Lei 13.103/2015 pode ser realizada pela leitura do disco do tacógrafo.",
+    "answer": true,
+    "explanation": "CERTO. Pelo Art. 5º da Res. 938 e Lei dos Motoristas, a PRF afere o descanso obrigatório e jornada de trabalho pela leitura dos dados do tacógrafo."
+  },
+  {
+    "id": "contran-prf-250",
+    "category": "CONTRAN",
+    "topic": "Cronotacógrafo Operacional (Res. 938)",
+    "legalBasis": "Resolução CONTRAN 938 c/c 136 CTB",
+    "statement": "Veículos destinados ao transporte escolar são dispensados de portar cronotacógrafo quando realizarem exclusivamente viagens em perímetros rurais.",
+    "answer": false,
+    "explanation": "ERRADO. Pelo Art. 136 do CTB e Res. 938, TODO veículo de transporte escolar deve obrigatoriamente possuir tacógrafo, independentemente do itinerário."
+  },
+  {
+    "id": "contran-prf-251",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 3º",
+    "statement": "Conforme a Resolução CONTRAN nº 946/2022, na amarração de cargas por atrito, os dispositivos devem comprimir a carga verticalmente contra o piso da carroceria.",
+    "answer": true,
+    "explanation": "CERTO. Na amarração envolvente (por atrito), a cinta ou corrente aplica força descendente sobre o topo da carga aumentando o coeficiente de atrito."
+  },
+  {
+    "id": "contran-prf-252",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 945/2022, Art. 3º",
+    "statement": "As correntes de aço carbono comuns sem especificação de grau de dureza podem ser usadas na amarração de blocos pesados de granito em rodovias federais.",
+    "answer": false,
+    "explanation": "ERRADO. A Resolução 945/2022 exige correntes de aço liga de alta tenacidade grau 8 ou superior com certificado de capacidade de carga gravado nos elos."
+  },
+  {
+    "id": "contran-prf-253",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Anexo I",
+    "statement": "O transporte de bobinas de chapa de aço deve ser realizado em berços específicos que garantam o assentamento do raio da bobina e sua perfeita fixação.",
+    "answer": true,
+    "explanation": "CERTO. Res. 946/2022, Anexo I: As bobinas de aço exigem berços ou cavidades com travas laterais e calços que impeçam qualquer rolamento da bobina."
+  },
+  {
+    "id": "contran-prf-254",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 5º",
+    "statement": "É autorizada a amarração de contêineres de transporte marítimo com cordas de sisal em caminhão comum caso o veículo não disponha de travas twist-lock.",
+    "answer": false,
+    "explanation": "ERRADO. Contêineres devem ser transportados exclusivamente em semirreboques dotados de travas padronizadas twist-lock; cordas são absolutamente proibidas."
+  },
+  {
+    "id": "contran-prf-255",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 5º",
+    "statement": "Os semirreboques porta-contêineres devem dispor de dispositivos de fixação mecânica tipo twist-lock instalados nos quatro cantos de cada contêiner transportado.",
+    "answer": true,
+    "explanation": "CERTO. O transporte seguro de contêiner exige quatro travas twist-lock engatadas e bloqueadas nas sapatas de canto estruturais da caixa de carga."
+  },
+  {
+    "id": "contran-prf-256",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 4º",
+    "statement": "A ausência de protetores de cantoneira em cargas de arestas cortantes que toquem cintas têxteis de amarração não impede a circulação nem gera retenção.",
+    "answer": false,
+    "explanation": "ERRADO. O uso de cantoneiras protetoras em arestas cortantes é obrigatório; o contato direto da aresta afiada com a cinta gera retenção por perigo iminente."
+  },
+  {
+    "id": "contran-prf-257",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 4º",
+    "statement": "Nas cargas com cantos vivos ou cortantes, é obrigatória a utilização de elementos de proteção entre a cinta têxtil e a carga para evitar o rompimento.",
+    "answer": true,
+    "explanation": "CERTO. Art. 4º, § 3º: Dispositivos de amarração têxteis em contato com cantos vivos devem ser protegidos com cantoneiras plásticas ou metálicas apropriadas."
+  },
+  {
+    "id": "contran-prf-258",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 945/2022, Art. 2º",
+    "statement": "O transporte de toras de madeira empilhadas na horizontal dispensa fueiros laterais de contenção caso estejam amarradas por corrente na extremidade.",
+    "answer": false,
+    "explanation": "ERRADO. A Resolução 945/2022 torna os fueiros metálicos laterais de contenção OBRIGATÓRIOS em qualquer transporte de madeira bruta em toras."
+  },
+  {
+    "id": "contran-prf-259",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN nº 946/2022, Art. 3º",
+    "statement": "O número mínimo de dispositivos de amarração deve ser calculado de modo que a força total de retenção suporte as acelerações e desacelerações do veículo.",
+    "answer": true,
+    "explanation": "CERTO. O cálculo da amarração deve atender aos fatores dinâmicos de estabilidade: 0,8g para frente, 0,5g para trás e 0,5g nas laterais."
+  },
+  {
+    "id": "contran-prf-260",
+    "category": "CONTRAN",
+    "topic": "Amarração e Cargas Especiais (Res. 945 e 946)",
+    "legalBasis": "Resolução CONTRAN 946 c/c 235 CTB",
+    "statement": "A condução de veículo de carga com amarração inadequada constitui mera infração leve sujeita unicamente a orientação educativa pelo policial da PRF.",
+    "answer": false,
+    "explanation": "ERRADO. Conduzir veículo com carga mal fixada que possa se soltar constitui infração GRAVE (Art. 235 ou 230, IX do CTB) com retenção para regularização."
+  },
+  {
+    "id": "contran-prf-261",
+    "category": "CONTRAN",
+    "topic": "Combinações de Carga e Eixos (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 2º",
+    "statement": "Conforme a Resolução CONTRAN nº 882/2021, a combinação de veículos bitrem é composta por cavalo-mecânico tracionando dois semirreboques acoplados entre si.",
+    "answer": true,
+    "explanation": "CERTO. Bitrem é a CVC formada por cavalo-mecânico e dois semirreboques, acoplados diretamente por quinta roda instalada no primeiro semirreboque."
+  },
+  {
+    "id": "contran-prf-262",
+    "category": "CONTRAN",
+    "topic": "Combinações de Carga e Eixos (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 2º",
+    "statement": "A combinação rodotrem dispensa o uso de dolly intermediário entre o primeiro e o segundo semirreboque em rodovias de pista dupla.",
+    "answer": false,
+    "explanation": "ERRADO. O rodotrem é definido exatamente pelo uso de veículo intermediário de engate (dolly) para articular o segundo semirreboque."
+  },
+  {
+    "id": "contran-prf-263",
+    "category": "CONTRAN",
+    "topic": "Combinações de Carga e Eixos (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 2º",
+    "statement": "A combinação rodotrem utiliza um veículo intermediário de engate (dolly) com quinta roda para tracionar a segunda unidade semirreboque.",
+    "answer": true,
+    "explanation": "CERTO. Art. 2º da Res. 882/2021: O rodotrem é uma CVC articulada de 9 eixos formada por cavalo, primeiro semirreboque, dolly e segundo semirreboque."
+  },
+  {
+    "id": "contran-prf-264",
+    "category": "CONTRAN",
+    "topic": "Combinações de Carga e Eixos (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 3º",
+    "statement": "O peso máximo admitido por eixo tandem triplo com rodagem dupla em via pública é de trinta e seis toneladas métricas sem tolerância.",
+    "answer": false,
+    "explanation": "ERRADO. O peso regulamentar máximo para eixo tandem triplo com rodagem dupla é de 25,5 toneladas métricas (Res. 882/2021, Art. 3º, VI)."
+  },
+  {
+    "id": "contran-prf-265",
+    "category": "CONTRAN",
+    "topic": "Combinações de Carga e Eixos (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 3º",
+    "statement": "O limite regulamentar de peso bruto transmitido às vias por eixo tandem triplo com rodagem dupla é de 25,5 toneladas métricas conforme a Resolução 882/2021.",
+    "answer": true,
+    "explanation": "CERTO. Art. 3º, VI da Res. 882/2021: O peso bruto máximo por conjunto de 3 eixos em tandem com rodagem dupla é fixado em 25,5 toneladas."
+  },
+  {
+    "id": "contran-prf-266",
+    "category": "CONTRAN",
+    "topic": "Combinações de Carga e Eixos (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 3º",
+    "statement": "O caminhão simples de 2 eixos pode circular em rodovias federais com PBT homologado de até 25 toneladas sem sofrer autuação por excesso de peso.",
+    "answer": false,
+    "explanation": "ERRADO. O caminhão simples de 2 eixos (toco) tem limite legal máximo de PBT de 16,0 toneladas (6t no eixo dianteiro + 10t no eixo traseiro duplo)."
+  },
+  {
+    "id": "contran-prf-267",
+    "category": "CONTRAN",
+    "topic": "Combinações de Carga e Eixos (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 3º",
+    "statement": "O limite regulamentar máximo de peso bruto total (PBT) para um caminhão simples de dois eixos é de dezesseis toneladas métricas.",
+    "answer": true,
+    "explanation": "CERTO. Art. 3º, II da Res. 882/2021: Veículo não articulado de dois eixos tem PBT regulamentar máximo de 16,0 toneladas métricas."
+  },
+  {
+    "id": "contran-prf-268",
+    "category": "CONTRAN",
+    "topic": "Combinações de Carga e Eixos (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 19",
+    "statement": "A pesagem de veículos por balança dinâmica na rodovia dispensa qualquer desconto de margem de erro sobre a pesagem registrada pelo sensor de solo.",
+    "answer": false,
+    "explanation": "ERRADO. É direito líquido e certo a aplicação da tolerância regulamentar legal (5% sobre o PBT e 12,5% sobre o peso por eixo)."
+  },
+  {
+    "id": "contran-prf-269",
+    "category": "CONTRAN",
+    "topic": "Combinações de Carga e Eixos (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 19",
+    "statement": "A tolerância de 5% sobre o peso bruto total (PBT) em pesagem rodoviária destina-se a absorver a margem metrológica do instrumento e umidade da carga.",
+    "answer": true,
+    "explanation": "CERTO. A margem de tolerância legal compensa variações dinâmicas de oscilação do veículo, imprecisões metrológicas e umidade absorvida pela carga."
+  },
+  {
+    "id": "contran-prf-270",
+    "category": "CONTRAN",
+    "topic": "Combinações de Carga e Eixos (Res. 882)",
+    "legalBasis": "Resolução CONTRAN nº 882/2021, Art. 19",
+    "statement": "O excesso de peso por eixo pode ser compensado automaticamente deduzindo-se do peso de outro eixo que esteja operando com folga de capacidade.",
+    "answer": false,
+    "explanation": "ERRADO. O limite por eixo é autônomo e visa proteger o pavimento asfáltico; se um eixo estiver com sobrepeso, a infração resta consumada."
+  },
+  {
+    "id": "contran-prf-271",
+    "category": "CONTRAN",
+    "topic": "Alcoolemia e Substâncias Psicoativas (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 4º",
+    "statement": "Conforme a Resolução CONTRAN nº 1031/2025, o condutor flagrado com resultado positivo no etilômetro tem direito de solicitar teste de contraprova imediato.",
+    "answer": true,
+    "explanation": "CERTO. A Resolução 1031 assegura ao condutor o direito de requerer contraprova imediata por meio de novo teste de sopro com intervalo regulamentar."
+  },
+  {
+    "id": "contran-prf-272",
+    "category": "CONTRAN",
+    "topic": "Alcoolemia e Substâncias Psicoativas (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 4º",
+    "statement": "A realização de teste de contraprova de alcoolemia deve ser feita obrigatoriamente 4 horas após o primeiro teste com o condutor liberado da custódia.",
+    "answer": false,
+    "explanation": "ERRADO. O teste de contraprova deve ser efetuado no próprio local ou imediatamente na sequência (cerca de 15 minutos), sob pena de perda do teor alcoólico."
+  },
+  {
+    "id": "contran-prf-273",
+    "category": "CONTRAN",
+    "topic": "Alcoolemia e Substâncias Psicoativas (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN 1031 c/c 165 CTB",
+    "statement": "A reincidência na infração do artigo 165 ou 165-A no período de 12 meses implica a aplicação da penalidade de multa em dobro e instauração de cassação da CNH.",
+    "answer": true,
+    "explanation": "CERTO. Art. 165, parágrafo único e Art. 263, II do CTB: Aplica-se a multa em dobro (R$ 5.869,40) e gera a cassação do direito de dirigir do condutor reincidente."
+  },
+  {
+    "id": "contran-prf-274",
+    "category": "CONTRAN",
+    "topic": "Alcoolemia e Substâncias Psicoativas (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025",
+    "statement": "Em sinistro grave de trânsito em que o motorista esteja hospitalizado desacordado, os policiais podem forçar a coleta de sangue com auxílio de algemas.",
+    "answer": false,
+    "explanation": "ERRADO. Ninguém pode ser constrangido fisicamente a intervenções corporais invasivas forçadas; a coleta de sangue involuntária com força é vedada."
+  },
+  {
+    "id": "contran-prf-275",
+    "category": "CONTRAN",
+    "topic": "Alcoolemia e Substâncias Psicoativas (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 5º",
+    "statement": "Em caso de condutor hospitalizado em estado grave, a embriaguez pode ser atestada pelo relatório médico ou prontuário clínico hospitalar oficial.",
+    "answer": true,
+    "explanation": "CERTO. Res. 1031/2025: Havendo internação médica, exames laboratoriais ou prontuários clínicos da equipe hospitalar de atendimento servem como meio de prova."
+  },
+  {
+    "id": "contran-prf-276",
+    "category": "CONTRAN",
+    "topic": "Alcoolemia e Substâncias Psicoativas (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN 1031 c/c 165 CTB",
+    "statement": "O uso de substâncias psicoativas ilícitas só configura infração de trânsito se o condutor for surpreendido portando drogas ilícitas no porta-luvas.",
+    "answer": false,
+    "explanation": "ERRADO. A infração do Art. 165 é DIRIGIR sob a influência de qualquer substância psicoativa; portar droga no interior do carro é crime autônomo (Lei de Drogas)."
+  },
+  {
+    "id": "contran-prf-277",
+    "category": "CONTRAN",
+    "topic": "Alcoolemia e Substâncias Psicoativas (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN 1031 c/c 165 CTB",
+    "statement": "Conforme o CTB e a Resolução 1031, dirigir sob efeito de qualquer substância psicoativa que determine dependência atrai as mesmas penalidades do álcool.",
+    "answer": true,
+    "explanation": "CERTO. Art. 165 do CTB: Dirigir sob efeito de álcool ou de qualquer outra substância psicoativa que determine dependência atrai as mesmas penalidades."
+  },
+  {
+    "id": "contran-prf-278",
+    "category": "CONTRAN",
+    "topic": "Alcoolemia e Substâncias Psicoativas (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025",
+    "statement": "A ingestão comprovada de bombons de licor garante imunidade penal e administrativa automática em caso de teste de etilômetro com 0,40 mg/L.",
+    "answer": false,
+    "explanation": "ERRADO. Valor considerado igual ou superior a 0,34 mg/L atesta alteração psicomotora com tipicidade penal; álcool residual de bombom não gera essa medição pulmonar."
+  },
+  {
+    "id": "contran-prf-279",
+    "category": "CONTRAN",
+    "topic": "Alcoolemia e Substâncias Psicoativas (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 4º",
+    "statement": "O agente da autoridade de trânsito deve certificar no auto de infração o número de série do etilômetro e o número da verificação anual do Inmetro.",
+    "answer": true,
+    "explanation": "CERTO. O auto de infração de trânsito por alcoolemia deve conter obrigatoriamente a identificação do equipamento, medição e laudo do Inmetro."
+  },
+  {
+    "id": "contran-prf-280",
+    "category": "CONTRAN",
+    "topic": "Alcoolemia e Substâncias Psicoativas (Res. 1031)",
+    "legalBasis": "Resolução CONTRAN nº 1031/2025, Art. 4º",
+    "statement": "A ausência do número de série do etilômetro no auto de infração por embriaguez constitui mera irregularidade que nunca anula o processo punitivo.",
+    "answer": false,
+    "explanation": "ERRADO. A omissão dos dados do aparelho de medição e de sua calibração impede a verificação da regularidade metrológica e nulifica a autuação."
+  },
+  {
+    "id": "contran-prf-281",
+    "category": "CONTRAN",
+    "topic": "Registro e Licenciamento (Res. 1027)",
+    "legalBasis": "Resolução CONTRAN nº 1027/2025, Art. 6º",
+    "statement": "Conforme a Resolução CONTRAN nº 1027/2025, a entrada de veículo usado em loja revendedora credenciada ao Renave transfere a responsabilidade ao lojista.",
+    "answer": true,
+    "explanation": "CERTO. O registro de entrada no Renave desvincula a responsabilidade por multas futuras do antigo dono e a transfere ao estoque da concessionária/loja."
+  },
+  {
+    "id": "contran-prf-282",
+    "category": "CONTRAN",
+    "topic": "Registro e Licenciamento (Res. 1027)",
+    "legalBasis": "Resolução CONTRAN nº 1027/2025, Art. 6º",
+    "statement": "O veículo registrado em estoque pelo sistema Renave pode circular normalmente em rodovias transportando passageiros e cargas comerciais de terceiros.",
+    "answer": false,
+    "explanation": "ERRADO. Veículos em estoque no Renave têm circulação restrita a testes técnicos e translados autorizados, sendo vedado transporte remunerado de cargas."
+  },
+  {
+    "id": "contran-prf-283",
+    "category": "CONTRAN",
+    "topic": "Placas de Identificação Mercosul (Res. 969)",
+    "legalBasis": "Resolução CONTRAN nº 969/2022, Art. 3º",
+    "statement": "As Placas de Identificação Veicular (PIV) no modelo Mercosul têm fundo branco com faixa azul superior contendo a bandeira do Brasil e o logotipo do bloco.",
+    "answer": true,
+    "explanation": "CERTO. Res. 969/2022, Art. 3º: A PIV Mercosul possui fundo branco, tarja azul horizontal superior com o logotipo do Mercosul e a bandeira do Brasil."
+  },
+  {
+    "id": "contran-prf-284",
+    "category": "CONTRAN",
+    "topic": "Placas de Identificação Mercosul (Res. 969)",
+    "legalBasis": "Resolução CONTRAN nº 969/2022, Art. 3º",
+    "statement": "As placas Mercosul ostentam obrigatoriamente na parte inferior o brasão municipal e a bandeira do Estado de registro do veículo automotor.",
+    "answer": false,
+    "explanation": "ERRADO. A versão oficial e vigente da placa Mercosul no Brasil NÃO possui brasão do município nem bandeira do Estado, para reduzir custos de troca."
+  },
+  {
+    "id": "contran-prf-285",
+    "category": "CONTRAN",
+    "topic": "Placas de Identificação Mercosul (Res. 969)",
+    "legalBasis": "Resolução CONTRAN nº 969/2022, Anexo I",
+    "statement": "A placa de identificação veicular dianteira possui dimensões de 400 mm de largura por 130 mm de altura nos automóveis de passeio e caminhonetes.",
+    "answer": true,
+    "explanation": "CERTO. As dimensões padronizadas da PIV para automóveis, caminhonetes, ônibus e caminhões são de 400 mm de largura por 130 mm de altura."
+  },
+  {
+    "id": "contran-prf-286",
+    "category": "CONTRAN",
+    "topic": "Placas de Identificação Mercosul (Res. 969)",
+    "legalBasis": "Resolução CONTRAN nº 969/2022, Anexo I",
+    "statement": "Para motocicletas e motonetas, o tamanho da placa Mercosul é idêntico em dimensões à placa frontal regulamentada para automóveis e caminhões.",
+    "answer": false,
+    "explanation": "ERRADO. A placa de motocicletas e triciclos possui dimensões reduzidas próprias (200 mm x 170 mm), sendo incompatível com a placa de automóveis."
+  },
+  {
+    "id": "contran-prf-287",
+    "category": "CONTRAN",
+    "topic": "Placas de Identificação Mercosul (Res. 969)",
+    "legalBasis": "Resolução CONTRAN nº 969/2022, Anexo I",
+    "statement": "A placa de motocicleta possui dimensões reduzidas de 200 mm de largura por 170 mm de altura, específica para a geometria de veículos de duas rodas.",
+    "answer": true,
+    "explanation": "CERTO. Res. 969/2022, Anexo I: As placas para motocicletas, motonetas, ciclomotores e triciclos medem exatamente 200 mm de largura por 170 mm de altura."
+  },
+  {
+    "id": "contran-prf-288",
+    "category": "CONTRAN",
+    "topic": "Placas de Identificação Mercosul (Res. 969)",
+    "legalBasis": "Resolução CONTRAN nº 969/2022, Art. 7º",
+    "statement": "É autorizado o uso de suporte de placa que oculte parcialmente a borda azul da placa Mercosul desde que os números permaneçam legíveis ao policial.",
+    "answer": false,
+    "explanation": "ERRADO. É vedado o uso de qualquer moldura ou suporte que encubra ou dificulte a visualização da borda azul, bandeira, QR Code ou caracteres da placa."
+  },
+  {
+    "id": "contran-prf-289",
+    "category": "CONTRAN",
+    "topic": "Placas de Identificação Mercosul (Res. 969)",
+    "legalBasis": "Resolução CONTRAN nº 969/2022, Art. 10",
+    "statement": "A estampagem da placa Mercosul só pode ser executada por empresa estampadora credenciada pelo órgão executivo de trânsito competente (Detran).",
+    "answer": true,
+    "explanation": "CERTO. A fabricação e estampagem das placas Mercosul exigem credenciamento oficial junto ao Senatran e DETRANs com auditoria e controle sistêmico."
+  },
+  {
+    "id": "contran-prf-290",
+    "category": "CONTRAN",
+    "topic": "Placas de Identificação Mercosul (Res. 969)",
+    "legalBasis": "Resolução CONTRAN nº 969/2022, Art. 7º",
+    "statement": "A perda ou dano do QR Code gravado na placa Mercosul não exige a substituição da placa, admitindo-se a aposição de selo adesivo sobre a placa.",
+    "answer": false,
+    "explanation": "ERRADO. O QR Code é elemento de segurança infalsificável a laser; se danificado ou ilegível, o proprietário deve providenciar nova placa estampada."
+  },
+  {
+    "id": "contran-prf-291",
+    "category": "CONTRAN",
+    "topic": "Cursos Especializados e Vidros (Res. 1020 e 960)",
+    "legalBasis": "Resolução CONTRAN nº 1020/2025, Anexo II",
+    "statement": "Conforme a Resolução CONTRAN nº 1020/2025, os cursos especializados (como transporte escolar e produtos perigosos) têm validade de cinco anos.",
+    "answer": true,
+    "explanation": "CERTO. Os cursos de especialização para motoristas profissionais têm validade regulamentar de 5 (cinco) anos, exigindo curso de atualização periódico."
+  },
+  {
+    "id": "contran-prf-292",
+    "category": "CONTRAN",
+    "topic": "Cursos Especializados e Vidros (Res. 1020 e 960)",
+    "legalBasis": "Resolução CONTRAN 1020 c/c 136 CTB",
+    "statement": "A realização de curso especializado de transporte escolar dispensa o condutor de realizar exame toxicológico caso sua CNH seja de categoria B.",
+    "answer": false,
+    "explanation": "ERRADO. O transporte escolar exige categoria D (ou E), a qual é sujeita compulsoriamente ao exame toxicológico periódico (Art. 148-A do CTB)."
+  },
+  {
+    "id": "contran-prf-293",
+    "category": "CONTRAN",
+    "topic": "Cursos Especializados e Vidros (Res. 1020 e 960)",
+    "legalBasis": "Resolução CONTRAN 1020 c/c 136 CTB",
+    "statement": "Para conduzir veículo de transporte escolar, o CTB e as normas do CONTRAN exigem idade superior a 21 anos e habilitação mínima na categoria D.",
+    "answer": true,
+    "explanation": "CERTO. Art. 136, II e III do CTB: O condutor de transporte escolar deve ter idade superior a vinte e um anos e ser habilitado na categoria D."
+  },
+  {
+    "id": "contran-prf-294",
+    "category": "CONTRAN",
+    "topic": "Cursos Especializados e Vidros (Res. 1020 e 960)",
+    "legalBasis": "Resolução CONTRAN nº 1020/2025",
+    "statement": "O condutor que estiver cumprindo penalidade de suspensão do direito de dirigir pode matricular-se e concluir curso especializado de transporte escolar.",
+    "answer": false,
+    "explanation": "ERRADO. É requisito legal não estar cumprindo penalidade de suspensão do direito de dirigir ou cassação para ingressar em curso especializado."
+  },
+  {
+    "id": "contran-prf-295",
+    "category": "CONTRAN",
+    "topic": "Cursos Especializados e Vidros (Res. 1020 e 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 7º",
+    "statement": "A medição de transmitância luminosa de vidros com película é realizada pelo Medidor de Transmitância Luminosa (MTL) com emissão de comprovante impresso ou digital.",
+    "answer": true,
+    "explanation": "CERTO. Art. 7º da Res. 960/2022: O MTL é o instrumento homologado para medição da transparência com registro de dados obrigatório para autuação."
+  },
+  {
+    "id": "contran-prf-296",
+    "category": "CONTRAN",
+    "topic": "Cursos Especializados e Vidros (Res. 1020 e 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 7º",
+    "statement": "O policial rodoviário federal pode autuar veículo por película escura avaliando a visibilidade unicamente a olho nu sem auxílio de instrumento homologado.",
+    "answer": false,
+    "explanation": "ERRADO. A fiscalização da transmitância luminosa é obrigatoriamente instrumental (MTL), vedada a autuação baseada puramente na impressão visual subjetiva."
+  },
+  {
+    "id": "contran-prf-297",
+    "category": "CONTRAN",
+    "topic": "Cursos Especializados e Vidros (Res. 1020 e 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Anexo I",
+    "statement": "Na fiscalização com Medidor de Transmitância Luminosa (MTL), aplica-se a margem de erro metrológica estabelecida na tabela oficial do Inmetro.",
+    "answer": true,
+    "explanation": "CERTO. A medição obtida sofre dedução da margem de erro máxima admissível da tabela metrológica do Inmetro para definição do valor considerado."
+  },
+  {
+    "id": "contran-prf-298",
+    "category": "CONTRAN",
+    "topic": "Cursos Especializados e Vidros (Res. 1020 e 960)",
+    "legalBasis": "Resolução CONTRAN 960 c/c 993",
+    "statement": "É permitida a instalação de painéis luminosos publicitários com imagens dinâmicas e vídeos no para-brisa frontal dos caminhões e utilitários.",
+    "answer": false,
+    "explanation": "ERRADO. É expressamente proibida a colocação de luzes, letreiros móveis ou painéis luminosos visíveis pelo condutor que comprometam a atenção ao trânsito."
+  },
+  {
+    "id": "contran-prf-299",
+    "category": "CONTRAN",
+    "topic": "Cursos Especializados e Vidros (Res. 1020 e 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 7º",
+    "statement": "A presença de inscrição ou chancela gravada no vidro do veículo deve ser visível do lado externo para conferência da transparência pelo agente fiscalizador.",
+    "answer": true,
+    "explanation": "CERTO. Art. 7º, § 1º: A marca do instalador e a transparência devem ser legíveis pelo lado externo do vidro para conferência na fiscalização."
+  },
+  {
+    "id": "contran-prf-300",
+    "category": "CONTRAN",
+    "topic": "Cursos Especializados e Vidros (Res. 1020 e 960)",
+    "legalBasis": "Resolução CONTRAN nº 960/2022, Art. 5º",
+    "statement": "O uso de cortinas ou persianas nos vidros traseiros de automóveis em movimento é permitido mesmo sem a presença dos espelhos retrovisores externos.",
+    "answer": false,
+    "explanation": "ERRADO. O uso de cortinas ou persianas nos vidros traseiros só é permitido se o veículo possuir espelhos retrovisores externos em ambos os lados."
   }
 ];
 
