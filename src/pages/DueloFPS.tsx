@@ -41,6 +41,7 @@ import {
   generateProceduralQuestionFromCtbArticle,
   generateProceduralQuestionFromContranArticle,
   generateProceduralQuestionFromContranTopic,
+  getRandomCuratedQuestion,
 } from '../data/questionsBank';
 import { TacticalRange3D, ShotTriggerCommand } from '../components/TacticalRange3D';
 import { soundFX } from '../utils/soundEffects';
@@ -100,6 +101,7 @@ export default function DueloFPS() {
 
   // Registro de assertivas já vistas para evitar repetição 100% igual
   const seenStatementsRef = useRef<Set<string>>(new Set());
+  const seenCuratedIdsRef = useRef<Set<string>>(new Set());
   const usedBaseIdsInCycleRef = useRef<{ CTB: Set<string>; CONTRAN: Set<string> }>({
     CTB: new Set(),
     CONTRAN: new Set(),
@@ -206,6 +208,18 @@ export default function DueloFPS() {
   const buildUniqueQuestion = useCallback(
     (targetCategory: QuestionCategory, topicOverride?: PRFTopicMetadata): ActiveRoundQuestion => {
       totalGeneratedCountRef.current += 1;
+
+      // 1. Prioriza banco curado de elite Cebraspe PRF
+      if (!topicOverride) {
+        const curated = getRandomCuratedQuestion(targetCategory, seenCuratedIdsRef.current);
+        if (curated && !seenStatementsRef.current.has(curated.statement)) {
+          seenCuratedIdsRef.current.add(curated.id);
+          persistSeenStatement(curated.statement);
+          return curated;
+        }
+      }
+
+      // 2. Gerador inteligente contextual (infração completa, crime ou parent-child inciso)
       if (targetCategory === 'CTB') {
         const artigo = getRandomCtbArticle(topicOverride?.name);
         const q = generateProceduralQuestionFromCtbArticle(artigo);
@@ -365,6 +379,7 @@ DIRETRIZES MANDATÓRIAS CEBRASPE:
     setRunHistory([]);
     setDeathReason(null);
     setLastFeedbackBanner(null);
+    seenCuratedIdsRef.current.clear();
 
     const firstCategory: QuestionCategory = 'CTB';
     const firstQ =

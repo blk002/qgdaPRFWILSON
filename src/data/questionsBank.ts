@@ -1,5 +1,8 @@
 import LEI_SECA_CTB_RAW from './leiSecaCTB.json';
 import LEI_SECA_CONTRAN_RAW from './leiSecaCONTRAN.json';
+import { CURATED_PRF_QUESTIONS, getRandomCuratedQuestion } from './curatedQuestionsPRF';
+
+export { CURATED_PRF_QUESTIONS, getRandomCuratedQuestion };
 
 export type QuestionCategory = 'CTB' | 'CONTRAN';
 
@@ -581,79 +584,199 @@ export function generateProceduralQuestionFromCtbArticle(
   forceAnswer?: boolean,
   recursionDepth: number = 0
 ): ActiveRoundQuestion {
-  const validBlocks = getValidBlocksForArticle(artigo.texto || '', false);
-
-  if (validBlocks.length === 0 || recursionDepth > 6) {
-    const fallbackArt = getRandomCtbArticle();
-    if (recursionDepth > 6) {
-      return {
-        id: `ctb-safe-${Date.now()}`,
-        uniqueHash: `ctb-safe-${Date.now()}`,
-        category: 'CTB',
-        topic: fallbackArt.capitulo,
-        legalBasis: fallbackArt.dispositivo,
-        statement: 'Nos termos do CTB, o trânsito de qualquer natureza nas vias terrestres do território nacional rege-se por este Código.',
-        answer: true,
-        explanation: 'CERTO. Disposição fundamental do Art. 1º do CTB.',
-        wasAiRewritten: false,
-      };
-    }
-    return generateProceduralQuestionFromCtbArticle(fallbackArt, forceAnswer, recursionDepth + 1);
+  if (recursionDepth > 6) {
+    return {
+      id: `ctb-safe-${Date.now()}`,
+      uniqueHash: `ctb-safe-${Date.now()}`,
+      category: 'CTB',
+      topic: artigo.capitulo,
+      legalBasis: artigo.dispositivo,
+      statement: 'Nos termos do CTB, o trânsito de qualquer natureza nas vias terrestres do território nacional rege-se por este Código.',
+      answer: true,
+      explanation: 'CERTO. Disposição fundamental do Art. 1º do CTB.',
+      wasAiRewritten: false,
+    };
   }
 
-  const chosen = validBlocks[Math.floor(Math.random() * validBlocks.length)];
-  let snippet = chosen.clean;
-
-  // Ajusta a primeira letra para minúscula se não for sigla (ex.: CONTRAN, PRF)
-  if (!/^[A-Z]{2,}/.test(snippet)) {
-    snippet = snippet.charAt(0).toLowerCase() + snippet.slice(1);
-  }
-
+  const m = artigo.numero.match(/Art\.?\s*(\d+)/i);
+  const n = m ? parseInt(m[1], 10) : 0;
+  const blocks = (artigo.texto || '').split(/\n\n+/).map(b => b.trim()).filter(Boolean);
   const willBeCorrect = forceAnswer !== undefined ? forceAnswer : Math.random() >= 0.5;
-  const prefix = `Nos termos do ${artigo.numero} do CTB, `;
 
-  let statement = '';
-  let answer = true;
-  let explanation = '';
+  // 1. INFRAÇÃO DE TRÂNSITO (Capítulo XIV - Arts. 161 a 255)
+  // Conecta a conduta do caput com a gravidade, penalidade e medida administrativa
+  if (n >= 161 && n <= 255 && blocks.length >= 2) {
+    let conduct = blocks[0]
+      .replace(/^Art\.?\s*\d+[º°o]?(?:-[A-Za-z])?\.?\s*/i, '')
+      .replace(/\([^\)]*\)/g, '')
+      .replace(/[:;\s]+$/, '')
+      .trim();
+    if (!/^[A-Z]{2,}/.test(conduct)) conduct = conduct.charAt(0).toLowerCase() + conduct.slice(1);
 
-  if (willBeCorrect) {
-    answer = true;
-    if (chosen.isInciso) {
-      statement = `${prefix}constitui preceito ou competência prevista ${snippet}.`;
-    } else {
-      statement = `${prefix}${snippet}.`;
-    }
-    explanation = `CERTO. Conforme o ${artigo.dispositivo}: "${chosen.clean}."`;
-  } else {
-    answer = false;
-    let modified = snippet;
-    let inverted = false;
+    let infracao = '';
+    let penalidade = '';
+    let medida = '';
 
-    for (const [regex, replacement] of INVERSION_PAIRS) {
-      if (regex.test(modified)) {
-        modified = modified.replace(regex, replacement);
-        inverted = true;
-        break;
+    for (const b of blocks.slice(1)) {
+      if (/^Infraç[ãa]o\s*[-–—]/i.test(b)) {
+        infracao = b.replace(/^Infraç[ãa]o\s*[-–—]\s*/i, '').replace(/\([^\)]*\)/g, '').replace(/[;,]\s*$/, '').trim();
+      } else if (/^Penalidade\s*[-–—]/i.test(b)) {
+        penalidade = b.replace(/^Penalidade\s*[-–—]\s*/i, '').replace(/\([^\)]*\)/g, '').replace(/[;,]\s*$/, '').trim();
+      } else if (/^Medida\s+administrativa\s*[-–—]/i.test(b)) {
+        medida = b.replace(/^Medida\s+administrativa\s*[-–—]\s*/i, '').replace(/\([^\)]*\)/g, '').replace(/[;,]\s*$/, '').trim();
       }
     }
 
-    if (!inverted) {
-      if (chosen.isInciso) {
-        statement = `${prefix}é expressamente vedado ou dispensado ${snippet}.`;
+    if (conduct.length >= 15 && (infracao || penalidade)) {
+      if (conduct.length > 130) {
+        const parts = conduct.split(/[,;]\s+/);
+        if (parts[0].length >= 35) conduct = parts[0];
+      }
+      let statement = '';
+      if (willBeCorrect) {
+        statement = `Conforme o ${artigo.numero} do CTB, a conduta de ${conduct} constitui infração ${infracao || 'prevista'}${penalidade ? ', com penalidade de ' + penalidade : ''}${medida ? ' e medida administrativa de ' + medida : ''}.`;
       } else {
-        statement = `${prefix}não se aplica a regra de que ${snippet}.`;
+        const wrongInfra = /gravíssima/i.test(infracao) ? 'média' : (/grave/i.test(infracao) ? 'leve' : 'gravíssima');
+        statement = `Conforme o ${artigo.numero} do CTB, a conduta de ${conduct} é classificada como infração de natureza ${wrongInfra}, não ensejando medidas administrativas mais severas.`;
+      }
+      statement = statement.replace(/\.\.+$/, '.').trim();
+      if (statement.length <= 275) {
+        return {
+          id: `${artigo.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          uniqueHash: `${artigo.id}-${Date.now()}`,
+          category: 'CTB',
+          topic: artigo.capitulo,
+          legalBasis: artigo.dispositivo,
+          statement,
+          answer: willBeCorrect,
+          explanation: `${willBeCorrect ? 'CERTO' : 'ERRADO'}. Conforme o ${artigo.dispositivo}: infração ${infracao || 'prevista'}${penalidade ? ', penalidade: ' + penalidade : ''}${medida ? ', medida: ' + medida : ''}.`,
+          wasAiRewritten: false,
+          articleText: artigo.texto,
+        };
+      }
+    }
+  }
+
+  // 2. CRIME DE TRÂNSITO (Capítulo XIX - Arts. 291 a 312-B)
+  if (n >= 291 && n <= 312 && blocks.length >= 1) {
+    let conduct = blocks[0]
+      .replace(/^Art\.?\s*\d+[º°o]?(?:-[A-Za-z])?\.?\s*/i, '')
+      .replace(/\([^\)]*\)/g, '')
+      .replace(/[:;\s]+$/, '')
+      .trim();
+    if (!/^[A-Z]{2,}/.test(conduct)) conduct = conduct.charAt(0).toLowerCase() + conduct.slice(1);
+    if (conduct.length > 130) {
+      const parts = conduct.split(/[,;]\s+/);
+      if (parts[0].length >= 35) conduct = parts[0];
+    }
+    if (conduct.length >= 20) {
+      let statement = '';
+      if (willBeCorrect) {
+        statement = `Nos termos do ${artigo.numero} do CTB, a conduta de ${conduct} constitui crime de trânsito tipificado expressamente na legislação penal especial.`;
+      } else {
+        statement = `Nos termos do ${artigo.numero} do CTB, a conduta de ${conduct} configura mera infração administrativa de trânsito, não sendo tipificada como crime.`;
+      }
+      statement = statement.replace(/\.\.+$/, '.').trim();
+      if (statement.length <= 275) {
+        return {
+          id: `${artigo.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+          uniqueHash: `${artigo.id}-${Date.now()}`,
+          category: 'CTB',
+          topic: artigo.capitulo,
+          legalBasis: artigo.dispositivo,
+          statement,
+          answer: willBeCorrect,
+          explanation: `${willBeCorrect ? 'CERTO' : 'ERRADO'}. O ${artigo.dispositivo} tipifica os crimes de trânsito em espécie no CTB.`,
+          wasAiRewritten: false,
+          articleText: artigo.texto,
+        };
+      }
+    }
+  }
+
+  // 3. ARTIGOS GERAIS: Conecta incisos com cláusula introdutória ou avalia parágrafos com verbos
+  let parentClause = '';
+  const candidates: { parent: string; text: string; isInciso: boolean }[] = [];
+
+  for (const b of blocks) {
+    if (b.endsWith(':')) {
+      const p = b
+        .replace(/^Art\.?\s*\d+[º°o]?\.?\s*/i, '')
+        .replace(/^§\s*\d+[º°o]?\.?\s*/i, '')
+        .replace(/\([^\)]*\)/g, '')
+        .replace(/:$/, '')
+        .trim();
+      if (p.length >= 20 && p.length <= 130) parentClause = p;
+    } else if (/^[IVXLCDM]+\s*[\-–—\.]/i.test(b) || /^[a-z]\)\s*/i.test(b)) {
+      const inc = b
+        .replace(/^[IVXLCDM]+\s*[\-–—\.]\s*/i, '')
+        .replace(/^[a-z]\)\s*/i, '')
+        .replace(/\([^\)]*\)/g, '')
+        .replace(/[;,]\s*(?:e|ou)?\s*$/i, '')
+        .trim();
+      if (parentClause && inc.length >= 15 && inc.length <= 110) {
+        candidates.push({ parent: parentClause, text: inc, isInciso: true });
       }
     } else {
-      if (chosen.isInciso) {
-        statement = `${prefix}constitui preceito ou competência prevista ${modified}.`;
+      let clean = b
+        .replace(/^Art\.?\s*\d+[º°o]?\.?\s*/i, '')
+        .replace(/^§\s*\d+[º°o]?\.?\s*/i, '')
+        .replace(/^Parágrafo\s+único\.?\s*/i, '')
+        .replace(/\([^\)]*\)/g, '')
+        .replace(/\s+/g, ' ')
+        .replace(/\.$/, '')
+        .trim();
+      const hasVerb = /\b(?:deve|devem|deverá|deverão|pode|podem|poderá|poderão|é|são|constitui|compete|exige|aplica-se|rege-se|dispõe|assegura|garante|vedado|proibido|permitido|autorizado)\b/i.test(clean);
+      if (hasVerb && clean.length >= 35 && clean.length <= 190) {
+        candidates.push({ parent: '', text: clean, isInciso: false });
+      }
+    }
+  }
+
+  if (candidates.length === 0) {
+    return generateProceduralQuestionFromCtbArticle(getRandomCtbArticle(), forceAnswer, recursionDepth + 1);
+  }
+
+  const chosen = candidates[Math.floor(Math.random() * candidates.length)];
+  const prefix = `Nos termos do ${artigo.numero} do CTB, `;
+  let statement = '';
+
+  if (chosen.isInciso) {
+    let p = chosen.parent;
+    if (!/^[A-Z]{2,}/.test(p)) p = p.charAt(0).toLowerCase() + p.slice(1);
+    let i = chosen.text;
+    if (!/^[A-Z]{2,}/.test(i)) i = i.charAt(0).toLowerCase() + i.slice(1);
+
+    if (willBeCorrect) {
+      statement = `${prefix}${p}, incluindo expressamente ${i}.`;
+    } else {
+      statement = `${prefix}${p}, sendo expressamente vedado ou dispensado ${i}.`;
+    }
+  } else {
+    let s = chosen.text;
+    if (!/^[A-Z]{2,}/.test(s)) s = s.charAt(0).toLowerCase() + s.slice(1);
+
+    if (willBeCorrect) {
+      statement = `${prefix}${s}.`;
+    } else {
+      let modified = s;
+      let inverted = false;
+      for (const [regex, replacement] of INVERSION_PAIRS) {
+        if (regex.test(modified)) {
+          modified = modified.replace(regex, replacement);
+          inverted = true;
+          break;
+        }
+      }
+      if (!inverted) {
+        statement = `${prefix}não se aplica a regra de que ${s}.`;
       } else {
         statement = `${prefix}${modified}.`;
       }
     }
-    explanation = `ERRADO. O dispositivo original do ${artigo.dispositivo} estabelece que: "${chosen.clean}."`;
   }
 
-  // Se por qualquer variação ultrapassar 275 caracteres, tenta outro bloco de forma limpa sem cortar com "..."
+  statement = statement.replace(/\.\.+$/, '.').trim();
   if (statement.length > 275) {
     return generateProceduralQuestionFromCtbArticle(getRandomCtbArticle(), forceAnswer, recursionDepth + 1);
   }
@@ -665,10 +788,10 @@ export function generateProceduralQuestionFromCtbArticle(
     topic: artigo.capitulo,
     legalBasis: artigo.dispositivo,
     statement,
-    answer,
-    explanation,
+    answer: willBeCorrect,
+    explanation: `${willBeCorrect ? 'CERTO' : 'ERRADO'}. Conforme o ${artigo.dispositivo}: "${chosen.text}."`,
     wasAiRewritten: false,
-    articleText: chosen.raw,
+    articleText: chosen.text,
   };
 }
 
@@ -734,79 +857,121 @@ export function generateProceduralQuestionFromContranArticle(
   forceAnswer?: boolean,
   recursionDepth: number = 0
 ): ActiveRoundQuestion {
-  const validBlocks = getValidBlocksForArticle(artigo.texto || '', true);
-
-  if (validBlocks.length === 0 || recursionDepth > 6) {
-    const fallbackArt = getRandomContranArticle();
-    if (recursionDepth > 6) {
-      return {
-        id: `contran-safe-${Date.now()}`,
-        uniqueHash: `contran-safe-${Date.now()}`,
-        category: 'CONTRAN',
-        topic: fallbackArt.resolucao,
-        legalBasis: fallbackArt.dispositivo,
-        statement: `Nos termos da ${fallbackArt.resolucao}, a fiscalização de trânsito deve observar as diretrizes regulamentares expedidas pelo CONTRAN.`,
-        answer: true,
-        explanation: `CERTO. Fundamentação regulamentar com base no ${fallbackArt.dispositivo}.`,
-        wasAiRewritten: false,
-      };
-    }
-    return generateProceduralQuestionFromContranArticle(fallbackArt, forceAnswer, recursionDepth + 1);
+  if (recursionDepth > 6) {
+    return {
+      id: `contran-safe-${Date.now()}`,
+      uniqueHash: `contran-safe-${Date.now()}`,
+      category: 'CONTRAN',
+      topic: artigo.resolucao,
+      legalBasis: artigo.dispositivo,
+      statement: `Nos termos da ${artigo.resolucao}, a fiscalização de trânsito deve observar as diretrizes regulamentares expedidas pelo CONTRAN.`,
+      answer: true,
+      explanation: `CERTO. Fundamentação regulamentar com base no ${artigo.dispositivo}.`,
+      wasAiRewritten: false,
+    };
   }
 
-  const chosen = validBlocks[Math.floor(Math.random() * validBlocks.length)];
-  let snippet = chosen.clean;
-
-  // Ajusta a primeira letra para minúscula se não for sigla (ex.: CONTRAN, PRF, RENAVAM)
-  if (!/^[A-Z]{2,}/.test(snippet)) {
-    snippet = snippet.charAt(0).toLowerCase() + snippet.slice(1);
-  }
-
+  const blocks = (artigo.texto || '').split(/\n\n+/).map(b => b.trim()).filter(Boolean);
   const willBeCorrect = forceAnswer !== undefined ? forceAnswer : Math.random() >= 0.5;
+
+  let parentClause = '';
+  const candidates: { parent: string; text: string; isInciso: boolean }[] = [];
+
+  for (const b of blocks) {
+    if (b.endsWith(':')) {
+      const p = b
+        .replace(/^Art\.?\s*\d+[º°o]?\.?\s*/i, '')
+        .replace(/^§\s*\d+[º°o]?\.?\s*/i, '')
+        .replace(/\([^\)]*\)/g, '')
+        .replace(/:$/, '')
+        .trim();
+      if (p.length >= 20 && p.length <= 130) parentClause = p;
+    } else if (/^[IVXLCDM]+\s*[\-–—\.]/i.test(b) || /^[a-z]\)\s*/i.test(b)) {
+      const inc = b
+        .replace(/^[IVXLCDM]+\s*[\-–—\.]\s*/i, '')
+        .replace(/^[a-z]\)\s*/i, '')
+        .replace(/\([^\)]*\)/g, '')
+        .replace(/[;,]\s*(?:e|ou)?\s*$/i, '')
+        .trim();
+      if (parentClause && inc.length >= 15 && inc.length <= 110) {
+        candidates.push({ parent: parentClause, text: inc, isInciso: true });
+      }
+    } else {
+      let clean = b
+        .replace(/^Art\.?\s*\d+[º°o]?\.?\s*/i, '')
+        .replace(/^§\s*\d+[º°o]?\.?\s*/i, '')
+        .replace(/^Parágrafo\s+único\.?\s*/i, '')
+        .replace(/\([^\)]*\)/g, '')
+        .replace(/\s+/g, ' ')
+        .replace(/\.$/, '')
+        .trim();
+      const hasVerb = /\b(?:deve|devem|deverá|deverão|pode|podem|poderá|poderão|é|são|constitui|compete|exige|aplica-se|rege-se|dispõe|assegura|garante|vedado|proibido|permitido|autorizado|utilizará|utilizarão)\b/i.test(clean);
+      if (hasVerb && clean.length >= 35 && clean.length <= 190) {
+        candidates.push({ parent: '', text: clean, isInciso: false });
+      }
+    }
+  }
+
+  if (candidates.length === 0) {
+    return generateProceduralQuestionFromContranArticle(getRandomContranArticle(), forceAnswer, recursionDepth + 1);
+  }
+
+  const chosen = candidates[Math.floor(Math.random() * candidates.length)];
   const prefix = `Conforme o ${artigo.dispositivo}, `;
-
   let statement = '';
-  let answer = true;
-  let explanation = '';
 
-  if (willBeCorrect) {
-    answer = true;
-    if (chosen.isInciso) {
-      statement = `${prefix}constitui preceito ou etapa legal que ${snippet}.`;
+  if (chosen.isInciso) {
+    let p = chosen.parent;
+    let i = chosen.text;
+    if (!/^[A-Z]{2,}/.test(i)) i = i.charAt(0).toLowerCase() + i.slice(1);
+
+    if (/etapas?/i.test(p)) {
+      statement = willBeCorrect
+        ? `${prefix}inclui-se entre as etapas expressamente previstas ${i}.`
+        : `${prefix}é expressamente dispensada como etapa ${i}.`;
+    } else if (/requisitos?/i.test(p)) {
+      statement = willBeCorrect
+        ? `${prefix}constitui requisito técnico exigido ${i}.`
+        : `${prefix}é expressamente dispensado como requisito ${i}.`;
+    } else if (/despachante/i.test(p)) {
+      statement = willBeCorrect
+        ? `${prefix}a atuação do despachante documentalista pode compreender ${i}.`
+        : `${prefix}é expressamente vedado ao despachante documentalista atuar em ${i}.`;
+    } else if (/compet[êe]ncias?/i.test(p)) {
+      statement = willBeCorrect
+        ? `${prefix}constitui atribuição expressamente prevista ${i}.`
+        : `${prefix}não compete ao órgão atuar em ${i}.`;
     } else {
-      statement = `${prefix}${snippet}.`;
+      if (!/^[A-Z]{2,}/.test(p)) p = p.charAt(0).toLowerCase() + p.slice(1);
+      statement = willBeCorrect
+        ? `${prefix}${p}, compreendendo expressamente ${i}.`
+        : `${prefix}${p}, sendo expressamente vedado ou excluído ${i}.`;
     }
-    explanation = `CERTO. Conforme o ${artigo.dispositivo}: "${chosen.clean}."`;
   } else {
-    answer = false;
-    let modified = snippet;
-    let inverted = false;
+    let s = chosen.text;
+    if (!/^[A-Z]{2,}/.test(s)) s = s.charAt(0).toLowerCase() + s.slice(1);
 
-    for (const [regex, replacement] of INVERSION_PAIRS) {
-      if (regex.test(modified)) {
-        modified = modified.replace(regex, replacement);
-        inverted = true;
-        break;
-      }
-    }
-
-    if (!inverted) {
-      if (chosen.isInciso) {
-        statement = `${prefix}é expressamente dispensada a exigência de que ${snippet}.`;
-      } else {
-        statement = `${prefix}não se aplica a regra de que ${snippet}.`;
-      }
+    if (willBeCorrect) {
+      statement = `${prefix}${s}.`;
     } else {
-      if (chosen.isInciso) {
-        statement = `${prefix}constitui preceito ou etapa legal que ${modified}.`;
+      let modified = s;
+      let inverted = false;
+      for (const [regex, replacement] of INVERSION_PAIRS) {
+        if (regex.test(modified)) {
+          modified = modified.replace(regex, replacement);
+          inverted = true;
+          break;
+        }
+      }
+      if (!inverted) {
+        statement = `${prefix}não se exige na fiscalização que ${s}.`;
       } else {
         statement = `${prefix}${modified}.`;
       }
     }
-    explanation = `ERRADO. O dispositivo original do ${artigo.dispositivo} estabelece que: "${chosen.clean}."`;
   }
 
-  // Se por qualquer variação ultrapassar 275 caracteres, tenta outro bloco de forma limpa sem cortar com "..."
+  statement = statement.replace(/\.\.+$/, '.').trim();
   if (statement.length > 275) {
     return generateProceduralQuestionFromContranArticle(getRandomContranArticle(), forceAnswer, recursionDepth + 1);
   }
@@ -818,9 +983,9 @@ export function generateProceduralQuestionFromContranArticle(
     topic: artigo.resolucao,
     legalBasis: artigo.dispositivo,
     statement,
-    answer,
-    explanation,
+    answer: willBeCorrect,
+    explanation: `${willBeCorrect ? 'CERTO' : 'ERRADO'}. Conforme o ${artigo.dispositivo}: "${chosen.text}."`,
     wasAiRewritten: false,
-    articleText: chosen.raw,
+    articleText: chosen.text,
   };
 }
