@@ -351,6 +351,83 @@ export function getRandomPrfTopic(category?: QuestionCategory): PRFTopicMetadata
   return pool[Math.floor(Math.random() * pool.length)];
 }
 
+// Função genérica de sorteio ponderado (Weighted Random Selection)
+export function pickWeightedItem<T>(items: T[], weightFn: (item: T) => number): T {
+  if (items.length === 0) throw new Error('Pool cannot be empty');
+  const weights = items.map(weightFn);
+  const totalWeight = weights.reduce((acc, w) => acc + w, 0);
+  if (totalWeight <= 0) return items[Math.floor(Math.random() * items.length)];
+  let random = Math.random() * totalWeight;
+  for (let i = 0; i < items.length; i++) {
+    if (random < weights[i]) {
+      return items[i];
+    }
+    random -= weights[i];
+  }
+  return items[items.length - 1];
+}
+
+// Ponderação estatística do CTB baseada nos 10 slides das provas Cebraspe/PRF (195 itens de CTB)
+export function getCtbArticleWeight(artigo: ArtigoLeiSeca): number {
+  const m = artigo.numero.match(/Art\.?\s*(\d+)/i);
+  const n = m ? parseInt(m[1], 10) : 0;
+
+  // 1. O que mais derruba: Art. 20 (Competência privativa da PRF - caiu em 5 das 7 provas da PRF)
+  if (n === 20) return 25;
+
+  // 2. Os Crimes que mais caem (Slide 5: Arts. 298, 302, 306, 311, 312)
+  if ([298, 302, 306, 311, 312].includes(n)) return 16;
+  // Crimes secundários de destaque (Slide 5: Arts. 303, 304, 308, 309, 310)
+  if ([303, 304, 308, 309, 310].includes(n)) return 12;
+  // Demais crimes de trânsito (Arts. 291 a 312-B)
+  if (n >= 291 && n <= 312) return 8;
+
+  // 3. O CTB que mais cai (Slide 3: 50 itens de Infrações + Penalidades e Medidas)
+  // Penalidades e Medidas Administrativas (Arts. 256 a 279-A - "estude antes da infração")
+  if (n >= 256 && n <= 279) return 12;
+  // Infrações mais cobradas (Arts. 161 a 255)
+  if (n >= 161 && n <= 255) return 8;
+
+  // 4. Normas Gerais de Circulação e Conduta (Slide 3: 29 itens - Arts. 26 a 67)
+  if (n >= 26 && n <= 67) return 8;
+
+  // 5. O que mais derruba / Mudanças 2025/2026 (Slide 6 & 10: Arts. 123, 140, 143, 147, 148, 159)
+  if ([123, 140, 143, 147, 148, 159].includes(n) || artigo.texto.includes('148-A')) return 12;
+
+  // 6. Sinalização de Trânsito (Slide 3: 22 itens - Arts. 80 a 90)
+  if (n >= 80 && n <= 90) return 6;
+
+  // Artigos de apoio / disposições gerais
+  return 1;
+}
+
+// Ponderação estatística do CONTRAN baseada nos 71 itens dos slides PRF
+export function getContranArticleWeight(artigo: ArtigoLeiSecaCONTRAN): number {
+  const r = artigo.numeroRes;
+
+  // 1. Cargas, Peso, Dimensões e Amarração (Slide 7: 16 itens - Res. 882/2021, 945/2022, 946/2022)
+  if (['882', '945', '946'].includes(r)) return 16;
+
+  // 2. Registro, Documentos, CRV/CRLV e Placas (Slide 7: 15 itens - Res. 1027/2026, 968/2022, 969/2022)
+  if (['1027', '968', '969'].includes(r)) return 15;
+
+  // 3. Novidades Normativas de Alto Impacto (Slide 1 & 9: Res. 1031/2026 Alcoolemia e Res. 1020/2025 Habilitação)
+  if (['1031'].includes(r)) return 14;
+  if (['1020'].includes(r)) return 10;
+
+  // 4. Segurança do Veículo, Películas e Iluminação (Slide 7: 9 itens - Res. 960/2022, 970/2022, 993/2023)
+  if (['960', '970', '993'].includes(r)) return 9;
+
+  // 5. Fiscalização Eletrônica e Radares (Slide 7: 6 itens - Res. 798/2020, 909/2022)
+  if (['798', '909'].includes(r)) return 7;
+
+  // 6. Motorista Profissional e Tacógrafo (Slide 7: 6 itens - Res. 938/2022, 918/2022)
+  if (['938', '918'].includes(r)) return 7;
+
+  // Demais resoluções vigentes (Res. 810, 819, 911, 967, 985, 996)
+  return 2;
+}
+
 export function getRandomCtbArticle(preferredTopicOrCapitulo?: string): ArtigoLeiSeca {
   const validPool = LEI_SECA_CTB.filter(a => {
     if (!a.texto || a.texto.length < 30) return false;
@@ -365,10 +442,10 @@ export function getRandomCtbArticle(preferredTopicOrCapitulo?: string): ArtigoLe
     const norm = preferredTopicOrCapitulo.toLowerCase();
     const matching = poolToUse.filter(a => a.capitulo.toLowerCase().includes(norm));
     if (matching.length > 0) {
-      return matching[Math.floor(Math.random() * matching.length)];
+      return pickWeightedItem(matching, getCtbArticleWeight);
     }
   }
-  return poolToUse[Math.floor(Math.random() * poolToUse.length)];
+  return pickWeightedItem(poolToUse, getCtbArticleWeight);
 }
 
 export function getRandomContranArticle(preferredResNumberOrTopic?: string): ArtigoLeiSecaCONTRAN {
@@ -390,10 +467,10 @@ export function getRandomContranArticle(preferredResNumberOrTopic?: string): Art
       a.assunto.toLowerCase().includes(norm)
     );
     if (matching.length > 0) {
-      return matching[Math.floor(Math.random() * matching.length)];
+      return pickWeightedItem(matching, getContranArticleWeight);
     }
   }
-  return poolToUse[Math.floor(Math.random() * poolToUse.length)];
+  return pickWeightedItem(poolToUse, getContranArticleWeight);
 }
 
 const INVERSION_PAIRS: [RegExp, string][] = [
