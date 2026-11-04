@@ -19,9 +19,7 @@ export default function Ciclo() {
     advanceDay,
     getSubjectProgress,
     getRelativeDateInfo,
-    getActiveTopic,
     reviews,
-    setReviewModal,
     setClassConfirmModal,
     setReplaceSubjectModal,
     saveTopicNotes,
@@ -44,7 +42,7 @@ export default function Ciclo() {
         setCurrentDayIndex(currentWeekIndex);
       }
     }
-  }, [cycleScheduleType, cycleWeekStart, cycle?.length]);
+  }, [cycleScheduleType, cycleWeekStart, cycle, currentDayIndex, setCurrentDayIndex]);
 
   const visibleDays = (() => {
     if (!cycle || cycle.length === 0) return [];

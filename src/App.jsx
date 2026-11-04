@@ -61,7 +61,7 @@ export default function App() {
     handleReviewSubmit, watchClass, handleReplaceSubject,
     subjects, isSyncing,
     session, setSession, loadFromCloud, signOut,
-    playSound, activeTheme, applyTheme,
+    activeTheme,
     pushSettings, pushTime
   } = useStore();
   

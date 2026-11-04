@@ -151,8 +151,22 @@ document.addEventListener('DOMContentLoaded', () => {
   }
 
   // Botão Abrir QG da PRF
-  document.getElementById('btn-open-qg').addEventListener('click', () => {
+  document.getElementById('btn-open-qg').addEventListener('click', async () => {
     const targetUrl = 'https://blk002.github.io/qgdaPRFWILSON/#/caveira';
+    try {
+      if (chrome.tabs && chrome.tabs.query) {
+        const tabs = await chrome.tabs.query({
+          url: ['https://blk002.github.io/*', 'http://localhost:*/*', 'http://127.0.0.1:*/*']
+        });
+        if (tabs && tabs.length > 0 && tabs[0].id) {
+          await chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl });
+          if (tabs[0].windowId && chrome.windows) {
+            chrome.windows.update(tabs[0].windowId, { focused: true });
+          }
+          return;
+        }
+      }
+    } catch (_) {}
     chrome.tabs.create({ url: targetUrl });
   });
 

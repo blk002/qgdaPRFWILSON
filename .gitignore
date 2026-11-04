@@ -27,3 +27,10 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Arquivos de teste e OCR temporários
+ocr_result*.txt
+processed_*.png
+testOcr*.cjs
+testParserV3.cjs
+*.traineddata

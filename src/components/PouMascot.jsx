@@ -7,7 +7,7 @@ export default function PouMascot({
   petData,
   onPetClick,
   actionState = 'idle', // 'idle' | 'eating' | 'washing' | 'sleeping' | 'happy'
-  onFeedDirect = null,
+  _onFeedDirect = null,
   isSleeping = false,
   className = ""
 }) {
@@ -15,7 +15,6 @@ export default function PouMascot({
   const [pupilOffset, setPupilOffset] = useState({ x: 0, y: 0 });
   const [isBlinking, setIsBlinking] = useState(false);
   const [hearts, setHearts] = useState([]);
-  const [bubbles, setBubbles] = useState([]);
 
   // Configuração visual de pele
   const currentSkinItem = PET_ACCESSORIES.find(a => a.id === `skin:${petData?.skin}`) || PET_ACCESSORIES.find(a => a.id === 'skin:caramel');
@@ -24,10 +23,7 @@ export default function PouMascot({
 
   // Olhos seguindo o cursor do mouse
   useEffect(() => {
-    if (isSleeping) {
-      setPupilOffset({ x: 0, y: 0 });
-      return;
-    }
+    if (isSleeping) return;
 
     let animationFrame;
     const handleMouseMove = (e) => {
@@ -74,9 +70,11 @@ export default function PouMascot({
     if (onPetClick) onPetClick(e);
 
     // Adiciona coração flutuante
+    const initialX = (Math.random() - 0.5) * 80;
     const newHeart = {
       id: Date.now() + Math.random(),
-      x: (Math.random() - 0.5) * 80,
+      x: initialX,
+      targetX: initialX + (Math.random() - 0.5) * 40,
       y: (Math.random() - 0.5) * 40
     };
     setHearts(prev => [...prev.slice(-6), newHeart]);
@@ -88,6 +86,7 @@ export default function PouMascot({
   const isHungry = (petData?.hunger || 100) < 35;
   const isDirty = (petData?.hygiene || 100) < 45;
   const isSad = (petData?.fun || 100) < 35;
+  const activePupilOffset = isSleeping ? { x: 0, y: 0 } : pupilOffset;
 
   return (
     <div 
@@ -112,7 +111,7 @@ export default function PouMascot({
           <motion.div
             key={h.id}
             initial={{ opacity: 1, scale: 0.5, x: h.x, y: 0 }}
-            animate={{ opacity: 0, scale: 1.4, x: h.x + (Math.random() - 0.5) * 40, y: -90 }}
+            animate={{ opacity: 0, scale: 1.4, x: h.targetX, y: -90 }}
             exit={{ opacity: 0 }}
             transition={{ duration: 1.2, ease: 'easeOut' }}
             className="absolute pointer-events-none text-red-500 z-30"
@@ -230,21 +229,21 @@ export default function PouMascot({
               <>
                 {/* Pupila que segue o mouse */}
                 <circle 
-                  cx={72 + pupilOffset.x} 
-                  cy={85 + pupilOffset.y + (isHungry ? 3 : 0)} 
+                  cx={72 + activePupilOffset.x} 
+                  cy={85 + activePupilOffset.y + (isHungry ? 3 : 0)} 
                   r={isHungry ? 7 : 10} 
                   fill="#09090b" 
                 />
                 {/* Reflexo de luz na pupila (dá vida e fofura!) */}
                 <circle 
-                  cx={75 + pupilOffset.x} 
-                  cy={81 + pupilOffset.y} 
+                  cx={75 + activePupilOffset.x} 
+                  cy={81 + activePupilOffset.y} 
                   r="3.5" 
                   fill="#ffffff" 
                 />
                 <circle 
-                  cx={68 + pupilOffset.x} 
-                  cy={88 + pupilOffset.y} 
+                  cx={68 + activePupilOffset.x} 
+                  cy={88 + activePupilOffset.y} 
                   r="1.5" 
                   fill="#ffffff" 
                 />
@@ -272,20 +271,20 @@ export default function PouMascot({
             {!isBlinking && !isSleeping && (
               <>
                 <circle 
-                  cx={128 + pupilOffset.x} 
-                  cy={85 + pupilOffset.y + (isHungry ? 3 : 0)} 
+                  cx={128 + activePupilOffset.x} 
+                  cy={85 + activePupilOffset.y + (isHungry ? 3 : 0)} 
                   r={isHungry ? 7 : 10} 
                   fill="#09090b" 
                 />
                 <circle 
-                  cx={131 + pupilOffset.x} 
-                  cy={81 + pupilOffset.y} 
+                  cx={131 + activePupilOffset.x} 
+                  cy={81 + activePupilOffset.y} 
                   r="3.5" 
                   fill="#ffffff" 
                 />
                 <circle 
-                  cx={124 + pupilOffset.x} 
-                  cy={88 + pupilOffset.y} 
+                  cx={124 + activePupilOffset.x} 
+                  cy={88 + activePupilOffset.y} 
                   r="1.5" 
                   fill="#ffffff" 
                 />

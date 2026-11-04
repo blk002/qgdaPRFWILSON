@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { Trophy, Coins, Play, RefreshCw, X, Heart, Shield, Sparkles } from 'lucide-react';
 import { useConfetti } from '../hooks/useConfetti';
@@ -26,20 +26,20 @@ export default function K9RodoviaRun({
   const [items, setItems] = useState([]);
 
   const animFrameRef = useRef(null);
-  const lastSpawnRef = useRef(Date.now());
+  const lastSpawnRef = useRef(0);
   const speedRef = useRef(5);
   const hasReportedGameOverRef = useRef(false);
 
   const { setTriggerConfetti } = useConfetti();
 
   // Ação de Pular
-  const jump = () => {
+  const jump = useCallback(() => {
     if (gameState !== 'playing') return;
     if (k9Ref.current.y <= 5) {
       k9Ref.current.velocity = 15;
       setIsJumping(true);
     }
-  };
+  }, [gameState]);
 
   const startGame = () => {
     hasReportedGameOverRef.current = false;
@@ -181,14 +181,20 @@ export default function K9RodoviaRun({
   useEffect(() => {
     if (gameState === 'gameover' && !hasReportedGameOverRef.current) {
       hasReportedGameOverRef.current = true;
-      if (score > highScore) {
-        setHighScore(score);
+      const isNewHigh = score > highScore;
+      if (isNewHigh) {
         localStorage.setItem('k9_minigame_high', score.toString());
-        setTriggerConfetti(true);
       }
-      if (onGameOver) {
-        onGameOver(score, coinsCollected);
-      }
+      const timer = setTimeout(() => {
+        if (isNewHigh) {
+          setHighScore(score);
+          setTriggerConfetti(true);
+        }
+        if (onGameOver) {
+          onGameOver(score, coinsCollected);
+        }
+      }, 0);
+      return () => clearTimeout(timer);
     }
   }, [gameState, score, highScore, coinsCollected, onGameOver, setTriggerConfetti]);
 
@@ -202,7 +208,7 @@ export default function K9RodoviaRun({
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState]);
+  }, [jump]);
 
   return (
     <div 

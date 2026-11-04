@@ -5,11 +5,104 @@ import { toast } from 'sonner';
 
 const LS_KEY = 'qg_vision_api_key';
 
+/** Normaliza duração para MM:SS */
+function normalizeDuration(raw) {
+  const d = raw.replace(/[;.,]/g, ':');
+  const parts = d.split(':').map(p => parseInt(p, 10));
+  if (parts.length === 3) {
+    const totalMin = parts[0] * 60 + parts[1];
+    const secs = parts[2];
+    if (secs >= 60) return null;
+    return String(totalMin).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+  } else if (parts.length === 2) {
+    const [mins, secs] = parts;
+    if (secs >= 60 || mins >= 2020 || mins > 180) return null;
+    if ((mins === 23 || mins === 24) && secs <= 10) return null;
+    return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
+  }
+  return null;
+}
+
+/** Limpa nome extraído pelo OCR */
+function cleanName(str) {
+  let s = str
+    .replace(/^[\s\-=*|\\/""":;.,!?#@&()[\]{}<>_~`^+%$]+/, '')
+    .replace(/[\s\-=*|\\/""":;.,!?#@&()[\]{}<>_~`^+%$]+$/, '')
+    .replace(/^[^A-ZÀ-Üa-zà-ü]*?(?=[A-ZÀ-Ü]{2,})/, '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toUpperCase();
+
+  // Remove apenas caractere único de lixo no início
+  s = s.replace(/^[A-ZÀ-Ü0-9]{1}\s*[|)\]}\s]\s*(?=[A-ZÀ-Ü]{2,}.{3,})/, '');
+
+  if (s.length < 3) s = str.toUpperCase().replace(/[^A-ZÀ-Ü0-9\s-]/g, '').trim();
+  s = s.replace(/[.,;:!?|]+$/, '').trim();
+
+  // Correções comuns de OCR
+  s = s.replace(/\bAULA\s+OL\b/g, 'AULA 01');
+  s = s.replace(/\bAULA\s+O(\d)\b/g, 'AULA 0$1');
+  s = s.replace(/\bAULA\s+I\b/g, 'AULA 01');
+
+  return s;
+}
+
+/** Parseia o texto retornado pela API e extrai pares (nome, duração) */
+function parseOCRText(text) {
+  const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+  const durRegex = /\b(\d{1,3}[:;.,]\d{2}(?:[:;.,]\d{2})?)\b/;
+  const ignoreRegex = /disponível|disponivel|dispon[ií]vel|cispon|dispon|até\s+\d|^\d{2}\/\d{2}|^às\s|^\d+%$|^0%$/i;
+
+  const lineData = lines.map((line, idx) => {
+    const isIgnored = ignoreRegex.test(line);
+    const durMatch = line.match(durRegex);
+    const duration = durMatch ? normalizeDuration(durMatch[1]) : null;
+    const nameText = durMatch ? line.replace(durRegex, '').trim() : line;
+    const isNameCandidate = !isIgnored && nameText.length > 3 && /[A-ZÀ-Ü]{3,}/.test(nameText);
+    return { line, idx, isIgnored, duration, nameText, isNameCandidate };
+  });
+
+  const results = [];
+  const usedNameLines = new Set();
+
+  for (let i = 0; i < lineData.length; i++) {
+    const ld = lineData[i];
+    if (!ld.duration) continue;
+
+    if (ld.isNameCandidate && ld.nameText.length > 3) {
+      const cleaned = cleanName(ld.nameText);
+      if (cleaned.length >= 3 && !results.some(r => r.name === cleaned)) {
+        results.push({ id: 'ocr_' + Date.now() + '_' + results.length, name: cleaned, duration: ld.duration, selected: true });
+        usedNameLines.add(i);
+        continue;
+      }
+    }
+
+    for (let j = i - 1; j >= Math.max(0, i - 5); j--) {
+      const prev = lineData[j];
+      if (usedNameLines.has(j) || prev.isIgnored) continue;
+      if (prev.duration && !prev.isNameCandidate) continue;
+      if (prev.isNameCandidate) {
+        const cleaned = cleanName(prev.nameText);
+        if (cleaned.length >= 3 && !results.some(r => r.name === cleaned)) {
+          results.push({ id: 'ocr_' + Date.now() + '_' + results.length, name: cleaned, duration: ld.duration, selected: true });
+          usedNameLines.add(j);
+        }
+        break;
+      }
+    }
+  }
+
+  // Deduplicação
+  const seen = new Set();
+  return results.filter(r => { if (seen.has(r.name)) return false; seen.add(r.name); return true; });
+}
+
 /**
  * Componente de importação de aulas via screenshot.
  * Usa a Google Cloud Vision API para extrair texto com alta precisão.
  */
-export default function ImportOCR({ subjects, setSubjects, availableColors, onClose }) {
+export default function ImportOCR({ subjects, setSubjects, _availableColors, onClose }) {
   // Estado do fluxo
   const [step, setStep] = useState('upload'); // 'upload' | 'processing' | 'review'
 
@@ -22,8 +115,8 @@ export default function ImportOCR({ subjects, setSubjects, availableColors, onCl
   // Disciplina
   const [selectedSubjectId, setSelectedSubjectId] = useState('');
   const [newSubjectName, setNewSubjectName] = useState('');
-  const [newSubjectBlock, setNewSubjectBlock] = useState('B1');
-  const [newSubjectColor, setNewSubjectColor] = useState('bg-slate-200 text-slate-900');
+  const [newSubjectBlock] = useState('B1');
+  const [newSubjectColor] = useState('bg-slate-200 text-slate-900');
   const [createNew, setCreateNew] = useState(Object.keys(subjects || {}).length === 0);
 
   // API Key
@@ -110,99 +203,6 @@ export default function ImportOCR({ subjects, setSubjects, availableColors, onCl
   }, [imagePreview]);
 
   // ===== GOOGLE VISION API =====
-
-  /** Normaliza duração para MM:SS */
-  const normalizeDuration = (raw) => {
-    const d = raw.replace(/[;.,]/g, ':');
-    const parts = d.split(':').map(p => parseInt(p, 10));
-    if (parts.length === 3) {
-      const totalMin = parts[0] * 60 + parts[1];
-      const secs = parts[2];
-      if (secs >= 60) return null;
-      return String(totalMin).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
-    } else if (parts.length === 2) {
-      const [mins, secs] = parts;
-      if (secs >= 60 || mins >= 2020 || mins > 180) return null;
-      if ((mins === 23 || mins === 24) && secs <= 10) return null;
-      return String(mins).padStart(2, '0') + ':' + String(secs).padStart(2, '0');
-    }
-    return null;
-  };
-
-  /** Limpa nome extraído pelo OCR */
-  const cleanName = (str) => {
-    let s = str
-      .replace(/^[\s\-=*|\\/""":;.,!?#@&()\[\]{}<>_~`^+%$]+/, '')
-      .replace(/[\s\-=*|\\/""":;.,!?#@&()\[\]{}<>_~`^+%$]+$/, '')
-      .replace(/^[^A-ZÀ-Üa-zà-ü]*?(?=[A-ZÀ-Ü]{2,})/, '')
-      .replace(/\s+/g, ' ')
-      .trim()
-      .toUpperCase();
-
-    // Remove apenas caractere único de lixo no início
-    s = s.replace(/^[A-ZÀ-Ü0-9]{1}\s*[|)\]}\s]\s*(?=[A-ZÀ-Ü]{2,}.{3,})/, '');
-
-    if (s.length < 3) s = str.toUpperCase().replace(/[^A-ZÀ-Ü0-9\s\-]/g, '').trim();
-    s = s.replace(/[.,;:!?|]+$/, '').trim();
-
-    // Correções comuns de OCR
-    s = s.replace(/\bAULA\s+OL\b/g, 'AULA 01');
-    s = s.replace(/\bAULA\s+O(\d)\b/g, 'AULA 0$1');
-    s = s.replace(/\bAULA\s+I\b/g, 'AULA 01');
-
-    return s;
-  };
-
-  /** Parseia o texto retornado pela API e extrai pares (nome, duração) */
-  const parseOCRText = (text) => {
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
-    const durRegex = /\b(\d{1,3}[:;.,]\d{2}(?:[:;.,]\d{2})?)\b/;
-    const ignoreRegex = /disponível|disponivel|dispon[ií]vel|cispon|dispon|até\s+\d|^\d{2}\/\d{2}|^às\s|^\d+%$|^0%$/i;
-
-    const lineData = lines.map((line, idx) => {
-      const isIgnored = ignoreRegex.test(line);
-      const durMatch = line.match(durRegex);
-      const duration = durMatch ? normalizeDuration(durMatch[1]) : null;
-      const nameText = durMatch ? line.replace(durRegex, '').trim() : line;
-      const isNameCandidate = !isIgnored && nameText.length > 3 && /[A-ZÀ-Ü]{3,}/.test(nameText);
-      return { line, idx, isIgnored, duration, nameText, isNameCandidate };
-    });
-
-    const results = [];
-    const usedNameLines = new Set();
-
-    for (let i = 0; i < lineData.length; i++) {
-      const ld = lineData[i];
-      if (!ld.duration) continue;
-
-      if (ld.isNameCandidate && ld.nameText.length > 3) {
-        const cleaned = cleanName(ld.nameText);
-        if (cleaned.length >= 3 && !results.some(r => r.name === cleaned)) {
-          results.push({ id: 'ocr_' + Date.now() + '_' + results.length, name: cleaned, duration: ld.duration, selected: true });
-          usedNameLines.add(i);
-          continue;
-        }
-      }
-
-      for (let j = i - 1; j >= Math.max(0, i - 5); j--) {
-        const prev = lineData[j];
-        if (usedNameLines.has(j) || prev.isIgnored) continue;
-        if (prev.duration && !prev.isNameCandidate) continue;
-        if (prev.isNameCandidate) {
-          const cleaned = cleanName(prev.nameText);
-          if (cleaned.length >= 3 && !results.some(r => r.name === cleaned)) {
-            results.push({ id: 'ocr_' + Date.now() + '_' + results.length, name: cleaned, duration: ld.duration, selected: true });
-            usedNameLines.add(j);
-          }
-          break;
-        }
-      }
-    }
-
-    // Deduplicação
-    const seen = new Set();
-    return results.filter(r => { if (seen.has(r.name)) return false; seen.add(r.name); return true; });
-  };
 
   /** Converte File para base64 sem o prefixo data:... */
   const fileToBase64 = (file) => new Promise((resolve, reject) => {

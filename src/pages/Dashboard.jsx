@@ -114,7 +114,7 @@ export default function Dashboard() {
     userStats, coins, user,
     getCurrentPatente, getEstimatedCompletionDate, getSubjectEstimates,
     weeklyMissions = [], claimMissionReward,
-    dailyMissions = [], claimDailyMissionReward, checkAndResetDailyMissions,
+    dailyMissions = [], claimDailyMissionReward,
     unlockedAvatars = [], selectAvatar,
     streakData = { currentStreak: 0 },
     reviewStats = { totalDone: 0, correct: 0, streak: 0 },

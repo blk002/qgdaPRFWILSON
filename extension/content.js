@@ -641,7 +641,7 @@
 
     // REGRA DE OURO 2: Se for expressamente Legislação de Trânsito
     if (s.includes('trânsito') || s.includes('transito') || s.includes('ctb') || s.includes('contran')) {
-      const subCat = (full.includes('contran') || full.includes('resolução'))
+      const subCat = (full.includes('contran') || full.includes('resolução') || full.includes('resolucao') || full.includes('resoluções') || full.includes('resolucoes'))
         ? 'Resoluções do CONTRAN'
         : 'Legislação de Trânsito (CTB)';
       return { bloco: 'Bloco II', canonicalSubject: subCat };
@@ -659,9 +659,10 @@
     if (
       full.includes('trânsito') || full.includes('transito') || full.includes('ctb') ||
       full.includes('9.503') || full.includes('contran') || full.includes('resolução') ||
+      full.includes('resolucao') || full.includes('resoluções') || full.includes('resolucoes') ||
       full.includes('sinalização') || full.includes('habilitação') || full.includes('sinistro')
     ) {
-      const subCat = (full.includes('contran') || full.includes('resolução'))
+      const subCat = (full.includes('contran') || full.includes('resolução') || full.includes('resolucao') || full.includes('resoluções') || full.includes('resolucoes'))
         ? 'Resoluções do CONTRAN'
         : 'Legislação de Trânsito (CTB)';
       return { bloco: 'Bloco II', canonicalSubject: subCat };

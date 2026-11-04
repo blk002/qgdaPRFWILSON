@@ -4,7 +4,7 @@ import { toast } from 'sonner';
 import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle, Camera, BookOpen, ScanLine, ChevronUp, ChevronDown, Zap, FastForward, Layers } from 'lucide-react';
 import ImportOCR from '../components/ImportOCR';
 import TopicLessonScanner from '../components/TopicLessonScanner';
-import { parseDurationToSeconds, formatSecondsToClock, formatSecondsToFriendly, getSubjectVideoStats, calculateSpeedComparison, formatMinutesToFriendly, calculateLessonsForGoal } from '../lib/durationHelpers';
+import { parseDurationToSeconds, formatSecondsToClock, formatSecondsToFriendly, getSubjectVideoStats, formatMinutesToFriendly, calculateLessonsForGoal } from '../lib/durationHelpers';
 
 import { useState } from 'react';
 import { createPortal } from 'react-dom';
@@ -51,8 +51,6 @@ export default function Config({
     setCycleScheduleType,
     cycleWeekStart,
     setCycleWeekStart,
-    cycleDayNames,
-    setCycleDayNames,
     fillFullWeekCycle,
     getRelativeDateInfo
   } = useStore();

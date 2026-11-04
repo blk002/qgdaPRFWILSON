@@ -11,7 +11,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 
 // Classificador Inteligente para a Estrutura Oficial do Edital PRF (Cebraspe)
-export function classifyPRFCategory(subject, topic, content) {
+function classifyPRFCategory(subject, topic, content) {
   const s = (subject || '').toLowerCase();
   const t = (topic || '').toLowerCase();
   const c = (content || '').toLowerCase();
@@ -34,7 +34,7 @@ export function classifyPRFCategory(subject, topic, content) {
 
   // REGRA DE OURO 2: Se for expressamente Legislação de Trânsito
   if (s.includes('trânsito') || s.includes('transito') || s.includes('ctb') || s.includes('contran')) {
-    const subCat = (full.includes('contran') || full.includes('resolução'))
+    const subCat = (full.includes('contran') || full.includes('resolução') || full.includes('resolucao') || full.includes('resoluções') || full.includes('resolucoes'))
       ? 'Resoluções do CONTRAN'
       : 'Legislação de Trânsito (CTB)';
     return { bloco: 'Bloco II', canonicalSubject: subCat };
@@ -52,9 +52,10 @@ export function classifyPRFCategory(subject, topic, content) {
   if (
     full.includes('trânsito') || full.includes('transito') || full.includes('ctb') ||
     full.includes('9.503') || full.includes('contran') || full.includes('resolução') ||
+    full.includes('resolucao') || full.includes('resoluções') || full.includes('resolucoes') ||
     full.includes('sinalização') || full.includes('habilitação') || full.includes('sinistro')
   ) {
-    const subCat = (full.includes('contran') || full.includes('resolução'))
+    const subCat = (full.includes('contran') || full.includes('resolução') || full.includes('resolucao') || full.includes('resoluções') || full.includes('resolucoes'))
       ? 'Resoluções do CONTRAN'
       : 'Legislação de Trânsito (CTB)';
     return { bloco: 'Bloco II', canonicalSubject: subCat };
@@ -143,7 +144,7 @@ const BLOCO_METADATA = {
   }
 };
 
-export function formatDurationHMS(totalSec) {
+function formatDurationHMS(totalSec) {
   const safe = Math.max(0, Number(totalSec) || 0);
   const h = Math.floor(safe / 3600);
   const m = Math.floor((safe % 3600) / 60);
@@ -161,7 +162,9 @@ export default function RaioXCaveira() {
     createFsrsCardFromCaveira
   } = useStore();
 
-  const [extensionDetected, setExtensionDetected] = useState(false);
+  const [extensionDetected, setExtensionDetected] = useState(() => {
+    return typeof document !== 'undefined' && document.documentElement.getAttribute('data-qg-caveira-extension-installed') === 'true';
+  });
   const [selectedBloco, setSelectedBloco] = useState('all'); // 'all' | 'Bloco I' | 'Bloco II' | 'Bloco III'
   const [selectedSubject, setSelectedSubject] = useState('all');
   const [selectedTopic, setSelectedTopic] = useState('all');
@@ -180,10 +183,6 @@ export default function RaioXCaveira() {
 
   // Escuta detecção e sincronização da extensão via bridge
   useEffect(() => {
-    if (document.documentElement.getAttribute('data-qg-caveira-extension-installed') === 'true') {
-      setExtensionDetected(true);
-    }
-
     const handleMessage = (event) => {
       if (event.data && event.data.source === 'QG_CAVEIRA_EXTENSION') {
         if (event.data.type === 'EXTENSION_DETECTED') {
@@ -199,13 +198,13 @@ export default function RaioXCaveira() {
           if (newQuestion) {
             useStore.getState().addCaveiraQuestion(newQuestion);
           } else if (questions) {
-            useStore.getState().importCaveiraQuestions(questions, false);
+            useStore.getState().importCaveiraQuestions(questions, true);
           }
         }
         if (event.data.type === 'CAVEIRA_DATA_RESPONSE' && event.data.payload) {
           setExtensionDetected(true);
           if (event.data.payload.questions && event.data.payload.questions.length > 0) {
-            useStore.getState().importCaveiraQuestions(event.data.payload.questions, false);
+            useStore.getState().importCaveiraQuestions(event.data.payload.questions, true);
           }
         }
       }
@@ -623,55 +622,6 @@ export default function RaioXCaveira() {
     setFilterType('all');
     setSearchQuery('');
     setSelectedLegalDevice(null);
-  };
-
-  const handleResetAll = () => {
-    if (caveiraQuestions.length === 0) return;
-    useStore.getState().setGlobalModal({
-      title: 'Zerar Questões Resolvidas?',
-      message: 'Esta ação removerá todas as questões resolvidas do histórico do Raio-X Caveira.',
-      onConfirm: () => clearCaveiraQuestions()
-    });
-  };
-
-  const handleResetHits = () => {
-    if (stats.hits === 0) return;
-    useStore.getState().setGlobalModal({
-      title: 'Zerar Acertos?',
-      message: `Deseja zerar os ${stats.hits} acertos registrados no histórico?`,
-      onConfirm: () => {
-        const remaining = caveiraQuestions.filter(q => {
-          const classified = classifyPRFCategory(q.subject, q.topic, q.content);
-          const qBloco = q.bloco || classified.bloco;
-          if (selectedBloco !== 'all' && qBloco !== selectedBloco) return true;
-          return !q.hit;
-        });
-        useStore.setState({ caveiraQuestions: remaining });
-        try { localStorage.setItem('prf_caveira_questions', JSON.stringify(remaining)); } catch (_) {}
-        try { window.postMessage({ source: 'QG_WEB_APP', type: 'REPLACE_CAVEIRA_QUESTIONS', payload: { questions: remaining } }, '*'); } catch (_) {}
-        toast.info('Acertos zerados.');
-      }
-    });
-  };
-
-  const handleResetErrors = () => {
-    if (stats.errors === 0) return;
-    useStore.getState().setGlobalModal({
-      title: 'Zerar Erros?',
-      message: `Deseja zerar os ${stats.errors} erros registrados no histórico?`,
-      onConfirm: () => {
-        const remaining = caveiraQuestions.filter(q => {
-          const classified = classifyPRFCategory(q.subject, q.topic, q.content);
-          const qBloco = q.bloco || classified.bloco;
-          if (selectedBloco !== 'all' && qBloco !== selectedBloco) return true;
-          return Boolean(q.hit);
-        });
-        useStore.setState({ caveiraQuestions: remaining });
-        try { localStorage.setItem('prf_caveira_questions', JSON.stringify(remaining)); } catch (_) {}
-        try { window.postMessage({ source: 'QG_WEB_APP', type: 'REPLACE_CAVEIRA_QUESTIONS', payload: { questions: remaining } }, '*'); } catch (_) {}
-        toast.info('Erros zerados.');
-      }
-    });
   };
 
   return (

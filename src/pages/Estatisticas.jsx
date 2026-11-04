@@ -72,7 +72,6 @@ export default function Estatisticas() {
       let subBom = 0;
       let subDificil = 0;
       let subSumStability = 0;
-      let subSumPerformance = 0;
       let subReviewedCount = 0;
 
       (sub.topics || []).forEach(topic => {
@@ -108,7 +107,6 @@ export default function Estatisticas() {
         subBom += bom;
         subDificil += dificil;
         subSumStability += topicReviews.reduce((acc, r) => acc + (r.stability || 0), 0);
-        subSumPerformance += topicReviews.reduce((acc, r) => acc + (r.lastPerformance || 0), 0);
         subReviewedCount += reviewedCount;
       });
 

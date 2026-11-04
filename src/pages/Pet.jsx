@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../store/useStore';
 import PouMascot from '../components/PouMascot';
@@ -42,9 +42,7 @@ export default function Pet() {
     playWithPet,
     equipPetItem,
     buyPetAccessory,
-    renamePet,
-    isDarkMode,
-    playSound
+    renamePet
   } = useStore();
 
   const [activeRoom, setActiveRoom] = useState('kitchen'); // 'kitchen' | 'bath' | 'bedroom' | 'play' | 'wardrobe'
@@ -52,10 +50,15 @@ export default function Pet() {
   const [showMinigame, setShowMinigame] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(petData?.name || 'Recruta K9');
+  const [prevPetName, setPrevPetName] = useState(petData?.name);
 
-  // Estado da esponja e sabão no banheiro
-  const [soapBubbles, setSoapBubbles] = useState([]);
-  const [isSoapActive, setIsSoapActive] = useState(false);
+  // Sincroniza nome caso mude externamente na store
+  if (petData?.name !== prevPetName) {
+    setPrevPetName(petData?.name);
+    if (!isEditingName) {
+      setTempName(petData?.name || 'Recruta K9');
+    }
+  }
 
   // Informações de nível do pet
   const currentLevelInfo = PET_LEVELS.find(l => l.level === (petData?.level || 1)) || PET_LEVELS[0];
@@ -63,11 +66,6 @@ export default function Pet() {
   const progressToNextLevel = nextLevelInfo 
     ? Math.min(100, Math.round(((petData?.xp || 0) / nextLevelInfo.minXp) * 100))
     : 100;
-
-  // Atualizar nome ao mudar store
-  useEffect(() => {
-    if (petData?.name) setTempName(petData.name);
-  }, [petData?.name]);
 
   const handleSaveName = () => {
     if (tempName.trim()) {

@@ -76,21 +76,32 @@
                 session: normalizeSession(response.session)
               }
             }, '*');
-            return;
+          } else {
+            // Fallback direto ao storage local se a mensagem falhar
+            chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
+              if (chrome.runtime.lastError) return;
+              const questions = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
+              const session = normalizeSession(res?.[SESSION_KEY]);
+              window.postMessage({
+                source: 'QG_CAVEIRA_EXTENSION',
+                type: 'CAVEIRA_DATA_RESPONSE',
+                payload: { questions, session }
+              }, '*');
+            });
           }
         });
+      } else {
+        chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
+          if (chrome.runtime.lastError) return;
+          const questions = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
+          const session = normalizeSession(res?.[SESSION_KEY]);
+          window.postMessage({
+            source: 'QG_CAVEIRA_EXTENSION',
+            type: 'CAVEIRA_DATA_RESPONSE',
+            payload: { questions, session }
+          }, '*');
+        });
       }
-
-      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
-        if (chrome.runtime.lastError) return;
-        const questions = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
-        const session = normalizeSession(res?.[SESSION_KEY]);
-        window.postMessage({
-          source: 'QG_CAVEIRA_EXTENSION',
-          type: 'CAVEIRA_DATA_RESPONSE',
-          payload: { questions, session }
-        }, '*');
-      });
     } catch (_) {}
   }
 

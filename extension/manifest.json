@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "QG da PRF — Rastreador Caveira",
-  "version": "1.2.4",
+  "version": "1.2.5",
   "description": "Rastreia e diagnostica cada questão resolvida no Projeto Caveira, sincronizando pontos fortes e fracos no QG da PRF.",
   "icons": {
     "16": "icons/icon16.png",
@@ -23,6 +23,7 @@
     "*://*.projetocaveira.com/*",
     "*://projetocaveira.com/*",
     "http://localhost:*/*",
+    "http://127.0.0.1:*/*",
     "https://blk002.github.io/*"
   ],
   "background": {
@@ -55,6 +56,7 @@
     {
       "matches": [
         "http://localhost:*/*",
+        "http://127.0.0.1:*/*",
         "https://blk002.github.io/*"
       ],
       "js": ["qg_bridge.js"],

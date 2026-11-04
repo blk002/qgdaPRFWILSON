@@ -3,6 +3,23 @@
 const STORAGE_KEY = 'qg_caveira_questions';
 const SESSION_KEY = 'qg_caveira_session';
 
+const CAVEIRA_URL_PATTERNS = [
+  '*://*.caveira.com/*',
+  '*://caveira.com/*',
+  '*://*.caveira.com.br/*',
+  '*://caveira.com.br/*',
+  '*://*.projetocaveira.com.br/*',
+  '*://projetocaveira.com.br/*',
+  '*://*.projetocaveira.com/*',
+  '*://projetocaveira.com/*'
+];
+
+const QG_URL_PATTERNS = [
+  'https://blk002.github.io/*',
+  'http://localhost:*/*',
+  'http://127.0.0.1:*/*'
+];
+
 function getTodaySessionDate() {
   const now = new Date();
   const y = now.getFullYear();
@@ -33,7 +50,7 @@ function normalizeSession(rawSession) {
 async function reinjectOpenTabs() {
   if (!chrome.scripting || !chrome.tabs) return;
   try {
-    const qgTabs = await chrome.tabs.query({ url: ['https://blk002.github.io/*', 'http://localhost:*/*'] });
+    const qgTabs = await chrome.tabs.query({ url: QG_URL_PATTERNS });
     for (const tab of qgTabs) {
       if (tab.id) {
         chrome.scripting.executeScript({
@@ -43,14 +60,7 @@ async function reinjectOpenTabs() {
       }
     }
 
-    const caveiraTabs = await chrome.tabs.query({
-      url: [
-        '*://*.projetocaveira.com.br/*',
-        '*://projetocaveira.com.br/*',
-        '*://*.caveira.com.br/*',
-        '*://caveira.com.br/*'
-      ]
-    });
+    const caveiraTabs = await chrome.tabs.query({ url: CAVEIRA_URL_PATTERNS });
     for (const tab of caveiraTabs) {
       if (tab.id) {
         chrome.scripting.insertCSS({
@@ -70,7 +80,7 @@ async function reinjectOpenTabs() {
 async function broadcastToQgTabs(questions, session) {
   if (!chrome.tabs) return;
   try {
-    const qgTabs = await chrome.tabs.query({ url: ['https://blk002.github.io/*', 'http://localhost:*/*'] });
+    const qgTabs = await chrome.tabs.query({ url: QG_URL_PATTERNS });
     for (const tab of qgTabs) {
       if (tab.id) {
         chrome.tabs.sendMessage(tab.id, {
@@ -84,7 +94,6 @@ async function broadcastToQgTabs(questions, session) {
 
 // Inicializar armazenamento
 chrome.runtime.onInstalled.addListener(() => {
-  const today = getTodaySessionDate();
   chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
     if (!res[STORAGE_KEY]) {
       chrome.storage.local.set({ [STORAGE_KEY]: [] });
@@ -139,14 +148,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'GET_CAVEIRA_QUESTIONS') {
     // Solicita varredura imediata nas abas abertas do Projeto Caveira antes de retornar os dados
     if (chrome.tabs) {
-      chrome.tabs.query({
-        url: [
-          '*://*.projetocaveira.com.br/*',
-          '*://projetocaveira.com.br/*',
-          '*://*.caveira.com.br/*',
-          '*://caveira.com.br/*'
-        ]
-      }).then((tabs) => {
+      chrome.tabs.query({ url: CAVEIRA_URL_PATTERNS }).then((tabs) => {
         for (const t of tabs) {
           if (t.id) {
             chrome.tabs.sendMessage(t.id, { type: 'FORCE_SCAN_NOW' }).catch(() => {});

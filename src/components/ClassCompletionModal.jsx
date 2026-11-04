@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { Play, FastForward, Clock, Zap, Target } from 'lucide-react';
 import { parseDurationToSeconds, calculateSpeedComparison, formatSecondsToFriendly, calculateLessonsForGoal } from '../lib/durationHelpers';
@@ -18,13 +18,18 @@ export default function ClassCompletionModal({
   const initialCount = suggestedClasses ? Math.min(suggestedClasses, maxClasses) : 1;
   const [numClasses, setNumClasses] = useState(initialCount);
   const [speed, setSpeed] = useState(Number(subjectSpeed) || 1);
+  const [prevProps, setPrevProps] = useState({ subjectSpeed, suggestedClasses, maxClasses });
 
-  // Sincroniza velocidade e sugestão quando a matéria mudar ou modal abrir
-  useEffect(() => {
-    if (subjectSpeed) setSpeed(Number(subjectSpeed) || 1);
-    const suggested = suggestedClasses ? Math.min(suggestedClasses, maxClasses) : 1;
-    setNumClasses(suggested);
-  }, [subjectSpeed, isOpen, suggestedClasses, maxClasses]);
+  // Padrão oficial React 19: ajusta o estado durante a renderização quando props mudam, sem causar cascading render
+  if (
+    prevProps.subjectSpeed !== subjectSpeed ||
+    prevProps.suggestedClasses !== suggestedClasses ||
+    prevProps.maxClasses !== maxClasses
+  ) {
+    setPrevProps({ subjectSpeed, suggestedClasses, maxClasses });
+    setSpeed(Number(subjectSpeed) || 1);
+    setNumClasses(suggestedClasses ? Math.min(suggestedClasses, maxClasses) : 1);
+  }
 
   const handleSpeedChange = (newSpeed) => {
     setSpeed(newSpeed);
@@ -59,7 +64,6 @@ export default function ClassCompletionModal({
   const comparison = calculateSpeedComparison(totalOriginalSec, speed);
   const goalSec = timeGoalMinutes ? timeGoalMinutes * 60 : 0;
   const overGoal = goalSec > 0 && comparison.acceleratedSeconds > goalSec;
-  const underGoal = goalSec > 0 && comparison.acceleratedSeconds < goalSec * 0.9;
 
   return createPortal(
     <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[110] p-4 fade-in font-sans">
