@@ -243,10 +243,11 @@ TEXTO INTEGRAL DA LEI:
 Elabore uma questão 100% INÉDITA para o candidato julgar como CERTO ou ERRADO.
 DIRETRIZES MANDATÓRIAS CEBRASPE:
 1. Padrão CEBRASPE: Uma assertiva afirmativa direta sobre a regra legal ou uma breve situação hipotética de fiscalização pela PRF em rodovia federal.
-2. Gabarito equilibrado: Decida aleatoriamente se o gabarito será CERTO ou ERRADO (50% de chance para cada). Se for ERRADO, insira um detalhe técnico sutilmente incorreto com base no próprio artigo (ex: altere prazo, competência, exceção ou penalidade).
-3. Tamanho MÁXIMO da assertiva: 280 caracteres (essencial para caber na tela do jogo de tiro tático 3D).
-4. Fundamentação: Indique a base legal exata e justificativa sucinta.
-5. Retorne EXCLUSIVAMENTE um objeto JSON válido no formato:
+2. NUNCA mencione nem elabore assertiva sobre parágrafo ou artigo vetado ou revogado; baseie-se estritamente nas regras vigentes do artigo.
+3. Gabarito equilibrado: Decida aleatoriamente se o gabarito será CERTO ou ERRADO (50% de chance para cada). Se for ERRADO, insira um detalhe técnico sutilmente incorreto com base no próprio artigo (ex: altere prazo, competência, exceção ou penalidade).
+4. Tamanho MÁXIMO da assertiva: 280 caracteres (essencial para caber na tela do jogo de tiro tático 3D).
+5. Fundamentação: Indique a base legal exata e justificativa sucinta.
+6. Retorne EXCLUSIVAMENTE um objeto JSON válido no formato:
 {
   "statement": "texto da assertiva (máximo 280 caracteres)",
   "answer": true, // use true para CERTO ou false para ERRADO
@@ -311,6 +312,8 @@ DIRETRIZES MANDATÓRIAS:
           if (
             parsed?.statement &&
             typeof parsed.answer === 'boolean' &&
+            !/vetado/i.test(parsed.statement) &&
+            !/revogad[oa]/i.test(parsed.statement) &&
             !seenStatementsRef.current.has(parsed.statement)
           ) {
             const stmt = parsed.statement.trim();

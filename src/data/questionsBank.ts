@@ -326,14 +326,23 @@ export function getRandomPrfTopic(category?: QuestionCategory): PRFTopicMetadata
 }
 
 export function getRandomCtbArticle(preferredTopicOrCapitulo?: string): ArtigoLeiSeca {
+  const validPool = LEI_SECA_CTB.filter(a => {
+    if (!a.texto || a.texto.length < 30) return false;
+    if (/vetado/i.test(a.texto)) return false;
+    if (/^\(?\s*revogad[oa]/i.test(a.texto.replace(/^Art\.?\s*\d+[º°o]?(?:-[A-Za-z])?\.?\s*/i, '').trim())) return false;
+    return true;
+  });
+
+  const poolToUse = validPool.length > 0 ? validPool : LEI_SECA_CTB;
+
   if (preferredTopicOrCapitulo) {
     const norm = preferredTopicOrCapitulo.toLowerCase();
-    const matching = LEI_SECA_CTB.filter(a => a.capitulo.toLowerCase().includes(norm));
+    const matching = poolToUse.filter(a => a.capitulo.toLowerCase().includes(norm));
     if (matching.length > 0) {
       return matching[Math.floor(Math.random() * matching.length)];
     }
   }
-  return LEI_SECA_CTB[Math.floor(Math.random() * LEI_SECA_CTB.length)];
+  return poolToUse[Math.floor(Math.random() * poolToUse.length)];
 }
 
 const INVERSION_PAIRS: [RegExp, string][] = [
@@ -365,24 +374,59 @@ const CEBRASPE_INTROS = [
 
 export function generateProceduralQuestionFromCtbArticle(
   artigo: ArtigoLeiSeca,
-  forceAnswer?: boolean
+  forceAnswer?: boolean,
+  recursionDepth: number = 0
 ): ActiveRoundQuestion {
-  const paragraphs = artigo.texto
+  // Filtra rigorosamente parágrafos sem vetos, revogações ou cabeçalhos
+  const paragraphs = (artigo.texto || '')
     .split(/\n\n+/)
     .map(p => p.trim())
-    .filter(p => p.length > 25 && !p.startsWith('(VETADO)') && !p.startsWith('CAPÍTULO') && !p.startsWith('Seção'));
+    .filter(p => {
+      if (p.length < 25) return false;
+      if (/vetado/i.test(p)) return false;
+      if (/revogad[oa]/i.test(p)) return false;
+      if (/^CAPÍTULO\b/i.test(p) || /^Seção\b/i.test(p)) return false;
+      return true;
+    });
 
-  const chosenParagraph = paragraphs.length > 0
-    ? paragraphs[Math.floor(Math.random() * paragraphs.length)]
-    : artigo.texto;
+  // Se o artigo não possui parágrafos válidos ou atingiu recursão
+  if (paragraphs.length === 0 || recursionDepth > 5) {
+    const fallbackArt = getRandomCtbArticle();
+    if (recursionDepth > 5) {
+      return {
+        id: `ctb-safe-${Date.now()}`,
+        uniqueHash: `ctb-safe-${Date.now()}`,
+        category: 'CTB',
+        topic: fallbackArt.capitulo,
+        legalBasis: fallbackArt.dispositivo,
+        statement: 'Nos termos do CTB, o trânsito de qualquer natureza nas vias terrestres do território nacional rege-se por este Código.',
+        answer: true,
+        explanation: 'CERTO. Disposição fundamental do Art. 1º do CTB.',
+        wasAiRewritten: false,
+      };
+    }
+    return generateProceduralQuestionFromCtbArticle(fallbackArt, forceAnswer, recursionDepth + 1);
+  }
 
-  // Limpa prefixos de parágrafos como "Art. 29. ", "§ 1º ", "I - "
-  const cleanSnippet = chosenParagraph
-    .replace(/^Art\.?\s*\d+[º°]?(?:-[A-Za-z])?\.?\s*/i, '')
-    .replace(/^§\s*\d+[º°]?\s*/i, '')
-    .replace(/^[IVXLCDM]+\s*-\s*/i, '')
+  const chosenParagraph = paragraphs[Math.floor(Math.random() * paragraphs.length)];
+
+  // Limpa prefixos e notas de rodapé do Planalto (ex.: Redação dada, Incluído, Vigência)
+  let cleanSnippet = chosenParagraph
+    .replace(/^Art\.?\s*\d+[º°o]?(?:-[A-Za-z])?\.?\s*/i, '')
+    .replace(/^§\s*\d+[º°o]?\.?\s*/i, '')
+    .replace(/^[IVXLCDM]+\s*[\-–—\.]\s*/i, '')
     .replace(/^Parágrafo\s+único\.?\s*/i, '')
+    .replace(/\(Redação dada[^\)]*\)/gi, '')
+    .replace(/\(Incluído[^\)]*\)/gi, '')
+    .replace(/\(Vigência[^\)]*\)/gi, '')
+    .replace(/\s+/g, ' ')
     .trim();
+
+  // Se por qualquer razão ainda contiver "VETADO" ou for muito curto, tenta outro
+  if (/vetado/i.test(cleanSnippet) || /revogad[oa]/i.test(cleanSnippet) || cleanSnippet.length < 25) {
+    const nextArt = getRandomCtbArticle();
+    return generateProceduralQuestionFromCtbArticle(nextArt, forceAnswer, recursionDepth + 1);
+  }
 
   // Decide se será CERTO ou ERRADO
   const willBeCorrect = forceAnswer !== undefined ? forceAnswer : Math.random() >= 0.5;
