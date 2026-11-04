@@ -28,14 +28,18 @@ import {
 } from 'lucide-react';
 import {
   LEI_SECA_CTB,
+  LEI_SECA_CONTRAN,
   ArtigoLeiSeca,
+  ArtigoLeiSecaCONTRAN,
   ActiveRoundQuestion,
   QuestionCategory,
   PRF_TOPICS_CATALOG,
   getRandomPrfTopic,
   getRandomCtbArticle,
+  getRandomContranArticle,
   PRFTopicMetadata,
   generateProceduralQuestionFromCtbArticle,
+  generateProceduralQuestionFromContranArticle,
   generateProceduralQuestionFromContranTopic,
 } from '../data/questionsBank';
 import { TacticalRange3D, ShotTriggerCommand } from '../components/TacticalRange3D';
@@ -208,8 +212,8 @@ export default function DueloFPS() {
         persistSeenStatement(q.statement);
         return q;
       } else {
-        const topic = topicOverride || getRandomPrfTopic('CONTRAN');
-        const q = generateProceduralQuestionFromContranTopic(topic);
+        const artigo = getRandomContranArticle(topicOverride?.name);
+        const q = generateProceduralQuestionFromContranArticle(artigo);
         persistSeenStatement(q.statement);
         return q;
       }
@@ -226,7 +230,7 @@ export default function DueloFPS() {
       let targetLegalBasis = '';
 
       if (category === 'CTB') {
-        // Seleciona um artigo real entre os 390 artigos vigentes do CTB
+        // Seleciona um artigo real entre os 363 artigos vigentes do CTB
         const artigo = getRandomCtbArticle();
         fallbackQ = generateProceduralQuestionFromCtbArticle(artigo);
         targetTopicName = artigo.capitulo;
@@ -256,29 +260,34 @@ DIRETRIZES MANDATÓRIAS CEBRASPE:
   "topic": "${artigo.capitulo}"
 }`;
       } else {
-        const topicMeta = getRandomPrfTopic('CONTRAN');
-        fallbackQ = generateProceduralQuestionFromContranTopic(topicMeta);
-        targetTopicName = topicMeta.name;
-        targetLegalBasis = topicMeta.legalScope;
+        // Seleciona um artigo real entre os 584 artigos vigentes das Resoluções CONTRAN
+        const artigo = getRandomContranArticle();
+        fallbackQ = generateProceduralQuestionFromContranArticle(artigo);
+        targetTopicName = artigo.resolucao;
+        targetLegalBasis = artigo.dispositivo;
 
         prompt = `Você é o examinador sênior da banca CEBRASPE criando a prova da Polícia Rodoviária Federal (PRF).
-Gere uma questão 100% INÉDITA (uma única assertiva para o candidato julgar como CERTO ou ERRADO) sobre a Resolução do CONTRAN selecionada abaixo:
-- Resolução: ${topicMeta.name}
-- Escopo Legal: ${topicMeta.legalScope}
-- Diretriz Temática: ${topicMeta.guideline}
+Com base EXCLUSIVAMENTE no dispositivo da RESOLUÇÃO DO CONTRAN fornecido abaixo:
 
-DIRETRIZES MANDATÓRIAS:
-1. Padrão CEBRASPE: Uma assertiva afirmativa direta ou um caso prático sucinto de fiscalização da PRF em rodovia federal.
-2. Gabarito equilibrado: Decida aleatoriamente se o gabarito será CERTO ou ERRADO (50% de chance para cada). Se for ERRADO, insira um detalhe técnico incorreto sutil e plausível.
-3. Tamanho MÁXIMO da assertiva: 280 caracteres (essencial para caber na tela do jogo de tiro 3D).
-4. Fundamentação: Indique a base legal exata e justificativa sucinta.
-5. Retorne EXCLUSIVAMENTE um objeto JSON válido no formato:
+DISPOSITIVO: ${artigo.dispositivo} (${artigo.resolucao})
+ASSUNTO: ${artigo.assunto}
+TEXTO INTEGRAL DA RESOLUÇÃO:
+"${artigo.texto}"
+
+Elabore uma questão 100% INÉDITA para o candidato julgar como CERTO ou ERRADO.
+DIRETRIZES MANDATÓRIAS CEBRASPE:
+1. Padrão CEBRASPE: Uma assertiva afirmativa direta sobre a regra técnica ou uma breve situação hipotética de fiscalização pela PRF em rodovia federal.
+2. NUNCA mencione nem elabore assertiva sobre norma revogada; baseie-se estritamente nas regras vigentes do texto fornecido.
+3. Gabarito equilibrado: Decida aleatoriamente se o gabarito será CERTO ou ERRADO (50% de chance para cada). Se for ERRADO, insira um detalhe técnico sutilmente incorreto com base no próprio artigo (ex: altere prazo, limite, tolerância, equipamento obrigatório, infração ou procedimento).
+4. Tamanho MÁXIMO da assertiva: 280 caracteres (essencial para caber na tela do jogo de tiro tático 3D).
+5. Fundamentação: Indique a base legal exata (${artigo.dispositivo}) e justificativa sucinta.
+6. Retorne EXCLUSIVAMENTE um objeto JSON válido no formato:
 {
   "statement": "texto da assertiva (máximo 280 caracteres)",
   "answer": true, // use true para CERTO ou false para ERRADO
-  "legalBasis": "${topicMeta.legalScope}",
-  "explanation": "explicação clara Cebraspe justificando a resposta",
-  "topic": "${topicMeta.name}"
+  "legalBasis": "${artigo.dispositivo}",
+  "explanation": "explicação clara Cebraspe justificando a resposta com base na resolução",
+  "topic": "${artigo.resolucao}"
 }`;
       }
 
@@ -572,13 +581,13 @@ DIRETRIZES MANDATÓRIAS:
     }
 
     if (vadeMecumFilter === 'ALL' || vadeMecumFilter === 'CONTRAN') {
-      PRF_TOPICS_CATALOG.filter((t) => t.category === 'CONTRAN').forEach((c) => {
+      LEI_SECA_CONTRAN.forEach((a) => {
         list.push({
-          id: c.id,
+          id: a.id,
           category: 'CONTRAN',
-          title: c.name,
-          subtitle: c.legalScope,
-          content: c.guideline,
+          title: a.dispositivo,
+          subtitle: `${a.resolucao} · ${a.assunto}`,
+          content: a.texto,
         });
       });
     }

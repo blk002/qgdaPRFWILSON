@@ -1,4 +1,5 @@
 import LEI_SECA_CTB_RAW from './leiSecaCTB.json';
+import LEI_SECA_CONTRAN_RAW from './leiSecaCONTRAN.json';
 
 export type QuestionCategory = 'CTB' | 'CONTRAN';
 
@@ -10,7 +11,18 @@ export interface ArtigoLeiSeca {
   texto: string;
 }
 
+export interface ArtigoLeiSecaCONTRAN {
+  id: string;
+  resolucao: string;
+  numeroRes: string;
+  numero: string;
+  assunto: string;
+  dispositivo: string;
+  texto: string;
+}
+
 export const LEI_SECA_CTB: ArtigoLeiSeca[] = LEI_SECA_CTB_RAW as ArtigoLeiSeca[];
+export const LEI_SECA_CONTRAN: ArtigoLeiSecaCONTRAN[] = LEI_SECA_CONTRAN_RAW as ArtigoLeiSecaCONTRAN[];
 
 export interface PRFTopicMetadata {
   id: string;
@@ -359,6 +371,31 @@ export function getRandomCtbArticle(preferredTopicOrCapitulo?: string): ArtigoLe
   return poolToUse[Math.floor(Math.random() * poolToUse.length)];
 }
 
+export function getRandomContranArticle(preferredResNumberOrTopic?: string): ArtigoLeiSecaCONTRAN {
+  const validPool = LEI_SECA_CONTRAN.filter(a => {
+    if (!a.texto || a.texto.length < 30) return false;
+    if (/vetado/i.test(a.texto)) return false;
+    if (/^\(?\s*revogad[oa]/i.test(a.texto.replace(/^Art\.?\s*\d+[º°o]?(?:-[A-Za-z])?\.?\s*/i, '').trim())) return false;
+    if (/^Art\.?\s*\d+[º°o]?\.?\s*Ficam?\s+revogad/i.test(a.texto)) return false;
+    return true;
+  });
+
+  const poolToUse = validPool.length > 0 ? validPool : LEI_SECA_CONTRAN;
+
+  if (preferredResNumberOrTopic) {
+    const norm = preferredResNumberOrTopic.toLowerCase();
+    const matching = poolToUse.filter(a =>
+      a.resolucao.toLowerCase().includes(norm) ||
+      a.numeroRes.toLowerCase().includes(norm) ||
+      a.assunto.toLowerCase().includes(norm)
+    );
+    if (matching.length > 0) {
+      return matching[Math.floor(Math.random() * matching.length)];
+    }
+  }
+  return poolToUse[Math.floor(Math.random() * poolToUse.length)];
+}
+
 const INVERSION_PAIRS: [RegExp, string][] = [
   [/\bobrigat[oó]ri[oa]\b/gi, 'facultativo(a)'],
   [/\bfacultativ[oa]\b/gi, 'obrigatório(a)'],
@@ -542,5 +579,108 @@ export function generateProceduralQuestionFromContranTopic(
     answer: isCorrect,
     explanation,
     wasAiRewritten: false,
+  };
+}
+
+export function generateProceduralQuestionFromContranArticle(
+  artigo: ArtigoLeiSecaCONTRAN,
+  forceAnswer?: boolean,
+  recursionDepth: number = 0
+): ActiveRoundQuestion {
+  const paragraphs = (artigo.texto || '')
+    .split(/\n\n+/)
+    .map(p => p.trim())
+    .filter(p => {
+      if (p.length < 25) return false;
+      if (/vetado/i.test(p)) return false;
+      if (/revogad[oa]/i.test(p)) return false;
+      if (/^CAPÍTULO\b/i.test(p) || /^Seção\b/i.test(p)) return false;
+      return true;
+    });
+
+  if (paragraphs.length === 0 || recursionDepth > 5) {
+    const fallbackArt = getRandomContranArticle();
+    if (recursionDepth > 5) {
+      return {
+        id: `contran-safe-${Date.now()}`,
+        uniqueHash: `contran-safe-${Date.now()}`,
+        category: 'CONTRAN',
+        topic: fallbackArt.resolucao,
+        legalBasis: fallbackArt.dispositivo,
+        statement: `Nos termos da ${fallbackArt.resolucao}, a fiscalização de trânsito deve observar as diretrizes regulamentares expedidas pelo CONTRAN.`,
+        answer: true,
+        explanation: `CERTO. Fundamentação regulamentar com base no ${fallbackArt.dispositivo}.`,
+        wasAiRewritten: false,
+      };
+    }
+    return generateProceduralQuestionFromContranArticle(fallbackArt, forceAnswer, recursionDepth + 1);
+  }
+
+  const chosenParagraph = paragraphs[Math.floor(Math.random() * paragraphs.length)];
+
+  let cleanSnippet = chosenParagraph
+    .replace(/^Art\.?\s*\d+[º°o]?(?:-[A-Za-z])?\.?\s*/i, '')
+    .replace(/^§\s*\d+[º°o]?\.?\s*/i, '')
+    .replace(/^[IVXLCDM]+\s*[\-–—\.]\s*/i, '')
+    .replace(/^Parágrafo\s+único\.?\s*/i, '')
+    .replace(/\(Redação dada[^\)]*\)/gi, '')
+    .replace(/\(Incluído[^\)]*\)/gi, '')
+    .replace(/\(Vigência[^\)]*\)/gi, '')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (/vetado/i.test(cleanSnippet) || /revogad[oa]/i.test(cleanSnippet) || cleanSnippet.length < 25) {
+    const nextArt = getRandomContranArticle();
+    return generateProceduralQuestionFromContranArticle(nextArt, forceAnswer, recursionDepth + 1);
+  }
+
+  const willBeCorrect = forceAnswer !== undefined ? forceAnswer : Math.random() >= 0.5;
+
+  let statement = '';
+  let answer = true;
+  let explanation = '';
+
+  if (willBeCorrect) {
+    answer = true;
+    statement = `Conforme o ${artigo.dispositivo}, ${cleanSnippet}`;
+    if (statement.length > 275) {
+      statement = statement.slice(0, 272).replace(/[,;:\s]+$/, '') + '...';
+    }
+    explanation = `CERTO. Conforme o ${artigo.dispositivo}: "${chosenParagraph.slice(0, 200)}..."`;
+  } else {
+    answer = false;
+    let modified = cleanSnippet;
+    let inverted = false;
+
+    for (const [regex, replacement] of INVERSION_PAIRS) {
+      if (regex.test(modified)) {
+        modified = modified.replace(regex, replacement);
+        inverted = true;
+        break;
+      }
+    }
+
+    if (!inverted) {
+      modified = `é expressamente vedado que ${cleanSnippet.toLowerCase()}`;
+    }
+
+    statement = `Conforme o ${artigo.dispositivo}, ${modified}`;
+    if (statement.length > 275) {
+      statement = statement.slice(0, 272).replace(/[,;:\s]+$/, '') + '...';
+    }
+    explanation = `ERRADO. O dispositivo original do ${artigo.dispositivo} estabelece que: "${chosenParagraph.slice(0, 200)}..."`;
+  }
+
+  return {
+    id: `${artigo.id}-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    uniqueHash: `${artigo.id}-${Date.now()}`,
+    category: 'CONTRAN',
+    topic: artigo.resolucao,
+    legalBasis: artigo.dispositivo,
+    statement,
+    answer,
+    explanation,
+    wasAiRewritten: false,
+    articleText: chosenParagraph,
   };
 }
