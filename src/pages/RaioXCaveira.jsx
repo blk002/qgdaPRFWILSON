@@ -1799,11 +1799,11 @@ export default function RaioXCaveira() {
                     <p className="text-slate-400 mb-1">Selecione a pasta raiz da extensão:</p>
                     <div className="flex items-center gap-1.5 mb-2">
                       <code className="text-amber-400 bg-slate-900 px-2 py-1 rounded text-[10px] truncate block font-mono flex-1">
-                        C:\Users\wilso\Downloads\teste\extension
+                        C:\Users\wilso\Downloads\teste\extensao PC
                       </code>
                       <button
                         onClick={() => {
-                          navigator.clipboard.writeText('C:\\Users\\wilso\\Downloads\\teste\\extension');
+                          navigator.clipboard.writeText('C:\\Users\\wilso\\Downloads\\teste\\extensao PC');
                           setCopiedExtensionPath(true);
                           setTimeout(() => setCopiedExtensionPath(false), 2000);
                         }}
