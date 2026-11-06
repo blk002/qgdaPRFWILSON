@@ -1,38 +1,60 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { toast } from 'sonner';
-import { useStore } from '../store/useStore';
 import { 
   Calendar as CalendarIcon, 
   ChevronLeft, 
   ChevronRight, 
-  Trophy, 
-  AlertTriangle, 
+  CheckCircle, 
   Clock, 
+  Trophy, 
   BookOpen, 
-  CheckCircle,
-  Zap,
+  Layers, 
+  Plus, 
+  Trash2, 
+  Edit3, 
+  Sparkles, 
+  AlertTriangle, 
+  ArrowRight, 
+  Settings, 
+  RotateCcw, 
+  X, 
+  Info, 
+  Zap, 
   Target,
-  RotateCcw,
-  Settings,
-  Shuffle,
-  Check,
-  X,
-  Plus
+  Sun,
+  ChevronDown,
+  ChevronUp
 } from 'lucide-react';
-import { formatMinutesToFriendly } from '../lib/durationHelpers';
+import { useStore } from '../store/useStore';
+import { toast } from 'sonner';
+
+function formatMinutesToFriendly(minutes) {
+  if (!minutes || minutes <= 0) return '0 min';
+  const hours = Math.floor(minutes / 60);
+  const remainingMins = Math.round(minutes % 60);
+  if (hours > 0 && remainingMins > 0) return `${hours}h ${remainingMins}m`;
+  if (hours > 0) return `${hours}h`;
+  return `${remainingMins}m`;
+}
 
 export default function Calendario() {
-  const {
-    subjects = {},
-    setSubjects,
-    cycle = [],
-    currentDayIndex = 0,
-    completedToday = [],
-    calendarDate,
-    setCalendarDate,
+  const { 
+    calendarDate, 
+    setCalendarDate, 
+    subjects = {}, 
+    cycle = [], 
+    setCycle,
+    cycleScheduleType = 'weekly',
+    setCycleScheduleType,
+    cycleWeekStart = 'sunday',
+    setCycleWeekStart,
+    fillFullWeekCycle,
+    currentDayIndex = 0, 
+    setCurrentDayIndex,
+    completedToday = [], 
+    getEstimatedCompletionDate, 
     getSubjectEstimates,
-    getEstimatedCompletionDate,
+    targetExamDate,
     subjectTimeGoal = {},
     calendarOverrides = {},
     setDayOverride,
@@ -40,17 +62,19 @@ export default function Calendario() {
     scheduleExtensions = [],
     addScheduleExtension,
     removeScheduleExtension,
-    setScheduleFromDate
+    setScheduleFromDate,
+    updateSubject
   } = useStore();
-  
-  // Estado do Gerenciador de Dia no Calendário
-  const [managingDay, setManagingDay] = useState(null);
+
+  // Estados de Interface
+  const [showWeeklySchedule, setShowWeeklySchedule] = useState(false);
+  const [managingDay, setManagingDay] = useState(null); // { dateObj, dateKey, diffDays, daySubjects, vacancies }
   const [daySlots, setDaySlots] = useState([]);
   const [isAddingNewBlock, setIsAddingNewBlock] = useState(false);
   const [selectedNewSubjectId, setSelectedNewSubjectId] = useState('');
   const [newBlockScope, setNewBlockScope] = useState('until_finished'); // 'until_finished' | 'single_day'
-  
-  // Estado do Modal de Transição
+
+  // Estado do Modal de Transição de Matéria
   const [editingTransitionSub, setEditingTransitionSub] = useState(null);
   const [tempAction, setTempAction] = useState('double_remaining');
   const [tempRepId, setTempRepId] = useState('');
@@ -67,6 +91,7 @@ export default function Calendario() {
   const firstDayIndex = new Date(year, month, 1).getDay();
   const mesesNomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
   const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const diasSemanaFull = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
   
   const blanks = Array(firstDayIndex).fill(null);
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
@@ -74,7 +99,9 @@ export default function Calendario() {
   const today = new Date();
   const todayDateObj = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
+  // Simulação dos 365 dias para renderização do calendário
   const futureSchedule = {};
+  const dayVacancies = {}; // mapeia dateKey -> lista de matérias que encerraram e deixaram vaga aberta
   const remainingLessonsQueue = {};
 
   Object.values(subjects || {}).forEach(sub => {
@@ -105,14 +132,16 @@ export default function Calendario() {
     const simDateKey = `${targetSimDate.getFullYear()}-${String(targetSimDate.getMonth() + 1).padStart(2, '0')}-${String(targetSimDate.getDate()).padStart(2, '0')}`;
 
     let daySubjects = [];
+    let isExplicitOverride = false;
     if (calendarOverrides && calendarOverrides[simDateKey]) {
       daySubjects = [...calendarOverrides[simDateKey]];
+      isExplicitOverride = true;
     } else if (cycle.length > 0) {
       const cycleIndex = (currentDayIndex + i) % cycle.length;
       daySubjects = [...(cycle[cycleIndex] || [])];
     }
 
-    // Adiciona extensões ativas a partir de uma data específica (3ª matéria até zerar)
+    // Extensões ativas (ex: 3ª matéria adicionada até zerar)
     if (scheduleExtensions && scheduleExtensions.length > 0) {
       scheduleExtensions.forEach(ext => {
         if (ext.active !== false && simDateKey >= ext.fromDate) {
@@ -124,14 +153,16 @@ export default function Calendario() {
     }
 
     const scheduledThisDay = [];
+    const vacanciesThisDay = [];
 
     daySubjects.forEach((subId, slotIdx) => {
       if (i === 0 && completedToday.includes(slotIdx)) return;
 
       let effectiveSubId = subId;
       let q = remainingLessonsQueue[effectiveSubId];
+      let wasTransitioned = false;
 
-      // Se a matéria original esgotou suas aulas, verificar a regra de transição
+      // Se a matéria esgotou suas aulas, verificar transição ou flag de vaga aberta
       if (!q || q.length === 0) {
         const originalSub = subjects[subId];
         const action = originalSub?.onCompleteAction || 'double_remaining';
@@ -142,6 +173,7 @@ export default function Calendario() {
           if (repQ && repQ.length > 0) {
             effectiveSubId = repId;
             q = repQ;
+            wasTransitioned = true;
           }
         } else if (action === 'double_remaining') {
           const fallbackId = daySubjects.find(sId => sId !== subId && remainingLessonsQueue[sId]?.length > 0)
@@ -150,7 +182,19 @@ export default function Calendario() {
           if (fallbackId) {
             effectiveSubId = fallbackId;
             q = remainingLessonsQueue[fallbackId];
+            wasTransitioned = true;
           }
+        }
+
+        // Se a matéria original terminou e não foi um override manual, registrar vaga pendente
+        if (!isExplicitOverride && originalSub) {
+          vacanciesThisDay.push({
+            slotIndex: slotIdx,
+            originalSubId: subId,
+            originalSubName: originalSub.name,
+            currentEffectiveSubId: wasTransitioned ? effectiveSubId : null,
+            transitionAction: action
+          });
         }
       }
 
@@ -186,16 +230,21 @@ export default function Calendario() {
         const isLast = q.length === 0;
         scheduledThisDay.push({ 
           id: effectiveSubId, 
+          originalId: subId,
           isLast, 
           count: consumed,
-          isTransitioned: effectiveSubId !== subId 
+          isTransitioned: wasTransitioned 
         });
       }
     });
+
     futureSchedule[i] = scheduledThisDay;
+    if (vacanciesThisDay.length > 0) {
+      dayVacancies[simDateKey] = vacanciesThisDay;
+    }
   }
 
-  // Handlers para gerenciar o dia
+  // Handlers do Gerenciador de Dia
   const handleOpenDayManager = (cellDateObj, dateKey) => {
     const diff = Math.round((cellDateObj.getTime() - todayDateObj.getTime()) / (1000 * 60 * 60 * 24));
     let currentDaySubs = [];
@@ -212,7 +261,8 @@ export default function Calendario() {
       dateObj: cellDateObj,
       dateKey,
       diffDays: diff,
-      isCustomized: Boolean(calendarOverrides && calendarOverrides[dateKey])
+      isCustomized: Boolean(calendarOverrides && calendarOverrides[dateKey]),
+      vacancies: dayVacancies[dateKey] || []
     });
     setDaySlots(currentDaySubs);
     setIsAddingNewBlock(false);
@@ -224,6 +274,8 @@ export default function Calendario() {
     if (!managingDay) return;
     const { dateKey } = managingDay;
 
+    let updatedSlots = [...daySlots];
+
     if (isAddingNewBlock && selectedNewSubjectId) {
       if (newBlockScope === 'until_finished') {
         if (addScheduleExtension) {
@@ -233,28 +285,67 @@ export default function Calendario() {
             mode: 'until_finished'
           });
         }
-        toast.success(`"${subjects[selectedNewSubjectId]?.name || 'Disciplina'}" agendada a partir de ${dateKey} até concluir o conteúdo!`);
+        toast.success(`Matéria agendada a partir de ${dateKey} até zerar todas as aulas!`);
       } else {
-        const updated = [...daySlots, selectedNewSubjectId];
-        if (setDayOverride) setDayOverride(dateKey, updated);
-        toast.success(`Novo bloco adicionado para o dia ${dateKey}!`);
+        updatedSlots.push(selectedNewSubjectId);
       }
-    } else {
-      if (setDayOverride) setDayOverride(dateKey, daySlots);
-      toast.success(`Cronograma do dia ${dateKey} atualizado!`);
     }
 
+    if (setDayOverride) {
+      setDayOverride(dateKey, updatedSlots);
+      toast.success(`Dia ${dateKey} personalizado com sucesso!`);
+    }
+    setManagingDay(null);
+  };
+
+  const handleApplyPermanentFromDate = () => {
+    if (!managingDay) return;
+    const { dateKey } = managingDay;
+    const dayOfWeek = managingDay.dateObj.getDay();
+
+    if (setCycle) {
+      setCycle(prev => {
+        const next = [...prev];
+        if (next[dayOfWeek] !== undefined) {
+          next[dayOfWeek] = [...daySlots];
+        }
+        return next;
+      });
+      if (removeDayOverride) removeDayOverride(dateKey);
+      toast.success(`Grade padrão para este dia da semana atualizada com sucesso!`);
+    }
     setManagingDay(null);
   };
 
   const handleResetDayToDefault = () => {
     if (!managingDay) return;
-    if (removeDayOverride) removeDayOverride(managingDay.dateKey);
-    toast.success('Dia restaurado para o padrão do ciclo.');
+    const { dateKey } = managingDay;
+    if (removeDayOverride) {
+      removeDayOverride(dateKey);
+      toast.success(`Personalização do dia ${dateKey} removida. Grade padrão restaurada!`);
+    }
     setManagingDay(null);
   };
 
-  const openTransitionModal = (sub) => {
+  const handleQuickFillVacancy = (vacancy, chosenSubId, mode = 'until_finished') => {
+    if (!managingDay) return;
+    const { dateKey } = managingDay;
+
+    if (mode === 'until_finished') {
+      if (setScheduleFromDate) {
+        setScheduleFromDate(dateKey, vacancy.originalSubId, chosenSubId);
+      }
+      toast.success(`Vaga preenchida por ${subjects[chosenSubId]?.name || 'nova matéria'} a partir deste dia até zerar!`);
+    } else {
+      const nextSlots = daySlots.map((sId, idx) => idx === vacancy.slotIndex ? chosenSubId : sId);
+      if (setDayOverride) setDayOverride(dateKey, nextSlots);
+      toast.success(`Vaga preenchida para este dia!`);
+    }
+    setManagingDay(null);
+  };
+
+  // Handlers para Transição de Conclusão no Painel Lateral
+  const handleOpenTransitionModal = (sub) => {
     setEditingTransitionSub(sub);
     setTempAction(sub.onCompleteAction || 'double_remaining');
     setTempRepId(sub.replacementSubjectId || '');
@@ -262,21 +353,13 @@ export default function Calendario() {
 
   const handleSaveTransition = () => {
     if (!editingTransitionSub) return;
-    if (setSubjects) {
-      setSubjects(prev => {
-        const current = prev[editingTransitionSub.id];
-        if (!current) return prev;
-        return {
-          ...prev,
-          [editingTransitionSub.id]: {
-            ...current,
-            onCompleteAction: tempAction,
-            replacementSubjectId: tempAction === 'replace' ? tempRepId : ''
-          }
-        };
+    if (updateSubject) {
+      updateSubject(editingTransitionSub.id, {
+        onCompleteAction: tempAction,
+        replacementSubjectId: tempAction === 'replace' ? tempRepId : undefined
       });
+      toast.success(`Regra de transição de ${editingTransitionSub.name} atualizada!`);
     }
-    toast.success(`Regra de transição de "${editingTransitionSub.name}" salva!`);
     setEditingTransitionSub(null);
   };
 
@@ -291,7 +374,7 @@ export default function Calendario() {
               <Trophy className="w-5 h-5 md:w-6 md:h-6 text-yellow-300" />
             </div>
             <div>
-              <p className="text-blue-100 text-[10px] md:text-xs font-bold uppercase tracking-wider mb-0.5">Previsão de Fechamento</p>
+              <p className="text-blue-100 text-[10px] md:text-xs font-bold uppercase tracking-wider mb-0.5">Previsão de Fechamento do Edital</p>
               <div className="flex-1 min-w-0">
                 <h4 className="text-xl md:text-2xl font-black text-white whitespace-nowrap overflow-visible">{estimatedDate.full}</h4>
               </div>
@@ -310,7 +393,164 @@ export default function Calendario() {
           </div>
         </div>
 
-        {/* Cabeçalho do Mês */}
+        {/* ⚙️ SEÇÃO CENTRALIZADA: CONFIGURAÇÃO DO CRONOGRAMA BASE */}
+        <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl mb-6 p-4 transition-all">
+          <div className="flex items-center justify-between cursor-pointer" onClick={() => setShowWeeklySchedule(!showWeeklySchedule)}>
+            <div className="flex items-center gap-2.5">
+              <div className="p-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 rounded-lg">
+                <Settings className="w-4 h-4" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
+                  Configuração do Meu Cronograma (Grade Semanal Base)
+                  <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
+                    {cycle.length} dias configurados
+                  </span>
+                </h3>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Defina a quantidade de blocos e matérias em cada dia da semana. O calendário distribui e recalcula tudo automaticamente.
+                </p>
+              </div>
+            </div>
+            <button 
+              type="button" 
+              className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+            >
+              {showWeeklySchedule ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
+            </button>
+          </div>
+
+          {showWeeklySchedule && (
+            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
+              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
+                <div className="flex items-center gap-2">
+                  <div className="bg-white dark:bg-slate-900 p-1 rounded-xl flex items-center gap-1 border border-slate-200 dark:border-slate-800 text-xs">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        if (setCycleScheduleType) setCycleScheduleType('weekly');
+                        if (cycle.length < 7 && fillFullWeekCycle) fillFullWeekCycle(cycleWeekStart || 'sunday');
+                      }}
+                      className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 ${cycleScheduleType === 'weekly' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300'}`}
+                    >
+                      <CalendarIcon className="w-3 h-3" /> Dias da Semana
+                    </button>
+                    <button
+                      type="button"
+                      onClick={() => setCycleScheduleType && setCycleScheduleType('numeric')}
+                      className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 ${cycleScheduleType !== 'weekly' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300'}`}
+                    >
+                      <Layers className="w-3 h-3" /> Ciclo Sequencial
+                    </button>
+                  </div>
+                </div>
+
+                {cycle.length < 7 && (
+                  <button
+                    type="button"
+                    onClick={() => fillFullWeekCycle && fillFullWeekCycle(cycleWeekStart || 'sunday')}
+                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shadow-xs"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Preencher 7 Dias Completos
+                  </button>
+                )}
+              </div>
+
+              {/* Grade de Dias da Semana / Ciclo */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-2.5">
+                {cycle.map((daySubjects, dIdx) => {
+                  const cardTitle = cycleScheduleType === 'weekly' 
+                    ? (diasSemanaFull[dIdx] || `Dia ${dIdx + 1}`) 
+                    : `DIA ${dIdx + 1}`;
+
+                  return (
+                    <div key={dIdx} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col overflow-hidden shadow-xs">
+                      <div className="p-2 bg-slate-100 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
+                        <span className="font-bold text-[11px] text-slate-800 dark:text-slate-200 uppercase truncate">
+                          {cardTitle}
+                        </span>
+                        <button 
+                          onClick={() => {
+                            setCycle(prev => {
+                              const n = [...prev];
+                              n[dIdx] = [];
+                              return n;
+                            });
+                            toast.success(`${cardTitle} definido como Livre / Descanso`);
+                          }}
+                          className="p-1 text-slate-400 hover:text-amber-500 rounded" 
+                          title="Tornar Dia Livre / Descanso"
+                        >
+                          <Sun className="w-3.5 h-3.5" />
+                        </button>
+                      </div>
+
+                      <div className="p-2 flex flex-col gap-1.5 min-h-[110px]">
+                        {daySubjects.length === 0 ? (
+                          <div className="flex-1 flex flex-col items-center justify-center p-2 border border-dashed border-slate-200 dark:border-slate-800 rounded bg-slate-50/50 dark:bg-slate-950/50">
+                            <Sun className="w-5 h-5 text-amber-400 opacity-60 mb-1" />
+                            <span className="text-[9px] font-bold text-slate-400 uppercase">Livre / Descanso</span>
+                          </div>
+                        ) : (
+                          daySubjects.map((subId, slotIdx) => {
+                            const sub = subjects[subId];
+                            return (
+                              <div key={slotIdx} className="flex items-center gap-1">
+                                <select
+                                  value={subId}
+                                  onChange={(e) => {
+                                    setCycle(prev => {
+                                      const n = [...prev];
+                                      const day = [...n[dIdx]];
+                                      if (e.target.value === '') {
+                                        n[dIdx] = day.filter((_, i) => i !== slotIdx);
+                                      } else {
+                                        day[slotIdx] = e.target.value;
+                                        n[dIdx] = day;
+                                      }
+                                      return n;
+                                    });
+                                  }}
+                                  className={`flex-1 text-[11px] font-bold p-1 rounded border border-slate-200 outline-none transition-colors cursor-pointer ${sub ? sub.color : 'bg-white text-slate-800'}`}
+                                >
+                                  <option value="" className="bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100">- Remover Bloco -</option>
+                                  {Object.values(subjects).map(s => (
+                                    <option key={s.id} value={s.id} className="bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100">{s.name}</option>
+                                  ))}
+                                </select>
+                              </div>
+                            );
+                          })
+                        )}
+
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (Object.keys(subjects).length === 0) {
+                              toast.error("Cadastre matérias primeiro!");
+                              return;
+                            }
+                            setCycle(prev => {
+                              const n = [...prev];
+                              const firstId = Object.keys(subjects)[0];
+                              n[dIdx] = [...n[dIdx], firstId];
+                              return n;
+                            });
+                          }}
+                          className="mt-auto py-1 border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-500 hover:text-blue-600 font-bold text-[10px] rounded transition-all flex items-center justify-center gap-1"
+                        >
+                          <Plus className="w-3 h-3" /> Bloco
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
+
+        {/* Cabeçalho do Mês no Calendário */}
         <div className="flex justify-between items-center mb-4 sm:mb-6">
           <h2 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2 dark:text-slate-100">
             <CalendarIcon className="text-blue-600 w-5 h-5 sm:w-6 sm:h-6" /> {mesesNomes[month]} {year}
@@ -349,23 +589,24 @@ export default function Calendario() {
                 const cellDateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isOverridden = Boolean(calendarOverrides && calendarOverrides[cellDateKey]);
                 const hasExtensions = scheduleExtensions?.some(e => e.active !== false && cellDateKey >= e.fromDate);
+                const vacancies = dayVacancies[cellDateKey] || [];
 
                 return (
                   <div 
                     key={day} 
                     onClick={() => handleOpenDayManager(cellDateObj, cellDateKey)}
                     className={`min-h-[5.5rem] md:min-h-[7.5rem] p-1 sm:p-1.5 rounded-md flex flex-col transition-all cursor-pointer group hover:ring-2 hover:ring-blue-400 hover:shadow-md ${bgClass}`}
-                    title="Clique para gerenciar as matérias e blocos deste dia"
+                    title="Clique para gerenciar matérias, adicionar bloco ou preencher vagas deste dia"
                   >
                     <div className="flex justify-between items-start mb-1 gap-0.5">
                       <div className="flex items-center gap-1">
                         <span className="font-bold text-xs sm:text-sm px-1 group-hover:text-blue-500 transition-colors">{day}</span>
                         {isOverridden && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Dia com programação personalizada" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Dia com personalização manual" />
                         )}
                         {hasExtensions && (
-                          <span className="text-[8px] font-black text-emerald-400 bg-emerald-950/80 px-1 rounded border border-emerald-800" title="3ª Matéria Ativa">
-                            +1
+                          <span className="text-[8px] font-black text-emerald-400 bg-emerald-950/80 px-1 rounded border border-emerald-800" title="3ª Matéria Ativa (até zerar)">
+                            +3ª
                           </span>
                         )}
                       </div>
@@ -374,6 +615,22 @@ export default function Calendario() {
                         <Settings className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     </div>
+
+                    {/* Vagas Abertas em Destaque */}
+                    {diffDays >= 0 && vacancies.length > 0 && !isOverridden && (
+                      <div className="mb-1">
+                        {vacancies.map((v, vIdx) => (
+                          <div 
+                            key={vIdx}
+                            className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-400/40 px-1 py-0.5 rounded text-[8px] sm:text-[9px] font-black uppercase flex items-center gap-1 animate-pulse"
+                            title={`${v.originalSubName} concluiu seu conteúdo! Clique para definir quem assume a vaga.`}
+                          >
+                            <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500 shrink-0" />
+                            <span className="truncate">Vaga: {v.originalSubName}</span>
+                          </div>
+                        ))}
+                      </div>
+                    )}
                     
                     {diffDays >= 0 && projectedSubjects.length > 0 && (
                        <div className="flex flex-col gap-0.5 sm:gap-1 pb-1 mt-auto">
@@ -448,403 +705,342 @@ export default function Calendario() {
 
                 {sub.remaining > 0 && (
                   <>
-                    <div className="flex justify-between items-baseline text-xs mt-0.5">
-                      <span className="text-slate-500 dark:text-slate-400 font-medium">
-                        Restam <strong className="text-slate-700 dark:text-slate-200">{sub.remaining} aulas</strong>
-                      </span>
-                      {sub.remainingAcceleratedMinutes > 0 ? (
-                        <div className="text-right">
-                          <span className="font-black text-blue-600 dark:text-blue-400 text-xs">
-                            ~{Math.round(sub.remainingAcceleratedMinutes / 60)}h
-                            {currentSpeed > 1 && <span className="text-[9px] font-bold text-yellow-500 ml-0.5">⚡</span>}
-                          </span>
-                          {currentSpeed > 1 && (
-                            <span className="text-[9px] text-slate-400 block -mt-0.5">
-                              (~{Math.round(sub.remainingMinutes / 60)}h normal)
-                            </span>
-                          )}
-                        </div>
-                      ) : sub.remainingMinutes > 0 ? (
-                        <span className="font-bold text-slate-500 text-xs">
-                          (~{Math.round(sub.remainingMinutes / 60)}h)
-                        </span>
-                      ) : null}
+                    <div className="flex justify-between items-center text-xs text-slate-500 font-medium">
+                      <span>{sub.remaining} aulas restantes</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">{pct}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                      <div className="bg-blue-600 h-1.5 rounded-full transition-all duration-300" style={{ width: `${pct}%` }}></div>
                     </div>
 
-                    <div className="flex items-center gap-2 mt-0.5">
-                      <div className="flex-1 bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                        <div 
-                          className="bg-gradient-to-r from-blue-500 to-emerald-500 h-1.5 rounded-full transition-all duration-500" 
-                          style={{ width: `${pct}%` }}
-                        />
-                      </div>
-                      <span className="text-[9px] font-black text-slate-400 shrink-0">{pct}%</span>
+                    <div className="mt-1 pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenTransitionModal(sub)}
+                        className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-bold"
+                      >
+                        <Sparkles className="w-3 h-3 text-amber-500" /> Regra ao concluir...
+                      </button>
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        {sub.onCompleteAction === 'replace' ? '🔄 Substituir' : '⚡ Dobrar Física'}
+                      </span>
                     </div>
                   </>
                 )}
-
-                {/* Transição de Cronograma ao Concluir */}
-                <div className="mt-1 pt-2 border-t border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between gap-1 text-[10px]">
-                  <div className="flex items-center gap-1 truncate text-slate-500 dark:text-slate-400">
-                    <RotateCcw className="w-3 h-3 text-blue-500 shrink-0" />
-                    <span className="truncate">
-                      Ao fim: <strong className="text-slate-700 dark:text-slate-200">
-                        {sub.onCompleteAction === 'replace' && sub.replacementSubjectId && subjects[sub.replacementSubjectId]
-                          ? `➔ ${subjects[sub.replacementSubjectId].name}`
-                          : sub.onCompleteAction === 'ask'
-                            ? 'Perguntar'
-                            : 'Dobra Restantes'}
-                      </strong>
-                    </span>
-                  </div>
-                  <button
-                    onClick={() => openTransitionModal(sub)}
-                    className="text-[9px] font-black text-blue-600 hover:text-blue-700 dark:text-blue-400 dark:hover:text-blue-300 bg-blue-50 hover:bg-blue-100 dark:bg-blue-950/60 dark:hover:bg-blue-900/60 px-2 py-0.5 rounded transition-colors flex items-center gap-1 shrink-0 cursor-pointer"
-                    title="Configurar regra de transição desta matéria no cronograma"
-                  >
-                    <Settings className="w-2.5 h-2.5" /> Ajustar
-                  </button>
-                </div>
               </div>
             );
           })}
         </div>
-      </div>
 
-      {/* Modal Interativo de Gerenciamento do Dia */}
-      {managingDay && createPortal(
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[130] p-4 fade-in font-sans">
-          <div className="bg-[#0f172a] border border-slate-800 rounded-2xl shadow-2xl max-w-lg w-full p-6 text-slate-100 flex flex-col gap-4 max-h-[90vh] overflow-y-auto custom-scrollbar">
-            
-            {/* Cabeçalho */}
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <CalendarIcon className="w-5 h-5 text-blue-500" />
-                <div>
-                  <h3 className="text-base font-black text-white uppercase tracking-wide">
-                    Gerenciar Dia: {String(managingDay.dateObj.getDate()).padStart(2, '0')}/{String(managingDay.dateObj.getMonth() + 1).padStart(2, '0')}/{managingDay.dateObj.getFullYear()}
-                  </h3>
-                  <span className="text-[10px] font-bold text-slate-400">
-                    {diasSemana[managingDay.dateObj.getDay()]} • {daySlots.length} Bloco(s) de Estudo
-                  </span>
-                </div>
-              </div>
-              <button 
-                onClick={() => setManagingDay(null)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
-
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Você pode alterar qualquer matéria deste dia, adicionar um 3º bloco ou definir uma nova matéria para rodar a partir desta data até zerar as aulas.
-            </p>
-
-            {/* Lista de Blocos Atuais do Dia */}
-            <div className="flex flex-col gap-2.5">
-              <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                Matérias Programadas para Este Dia:
-              </label>
-
-              {daySlots.map((sId, slotIdx) => {
-                const sub = subjects[sId];
+        {/* Seção de Extensões / Personalizações Ativas */}
+        {((scheduleExtensions && scheduleExtensions.length > 0) || (calendarOverrides && Object.keys(calendarOverrides).length > 0)) && (
+          <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800">
+            <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5">
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Ajustes e Extensões Ativas
+            </h4>
+            <div className="flex flex-col gap-2">
+              {scheduleExtensions?.map(ext => {
+                const sub = subjects[ext.subjectId];
                 return (
-                  <div key={slotIdx} className="p-3 bg-slate-900/80 border border-slate-800 rounded-xl flex items-center justify-between gap-3">
-                    <div className="flex items-center gap-2 min-w-0 flex-1">
-                      <span className="text-xs font-black text-slate-500 w-5">#{slotIdx + 1}</span>
-                      {sub ? (
-                        <span className={`text-xs font-black px-2.5 py-1 rounded uppercase tracking-wider ${sub.color}`}>
-                          {sub.name}
-                        </span>
-                      ) : (
-                        <span className="text-xs font-black px-2.5 py-1 rounded bg-slate-800 text-slate-400 border border-dashed border-slate-700">
-                          Vaga em Aberto
-                        </span>
-                      )}
+                  <div key={ext.id} className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-xs flex items-center justify-between gap-2 border border-slate-200 dark:border-slate-700">
+                    <div className="flex flex-col">
+                      <span className="font-bold text-slate-800 dark:text-slate-200">
+                        + {sub?.name || 'Disciplina'}
+                      </span>
+                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
+                        A partir de {ext.fromDate} (até zerar aulas)
+                      </span>
                     </div>
-
-                    {/* Trocar matéria do bloco */}
-                    <div className="flex items-center gap-2">
-                      <select
-                        value={sId || ''}
-                        onChange={(e) => {
-                          const val = e.target.value;
-                          const next = [...daySlots];
-                          next[slotIdx] = val;
-                          setDaySlots(next);
-                        }}
-                        className="bg-slate-950 border border-slate-700 rounded-lg px-2 py-1 text-xs font-bold text-white outline-none focus:border-blue-500 cursor-pointer"
-                      >
-                        {Object.values(subjects || {}).map(s => (
-                          <option key={s.id} value={s.id}>
-                            {s.name}
-                          </option>
-                        ))}
-                      </select>
-
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const next = daySlots.filter((_, idx) => idx !== slotIdx);
-                          setDaySlots(next);
-                        }}
-                        className="p-1 text-slate-500 hover:text-red-400 transition-colors cursor-pointer"
-                        title="Remover este bloco"
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
+                    <button
+                      onClick={() => removeScheduleExtension && removeScheduleExtension(ext.id)}
+                      className="p-1 text-slate-400 hover:text-red-500 rounded"
+                      title="Remover esta extensão"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
                   </div>
                 );
               })}
+            </div>
+          </div>
+        )}
+      </div>
 
-              {daySlots.length === 0 && (
-                <div className="p-4 bg-slate-900/40 border border-dashed border-slate-800 rounded-xl text-center text-xs text-slate-500 font-bold">
-                  Nenhum bloco de estudo agendado para este dia (Dia de Descanso).
+      {/* MODAL: GERENCIADOR DE DIA DO CALENDÁRIO */}
+      {managingDay && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+            <button 
+              onClick={() => setManagingDay(null)}
+              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <CalendarIcon className="w-5 h-5 text-blue-600" />
+                <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">
+                  Gerenciar Dia: {managingDay.dateKey}
+                </h3>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Personalize as matérias e blocos deste dia. Adicione um 3º bloco, substitua disciplinas ou preencha vagas em aberto.
+              </p>
+            </div>
+
+            {/* Alerta de Vaga em Aberto */}
+            {managingDay.vacancies && managingDay.vacancies.length > 0 && (
+              <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl p-3 flex flex-col gap-2">
+                <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200 font-bold text-xs">
+                  <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
+                  <span>Vaga disponível: Matéria concluída</span>
                 </div>
+                {managingDay.vacancies.map((vac, vIdx) => (
+                  <div key={vIdx} className="text-xs text-slate-600 dark:text-slate-300 flex flex-col gap-2">
+                    <p>
+                      <strong>{vac.originalSubName}</strong> encerrou seu conteúdo nesta data. Como você gostaria de preencher esta vaga?
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const otherId = daySlots.find(sId => sId !== vac.originalSubId) || Object.keys(subjects)[0];
+                          handleQuickFillVacancy(vac, otherId, 'until_finished');
+                        }}
+                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs shadow-xs"
+                      >
+                        ⚡ Dobrar Matéria Restante (Até Zerar)
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Lista de Blocos Agendados para o Dia */}
+            <div className="flex flex-col gap-2">
+              <label className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                Blocos de Estudo Agendados ({daySlots.length})
+              </label>
+
+              {daySlots.length === 0 ? (
+                <div className="p-4 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-center text-xs text-slate-400">
+                  Nenhum bloco agendado para este dia (Dia de Descanso).
+                </div>
+              ) : (
+                daySlots.map((subId, idx) => {
+                  const sub = subjects[subId];
+                  return (
+                    <div key={idx} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <span className="text-xs font-black text-slate-400 w-6 text-center">
+                        #{idx + 1}
+                      </span>
+                      <select
+                        value={subId}
+                        onChange={(e) => {
+                          const newSlots = [...daySlots];
+                          newSlots[idx] = e.target.value;
+                          setDaySlots(newSlots);
+                        }}
+                        className={`flex-1 text-xs font-bold p-2 rounded-lg border border-slate-200 dark:border-slate-700 outline-none cursor-pointer ${sub ? sub.color : 'bg-white text-slate-800'}`}
+                      >
+                        {Object.values(subjects).map(s => (
+                          <option key={s.id} value={s.id} className="bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100">{s.name}</option>
+                        ))}
+                      </select>
+                      <button
+                        type="button"
+                        onClick={() => setDaySlots(daySlots.filter((_, i) => i !== idx))}
+                        className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                        title="Remover este bloco"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                      </button>
+                    </div>
+                  );
+                })
               )}
             </div>
 
-            {/* Painel para Adicionar Novo Bloco (Ex: 3ª Matéria) */}
-            <div className="border border-slate-800 bg-slate-900/50 p-3.5 rounded-xl flex flex-col gap-3 mt-1">
+            {/* Adicionar Novo Bloco (ex: 3ª Matéria) */}
+            <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
               {!isAddingNewBlock ? (
                 <button
                   type="button"
-                  onClick={() => setIsAddingNewBlock(true)}
-                  className="w-full py-2.5 bg-blue-600/15 hover:bg-blue-600/25 border border-dashed border-blue-500/40 hover:border-blue-400 text-blue-400 hover:text-white rounded-xl font-black text-xs uppercase tracking-wider flex items-center justify-center gap-1.5 transition-all cursor-pointer"
+                  onClick={() => {
+                    setIsAddingNewBlock(true);
+                    setSelectedNewSubjectId(Object.keys(subjects)[0] || '');
+                  }}
+                  className="w-full py-2 border-2 border-dashed border-blue-300 dark:border-blue-900 bg-blue-50/50 hover:bg-blue-100 dark:bg-blue-950/30 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all"
                 >
-                  <Target className="w-3.5 h-3.5" /> + Adicionar Nova Matéria (3º Bloco)
+                  <Plus className="w-4 h-4" /> Adicionar Mais um Bloco neste Dia (3º, 4º...)
                 </button>
               ) : (
-                <div className="flex flex-col gap-3">
-                  <div className="flex items-center justify-between">
-                    <label className="text-[10px] font-black text-emerald-400 uppercase tracking-widest flex items-center gap-1">
-                      <Zap className="w-3.5 h-3.5 fill-emerald-400" /> Adicionar Matéria ao Cronograma:
-                    </label>
-                    <button 
-                      onClick={() => setIsAddingNewBlock(false)} 
-                      className="text-xs text-slate-500 hover:text-white cursor-pointer"
-                    >
-                      Cancelar
-                    </button>
+                <div className="bg-blue-50/60 dark:bg-blue-950/40 p-3 rounded-xl border border-blue-200 dark:border-blue-800 flex flex-col gap-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs font-bold text-blue-900 dark:text-blue-200 flex items-center gap-1">
+                      <Plus className="w-3.5 h-3.5" /> Adicionar Bloco Adicional
+                    </span>
+                    <button onClick={() => setIsAddingNewBlock(false)} className="text-slate-400 hover:text-slate-600 text-xs">Cancelar</button>
                   </div>
 
                   <select
                     value={selectedNewSubjectId}
                     onChange={(e) => setSelectedNewSubjectId(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-700 rounded-lg p-2.5 text-xs font-bold text-white outline-none focus:border-blue-500 cursor-pointer"
+                    className="w-full text-xs font-bold p-2 rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
                   >
-                    <option value="">-- Selecione a disciplina --</option>
-                    {Object.values(subjects || {}).map(s => (
-                      <option key={s.id} value={s.id}>
-                        {s.name} ({s.topics?.reduce((acc, t) => acc + (t.total || 0), 0) || 0} aulas)
-                      </option>
+                    {Object.values(subjects).map(s => (
+                      <option key={s.id} value={s.id}>{s.name}</option>
                     ))}
                   </select>
 
-                  {/* Escopo da Adição */}
-                  <div className="flex flex-col gap-2 bg-[#020617] p-3 rounded-lg border border-slate-800">
-                    <span className="text-[10px] font-black text-slate-400 uppercase">Duração desta matéria:</span>
-                    
-                    <label className="flex items-start gap-2.5 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="newBlockScope"
-                        checked={newBlockScope === 'until_finished'}
+                  <div className="flex flex-col gap-1.5 text-xs text-slate-700 dark:text-slate-300">
+                    <label className="font-bold text-[11px] uppercase tracking-wider text-slate-500">Alcance desta inclusão:</label>
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="newBlockScope" 
+                        value="until_finished" 
+                        checked={newBlockScope === 'until_finished'} 
                         onChange={() => setNewBlockScope('until_finished')}
-                        className="mt-0.5 text-blue-600 focus:ring-blue-500"
                       />
-                      <div>
-                        <span className="text-xs font-bold text-white block">
-                          A partir deste dia em diante (até zerar as aulas)
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          A matéria passará a ser estudada diariamente como 3º bloco até concluir 100% das suas aulas.
-                        </span>
-                      </div>
+                      <span><strong>Desta data em diante até zerar todas as aulas</strong> (Estender cronograma)</span>
                     </label>
-
-                    <label className="flex items-start gap-2.5 cursor-pointer">
-                      <input
-                        type="radio"
-                        name="newBlockScope"
-                        checked={newBlockScope === 'single_day'}
+                    <label className="flex items-center gap-2 cursor-pointer">
+                      <input 
+                        type="radio" 
+                        name="newBlockScope" 
+                        value="single_day" 
+                        checked={newBlockScope === 'single_day'} 
                         onChange={() => setNewBlockScope('single_day')}
-                        className="mt-0.5 text-blue-600 focus:ring-blue-500"
                       />
-                      <div>
-                        <span className="text-xs font-bold text-white block">
-                          Apenas neste dia específico
-                        </span>
-                        <span className="text-[10px] text-slate-400">
-                          Válido somente para esta data (ideal para feriados ou dias com mais tempo).
-                        </span>
-                      </div>
+                      <span>Apenas neste dia ({managingDay.dateKey})</span>
                     </label>
                   </div>
                 </div>
               )}
             </div>
 
-            {/* Ações do Rodapé */}
-            <div className="flex flex-col sm:flex-row items-center gap-2 pt-3 border-t border-slate-800 mt-2">
-              <button
-                type="button"
-                onClick={handleSaveDayManager}
-                className="w-full sm:flex-1 py-3 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-blue-600/30 cursor-pointer"
-              >
-                Salvar Alterações no Calendário
-              </button>
+            {/* Botões de Ação do Modal */}
+            <div className="flex flex-col gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={handleSaveDayManager}
+                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+                >
+                  <CheckCircle className="w-4 h-4" /> Salvar Alterações para este Dia
+                </button>
+                <button
+                  type="button"
+                  onClick={handleApplyPermanentFromDate}
+                  className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
+                  title="Atualizar este dia da semana como o novo padrão da grade base"
+                >
+                  <CalendarIcon className="w-4 h-4" /> Tornar Padrão da Grade
+                </button>
+              </div>
 
               {managingDay.isCustomized && (
                 <button
                   type="button"
                   onClick={handleResetDayToDefault}
-                  className="w-full sm:w-auto px-3 py-3 text-amber-400 hover:text-amber-300 font-bold text-xs uppercase rounded-xl border border-amber-900/40 hover:bg-amber-950/30 transition-colors cursor-pointer"
+                  className="w-full py-2 text-slate-500 hover:text-red-500 text-xs font-bold transition-colors flex items-center justify-center gap-1"
                 >
-                  Restaurar Padrão
+                  <RotateCcw className="w-3.5 h-3.5" /> Restaurar Grade Padrão do Cronograma
                 </button>
               )}
-
-              <button
-                type="button"
-                onClick={() => setManagingDay(null)}
-                className="w-full sm:w-auto px-4 py-3 text-slate-400 hover:text-white font-bold text-xs uppercase rounded-xl transition-colors cursor-pointer"
-              >
-                Fechar
-              </button>
             </div>
           </div>
         </div>,
         document.body
       )}
 
-      {/* Modal de Configuração de Transição no Calendário */}
+      {/* MODAL: CONFIGURAÇÃO DE TRANSIÇÃO DE UMA MATÉRIA */}
       {editingTransitionSub && createPortal(
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[130] p-4 fade-in font-sans">
-          <div className="bg-[#0f172a] border border-slate-800 rounded-2xl shadow-2xl max-w-md w-full p-6 text-slate-100 flex flex-col gap-4">
-            <div className="flex items-center justify-between border-b border-slate-800 pb-3">
-              <div className="flex items-center gap-2">
-                <RotateCcw className="w-5 h-5 text-blue-500" />
-                <h3 className="text-base font-black text-white uppercase tracking-wide">
-                  Transição: {editingTransitionSub.name}
-                </h3>
-              </div>
-              <button 
-                onClick={() => setEditingTransitionSub(null)}
-                className="text-slate-400 hover:text-white p-1 rounded-lg transition-colors cursor-pointer"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            </div>
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 w-full max-w-md shadow-2xl relative flex flex-col gap-4">
+            <button 
+              onClick={() => setEditingTransitionSub(null)}
+              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            >
+              <X className="w-5 h-5" />
+            </button>
 
-            <p className="text-xs text-slate-400 leading-relaxed">
-              Defina o que o calendário e o ciclo de estudos farão com as vagas de <strong className="text-white">{editingTransitionSub.name}</strong> a partir do dia em que suas aulas forem concluídas.
-            </p>
+            <div>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${editingTransitionSub.color}`}>
+                {editingTransitionSub.name}
+              </span>
+              <h3 className="text-base font-bold text-slate-800 dark:text-slate-100 mt-2">
+                Regra ao Concluir Conteúdo
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Quando você terminar todas as aulas desta matéria, o que deve acontecer com seus blocos nos dias seguintes?
+              </p>
+            </div>
 
             <div className="flex flex-col gap-2.5">
-              {/* Opção 1: Dobrar Restantes */}
-              <button
-                type="button"
-                onClick={() => setTempAction('double_remaining')}
-                className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
-                  tempAction === 'double_remaining'
-                    ? 'bg-blue-950/60 border-blue-500 ring-2 ring-blue-500/30'
-                    : 'bg-slate-900/70 border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-white flex items-center gap-1.5">
-                    <Zap className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" /> Dobrar Matéria(s) Restante(s)
-                  </span>
-                  {tempAction === 'double_remaining' && <Check className="w-4 h-4 text-blue-400 stroke-[3]" />}
+              <label className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${tempAction === 'double_remaining' ? 'bg-blue-50 border-blue-500 dark:bg-blue-950/40 dark:border-blue-600' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'}`}>
+                <input 
+                  type="radio" 
+                  name="modalAction" 
+                  value="double_remaining" 
+                  checked={tempAction === 'double_remaining'} 
+                  onChange={() => setTempAction('double_remaining')}
+                  className="mt-0.5"
+                />
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100">⚡ Dobrar Matéria Restante (ex: 2 aulas de Física)</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">A outra disciplina do dia assume a vaga deixada, acelerando o término do edital.</span>
                 </div>
-                <p className="text-[10px] text-slate-400">
-                  A vaga será usada para dobrar os estudos das outras matérias ativas (ex: 2 aulas de Física por dia).
-                </p>
-              </button>
+              </label>
 
-              {/* Opção 2: Nova Disciplina */}
-              <button
-                type="button"
-                onClick={() => setTempAction('replace')}
-                className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
-                  tempAction === 'replace'
-                    ? 'bg-blue-950/60 border-blue-500 ring-2 ring-blue-500/30'
-                    : 'bg-slate-900/70 border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-white flex items-center gap-1.5">
-                    <Shuffle className="w-3.5 h-3.5 text-emerald-400" /> Substituir por Nova Disciplina
-                  </span>
-                  {tempAction === 'replace' && <Check className="w-4 h-4 text-blue-400 stroke-[3]" />}
+              <label className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${tempAction === 'replace' ? 'bg-blue-50 border-blue-500 dark:bg-blue-950/40 dark:border-blue-600' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'}`}>
+                <input 
+                  type="radio" 
+                  name="modalAction" 
+                  value="replace" 
+                  checked={tempAction === 'replace'} 
+                  onChange={() => setTempAction('replace')}
+                  className="mt-0.5"
+                />
+                <div className="flex flex-col flex-1">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100">🔄 Ingressar Nova Disciplina</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 mb-2">Uma disciplina cadastrada que ainda não foi estudada entra no lugar.</span>
+                  
+                  {tempAction === 'replace' && (
+                    <select
+                      value={tempRepId}
+                      onChange={(e) => setTempRepId(e.target.value)}
+                      className="text-xs font-bold p-2 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-800 dark:text-slate-100"
+                    >
+                      <option value="">-- Selecione a disciplina substituta --</option>
+                      {Object.values(subjects)
+                        .filter(s => s.id !== editingTransitionSub.id)
+                        .map(s => (
+                          <option key={s.id} value={s.id}>{s.name}</option>
+                        ))}
+                    </select>
+                  )}
                 </div>
-                <p className="text-[10px] text-slate-400">
-                  Uma matéria cadastrada da fila assumirá esta vaga no dia seguinte ao término.
-                </p>
-              </button>
-
-              {/* Seletor quando 'replace' */}
-              {tempAction === 'replace' && (
-                <div className="bg-[#020617] p-2.5 rounded-lg border border-slate-800 ml-2">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-1.5">
-                    Qual disciplina assumirá esta vaga?
-                  </label>
-                  <select
-                    value={tempRepId}
-                    onChange={(e) => setTempRepId(e.target.value)}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs font-bold text-white outline-none focus:border-blue-500 cursor-pointer"
-                  >
-                    <option value="">-- Selecione uma matéria cadastrada --</option>
-                    {Object.values(subjects || {})
-                      .filter(s => s.id !== editingTransitionSub.id)
-                      .map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.topics?.reduce((acc, t) => acc + (t.total || 0), 0) || 0} aulas)
-                        </option>
-                      ))}
-                  </select>
-                </div>
-              )}
-
-              {/* Opção 3: Perguntar Depois */}
-              <button
-                type="button"
-                onClick={() => setTempAction('ask')}
-                className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
-                  tempAction === 'ask'
-                    ? 'bg-blue-950/60 border-blue-500 ring-2 ring-blue-500/30'
-                    : 'bg-slate-900/70 border-slate-800 hover:border-slate-700'
-                }`}
-              >
-                <div className="flex items-center justify-between">
-                  <span className="text-xs font-black text-white flex items-center gap-1.5">
-                    <Clock className="w-3.5 h-3.5 text-purple-400" /> Perguntar na Conclusão
-                  </span>
-                  {tempAction === 'ask' && <Check className="w-4 h-4 text-blue-400 stroke-[3]" />}
-                </div>
-                <p className="text-[10px] text-slate-400">
-                  O sistema pausará o bloco no calendário e perguntará quando a última aula for concluída.
-                </p>
-              </button>
+              </label>
             </div>
 
-            <div className="flex gap-2 pt-2 border-t border-slate-800 mt-2">
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setEditingTransitionSub(null)}
+                className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 transition-colors"
+              >
+                Cancelar
+              </button>
               <button
                 type="button"
                 onClick={handleSaveTransition}
-                className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-blue-600/30 cursor-pointer"
+                className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-colors"
               >
-                Salvar e Atualizar Calendário
-              </button>
-              <button
-                type="button"
-                onClick={() => setEditingTransitionSub(null)}
-                className="px-4 py-2.5 text-slate-400 hover:text-white font-bold text-xs uppercase rounded-xl transition-colors cursor-pointer"
-              >
-                Cancelar
+                Salvar Regra
               </button>
             </div>
           </div>
