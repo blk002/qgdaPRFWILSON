@@ -27,7 +27,9 @@ export default function Ciclo() {
     cycleScheduleType,
     cycleWeekStart,
     setCurrentDayIndex,
-    studyHistory
+    studyHistory,
+    calendarOverrides,
+    scheduleExtensions
   } = useStore();
 
   const pendingReviews = getPendingReviews().slice(0, 4);
@@ -352,8 +354,24 @@ export default function Ciclo() {
         <div className="flex gap-2.5 sm:gap-4 items-stretch w-full min-w-max">
           {(() => {
             const simulatedIncrements = {};
-            return visibleDays.map(({ daySubjects, dayIndex }) => {
+            return visibleDays.map(({ daySubjects: rawDaySubjects, dayIndex }) => {
               const dateInfo = getRelativeDateInfo(dayIndex);
+              let daySubjects = [...(rawDaySubjects || [])];
+
+              if (calendarOverrides && calendarOverrides[dateInfo.fullDateStr]) {
+                daySubjects = [...calendarOverrides[dateInfo.fullDateStr]];
+              }
+
+              if (scheduleExtensions && scheduleExtensions.length > 0) {
+                scheduleExtensions.forEach(ext => {
+                  if (ext.active !== false && dateInfo.fullDateStr >= ext.fromDate) {
+                    const s = subjects[ext.subjectId];
+                    if ((s?.topics || []).some(t => (t.completed || 0) < (t.total || 0))) {
+                      if (!daySubjects.includes(ext.subjectId)) daySubjects.push(ext.subjectId);
+                    }
+                  }
+                });
+              }
               const isToday = dateInfo.isToday;
               const isPast = dateInfo.isPast;
               

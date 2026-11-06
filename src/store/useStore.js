@@ -163,6 +163,8 @@ export const getCleanInitialState = () => ({
   cycleScheduleType: 'weekly',
   cycleWeekStart: 'sunday',
   cycleDayNames: [],
+  calendarOverrides: {},
+  scheduleExtensions: [],
   petData: {
     name: 'Recruta K9',
     hunger: 85,
@@ -213,7 +215,7 @@ export const PERSISTED_KEYS = [
   'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate', 'pushEnabled', 'pushTime',
   'enableSounds', 'activeBoosts', 'dailyReviewStats', 'syntaxLevel',
   'activeTheme', 'unlockedThemes', 'dailyGoalMinutes', 'subjectGoals', 'subjectTimeGoal', 'pushSettings',
-  'cycleScheduleType', 'cycleWeekStart', 'cycleDayNames', 'petData', 'caveiraQuestions'
+  'cycleScheduleType', 'cycleWeekStart', 'cycleDayNames', 'calendarOverrides', 'scheduleExtensions', 'petData', 'caveiraQuestions'
 ];
 
 export const useStore = create(
@@ -502,6 +504,51 @@ export const useStore = create(
               speed: Number(speed) || 1
             }
           }
+        };
+      }),
+      setDayOverride: (dateStr, subjectIds) => set(state => ({
+        calendarOverrides: {
+          ...(state.calendarOverrides || {}),
+          [dateStr]: subjectIds
+        }
+      })),
+      removeDayOverride: (dateStr) => set(state => {
+        const next = { ...(state.calendarOverrides || {}) };
+        delete next[dateStr];
+        return { calendarOverrides: next };
+      }),
+      addScheduleExtension: ({ fromDate, subjectId, mode = 'until_finished' }) => set(state => ({
+        scheduleExtensions: [
+          ...(state.scheduleExtensions || []).filter(e => !(e.fromDate === fromDate && e.subjectId === subjectId)),
+          {
+            id: 'ext_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            fromDate,
+            subjectId,
+            mode,
+            active: true
+          }
+        ]
+      })),
+      removeScheduleExtension: (extId) => set(state => ({
+        scheduleExtensions: (state.scheduleExtensions || []).filter(e => e.id !== extId)
+      })),
+      setScheduleFromDate: (fromDate, oldSubId, newSubId) => set(state => {
+        const newCycle = (state.cycle || []).map(day => 
+          day.map(sId => (sId === oldSubId ? newSubId : sId))
+        );
+        return {
+          cycle: newCycle,
+          scheduleExtensions: [
+            ...(state.scheduleExtensions || []),
+            {
+              id: 'rep_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+              fromDate,
+              subjectId: newSubId,
+              replacedSubjectId: oldSubId,
+              mode: 'until_finished',
+              active: true
+            }
+          ]
         };
       }),
       setCycle: (cycle) => set((state) => ({ cycle: typeof cycle === 'function' ? cycle(state.cycle) : cycle })),
@@ -2207,7 +2254,7 @@ export const useStore = create(
       },
 
       getSubjectEstimates: () => {
-        const { subjects, cycle, currentDayIndex, completedToday, subjectTimeGoal } = get();
+        const { subjects, cycle, currentDayIndex, completedToday, subjectTimeGoal, calendarOverrides, scheduleExtensions } = get();
         const estimates = [];
         const remainingClasses = {};
         const remainingMinutesDict = {};
@@ -2279,8 +2326,27 @@ export const useStore = create(
 
         if (cycle.length > 0) {
           while (!allDone && dayOffset < maxSimulationDays) {
-            const cycleIndex = (currentDayIndex + dayOffset) % cycle.length;
-            const daySubjects = cycle[cycleIndex] || [];
+            const targetSimDate = new Date(todayDateObj);
+            targetSimDate.setDate(targetSimDate.getDate() + dayOffset);
+            const simDateKey = `${targetSimDate.getFullYear()}-${String(targetSimDate.getMonth() + 1).padStart(2, '0')}-${String(targetSimDate.getDate()).padStart(2, '0')}`;
+
+            let daySubjects = [];
+            if (calendarOverrides && calendarOverrides[simDateKey]) {
+              daySubjects = [...calendarOverrides[simDateKey]];
+            } else {
+              const cycleIndex = (currentDayIndex + dayOffset) % cycle.length;
+              daySubjects = [...(cycle[cycleIndex] || [])];
+            }
+
+            if (scheduleExtensions && scheduleExtensions.length > 0) {
+              scheduleExtensions.forEach(ext => {
+                if (ext.active !== false && simDateKey >= ext.fromDate) {
+                  if (remainingLessonsQueue[ext.subjectId]?.length > 0) {
+                    daySubjects.push(ext.subjectId);
+                  }
+                }
+              });
+            }
             
             daySubjects.forEach((subId, slotIdx) => {
               if (dayOffset === 0 && completedToday.includes(slotIdx)) return; 

@@ -70,9 +70,31 @@ export default function Calendario() {
   });
 
   for (let i = 0; i < 365; i++) {
-    if (cycle.length === 0) break;
-    const cycleIndex = (currentDayIndex + i) % cycle.length;
-    const daySubjects = cycle[cycleIndex] || [];
+    if (cycle.length === 0 && (!calendarOverrides || Object.keys(calendarOverrides).length === 0)) break;
+    
+    const targetSimDate = new Date(todayDateObj);
+    targetSimDate.setDate(targetSimDate.getDate() + i);
+    const simDateKey = `${targetSimDate.getFullYear()}-${String(targetSimDate.getMonth() + 1).padStart(2, '0')}-${String(targetSimDate.getDate()).padStart(2, '0')}`;
+
+    let daySubjects = [];
+    if (calendarOverrides && calendarOverrides[simDateKey]) {
+      daySubjects = [...calendarOverrides[simDateKey]];
+    } else if (cycle.length > 0) {
+      const cycleIndex = (currentDayIndex + i) % cycle.length;
+      daySubjects = [...(cycle[cycleIndex] || [])];
+    }
+
+    // Adiciona extensões de matérias ativas a partir de uma data específica (3ª matéria até zerar)
+    if (scheduleExtensions && scheduleExtensions.length > 0) {
+      scheduleExtensions.forEach(ext => {
+        if (ext.active !== false && simDateKey >= ext.fromDate) {
+          if (remainingLessonsQueue[ext.subjectId]?.length > 0) {
+            daySubjects.push(ext.subjectId);
+          }
+        }
+      });
+    }
+
     const scheduledThisDay = [];
 
     daySubjects.forEach((subId, slotIdx) => {
@@ -207,11 +229,33 @@ export default function Calendario() {
                 let projectedSubjects = [];
                 if (diffDays >= 0 && futureSchedule[diffDays]) projectedSubjects = futureSchedule[diffDays];
 
+                const cellDateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+                const isOverridden = Boolean(calendarOverrides && calendarOverrides[cellDateKey]);
+                const hasExtensions = scheduleExtensions?.some(e => e.active !== false && cellDateKey >= e.fromDate);
+
                 return (
-                  <div key={day} className={`min-h-[5rem] md:min-h-[7rem] p-1 sm:p-1.5 rounded-md flex flex-col ${bgClass}`}>
+                  <div 
+                    key={day} 
+                    onClick={() => handleOpenDayManager(cellDateObj, cellDateKey)}
+                    className={`min-h-[5.5rem] md:min-h-[7.5rem] p-1 sm:p-1.5 rounded-md flex flex-col transition-all cursor-pointer group hover:ring-2 hover:ring-blue-400 hover:shadow-md ${bgClass}`}
+                    title="Clique para gerenciar as matérias e blocos deste dia"
+                  >
                     <div className="flex justify-between items-start mb-1 gap-0.5">
-                      <span className="font-bold text-xs sm:text-sm px-1">{day}</span>
-                      {isTodayReal && <span className="text-[9px] sm:text-[10px] font-black bg-blue-500 text-white px-1 sm:px-1.5 py-0.5 rounded-sm">HOJE</span>}
+                      <div className="flex items-center gap-1">
+                        <span className="font-bold text-xs sm:text-sm px-1 group-hover:text-blue-500 transition-colors">{day}</span>
+                        {isOverridden && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Dia com programação personalizada" />
+                        )}
+                        {hasExtensions && (
+                          <span className="text-[8px] font-black text-emerald-400 bg-emerald-950/80 px-1 rounded border border-emerald-800" title="3ª Matéria Ativa">
+                            +1
+                          </span>
+                        )}
+                      </div>
+                      <div className="flex items-center gap-1">
+                        {isTodayReal && <span className="text-[9px] sm:text-[10px] font-black bg-blue-500 text-white px-1 sm:px-1.5 py-0.5 rounded-sm">HOJE</span>}
+                        <Settings className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </div>
                     </div>
                     
                     {diffDays >= 0 && projectedSubjects.length > 0 && (
