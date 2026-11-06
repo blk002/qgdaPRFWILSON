@@ -2,7 +2,7 @@ import { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X, UploadCloud, Camera, Trash2, Loader2, CheckSquare,
-  Square, Key, Eye, EyeOff, Plus, AlertTriangle, Check
+  Square, Key, Eye, EyeOff, Plus, AlertTriangle, Check, Sparkles
 } from 'lucide-react';
 import { toast } from 'sonner';
 
@@ -35,6 +35,8 @@ export default function TopicLessonScanner({ topicName, onConfirm, onClose }) {
   // OCR
   const [ocrStatus, setOcrStatus] = useState('');
   const [extractedLessons, setExtractedLessons] = useState([]);
+  const [detectedTopicName, setDetectedTopicName] = useState('');
+  const [applyTopicRename, setApplyTopicRename] = useState(true);
   const [allSelected, setAllSelected] = useState(true);
 
   // ===== UPLOAD HANDLERS =====
@@ -90,41 +92,127 @@ export default function TopicLessonScanner({ topicName, onConfirm, onClose }) {
   const callGeminiAPI = async (file, key) => {
     const base64 = await fileToBase64(file);
     const mimeType = file.type || 'image/png';
+    const promptText = `Você é um assistente estruturador de dados de estudos e videoaulas de plataformas de concursos e cursos (ex: Gran Cursos, Estratégia, Alfacon, Focus).
+Analise a captura de tela fornecida.
+
+REGRAS OBRIGATÓRIAS:
+1. IDENTIFICAR O NOME DO ASSUNTO (MÓDULO):
+   - Localize o cabeçalho ou título principal do assunto/módulo (geralmente fica no topo da lista ou no cabeçalho do acordeão retrátil).
+   - EXEMPLO REAL: se estiver escrito "3 Ortografia e semântica" ou "Módulo 3 - Ortografia e semântica", o número "3" é apenas a numeração/ordem. O NOME DO ASSUNTO É "Ortografia e semântica".
+   - Limpe números iniciais, ordens, pontos, hífens ou palavras como "Módulo 3 -", "3.", "03 -", "3 ".
+   - Converta o nome do assunto para CAIXA ALTA (ex: "ORTOGRAFIA E SEMÂNTICA").
+   - Se não houver cabeçalho explícito com número de módulo, deduza o assunto pelo tema comum das aulas ou deixe vazio "".
+
+2. IDENTIFICAR AS VIDEOAULAS INDIVIDUAIS:
+   - Identifique cada aula/linha/card abaixo do cabeçalho. Ignore o cabeçalho principal (não o repita como aula).
+   - Extraia o nome da aula (em CAIXA ALTA) e sua duração (formato MM:SS ou H:MM:SS, ex: "31:41", "01:16:49").
+   - Se um card indicar múltiplas aulas (exemplos: 'PLANO INCLINADO - AULAS 01 A 03', 'FORÇA - AULAS 02 E 03'), expanda em entradas separadas: uma por aula. A primeira aula recebe o tempo exibido no card; as demais recebem '00:00'.
+   - Se o card tiver apenas UMA aula, crie somente uma entrada com o tempo correto.
+   - Limpe ícones de play, caixas de seleção (checkbox), badges e status visuais dos nomes.
+
+Retorne SOMENTE um objeto JSON válido (sem blocos de código markdown, sem texto extra):
+{
+  "topic_name": "NOME DO ASSUNTO EM CAIXA ALTA (SEM O NÚMERO DO MÓDULO)",
+  "lessons": [
+    { "name": "NOME DA AULA EM CAIXA ALTA", "duration": "MM:SS" }
+  ]
+}`;
+
     const body = {
       contents: [{
         parts: [
           { inlineData: { mimeType, data: base64 } },
-          { text: "Você é um assistente estruturador de dados de estudos. Analise a imagem fornecida, que é uma captura de tela de uma lista de aulas de uma plataforma de cursos.\n\nREGRAS IMPORTANTES:\n1. Identifique cada card/item de aula visível.\n2. Se um card tiver um título indicando múltiplas aulas (exemplos: 'PLANO INCLINADO - AULAS 01 A 03', 'FORÇA - AULAS 02 E 03', 'TEMA X - AULAS 01-04'), você DEVE expandir em entradas separadas: uma por aula. A primeira aula recebe o tempo exibido no card; as demais recebem '00:00'. O nome de cada entrada deve identificar a aula individual (ex: 'PLANO INCLINADO - AULA 01', 'PLANO INCLINADO - AULA 02', 'PLANO INCLINADO - AULA 03').\n3. Se o card tiver apenas UMA aula, crie somente uma entrada com o tempo correto.\n4. Converta todos os nomes para CAIXA ALTA, preservando acentos.\n5. Limpe badges de progresso, ícones e elementos visuais dos nomes.\n6. A duração deve estar no formato MM:SS ou H:MM:SS.\n\nRetorne SOMENTE um array JSON válido (sem texto extra, sem blocos de código):\n[\n  { \"name\": \"NOME DA AULA EM CAIXA ALTA\", \"duration\": \"MM:SS\" }\n]" }
+          { text: promptText }
         ]
       }],
       generationConfig: { responseMimeType: 'application/json' }
     };
 
-    const res = await fetch(
-      `https://generativelanguage.googleapis.com/v1beta/models/gemini-3.1-flash-lite:generateContent?key=${key}`,
-      { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
-    );
+    // Tentar modelos com fallback automático
+    const models = [
+      'gemini-2.5-flash',
+      'gemini-2.0-flash',
+      'gemini-1.5-flash',
+      'gemini-3.1-flash-lite'
+    ];
 
-    if (!res.ok) {
-      const err = await res.json();
-      throw new Error(err?.error?.message || 'Erro na API do Gemini');
+    let lastError = null;
+    let data = null;
+
+    for (const model of models) {
+      try {
+        const res = await fetch(
+          `https://generativelanguage.googleapis.com/v1beta/models/${model}:generateContent?key=${key}`,
+          { method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) }
+        );
+
+        if (res.ok) {
+          data = await res.json();
+          break;
+        } else {
+          const errData = await res.json().catch(() => ({}));
+          const errMsg = errData?.error?.message || `HTTP ${res.status}`;
+          lastError = new Error(errMsg);
+
+          // Se a chave for comprovadamente inválida, interrompe fallback
+          if (errMsg.toLowerCase().includes('api key not valid') || errMsg.toLowerCase().includes('api_key_invalid')) {
+            throw lastError;
+          }
+        }
+      } catch (e) {
+        lastError = e;
+        if (e.message && e.message.toLowerCase().includes('api key not valid')) {
+          throw e;
+        }
+      }
     }
 
-    const data = await res.json();
-    const jsonText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '[]';
+    if (!data) {
+      throw lastError || new Error('Não foi possível obter resposta dos servidores Gemini.');
+    }
+
+    const jsonText = data?.candidates?.[0]?.content?.parts?.[0]?.text || '{}';
     try {
-      const parsed = JSON.parse(jsonText);
-      if (Array.isArray(parsed)) {
-        return parsed
-          .filter(item => item.name && item.name.trim().length > 1)
-          .map((item, idx) => ({
-            id: 'ls_' + Date.now() + '_' + idx,
-            name: String(item.name).toUpperCase().trim(),
-            duration: String(item.duration || '00:00').trim(),
-            selected: true
-          }));
+      let rawText = jsonText.trim();
+      if (rawText.startsWith('```')) {
+        rawText = rawText.replace(/^```(?:json)?\s*/i, '').replace(/\s*```$/, '').trim();
       }
-      return [];
+      const parsed = JSON.parse(rawText);
+
+      let extractedTopic = '';
+      let rawLessons = [];
+
+      if (Array.isArray(parsed)) {
+        rawLessons = parsed;
+      } else if (parsed && typeof parsed === 'object') {
+        if (typeof parsed.topic_name === 'string') {
+          extractedTopic = parsed.topic_name.trim();
+        }
+        if (Array.isArray(parsed.lessons)) {
+          rawLessons = parsed.lessons;
+        }
+      }
+
+      // Limpeza aprofundada do título do assunto (remove prefixos como "3 ", "3. ", "03 - ", "Módulo 3 - ")
+      if (extractedTopic) {
+        extractedTopic = extractedTopic
+          .replace(/^(?:m[óo]dulo|assunto|cap[íi]tulo|tema|bloco|aula)?\s*\d+[\s.\-–—:]+/i, '')
+          .replace(/^\d+[\s.\-–—:]*/, '')
+          .replace(/[.\-–—:]+$/, '')
+          .trim()
+          .toUpperCase();
+      }
+
+      const lessons = rawLessons
+        .filter(item => item && item.name && String(item.name).trim().length > 1)
+        .map((item, idx) => ({
+          id: 'ls_' + Date.now() + '_' + idx,
+          name: String(item.name).toUpperCase().trim(),
+          duration: String(item.duration || '00:00').trim(),
+          selected: true
+        }));
+
+      return { topicTitle: extractedTopic, lessons };
     } catch {
       throw new Error('O modelo não respondeu no formato esperado.');
     }
@@ -136,19 +224,25 @@ export default function TopicLessonScanner({ topicName, onConfirm, onClose }) {
     if (!key) { toast.error('Configure sua chave da API antes de continuar.'); setEditingKey(true); return; }
     localStorage.setItem(LS_KEY, key);
     setStep('processing');
-    setOcrStatus('Enviando imagem para o Gemini...');
+    setOcrStatus('Enviando imagem para a Vision AI do Gemini...');
 
     try {
-      const lessons = await callGeminiAPI(imageFile, key);
+      const { topicTitle, lessons } = await callGeminiAPI(imageFile, key);
       if (!lessons.length) {
         toast.error('Nenhuma aula detectada. Tente outra imagem.');
         setStep('upload');
         return;
       }
       setExtractedLessons(lessons);
+      setDetectedTopicName(topicTitle || '');
+      setApplyTopicRename(Boolean(topicTitle));
       setAllSelected(true);
       setStep('review');
-      toast.success(`${lessons.length} aula(s) detectada(s)! Revise abaixo.`);
+      if (topicTitle) {
+        toast.success(`Assunto "${topicTitle}" identificado com ${lessons.length} aula(s)!`);
+      } else {
+        toast.success(`${lessons.length} aula(s) detectada(s)! Revise abaixo.`);
+      }
     } catch (err) {
       console.error('Gemini API Error:', err);
       toast.error('Erro ao processar: ' + err.message);
@@ -189,7 +283,8 @@ export default function TopicLessonScanner({ topicName, onConfirm, onClose }) {
   const handleConfirm = () => {
     const selected = extractedLessons.filter(l => l.selected);
     if (!selected.length) { toast.error('Selecione pelo menos uma aula.'); return; }
-    onConfirm(selected.map(l => ({ name: l.name, duration: l.duration })));
+    const newTopicName = (applyTopicRename && detectedTopicName.trim()) ? detectedTopicName.trim().toUpperCase() : null;
+    onConfirm(selected.map(l => ({ name: l.name, duration: l.duration })), newTopicName);
   };
 
   const selectedCount = extractedLessons.filter(l => l.selected).length;
@@ -197,7 +292,7 @@ export default function TopicLessonScanner({ topicName, onConfirm, onClose }) {
   // ===== RENDER =====
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" onClick={onClose}>
+    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
       <div
         className="relative bg-[#0f172a] border border-slate-800 rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-hidden flex flex-col"
@@ -212,7 +307,7 @@ export default function TopicLessonScanner({ topicName, onConfirm, onClose }) {
             <div>
               <h3 className="text-base font-black text-white tracking-tight">Adicionar Aulas via Vision AI</h3>
               <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest truncate max-w-[220px]">
-                Assunto: {topicName}
+                Assunto: {detectedTopicName && applyTopicRename ? detectedTopicName : topicName}
               </p>
             </div>
           </div>
@@ -320,7 +415,7 @@ export default function TopicLessonScanner({ topicName, onConfirm, onClose }) {
               <div className="flex items-start gap-2 bg-violet-900/20 border border-violet-800/30 rounded-xl p-3">
                 <AlertTriangle className="w-4 h-4 text-violet-400 flex-shrink-0 mt-0.5" />
                 <p className="text-[11px] text-violet-300/80 font-medium leading-relaxed">
-                  Tire uma screenshot da <strong>lista de aulas</strong> da plataforma (com nome e duração visíveis) e a Vision AI vai extrair automaticamente.
+                  Tire uma screenshot da <strong>lista de aulas</strong> da plataforma (com cabeçalho do módulo como "3 Ortografia..." e durações) e a Vision AI vai identificar o assunto e extrair as aulas.
                 </p>
               </div>
 
@@ -344,7 +439,7 @@ export default function TopicLessonScanner({ topicName, onConfirm, onClose }) {
               </div>
               <div className="text-center space-y-2">
                 <p className="text-sm font-bold text-white">{ocrStatus}</p>
-                <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Gemini Flash — leva apenas 2-3 segundos</p>
+                <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">Gemini Flash — processamento rápido e preciso</p>
               </div>
               <div className="flex gap-1.5">
                 {[0,1,2].map(i => (
@@ -356,8 +451,46 @@ export default function TopicLessonScanner({ topicName, onConfirm, onClose }) {
 
           {/* ===== REVIEW ===== */}
           {step === 'review' && (
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
+            <div className="space-y-3.5">
+              {/* Card de Nome do Assunto Detectado (ex: "3 Ortografia e semântica" -> "ORTOGRAFIA E SEMÂNTICA") */}
+              <div className="bg-slate-900/90 border border-violet-800/60 rounded-xl p-3.5 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-4 h-4 text-violet-400" />
+                    <span className="text-[10px] font-black text-violet-300 uppercase tracking-widest">
+                      Nome do Assunto (Módulo Detectado)
+                    </span>
+                  </div>
+                  <label className="flex items-center gap-1.5 cursor-pointer text-[10px] font-bold text-violet-300 select-none">
+                    <input
+                      type="checkbox"
+                      checked={applyTopicRename}
+                      onChange={(e) => setApplyTopicRename(e.target.checked)}
+                      className="w-3.5 h-3.5 rounded border-slate-700 bg-slate-800 text-violet-600 focus:ring-0 cursor-pointer"
+                    />
+                    <span>Renomear assunto</span>
+                  </label>
+                </div>
+                <div className="relative">
+                  <input
+                    type="text"
+                    value={detectedTopicName}
+                    onChange={(e) => setDetectedTopicName(e.target.value.toUpperCase())}
+                    onPaste={(e) => e.stopPropagation()}
+                    placeholder="NOME DO ASSUNTO (EX: ORTOGRAFIA E SEMÂNTICA)..."
+                    className="w-full bg-[#020617] border border-violet-700/60 focus:border-violet-400 rounded-lg px-3 py-2 text-xs font-black text-white uppercase outline-none transition-all placeholder:text-slate-600"
+                  />
+                </div>
+                <p className="text-[10px] text-slate-400 leading-relaxed">
+                  {detectedTopicName ? (
+                    <>Identificado automaticamente na imagem ao lado do número (ex: <em>3 Ortografia e semântica</em> → <strong>{detectedTopicName}</strong>). O assunto será renomeado automaticamente ao confirmar.</>
+                  ) : (
+                    <>Se o cabeçalho tiver um número de módulo (ex: <em>3 Ortografia e semântica</em>), ele será preenchido aqui para renomear o assunto.</>
+                  )}
+                </p>
+              </div>
+
+              <div className="flex items-center justify-between pt-1">
                 <button onClick={toggleAll} className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-colors">
                   {allSelected ? <CheckSquare className="w-4 h-4 text-violet-400" /> : <Square className="w-4 h-4" />}
                   {allSelected ? 'Desmarcar tudo' : 'Selecionar tudo'}
@@ -429,10 +562,10 @@ export default function TopicLessonScanner({ topicName, onConfirm, onClose }) {
             <button
               onClick={handleConfirm}
               disabled={selectedCount === 0}
-              className="w-full py-3.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-black rounded-xl transition-all shadow-lg shadow-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed uppercase tracking-wider text-sm flex items-center justify-center gap-2"
+              className="w-full py-3.5 bg-gradient-to-r from-violet-600 to-indigo-600 hover:from-violet-500 hover:to-indigo-500 text-white font-black rounded-xl transition-all shadow-lg shadow-violet-500/20 disabled:opacity-40 disabled:cursor-not-allowed uppercase tracking-wider text-sm flex items-center justify-center gap-2 cursor-pointer"
             >
               <Check className="w-4 h-4" />
-              Adicionar {selectedCount} aula{selectedCount !== 1 ? 's' : ''} ao assunto
+              Adicionar {selectedCount} aula{selectedCount !== 1 ? 's' : ''} {detectedTopicName && applyTopicRename ? `a "${detectedTopicName}"` : 'ao assunto'}
             </button>
           </div>
         )}

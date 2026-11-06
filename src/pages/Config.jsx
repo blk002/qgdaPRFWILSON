@@ -6,7 +6,7 @@ import ImportOCR from '../components/ImportOCR';
 import TopicLessonScanner from '../components/TopicLessonScanner';
 import { parseDurationToSeconds, formatSecondsToClock, formatSecondsToFriendly, getSubjectVideoStats, formatMinutesToFriendly, calculateLessonsForGoal } from '../lib/durationHelpers';
 
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
 
 const notificationsSupported = typeof Notification !== 'undefined';
@@ -19,6 +19,7 @@ export default function Config({
   const [showImportOCR, setShowImportOCR] = useState(false);
   // Scanner de aulas por assunto
   const [scannerTopicIdx, setScannerTopicIdx] = useState(null); // índice do tópico sendo escaneado
+  const modalBodyRef = useRef(null);
 
   const {
     cycle,
@@ -1050,14 +1051,14 @@ export default function Config({
       </div>
       {/* Modal de Edição de Disciplina (Estilo Compacto Centralizado) */}
       {editingSubjectId && draftSubject && createPortal((
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[120] p-4 fade-in">
-          <div className="bg-[#0f172a] rounded-2xl shadow-2xl max-w-lg w-full p-8 border border-slate-800 relative overflow-hidden flex flex-col">
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[120] p-3 sm:p-6 overflow-y-auto fade-in">
+          <div className="bg-[#0f172a] rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-800 relative overflow-hidden flex flex-col max-h-[92vh] my-auto">
             
             {/* Barra de Progresso Topo */}
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-teal-400 to-blue-500 opacity-80"></div>
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-teal-400 to-blue-500 opacity-80 z-10"></div>
 
-            {/* Cabeçalho */}
-            <div className="flex justify-between items-start mb-6">
+            {/* Cabeçalho Fixo */}
+            <div className="flex justify-between items-start p-6 pb-4 border-b border-slate-800 shrink-0">
               <div>
                 <h3 className="text-[22px] font-black text-white uppercase tracking-tight leading-none mb-1">
                   Configurar Disciplina
@@ -1074,14 +1075,16 @@ export default function Config({
                   setEditingSubjectId(null);
                   setDraftSubject(null);
                 }}
-                className="text-slate-400 hover:text-white transition-colors"
+                className="text-slate-400 hover:text-white transition-colors p-1"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Dados Básicos */}
-            <div className="grid grid-cols-2 gap-4 mb-5">
+            {/* Corpo com rolagem independente */}
+            <div ref={modalBodyRef} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
+              {/* Dados Básicos */}
+              <div className="grid grid-cols-2 gap-4">
               <div>
                 <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Nome Operacional</label>
                 <input 
@@ -1263,22 +1266,29 @@ export default function Config({
             </div>
 
             {/* Assuntos */}
-            <div className="mb-8">
+            <div>
               <div className="flex justify-between items-end mb-3 border-b border-slate-800 pb-2">
                 <label className="text-[10px] font-black text-slate-400 uppercase">Conteúdo Programático (Assuntos)</label>
                 <button 
-                  onClick={() => setDraftSubject(prev => {
-                    const newTopics = [...(prev.topics || [])];
-                    newTopics.push({ id: 't' + Date.now(), name: 'NOVO ASSUNTO', total: 0, completed: 0, lessons: [] });
-                    return { ...prev, topics: newTopics };
-                  })}
-                  className="flex items-center gap-1 text-[9px] font-black text-blue-500 bg-blue-900/30 px-2 py-1 rounded tracking-widest uppercase hover:text-white hover:bg-blue-600 transition-colors"
+                  onClick={() => {
+                    setDraftSubject(prev => {
+                      const newTopics = [...(prev.topics || [])];
+                      newTopics.push({ id: 't' + Date.now(), name: 'NOVO ASSUNTO', total: 0, completed: 0, lessons: [] });
+                      return { ...prev, topics: newTopics };
+                    });
+                    setTimeout(() => {
+                      if (modalBodyRef.current) {
+                        modalBodyRef.current.scrollTo({ top: modalBodyRef.current.scrollHeight, behavior: 'smooth' });
+                      }
+                    }, 60);
+                  }}
+                  className="flex items-center gap-1 text-[9px] font-black text-blue-500 bg-blue-900/30 px-2 py-1 rounded tracking-widest uppercase hover:text-white hover:bg-blue-600 transition-colors cursor-pointer"
                 >
                   <Plus className="w-3 h-3"/> Add Assunto
                 </button>
               </div>
               
-              <div className="space-y-3 max-h-64 overflow-y-auto custom-scrollbar pr-1">
+              <div className="space-y-3">
                 {(draftSubject.topics || []).map((topic, idx) => (
                   <div key={topic.id} className="bg-slate-900/60 border border-slate-800 rounded-xl p-3">
                     {/* Linha do nome do assunto */}
@@ -1465,8 +1475,11 @@ export default function Config({
               </div>
             </div>
 
-            {/* Ações */}
-            <div className="flex flex-col gap-3 mt-auto">
+            {/* Fim do Conteúdo Rolável */}
+            </div>
+
+            {/* Ações Fixas no Rodapé */}
+            <div className="p-6 pt-3 border-t border-slate-800 bg-[#0f172a] shrink-0 flex flex-col gap-2.5">
               <button 
                 onClick={() => {
                   if (!draftSubject.name || draftSubject.name.trim() === "") {
@@ -1481,7 +1494,7 @@ export default function Config({
                   setDraftSubject(null);
                   toast.success("Disciplina salva com sucesso!");
                 }}
-                className="w-full py-4 bg-[#1d4ed8] hover:bg-blue-600 outline-none focus:ring-4 focus:ring-blue-500/50 text-white font-black rounded-xl shadow-[0_0_20px_rgba(29,78,216,0.3)] transition-all transform active:scale-95 flex items-center justify-center uppercase tracking-widest text-sm"
+                className="w-full py-3.5 bg-[#1d4ed8] hover:bg-blue-600 outline-none focus:ring-4 focus:ring-blue-500/50 text-white font-black rounded-xl shadow-[0_0_20px_rgba(29,78,216,0.3)] transition-all transform active:scale-[0.99] flex items-center justify-center uppercase tracking-widest text-sm cursor-pointer"
               >
                 Salvar Configurações
               </button>
@@ -1490,7 +1503,7 @@ export default function Config({
                   setEditingSubjectId(null);
                   setDraftSubject(null);
                 }}
-                className="w-full py-2 text-slate-400 font-bold hover:text-white transition-colors uppercase text-[10px] tracking-widest"
+                className="w-full py-2 text-slate-400 font-bold hover:text-white transition-colors uppercase text-[10px] tracking-widest cursor-pointer"
               >
                 Cancelar Edição
               </button>
@@ -1504,20 +1517,25 @@ export default function Config({
         <TopicLessonScanner
           topicName={(draftSubject.topics || [])[scannerTopicIdx]?.name || 'Assunto'}
           onClose={() => setScannerTopicIdx(null)}
-          onConfirm={(newLessons) => {
+          onConfirm={(newLessons, newTopicName) => {
             setDraftSubject(prev => {
               const newTopics = [...(prev.topics || [])];
               const existing = newTopics[scannerTopicIdx].lessons || [];
               const merged = [...existing, ...newLessons];
               newTopics[scannerTopicIdx] = {
                 ...newTopics[scannerTopicIdx],
+                name: (newTopicName && newTopicName.trim()) ? newTopicName.trim() : newTopics[scannerTopicIdx].name,
                 lessons: merged,
                 total: merged.length
               };
               return { ...prev, topics: newTopics };
             });
             setScannerTopicIdx(null);
-            toast.success(`${newLessons.length} aula(s) adicionada(s) ao assunto!`);
+            if (newTopicName && newTopicName.trim()) {
+              toast.success(`Assunto renomeado para "${newTopicName.trim()}" e ${newLessons.length} aula(s) adicionada(s)!`);
+            } else {
+              toast.success(`${newLessons.length} aula(s) adicionada(s) ao assunto!`);
+            }
           }}
         />
       )}
