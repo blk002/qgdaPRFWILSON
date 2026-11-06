@@ -2317,6 +2317,9 @@ export const useStore = create(
           }
         });
 
+        const today = get().getTodayDate();
+        const todayDateObj = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+
         const endDaysOffset = {};
         let dayOffset = 0;
         let allDone = false;
@@ -2420,9 +2423,6 @@ export const useStore = create(
             if (!allDone) dayOffset++;
           }
         }
-
-        const today = get().getTodayDate();
-        const todayDateObj = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
         Object.values(subjects).forEach(sub => {
           if (remainingClasses[sub.id] > 0) {
