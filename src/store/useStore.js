@@ -2285,10 +2285,35 @@ export const useStore = create(
             daySubjects.forEach((subId, slotIdx) => {
               if (dayOffset === 0 && completedToday.includes(slotIdx)) return; 
               
-              const q = remainingLessonsQueue[subId];
+              let effectiveSubId = subId;
+              let q = remainingLessonsQueue[effectiveSubId];
+
+              // Se a matéria original esgotou suas aulas, verificar a regra de transição
+              if (!q || q.length === 0) {
+                const originalSub = subjects[subId];
+                const action = originalSub?.onCompleteAction || 'double_remaining';
+
+                if (action === 'replace' && originalSub?.replacementSubjectId && subjects[originalSub.replacementSubjectId]) {
+                  const repId = originalSub.replacementSubjectId;
+                  const repQ = remainingLessonsQueue[repId];
+                  if (repQ && repQ.length > 0) {
+                    effectiveSubId = repId;
+                    q = repQ;
+                  }
+                } else if (action === 'double_remaining') {
+                  const fallbackId = daySubjects.find(sId => sId !== subId && remainingLessonsQueue[sId]?.length > 0)
+                    || Object.keys(remainingLessonsQueue).find(sId => remainingLessonsQueue[sId]?.length > 0);
+                  
+                  if (fallbackId) {
+                    effectiveSubId = fallbackId;
+                    q = remainingLessonsQueue[fallbackId];
+                  }
+                }
+              }
+
               if (q && q.length > 0) {
-                const sub = subjects[subId];
-                const goalMin = Number(sub?.timeGoalMinutes || subjectTimeGoal?.[subId]) || 0;
+                const sub = subjects[effectiveSubId];
+                const goalMin = Number(sub?.timeGoalMinutes || subjectTimeGoal?.[effectiveSubId]) || 0;
                 
                 let slotCount = 0;
                 let slotAccelMins = 0;
@@ -2317,14 +2342,14 @@ export const useStore = create(
                   }
                 }
 
-                if (q.length === 0 && endDaysOffset[subId] === undefined) {
-                  endDaysOffset[subId] = dayOffset;
+                if (q.length === 0 && endDaysOffset[effectiveSubId] === undefined) {
+                  endDaysOffset[effectiveSubId] = dayOffset;
                 }
               }
             });
 
             allDone = Object.keys(remainingLessonsQueue).every(subId => 
-              remainingLessonsQueue[subId].length === 0 || !subjectsInCycle.has(subId)
+              remainingLessonsQueue[subId].length === 0 || (!subjectsInCycle.has(subId) && !Object.values(subjects).some(s => s.replacementSubjectId === subId))
             );
             if (!allDone) dayOffset++;
           }

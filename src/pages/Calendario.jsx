@@ -77,10 +77,37 @@ export default function Calendario() {
 
     daySubjects.forEach((subId, slotIdx) => {
       if (i === 0 && completedToday.includes(slotIdx)) return;
-      const q = remainingLessonsQueue[subId];
+
+      let effectiveSubId = subId;
+      let q = remainingLessonsQueue[effectiveSubId];
+
+      // Se a matéria original esgotou suas aulas, verificar a regra de transição pré-configurada
+      if (!q || q.length === 0) {
+        const originalSub = subjects[subId];
+        const action = originalSub?.onCompleteAction || 'double_remaining';
+
+        if (action === 'replace' && originalSub?.replacementSubjectId && subjects[originalSub.replacementSubjectId]) {
+          const repId = originalSub.replacementSubjectId;
+          const repQ = remainingLessonsQueue[repId];
+          if (repQ && repQ.length > 0) {
+            effectiveSubId = repId;
+            q = repQ;
+          }
+        } else if (action === 'double_remaining') {
+          // Busca uma matéria com aulas pendentes (primeiro no próprio dia, depois em qualquer matéria da fila)
+          const fallbackId = daySubjects.find(sId => sId !== subId && remainingLessonsQueue[sId]?.length > 0)
+            || Object.keys(remainingLessonsQueue).find(sId => remainingLessonsQueue[sId]?.length > 0);
+          
+          if (fallbackId) {
+            effectiveSubId = fallbackId;
+            q = remainingLessonsQueue[fallbackId];
+          }
+        }
+      }
+
       if (q && q.length > 0) {
-        const sub = subjects[subId];
-        const goalMin = Number(sub?.timeGoalMinutes || subjectTimeGoal?.[subId]) || 0;
+        const sub = subjects[effectiveSubId];
+        const goalMin = Number(sub?.timeGoalMinutes || subjectTimeGoal?.[effectiveSubId]) || 0;
         let consumed = 0;
         let accelAcc = 0;
 
@@ -108,7 +135,12 @@ export default function Calendario() {
         }
 
         const isLast = q.length === 0;
-        scheduledThisDay.push({ id: subId, isLast, count: consumed });
+        scheduledThisDay.push({ 
+          id: effectiveSubId, 
+          isLast, 
+          count: consumed,
+          isTransitioned: effectiveSubId !== subId 
+        });
       }
     });
     futureSchedule[i] = scheduledThisDay;
@@ -189,7 +221,14 @@ export default function Calendario() {
                            if(!sub) return null;
                            return (
                              <div key={idx} className={`flex items-center justify-between text-[10px] sm:text-[12px] font-bold px-1 sm:px-1.5 py-0.5 rounded-sm leading-tight mb-0.5 ${sub.color}`}>
-                               <span className="truncate flex-1">{sub.name}</span>
+                               <span className="truncate flex-1">
+                                {sub.name}
+                                {item.isTransitioned && (
+                                  <span className="opacity-80 text-[8px] font-black uppercase tracking-tight ml-1 bg-black/20 dark:bg-white/20 px-1 py-0.2 rounded">
+                                    2º BLOCO
+                                  </span>
+                                )}
+                              </span>
                                {item.isLast && (
                                  <svg className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 shrink-0 ml-0.5" viewBox="0 0 24 24" fill="none">
                                    <path d="M12 2L22 20H2L12 2Z" fill="white" stroke="#E81C23" strokeWidth="3" strokeLinejoin="round"/>

@@ -1,7 +1,7 @@
 import { useStore, getCleanInitialState, PERSISTED_KEYS } from '../store/useStore';
 import { assetUrl } from '../lib/assets';
 import { toast } from 'sonner';
-import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle, Check, Camera, BookOpen, ScanLine, ChevronUp, ChevronDown, Zap, FastForward, Layers, RotateCcw, RefreshCw } from 'lucide-react';
+import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle, Check, Camera, BookOpen, ScanLine, ChevronUp, ChevronDown, Zap, FastForward, Layers, RotateCcw, RefreshCw, Shuffle } from 'lucide-react';
 import ImportOCR from '../components/ImportOCR';
 import TopicLessonScanner from '../components/TopicLessonScanner';
 import SelectiveResetModal from '../components/SelectiveResetModal';
@@ -199,7 +199,17 @@ export default function Config({
           <button onClick={() => {
               const newId = 'sub_' + Date.now();
               const defaultColor = (availableColors && availableColors[0]?.color) || 'bg-blue-600 text-white';
-              setDraftSubject({ id: newId, name: '', color: defaultColor, block: 'B1', speed: 1, topics: [] });
+              setDraftSubject({ 
+                id: newId, 
+                name: '', 
+                color: defaultColor, 
+                block: 'B1', 
+                speed: 1, 
+                timeGoalMinutes: 0,
+                onCompleteAction: 'double_remaining',
+                replacementSubjectId: '',
+                topics: [] 
+              });
               setEditingSubjectId(newId);
             }} 
             className="bg-blue-100 text-blue-700 px-3 py-2 rounded-lg font-bold flex items-center gap-1 text-xs sm:text-sm">
@@ -231,13 +241,28 @@ export default function Config({
                       <Target className="w-2.5 h-2.5" /> {formatMinutesToFriendly(currentTimeGoal)}/bloco
                     </span>
                   )}
+                  {sub.onCompleteAction === 'replace' && sub.replacementSubjectId && subjects[sub.replacementSubjectId] ? (
+                    <span className="text-[9px] font-black bg-purple-100 text-purple-700 dark:bg-purple-950/70 dark:text-purple-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-purple-200 dark:border-purple-900" title={`Substitui por ${subjects[sub.replacementSubjectId].name} ao concluir`}>
+                      <Shuffle className="w-2.5 h-2.5 text-purple-400" /> ➔ {subjects[sub.replacementSubjectId].name}
+                    </span>
+                  ) : sub.onCompleteAction === 'ask' ? (
+                    <span className="text-[9px] font-black bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-slate-300 dark:border-slate-700" title="Decidir no dia da conclusão">
+                      <Clock className="w-2.5 h-2.5 text-slate-400" /> Decidir ao fim
+                    </span>
+                  ) : (
+                    <span className="text-[9px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-amber-200 dark:border-amber-900" title="Dobra matérias restantes do ciclo ao concluir">
+                      <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500" /> Dobra Restantes
+                    </span>
+                  )}
                 </div>
                 <div className="flex gap-1">
                   <button onClick={() => {
                     setDraftSubject({ 
                       ...sub, 
                       speed: sub.speed || 1,
-                      timeGoalMinutes: currentTimeGoal
+                      timeGoalMinutes: currentTimeGoal,
+                      onCompleteAction: sub.onCompleteAction || 'double_remaining',
+                      replacementSubjectId: sub.replacementSubjectId || ''
                     });
                     setEditingSubjectId(sub.id);
                   }} className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-blue-600 rounded dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800"><Edit2 className="w-4 h-4" /></button>
@@ -1329,6 +1354,120 @@ export default function Config({
                   </div>
                 );
               })()}
+            </div>
+
+            {/* Transição ao Concluir Edital / Aulas */}
+            <div className="mb-6 bg-slate-900/60 border border-slate-800 p-4 rounded-xl">
+              <div className="flex items-center justify-between mb-2">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
+                  <RotateCcw className="w-3.5 h-3.5 text-blue-400" /> Transição ao Concluir Conteúdo (O Que Fazer com a Vaga?)
+                </label>
+                <span className="text-[10px] font-black text-blue-400 bg-blue-950/80 border border-blue-800 px-2 py-0.5 rounded uppercase">
+                  {draftSubject.onCompleteAction === 'replace' ? 'Substituir' : draftSubject.onCompleteAction === 'ask' ? 'Perguntar' : 'Dobrar Restantes'}
+                </span>
+              </div>
+              <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
+                Quando todas as aulas desta matéria forem concluídas, o que o cronograma e o calendário devem fazer com os blocos vagos?
+              </p>
+
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-3">
+                {/* Opção 1: Dobrar */}
+                <button
+                  type="button"
+                  onClick={() => setDraftSubject(prev => ({ ...prev, onCompleteAction: 'double_remaining' }))}
+                  className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
+                    (draftSubject.onCompleteAction || 'double_remaining') === 'double_remaining'
+                      ? 'bg-blue-950/50 border-blue-500 ring-2 ring-blue-500/30'
+                      : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-white flex items-center gap-1.5">
+                      <Zap className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" /> Dobrar Restantes
+                    </span>
+                    {(draftSubject.onCompleteAction || 'double_remaining') === 'double_remaining' && (
+                      <Check className="w-3.5 h-3.5 text-blue-400 stroke-[3]" />
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-tight">
+                    A vaga é absorvida pelas outras matérias pendentes (ex: 2 aulas de Física por dia).
+                  </p>
+                </button>
+
+                {/* Opção 2: Substituir */}
+                <button
+                  type="button"
+                  onClick={() => setDraftSubject(prev => ({ ...prev, onCompleteAction: 'replace' }))}
+                  className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
+                    draftSubject.onCompleteAction === 'replace'
+                      ? 'bg-blue-950/50 border-blue-500 ring-2 ring-blue-500/30'
+                      : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-white flex items-center gap-1.5">
+                      <Shuffle className="w-3.5 h-3.5 text-emerald-400" /> Nova Disciplina
+                    </span>
+                    {draftSubject.onCompleteAction === 'replace' && (
+                      <Check className="w-3.5 h-3.5 text-blue-400 stroke-[3]" />
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-tight">
+                    Uma matéria cadastrada entrará no lugar desta assim que suas aulas acabarem.
+                  </p>
+                </button>
+
+                {/* Opção 3: Perguntar */}
+                <button
+                  type="button"
+                  onClick={() => setDraftSubject(prev => ({ ...prev, onCompleteAction: 'ask' }))}
+                  className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
+                    draftSubject.onCompleteAction === 'ask'
+                      ? 'bg-blue-950/50 border-blue-500 ring-2 ring-blue-500/30'
+                      : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
+                  }`}
+                >
+                  <div className="flex items-center justify-between">
+                    <span className="text-xs font-black text-white flex items-center gap-1.5">
+                      <Clock className="w-3.5 h-3.5 text-purple-400" /> Perguntar Depois
+                    </span>
+                    {draftSubject.onCompleteAction === 'ask' && (
+                      <Check className="w-3.5 h-3.5 text-blue-400 stroke-[3]" />
+                    )}
+                  </div>
+                  <p className="text-[10px] text-slate-400 leading-tight">
+                    O sistema pausará o bloco e perguntará a sua decisão quando a última aula for assistida.
+                  </p>
+                </button>
+              </div>
+
+              {/* Se escolher substituir por outra matéria, exibe o seletor */}
+              {draftSubject.onCompleteAction === 'replace' && (
+                <div className="bg-[#020617] p-3 rounded-lg border border-slate-800 mt-2">
+                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">
+                    Qual disciplina deve entrar nesta vaga quando concluir?
+                  </label>
+                  <select
+                    value={draftSubject.replacementSubjectId || ''}
+                    onChange={(e) => setDraftSubject(prev => ({ ...prev, replacementSubjectId: e.target.value }))}
+                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs font-bold text-white outline-none focus:border-blue-500 cursor-pointer"
+                  >
+                    <option value="">-- Selecione uma matéria substituta --</option>
+                    {Object.values(subjects || {})
+                      .filter(s => s.id !== draftSubject.id)
+                      .map(s => (
+                        <option key={s.id} value={s.id}>
+                          {s.name} ({s.topics?.reduce((acc, t) => acc + (t.total || 0), 0) || 0} aulas cadastradas)
+                        </option>
+                      ))}
+                  </select>
+                  {(!draftSubject.replacementSubjectId || !subjects[draftSubject.replacementSubjectId]) && (
+                    <p className="text-[10px] text-amber-400 mt-1.5 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3" /> Selecione uma disciplina acima para assumir a vaga automaticamente.
+                    </p>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Assuntos */}

@@ -368,11 +368,31 @@ export default function Ciclo() {
               } else {
                 const tempSim = { ...simulatedIncrements };
                 for (let i = 0; i < daySubjects.length; i++) {
-                  const subjectId = daySubjects[i];
-                  const subject = subjects[subjectId];
+                  const originalSubId = daySubjects[i];
+                  let subjectId = originalSubId;
+                  let subject = subjects[subjectId];
                   if (!subject) continue;
                   const isSlotCompleted = isToday && completedToday.includes(i);
                   if (isSlotCompleted) continue;
+                  // Transição inteligente se a matéria original já foi concluída
+                  const isOrigDone = (subject.topics || []).every(t => (t.completed || 0) >= (t.total || 0));
+                  if (isOrigDone) {
+                    const action = subject.onCompleteAction || "double_remaining";
+                    if (action === "replace" && subject.replacementSubjectId && subjects[subject.replacementSubjectId]) {
+                      const rep = subjects[subject.replacementSubjectId];
+                      if ((rep.topics || []).some(t => (t.completed || 0) < (t.total || 0))) {
+                        subjectId = subject.replacementSubjectId;
+                        subject = rep;
+                      }
+                    } else if (action === "double_remaining") {
+                      const fallbackId = daySubjects.find(sId => sId !== originalSubId && (subjects[sId]?.topics || []).some(t => (t.completed || 0) < (t.total || 0)))
+                        || Object.keys(subjects).find(sId => sId !== originalSubId && (subjects[sId]?.topics || []).some(t => (t.completed || 0) < (t.total || 0)));
+                      if (fallbackId && subjects[fallbackId]) {
+                        subjectId = fallbackId;
+                        subject = subjects[fallbackId];
+                      }
+                    }
+                  }
 
                   let tempIncrement = tempSim[subjectId] || 0;
 
@@ -469,9 +489,32 @@ export default function Ciclo() {
                   </div>
 
                   <div className="p-2 sm:p-4 flex flex-col gap-2 sm:gap-4 flex-1">
-                    {daySubjects.map((subjectId, slotIndex) => {
-                      const subject = subjects[subjectId];
+                    {daySubjects.map((originalSubId, slotIndex) => {
+                      let subjectId = originalSubId;
+                      let subject = subjects[subjectId];
                       if (!subject) return null;
+                      const isOriginalDone = (subject.topics || []).every(t => (t.completed || 0) >= (t.total || 0));
+                      let isDoubled = false;
+                      let isReplaced = false;
+                      if (isOriginalDone) {
+                        const action = subject.onCompleteAction || "double_remaining";
+                        if (action === "replace" && subject.replacementSubjectId && subjects[subject.replacementSubjectId]) {
+                          const rep = subjects[subject.replacementSubjectId];
+                          if ((rep.topics || []).some(t => (t.completed || 0) < (t.total || 0))) {
+                            subjectId = subject.replacementSubjectId;
+                            subject = rep;
+                            isReplaced = true;
+                          }
+                        } else if (action === "double_remaining") {
+                          const fallbackId = daySubjects.find(sId => sId !== originalSubId && (subjects[sId]?.topics || []).some(t => (t.completed || 0) < (t.total || 0)))
+                            || Object.keys(subjects).find(sId => sId !== originalSubId && (subjects[sId]?.topics || []).some(t => (t.completed || 0) < (t.total || 0)));
+                          if (fallbackId && subjects[fallbackId]) {
+                            subjectId = fallbackId;
+                            subject = subjects[fallbackId];
+                            isDoubled = true;
+                          }
+                        }
+                      }
 
                       if (isPast) {
                         const pastMinutes = studyHistory?.[dateInfo.fullDateStr] || 0;
@@ -479,8 +522,14 @@ export default function Ciclo() {
                         return (
                           <div key={slotIndex} className="bg-white/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden flex flex-col shadow-xs opacity-75">
                             <div className={`px-2.5 py-1.5 sm:px-3 sm:py-2 flex justify-between items-center border-b border-black/5 ${subject.color}`}>
-                              <span className="font-black text-[10px] sm:text-xs uppercase tracking-wider truncate max-w-[70%]" title={subject.name}>{subject.name}</span>
-                              <span className="text-[9px] font-black bg-white/30 dark:bg-slate-900/50 dark:text-white px-1.5 py-0.5 rounded backdrop-blur-sm shrink-0">{subject.block || 'B?'}</span>
+                              <span className="font-black text-[10px] sm:text-xs uppercase tracking-wider truncate max-w-[70%]" title={subject.name}>
+                                {subject.name}
+                                {isDoubled && <span className="ml-1 text-[8px] font-bold opacity-80">(2º BLOCO)</span>}
+                                {isReplaced && <span className="ml-1 text-[8px] font-bold opacity-80">(SUBST.)</span>}
+                              </span>
+                              <span className="text-[9px] font-black bg-white/30 dark:bg-slate-900/50 dark:text-white px-1.5 py-0.5 rounded backdrop-blur-sm shrink-0">
+                                {isDoubled ? '⚡ DOBRADA' : isReplaced ? '🔄 SUBST.' : (subject.block || 'B?')}
+                              </span>
                             </div>
                             <div className="p-4 flex flex-col items-center justify-center text-center gap-1.5 flex-1 min-h-[140px]">
                               {wasStudied ? (
