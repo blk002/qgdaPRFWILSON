@@ -23,7 +23,8 @@ import {
   Target,
   Sun,
   ChevronDown,
-  ChevronUp
+  ChevronUp,
+  History
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { toast } from 'sonner';
@@ -62,14 +63,18 @@ export default function Calendario() {
     scheduleExtensions = [],
     addScheduleExtension,
     removeScheduleExtension,
+    futureScheduleRules = [],
+    addFutureScheduleRule,
+    removeFutureScheduleRule,
     setScheduleFromDate,
     updateSubject
   } = useStore();
 
   // Estados de Interface
   const [showWeeklySchedule, setShowWeeklySchedule] = useState(false);
-  const [managingDay, setManagingDay] = useState(null); // { dateObj, dateKey, diffDays, daySubjects, vacancies }
+  const [managingDay, setManagingDay] = useState(null); // { dateObj, dateKey, diffDays, daySubjects, vacancies, isCustomized, hasFutureRule }
   const [daySlots, setDaySlots] = useState([]);
+  const [saveMode, setSaveMode] = useState('future'); // 'single' | 'future' | 'all'
   const [isAddingNewBlock, setIsAddingNewBlock] = useState(false);
   const [selectedNewSubjectId, setSelectedNewSubjectId] = useState('');
   const [newBlockScope, setNewBlockScope] = useState('until_finished'); // 'until_finished' | 'single_day'
@@ -101,7 +106,7 @@ export default function Calendario() {
 
   // Simulação dos 365 dias para renderização do calendário
   const futureSchedule = {};
-  const dayVacancies = {}; // mapeia dateKey -> lista de matérias que encerraram e deixaram vaga aberta
+  const dayVacancies = {}; // mapeia dateKey -> lista de vagas abertas
   const remainingLessonsQueue = {};
 
   Object.values(subjects || {}).forEach(sub => {
@@ -125,7 +130,7 @@ export default function Calendario() {
   });
 
   for (let i = 0; i < 365; i++) {
-    if (cycle.length === 0 && (!calendarOverrides || Object.keys(calendarOverrides).length === 0)) break;
+    if (cycle.length === 0 && (!calendarOverrides || Object.keys(calendarOverrides).length === 0) && (!futureScheduleRules || futureScheduleRules.length === 0)) break;
     
     const targetSimDate = new Date(todayDateObj);
     targetSimDate.setDate(targetSimDate.getDate() + i);
@@ -133,12 +138,24 @@ export default function Calendario() {
 
     let daySubjects = [];
     let isExplicitOverride = false;
+    
     if (calendarOverrides && calendarOverrides[simDateKey]) {
       daySubjects = [...calendarOverrides[simDateKey]];
       isExplicitOverride = true;
-    } else if (cycle.length > 0) {
-      const cycleIndex = (currentDayIndex + i) % cycle.length;
-      daySubjects = [...(cycle[cycleIndex] || [])];
+    } else {
+      const cycleIndex = (currentDayIndex + i) % Math.max(1, cycle.length);
+      const targetDayOfWeek = targetSimDate.getDay();
+      
+      // Procura regras de padrão para o futuro que comecem antes ou nesta data
+      const matchingRules = (futureScheduleRules || [])
+        .filter(r => r.fromDate <= simDateKey && (r.dayOfWeek === targetDayOfWeek || r.cycleIndex === cycleIndex))
+        .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
+
+      if (matchingRules.length > 0) {
+        daySubjects = [...matchingRules[0].daySlots];
+      } else if (cycle.length > 0) {
+        daySubjects = [...(cycle[cycleIndex] || [])];
+      }
     }
 
     // Extensões ativas (ex: 3ª matéria adicionada até zerar)
@@ -186,7 +203,7 @@ export default function Calendario() {
           }
         }
 
-        // Se a matéria original terminou e não foi um override manual, registrar vaga pendente
+        // Registrar vaga aberta caso a original tenha zerado
         if (!isExplicitOverride && originalSub) {
           vacanciesThisDay.push({
             slotIndex: slotIdx,
@@ -248,23 +265,37 @@ export default function Calendario() {
   const handleOpenDayManager = (cellDateObj, dateKey) => {
     const diff = Math.round((cellDateObj.getTime() - todayDateObj.getTime()) / (1000 * 60 * 60 * 24));
     let currentDaySubs = [];
+    
     if (calendarOverrides && calendarOverrides[dateKey]) {
       currentDaySubs = [...calendarOverrides[dateKey]];
     } else if (diff >= 0 && futureSchedule[diff]) {
       currentDaySubs = futureSchedule[diff].map(item => item.id);
-    } else if (cycle.length > 0) {
-      const cIdx = ((currentDayIndex + Math.max(0, diff)) % cycle.length);
-      currentDaySubs = [...(cycle[cIdx] || [])];
+    } else {
+      const cIdx = ((currentDayIndex + Math.max(0, diff)) % Math.max(1, cycle.length));
+      const targetDayOfWeek = cellDateObj.getDay();
+      const matchingRules = (futureScheduleRules || [])
+        .filter(r => r.fromDate <= dateKey && (r.dayOfWeek === targetDayOfWeek || r.cycleIndex === cIdx))
+        .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
+
+      if (matchingRules.length > 0) {
+        currentDaySubs = [...matchingRules[0].daySlots];
+      } else if (cycle.length > 0) {
+        currentDaySubs = [...(cycle[cIdx] || [])];
+      }
     }
+
+    const hasFutureRule = futureScheduleRules?.some(r => r.fromDate === dateKey && r.dayOfWeek === cellDateObj.getDay());
 
     setManagingDay({
       dateObj: cellDateObj,
       dateKey,
       diffDays: diff,
       isCustomized: Boolean(calendarOverrides && calendarOverrides[dateKey]),
+      hasFutureRule,
       vacancies: dayVacancies[dateKey] || []
     });
     setDaySlots(currentDaySubs);
+    setSaveMode('future'); // padrão recomendado: para o futuro
     setIsAddingNewBlock(false);
     setSelectedNewSubjectId('');
     setNewBlockScope('until_finished');
@@ -272,10 +303,13 @@ export default function Calendario() {
 
   const handleSaveDayManager = () => {
     if (!managingDay) return;
-    const { dateKey } = managingDay;
+    const { dateKey, dateObj, diffDays } = managingDay;
+    const dayOfWeek = dateObj.getDay();
+    const cycleIndex = (currentDayIndex + Math.max(0, diffDays)) % Math.max(1, cycle.length);
 
     let updatedSlots = [...daySlots];
 
+    // Se estiver adicionando novo bloco
     if (isAddingNewBlock && selectedNewSubjectId) {
       if (newBlockScope === 'until_finished') {
         if (addScheduleExtension) {
@@ -285,62 +319,85 @@ export default function Calendario() {
             mode: 'until_finished'
           });
         }
-        toast.success(`Matéria agendada a partir de ${dateKey} até zerar todas as aulas!`);
+        toast.success(`3ª Matéria (${subjects[selectedNewSubjectId]?.name || 'Disciplina'}) estendida a partir de ${dateKey} até zerar!`);
       } else {
         updatedSlots.push(selectedNewSubjectId);
       }
     }
 
-    if (setDayOverride) {
-      setDayOverride(dateKey, updatedSlots);
-      toast.success(`Dia ${dateKey} personalizado com sucesso!`);
-    }
-    setManagingDay(null);
-  };
-
-  const handleApplyPermanentFromDate = () => {
-    if (!managingDay) return;
-    const { dateKey } = managingDay;
-    const dayOfWeek = managingDay.dateObj.getDay();
-
-    if (setCycle) {
-      setCycle(prev => {
-        const next = [...prev];
-        if (next[dayOfWeek] !== undefined) {
-          next[dayOfWeek] = [...daySlots];
-        }
-        return next;
-      });
+    if (saveMode === 'single') {
+      // 1. Salvar APENAS neste dia
+      if (setDayOverride) {
+        setDayOverride(dateKey, updatedSlots);
+        toast.success(`Alterações salvas exclusivamente para o dia ${dateKey}!`);
+      }
+    } else if (saveMode === 'future') {
+      // 2. Tornar PADRÃO PARA O FUTURO (a partir desta data)
+      // Preserva todos os dias anteriores intactos!
+      if (addFutureScheduleRule) {
+        addFutureScheduleRule({
+          fromDate: dateKey,
+          dayOfWeek,
+          cycleIndex,
+          daySlots: updatedSlots
+        });
+      }
       if (removeDayOverride) removeDayOverride(dateKey);
-      toast.success(`Grade padrão para este dia da semana atualizada com sucesso!`);
+      toast.success(`Padrão definido para o futuro a partir de ${dateKey}! Todos os dias anteriores foram preservados.`);
+    } else if (saveMode === 'all') {
+      // 3. Tornar padrão geral (passado e futuro)
+      if (setCycle) {
+        setCycle(prev => {
+          const next = [...prev];
+          if (next[dayOfWeek] !== undefined) {
+            next[dayOfWeek] = [...updatedSlots];
+          }
+          return next;
+        });
+      }
+      if (removeDayOverride) removeDayOverride(dateKey);
+      toast.success(`Grade semanal base atualizada para toda a rotina!`);
     }
+
     setManagingDay(null);
   };
 
   const handleResetDayToDefault = () => {
     if (!managingDay) return;
-    const { dateKey } = managingDay;
-    if (removeDayOverride) {
-      removeDayOverride(dateKey);
-      toast.success(`Personalização do dia ${dateKey} removida. Grade padrão restaurada!`);
+    const { dateKey, dateObj } = managingDay;
+    const dayOfWeek = dateObj.getDay();
+
+    if (removeDayOverride) removeDayOverride(dateKey);
+    
+    // Remove regras de futuro que começavam exatamente nesta data
+    const ruleToRemove = futureScheduleRules?.find(r => r.fromDate === dateKey && r.dayOfWeek === dayOfWeek);
+    if (ruleToRemove && removeFutureScheduleRule) {
+      removeFutureScheduleRule(ruleToRemove.id);
     }
+
+    toast.success(`Customização do dia ${dateKey} removida. Padrão anterior restaurado!`);
     setManagingDay(null);
   };
 
-  const handleQuickFillVacancy = (vacancy, chosenSubId, mode = 'until_finished') => {
+  const handleQuickFillVacancy = (vacancy, chosenSubId) => {
     if (!managingDay) return;
-    const { dateKey } = managingDay;
+    const { dateKey, dateObj, diffDays } = managingDay;
+    const dayOfWeek = dateObj.getDay();
+    const cycleIndex = (currentDayIndex + Math.max(0, diffDays)) % Math.max(1, cycle.length);
 
-    if (mode === 'until_finished') {
-      if (setScheduleFromDate) {
-        setScheduleFromDate(dateKey, vacancy.originalSubId, chosenSubId);
-      }
-      toast.success(`Vaga preenchida por ${subjects[chosenSubId]?.name || 'nova matéria'} a partir deste dia até zerar!`);
-    } else {
-      const nextSlots = daySlots.map((sId, idx) => idx === vacancy.slotIndex ? chosenSubId : sId);
-      if (setDayOverride) setDayOverride(dateKey, nextSlots);
-      toast.success(`Vaga preenchida para este dia!`);
+    const updatedSlots = daySlots.map((sId, idx) => idx === vacancy.slotIndex ? chosenSubId : sId);
+
+    // Cria regra para o futuro a partir de dateKey
+    if (addFutureScheduleRule) {
+      addFutureScheduleRule({
+        fromDate: dateKey,
+        dayOfWeek,
+        cycleIndex,
+        daySlots: updatedSlots
+      });
     }
+
+    toast.success(`Vaga preenchida por ${subjects[chosenSubId]?.name || 'nova matéria'} a partir de ${dateKey} para o futuro! Dias anteriores preservados.`);
     setManagingDay(null);
   };
 
@@ -589,6 +646,7 @@ export default function Calendario() {
                 const cellDateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isOverridden = Boolean(calendarOverrides && calendarOverrides[cellDateKey]);
                 const hasExtensions = scheduleExtensions?.some(e => e.active !== false && cellDateKey >= e.fromDate);
+                const hasFutureRule = futureScheduleRules?.some(r => r.fromDate <= cellDateKey && r.dayOfWeek === cellDateObj.getDay());
                 const vacancies = dayVacancies[cellDateKey] || [];
 
                 return (
@@ -596,13 +654,16 @@ export default function Calendario() {
                     key={day} 
                     onClick={() => handleOpenDayManager(cellDateObj, cellDateKey)}
                     className={`min-h-[5.5rem] md:min-h-[7.5rem] p-1 sm:p-1.5 rounded-md flex flex-col transition-all cursor-pointer group hover:ring-2 hover:ring-blue-400 hover:shadow-md ${bgClass}`}
-                    title="Clique para gerenciar matérias, adicionar bloco ou preencher vagas deste dia"
+                    title="Clique para gerenciar matérias, adicionar bloco ou definir padrão para o futuro"
                   >
                     <div className="flex justify-between items-start mb-1 gap-0.5">
                       <div className="flex items-center gap-1">
                         <span className="font-bold text-xs sm:text-sm px-1 group-hover:text-blue-500 transition-colors">{day}</span>
                         {isOverridden && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Dia com personalização manual" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Dia com personalização manual avulsa" />
+                        )}
+                        {hasFutureRule && !isOverridden && (
+                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Dia sob regra de padrão para o futuro" />
                         )}
                         {hasExtensions && (
                           <span className="text-[8px] font-black text-emerald-400 bg-emerald-950/80 px-1 rounded border border-emerald-800" title="3ª Matéria Ativa (até zerar)">
@@ -732,20 +793,48 @@ export default function Calendario() {
           })}
         </div>
 
-        {/* Seção de Extensões / Personalizações Ativas */}
-        {((scheduleExtensions && scheduleExtensions.length > 0) || (calendarOverrides && Object.keys(calendarOverrides).length > 0)) && (
+        {/* Seção de Regras para o Futuro e Extensões Ativas */}
+        {((futureScheduleRules && futureScheduleRules.length > 0) || (scheduleExtensions && scheduleExtensions.length > 0)) && (
           <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800">
             <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Ajustes e Extensões Ativas
+              <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Padrões Futuros & Extensões
             </h4>
             <div className="flex flex-col gap-2">
+              {/* Regras de Padrão para o Futuro */}
+              {futureScheduleRules?.map(rule => {
+                const dayName = diasSemanaFull[rule.dayOfWeek] || `Dia ${rule.dayOfWeek}`;
+                return (
+                  <div key={rule.id} className="bg-emerald-50 dark:bg-emerald-950/40 p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 border border-emerald-200 dark:border-emerald-800">
+                    <div className="flex flex-col">
+                      <span className="font-bold text-emerald-900 dark:text-emerald-200">
+                        Padrão: {dayName}
+                      </span>
+                      <span className="text-[10px] text-emerald-700 dark:text-emerald-400">
+                        A partir de {rule.fromDate} ({rule.daySlots.length} blocos)
+                      </span>
+                    </div>
+                    <button
+                      onClick={() => {
+                        if (removeFutureScheduleRule) removeFutureScheduleRule(rule.id);
+                        toast.success('Padrão para o futuro removido! Grade base restaurada.');
+                      }}
+                      className="p-1.5 text-emerald-700 hover:text-red-500 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
+                      title="Excluir este padrão futuro e restaurar o original"
+                    >
+                      <Trash2 className="w-3.5 h-3.5" />
+                    </button>
+                  </div>
+                );
+              })}
+
+              {/* 3ª Matéria Estendida */}
               {scheduleExtensions?.map(ext => {
                 const sub = subjects[ext.subjectId];
                 return (
-                  <div key={ext.id} className="bg-slate-100 dark:bg-slate-800 p-2 rounded-lg text-xs flex items-center justify-between gap-2 border border-slate-200 dark:border-slate-700">
+                  <div key={ext.id} className="bg-slate-100 dark:bg-slate-800 p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 border border-slate-200 dark:border-slate-700">
                     <div className="flex flex-col">
                       <span className="font-bold text-slate-800 dark:text-slate-200">
-                        + {sub?.name || 'Disciplina'}
+                        + {sub?.name || 'Disciplina'} (3ª Matéria)
                       </span>
                       <span className="text-[10px] text-slate-500 dark:text-slate-400">
                         A partir de {ext.fromDate} (até zerar aulas)
@@ -753,7 +842,7 @@ export default function Calendario() {
                     </div>
                     <button
                       onClick={() => removeScheduleExtension && removeScheduleExtension(ext.id)}
-                      className="p-1 text-slate-400 hover:text-red-500 rounded"
+                      className="p-1.5 text-slate-400 hover:text-red-500 rounded"
                       title="Remover esta extensão"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
@@ -781,11 +870,11 @@ export default function Calendario() {
               <div className="flex items-center gap-2 mb-1">
                 <CalendarIcon className="w-5 h-5 text-blue-600" />
                 <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">
-                  Gerenciar Dia: {managingDay.dateKey}
+                  Gerenciar Dia: {managingDay.dateKey} ({diasSemanaFull[managingDay.dateObj.getDay()]})
                 </h3>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400">
-                Personalize as matérias e blocos deste dia. Adicione um 3º bloco, substitua disciplinas ou preencha vagas em aberto.
+                Ajuste os blocos deste dia e decida se a alteração se aplica apenas a esta data ou se torna o novo padrão para o futuro.
               </p>
             </div>
 
@@ -799,18 +888,18 @@ export default function Calendario() {
                 {managingDay.vacancies.map((vac, vIdx) => (
                   <div key={vIdx} className="text-xs text-slate-600 dark:text-slate-300 flex flex-col gap-2">
                     <p>
-                      <strong>{vac.originalSubName}</strong> encerrou seu conteúdo nesta data. Como você gostaria de preencher esta vaga?
+                      <strong>{vac.originalSubName}</strong> encerrou seu conteúdo nesta data. Como deseja preencher esta vaga?
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <button
                         type="button"
                         onClick={() => {
                           const otherId = daySlots.find(sId => sId !== vac.originalSubId) || Object.keys(subjects)[0];
-                          handleQuickFillVacancy(vac, otherId, 'until_finished');
+                          handleQuickFillVacancy(vac, otherId);
                         }}
                         className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs shadow-xs"
                       >
-                        ⚡ Dobrar Matéria Restante (Até Zerar)
+                        ⚡ Dobrar Matéria Restante (Para o Futuro a partir de {managingDay.dateKey})
                       </button>
                     </div>
                   </div>
@@ -922,33 +1011,71 @@ export default function Calendario() {
               )}
             </div>
 
+            {/* SELEÇÃO DO ESCOPO DE SALVAMENTO */}
+            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
+              <label className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                <Target className="w-3.5 h-3.5 text-blue-600" /> Onde aplicar estas alterações?
+              </label>
+
+              <div className="grid grid-cols-1 gap-2">
+                <label className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${saveMode === 'future' ? 'bg-emerald-50 border-emerald-500 dark:bg-emerald-950/40 dark:border-emerald-600' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'}`}>
+                  <input 
+                    type="radio" 
+                    name="saveModeRadio" 
+                    value="future" 
+                    checked={saveMode === 'future'} 
+                    onChange={() => setSaveMode('future')}
+                    className="mt-1"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1">
+                      🚀 Tornar Padrão para o Futuro (a partir de {managingDay.dateKey})
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Aplica esta grade para este dia da semana ({diasSemanaFull[managingDay.dateObj.getDay()]}) daqui em diante. <strong>Todos os dias anteriores continuam intactos!</strong>
+                    </span>
+                  </div>
+                </label>
+
+                <label className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${saveMode === 'single' ? 'bg-blue-50 border-blue-500 dark:bg-blue-950/40 dark:border-blue-600' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'}`}>
+                  <input 
+                    type="radio" 
+                    name="saveModeRadio" 
+                    value="single" 
+                    checked={saveMode === 'single'} 
+                    onChange={() => setSaveMode('single')}
+                    className="mt-1"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                      💾 Apenas neste dia ({managingDay.dateKey})
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Modifica exclusivamente esta data. As semanas seguintes e anteriores não serão alteradas.
+                    </span>
+                  </div>
+                </label>
+              </div>
+            </div>
+
             {/* Botões de Ação do Modal */}
             <div className="flex flex-col gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={handleSaveDayManager}
-                  className="flex-1 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
-                >
-                  <CheckCircle className="w-4 h-4" /> Salvar Alterações para este Dia
-                </button>
-                <button
-                  type="button"
-                  onClick={handleApplyPermanentFromDate}
-                  className="py-2.5 px-3 bg-emerald-600 hover:bg-emerald-700 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5"
-                  title="Atualizar este dia da semana como o novo padrão da grade base"
-                >
-                  <CalendarIcon className="w-4 h-4" /> Tornar Padrão da Grade
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={handleSaveDayManager}
+                className={`w-full py-2.5 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 ${saveMode === 'future' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}
+              >
+                <CheckCircle className="w-4 h-4" /> 
+                {saveMode === 'future' ? `Confirmar e Tornar Padrão de ${managingDay.dateKey} em Diante` : 'Salvar Alterações para este Dia'}
+              </button>
 
-              {managingDay.isCustomized && (
+              {(managingDay.isCustomized || managingDay.hasFutureRule) && (
                 <button
                   type="button"
                   onClick={handleResetDayToDefault}
                   className="w-full py-2 text-slate-500 hover:text-red-500 text-xs font-bold transition-colors flex items-center justify-center gap-1"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" /> Restaurar Grade Padrão do Cronograma
+                  <RotateCcw className="w-3.5 h-3.5" /> Restaurar Padrão Anterior (Remover Customização)
                 </button>
               )}
             </div>

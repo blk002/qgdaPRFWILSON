@@ -29,7 +29,8 @@ export default function Ciclo() {
     setCurrentDayIndex,
     studyHistory,
     calendarOverrides,
-    scheduleExtensions
+    scheduleExtensions,
+    futureScheduleRules
   } = useStore();
 
   const pendingReviews = getPendingReviews().slice(0, 4);
@@ -360,6 +361,17 @@ export default function Ciclo() {
 
               if (calendarOverrides && calendarOverrides[dateInfo.fullDateStr]) {
                 daySubjects = [...calendarOverrides[dateInfo.fullDateStr]];
+              } else {
+                const parts = String(dateInfo.fullDateStr).split('-').map(Number);
+                const dayDateObj = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date();
+                const dayOfWeek = dayDateObj.getDay();
+                const matchingRules = (futureScheduleRules || [])
+                  .filter(r => r.fromDate <= dateInfo.fullDateStr && (r.dayOfWeek === dayOfWeek || r.cycleIndex === dayIndex))
+                  .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
+
+                if (matchingRules.length > 0) {
+                  daySubjects = [...matchingRules[0].daySlots];
+                }
               }
 
               if (scheduleExtensions && scheduleExtensions.length > 0) {

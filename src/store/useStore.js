@@ -165,6 +165,7 @@ export const getCleanInitialState = () => ({
   cycleDayNames: [],
   calendarOverrides: {},
   scheduleExtensions: [],
+  futureScheduleRules: [],
   petData: {
     name: 'Recruta K9',
     hunger: 85,
@@ -215,7 +216,7 @@ export const PERSISTED_KEYS = [
   'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate', 'pushEnabled', 'pushTime',
   'enableSounds', 'activeBoosts', 'dailyReviewStats', 'syntaxLevel',
   'activeTheme', 'unlockedThemes', 'dailyGoalMinutes', 'subjectGoals', 'subjectTimeGoal', 'pushSettings',
-  'cycleScheduleType', 'cycleWeekStart', 'cycleDayNames', 'calendarOverrides', 'scheduleExtensions', 'petData', 'caveiraQuestions'
+  'cycleScheduleType', 'cycleWeekStart', 'cycleDayNames', 'calendarOverrides', 'scheduleExtensions', 'futureScheduleRules', 'petData', 'caveiraQuestions'
 ];
 
 export const useStore = create(
@@ -528,6 +529,21 @@ export const useStore = create(
             active: true
           }
         ]
+      })),
+      addFutureScheduleRule: ({ fromDate, dayOfWeek, cycleIndex, daySlots }) => set(state => ({
+        futureScheduleRules: [
+          ...(state.futureScheduleRules || []).filter(r => !(r.fromDate === fromDate && (r.dayOfWeek === dayOfWeek || r.cycleIndex === cycleIndex))),
+          {
+            id: 'rule_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+            fromDate,
+            dayOfWeek,
+            cycleIndex,
+            daySlots: [...daySlots]
+          }
+        ]
+      })),
+      removeFutureScheduleRule: (ruleId) => set(state => ({
+        futureScheduleRules: (state.futureScheduleRules || []).filter(r => r.id !== ruleId)
       })),
       removeScheduleExtension: (extId) => set(state => ({
         scheduleExtensions: (state.scheduleExtensions || []).filter(e => e.id !== extId)
@@ -2254,7 +2270,7 @@ export const useStore = create(
       },
 
       getSubjectEstimates: () => {
-        const { subjects, cycle, currentDayIndex, completedToday, subjectTimeGoal, calendarOverrides, scheduleExtensions } = get();
+        const { subjects, cycle, currentDayIndex, completedToday, subjectTimeGoal, calendarOverrides, scheduleExtensions, futureScheduleRules } = get();
         const estimates = [];
         const remainingClasses = {};
         const remainingMinutesDict = {};
@@ -2338,7 +2354,15 @@ export const useStore = create(
               daySubjects = [...calendarOverrides[simDateKey]];
             } else {
               const cycleIndex = (currentDayIndex + dayOffset) % cycle.length;
-              daySubjects = [...(cycle[cycleIndex] || [])];
+              const matchingRules = (futureScheduleRules || [])
+                .filter(r => r.fromDate <= simDateKey && (r.dayOfWeek === targetSimDate.getDay() || r.cycleIndex === cycleIndex))
+                .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
+
+              if (matchingRules.length > 0) {
+                daySubjects = [...matchingRules[0].daySlots];
+              } else {
+                daySubjects = [...(cycle[cycleIndex] || [])];
+              }
             }
 
             if (scheduleExtensions && scheduleExtensions.length > 0) {
