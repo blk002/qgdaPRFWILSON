@@ -43,7 +43,7 @@ if ('serviceWorker' in navigator) {
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'qg-prf-cache-v54') {
+          if (name !== 'qg-prf-cache-v84') {
             caches.delete(name);
           }
         });

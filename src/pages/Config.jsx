@@ -1052,7 +1052,7 @@ export default function Config({
       {/* Modal de Edição de Disciplina (Estilo Compacto Centralizado) */}
       {editingSubjectId && draftSubject && createPortal((
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[120] p-3 sm:p-6 overflow-y-auto fade-in">
-          <div className="bg-[#0f172a] rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-800 relative overflow-hidden flex flex-col max-h-[92vh] my-auto">
+          <div className="bg-[#0f172a] rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-800 relative overflow-hidden flex flex-col h-[90vh] max-h-[90vh] my-auto">
             
             {/* Barra de Progresso Topo */}
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-teal-400 to-blue-500 opacity-80 z-10"></div>
@@ -1075,14 +1075,14 @@ export default function Config({
                   setEditingSubjectId(null);
                   setDraftSubject(null);
                 }}
-                className="text-slate-400 hover:text-white transition-colors p-1"
+                className="text-slate-400 hover:text-white transition-colors p-1 cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
             {/* Corpo com rolagem independente */}
-            <div ref={modalBodyRef} className="flex-1 overflow-y-auto custom-scrollbar p-6 space-y-6">
+            <div ref={modalBodyRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-6 space-y-6">
               {/* Dados Básicos */}
               <div className="grid grid-cols-2 gap-4">
               <div>

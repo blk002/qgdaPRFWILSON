@@ -128,11 +128,11 @@ Retorne SOMENTE um objeto JSON válido (sem blocos de código markdown, sem text
       generationConfig: { responseMimeType: 'application/json' }
     };
 
-    // Tentar modelos com fallback automático
+    // Tentar modelos com fallback automático (modelos rápidos e modernos)
     const models = [
-      'gemini-2.5-flash',
       'gemini-2.0-flash',
       'gemini-1.5-flash',
+      'gemini-1.5-flash-8b',
       'gemini-3.1-flash-lite'
     ];
 
@@ -201,6 +201,24 @@ Retorne SOMENTE um objeto JSON válido (sem blocos de código markdown, sem text
           .replace(/[.\-–—:]+$/, '')
           .trim()
           .toUpperCase();
+      }
+
+      // Dedução de backup: se não encontrou o cabeçalho, deduz pelo padrão das aulas (ex: "ORTOGRAFIA E SEMÂNTICA - PARTE 01")
+      if (!extractedTopic && rawLessons.length > 0) {
+        const prefixes = rawLessons
+          .map(l => {
+            const m = String(l?.name || '').match(/^(.*?)\s*[-–—]\s*(?:PARTE|AULA|BLOCO|\d)/i);
+            return m ? m[1].trim() : '';
+          })
+          .filter(Boolean);
+        if (prefixes.length > 0) {
+          const counts = {};
+          for (const p of prefixes) { counts[p] = (counts[p] || 0) + 1; }
+          const top = Object.entries(counts).sort((a, b) => b[1] - a[1])[0];
+          if (top && top[1] >= 2) {
+            extractedTopic = top[0].toUpperCase().trim();
+          }
+        }
       }
 
       const lessons = rawLessons
