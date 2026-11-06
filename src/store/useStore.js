@@ -2339,7 +2339,8 @@ export const useStore = create(
         const endDaysOffset = {};
         let dayOffset = 0;
         let allDone = false;
-        const maxSimulationDays = 1500; 
+        const maxSimulationDays = 1500;
+        let consecutiveNoProgressDays = 0; 
 
         const subjectsInCycle = new Set(cycle.flat());
 
@@ -2375,6 +2376,7 @@ export const useStore = create(
               });
             }
             
+            let progressMadeToday = false;
             daySubjects.forEach((subId, slotIdx) => {
               if (dayOffset === 0 && completedToday.includes(slotIdx)) return; 
               
@@ -2417,6 +2419,7 @@ export const useStore = create(
                     slotCount++;
                     slotAccelMins += nextLesson.accelMins;
                     q.shift();
+                    progressMadeToday = true;
                     if (goalMin === 0) break;
                     continue;
                   }
@@ -2430,6 +2433,7 @@ export const useStore = create(
                     slotCount++;
                     slotAccelMins += nextLesson.accelMins;
                     q.shift();
+                    progressMadeToday = true;
                   } else {
                     break;
                   }
@@ -2441,10 +2445,18 @@ export const useStore = create(
               }
             });
 
-            allDone = Object.keys(remainingLessonsQueue).every(subId => 
-              remainingLessonsQueue[subId].length === 0 || (!subjectsInCycle.has(subId) && !Object.values(subjects).some(s => s.replacementSubjectId === subId))
-            );
-            if (!allDone) dayOffset++;
+            if (progressMadeToday) {
+              consecutiveNoProgressDays = 0;
+            } else {
+              consecutiveNoProgressDays++;
+            }
+
+            const anyRemainingInQueues = Object.keys(remainingLessonsQueue).some(subId => remainingLessonsQueue[subId].length > 0);
+            if (!anyRemainingInQueues || consecutiveNoProgressDays >= 60) {
+              allDone = true;
+            } else {
+              dayOffset++;
+            }
           }
         }
 

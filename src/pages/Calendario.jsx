@@ -21,10 +21,7 @@ import {
   Info, 
   Zap, 
   Target,
-  Sun,
-  ChevronDown,
-  ChevronUp,
-  History
+  Sun
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { toast } from 'sonner';
@@ -46,12 +43,7 @@ export default function Calendario() {
     cycle = [], 
     setCycle,
     cycleScheduleType = 'weekly',
-    setCycleScheduleType,
-    cycleWeekStart = 'sunday',
-    setCycleWeekStart,
-    fillFullWeekCycle,
     currentDayIndex = 0, 
-    setCurrentDayIndex,
     completedToday = [], 
     getEstimatedCompletionDate, 
     getSubjectEstimates,
@@ -71,7 +63,6 @@ export default function Calendario() {
   } = useStore();
 
   // Estados de Interface
-  const [showWeeklySchedule, setShowWeeklySchedule] = useState(false);
   const [managingDay, setManagingDay] = useState(null); // { dateObj, dateKey, diffDays, daySubjects, vacancies, isCustomized, hasFutureRule }
   const [daySlots, setDaySlots] = useState([]);
   const [saveMode, setSaveMode] = useState('future'); // 'single' | 'future' | 'all'
@@ -95,6 +86,7 @@ export default function Calendario() {
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayIndex = new Date(year, month, 1).getDay();
   const mesesNomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const mesesNomesShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const diasSemanaFull = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
   
@@ -104,9 +96,10 @@ export default function Calendario() {
   const today = new Date();
   const todayDateObj = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-  // Simulação dos 365 dias para renderização do calendário
+  // Simulação dos 365 dias para renderização do calendário e sincronização exata de datas
   const futureSchedule = {};
   const dayVacancies = {}; // mapeia dateKey -> lista de vagas abertas
+  const calCompletionDates = {}; // mapeia subjectId -> { dayOffset, dateObj, dateStr }
   const remainingLessonsQueue = {};
 
   Object.values(subjects || {}).forEach(sub => {
@@ -252,6 +245,16 @@ export default function Calendario() {
           count: consumed,
           isTransitioned: wasTransitioned 
         });
+
+        // Grava a data exata em que a matéria encerra no grid
+        if (isLast && !calCompletionDates[effectiveSubId]) {
+          const dStr = `${String(targetSimDate.getDate()).padStart(2, '0')}/${mesesNomesShort[targetSimDate.getMonth()]}/${targetSimDate.getFullYear()}`;
+          calCompletionDates[effectiveSubId] = {
+            dayOffset: i,
+            dateObj: new Date(targetSimDate),
+            dateStr: dStr
+          };
+        }
       }
     });
 
@@ -344,19 +347,6 @@ export default function Calendario() {
       }
       if (removeDayOverride) removeDayOverride(dateKey);
       toast.success(`Padrão definido para o futuro a partir de ${dateKey}! Todos os dias anteriores foram preservados.`);
-    } else if (saveMode === 'all') {
-      // 3. Tornar padrão geral (passado e futuro)
-      if (setCycle) {
-        setCycle(prev => {
-          const next = [...prev];
-          if (next[dayOfWeek] !== undefined) {
-            next[dayOfWeek] = [...updatedSlots];
-          }
-          return next;
-        });
-      }
-      if (removeDayOverride) removeDayOverride(dateKey);
-      toast.success(`Grade semanal base atualizada para toda a rotina!`);
     }
 
     setManagingDay(null);
@@ -448,163 +438,6 @@ export default function Calendario() {
               </span>
             )}
           </div>
-        </div>
-
-        {/* ⚙️ SEÇÃO CENTRALIZADA: CONFIGURAÇÃO DO CRONOGRAMA BASE */}
-        <div className="bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl mb-6 p-4 transition-all">
-          <div className="flex items-center justify-between cursor-pointer" onClick={() => setShowWeeklySchedule(!showWeeklySchedule)}>
-            <div className="flex items-center gap-2.5">
-              <div className="p-2 bg-blue-100 dark:bg-blue-900/50 text-blue-600 dark:text-blue-300 rounded-lg">
-                <Settings className="w-4 h-4" />
-              </div>
-              <div>
-                <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2">
-                  Configuração do Meu Cronograma (Grade Semanal Base)
-                  <span className="text-[10px] font-bold bg-blue-100 dark:bg-blue-900/60 text-blue-700 dark:text-blue-300 px-2 py-0.5 rounded-full">
-                    {cycle.length} dias configurados
-                  </span>
-                </h3>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Defina a quantidade de blocos e matérias em cada dia da semana. O calendário distribui e recalcula tudo automaticamente.
-                </p>
-              </div>
-            </div>
-            <button 
-              type="button" 
-              className="p-1.5 text-slate-500 hover:text-slate-800 dark:hover:text-white rounded-lg hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
-            >
-              {showWeeklySchedule ? <ChevronUp className="w-5 h-5" /> : <ChevronDown className="w-5 h-5" />}
-            </button>
-          </div>
-
-          {showWeeklySchedule && (
-            <div className="mt-4 pt-4 border-t border-slate-200 dark:border-slate-800">
-              <div className="flex flex-wrap items-center justify-between gap-3 mb-4">
-                <div className="flex items-center gap-2">
-                  <div className="bg-white dark:bg-slate-900 p-1 rounded-xl flex items-center gap-1 border border-slate-200 dark:border-slate-800 text-xs">
-                    <button
-                      type="button"
-                      onClick={() => {
-                        if (setCycleScheduleType) setCycleScheduleType('weekly');
-                        if (cycle.length < 7 && fillFullWeekCycle) fillFullWeekCycle(cycleWeekStart || 'sunday');
-                      }}
-                      className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 ${cycleScheduleType === 'weekly' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300'}`}
-                    >
-                      <CalendarIcon className="w-3 h-3" /> Dias da Semana
-                    </button>
-                    <button
-                      type="button"
-                      onClick={() => setCycleScheduleType && setCycleScheduleType('numeric')}
-                      className={`px-2.5 py-1 rounded-lg font-bold flex items-center gap-1 ${cycleScheduleType !== 'weekly' ? 'bg-blue-600 text-white shadow-xs' : 'text-slate-600 dark:text-slate-300'}`}
-                    >
-                      <Layers className="w-3 h-3" /> Ciclo Sequencial
-                    </button>
-                  </div>
-                </div>
-
-                {cycle.length < 7 && (
-                  <button
-                    type="button"
-                    onClick={() => fillFullWeekCycle && fillFullWeekCycle(cycleWeekStart || 'sunday')}
-                    className="px-3 py-1.5 bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-bold rounded-lg transition-colors flex items-center gap-1 shadow-xs"
-                  >
-                    <Plus className="w-3.5 h-3.5" /> Preencher 7 Dias Completos
-                  </button>
-                )}
-              </div>
-
-              {/* Grade de Dias da Semana / Ciclo */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 xl:grid-cols-7 gap-2.5">
-                {cycle.map((daySubjects, dIdx) => {
-                  const cardTitle = cycleScheduleType === 'weekly' 
-                    ? (diasSemanaFull[dIdx] || `Dia ${dIdx + 1}`) 
-                    : `DIA ${dIdx + 1}`;
-
-                  return (
-                    <div key={dIdx} className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl flex flex-col overflow-hidden shadow-xs">
-                      <div className="p-2 bg-slate-100 dark:bg-slate-800/80 border-b border-slate-200 dark:border-slate-700 flex justify-between items-center">
-                        <span className="font-bold text-[11px] text-slate-800 dark:text-slate-200 uppercase truncate">
-                          {cardTitle}
-                        </span>
-                        <button 
-                          onClick={() => {
-                            setCycle(prev => {
-                              const n = [...prev];
-                              n[dIdx] = [];
-                              return n;
-                            });
-                            toast.success(`${cardTitle} definido como Livre / Descanso`);
-                          }}
-                          className="p-1 text-slate-400 hover:text-amber-500 rounded" 
-                          title="Tornar Dia Livre / Descanso"
-                        >
-                          <Sun className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-
-                      <div className="p-2 flex flex-col gap-1.5 min-h-[110px]">
-                        {daySubjects.length === 0 ? (
-                          <div className="flex-1 flex flex-col items-center justify-center p-2 border border-dashed border-slate-200 dark:border-slate-800 rounded bg-slate-50/50 dark:bg-slate-950/50">
-                            <Sun className="w-5 h-5 text-amber-400 opacity-60 mb-1" />
-                            <span className="text-[9px] font-bold text-slate-400 uppercase">Livre / Descanso</span>
-                          </div>
-                        ) : (
-                          daySubjects.map((subId, slotIdx) => {
-                            const sub = subjects[subId];
-                            return (
-                              <div key={slotIdx} className="flex items-center gap-1">
-                                <select
-                                  value={subId}
-                                  onChange={(e) => {
-                                    setCycle(prev => {
-                                      const n = [...prev];
-                                      const day = [...n[dIdx]];
-                                      if (e.target.value === '') {
-                                        n[dIdx] = day.filter((_, i) => i !== slotIdx);
-                                      } else {
-                                        day[slotIdx] = e.target.value;
-                                        n[dIdx] = day;
-                                      }
-                                      return n;
-                                    });
-                                  }}
-                                  className={`flex-1 text-[11px] font-bold p-1 rounded border border-slate-200 outline-none transition-colors cursor-pointer ${sub ? sub.color : 'bg-white text-slate-800'}`}
-                                >
-                                  <option value="" className="bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100">- Remover Bloco -</option>
-                                  {Object.values(subjects).map(s => (
-                                    <option key={s.id} value={s.id} className="bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100">{s.name}</option>
-                                  ))}
-                                </select>
-                              </div>
-                            );
-                          })
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            if (Object.keys(subjects).length === 0) {
-                              toast.error("Cadastre matérias primeiro!");
-                              return;
-                            }
-                            setCycle(prev => {
-                              const n = [...prev];
-                              const firstId = Object.keys(subjects)[0];
-                              n[dIdx] = [...n[dIdx], firstId];
-                              return n;
-                            });
-                          }}
-                          className="mt-auto py-1 border border-dashed border-slate-300 dark:border-slate-700 bg-slate-50 hover:bg-blue-50 hover:border-blue-300 text-slate-500 hover:text-blue-600 font-bold text-[10px] rounded transition-all flex items-center justify-center gap-1"
-                        >
-                          <Plus className="w-3 h-3" /> Bloco
-                        </button>
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            </div>
-          )}
         </div>
 
         {/* Cabeçalho do Mês no Calendário */}
@@ -741,6 +574,10 @@ export default function Calendario() {
             const currentSpeed = Number(sub.speed) || 1;
             const currentTimeGoal = Number(sub.timeGoalMinutes) || 0;
 
+            // Sincronização direta com a previsão do calendário
+            const calFinish = calCompletionDates[sub.id];
+            const displayDateStr = calFinish ? calFinish.dateStr : sub.dateStr;
+
             return (
               <div key={sub.id} className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col gap-2 hover:border-blue-300 dark:hover:border-blue-900 transition-all bg-slate-50/70 dark:bg-slate-950/70 shadow-sm">
                 <div className="flex justify-between items-start gap-1">
@@ -760,7 +597,7 @@ export default function Calendario() {
                   {sub.remaining === 0 ? (
                     <span className="flex items-center gap-1 text-xs font-black text-emerald-600"><CheckCircle className="w-3.5 h-3.5" /> Concluído</span>
                   ) : (
-                    <span className="text-sm font-black text-blue-600 dark:text-blue-400 font-mono tracking-tight shrink-0">{sub.dateStr}</span>
+                    <span className="text-sm font-black text-blue-600 dark:text-blue-400 font-mono tracking-tight shrink-0">{displayDateStr}</span>
                   )}
                 </div>
 
@@ -783,7 +620,7 @@ export default function Calendario() {
                         <Sparkles className="w-3 h-3 text-amber-500" /> Regra ao concluir...
                       </button>
                       <span className="text-[10px] text-slate-400 font-medium">
-                        {sub.onCompleteAction === 'replace' ? '🔄 Substituir' : '⚡ Dobrar Física'}
+                        {sub.onCompleteAction === 'replace' ? '🔄 Substituir' : '⚡ Dobrar Restante'}
                       </span>
                     </div>
                   </>
