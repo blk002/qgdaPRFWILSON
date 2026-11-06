@@ -1819,6 +1819,122 @@ export const useStore = create(
         await saveToCloud();
       },
 
+      executeSelectiveReset: async (options = {}) => {
+        const { all, subjects, raioXCaveira, fsrs, dueloCTB, career, mascot, coinsRewards } = options;
+
+        if (all) {
+          return await get().executeTotalWipe();
+        }
+
+        const clean = getCleanInitialState();
+        const changes = {};
+        const summary = [];
+
+        // 1. Apagar somente as disciplinas
+        if (subjects) {
+          changes.subjects = {};
+          changes.cycle = [];
+          changes.completedToday = [];
+          changes.subjectGoals = {};
+          changes.studyHistory = {};
+          summary.push('Disciplinas & Ciclo');
+        }
+
+        // 2. Apagar somente o Raio-X Caveira
+        if (raioXCaveira) {
+          changes.caveiraQuestions = [];
+          const currentReviews = changes.reviews !== undefined ? changes.reviews : (get().reviews || []);
+          changes.reviews = currentReviews.filter(r => !(r.isCaveiraQuestion || String(r.id || '').startsWith('rev_caveira_') || String(r.topicName || '').startsWith('[Caveira]')));
+          try { localStorage.removeItem('prf_caveira_questions'); } catch (_) {}
+          try { window.postMessage({ source: 'QG_WEB_APP', type: 'CLEAR_SESSION' }, '*'); } catch (_) {}
+          summary.push('Raio-X Caveira');
+        }
+
+        // 3. Apagar somente as revisões FSRS
+        if (fsrs) {
+          changes.reviews = [];
+          changes.reviewStats = { totalDone: 0, correct: 0, streak: 0 };
+          changes.dailyReviewStats = {};
+          if (!raioXCaveira) {
+            const currentCaveira = changes.caveiraQuestions !== undefined ? changes.caveiraQuestions : (get().caveiraQuestions || []);
+            changes.caveiraQuestions = currentCaveira.map(q => ({ ...q, fsrsCreated: false }));
+          }
+          summary.push('Revisões FSRS');
+        }
+
+        // 4. Apagar somente os dados do Duelo CTB
+        if (dueloCTB) {
+          try {
+            localStorage.removeItem('alvo_legal_seen_statements_v1');
+            localStorage.removeItem('alvo_legal_high_score_v1');
+            localStorage.removeItem('qg_duelo_fps_topic_stats_v1');
+          } catch (_) {}
+          if (!raioXCaveira) {
+            const currentCaveira = changes.caveiraQuestions !== undefined ? changes.caveiraQuestions : (get().caveiraQuestions || []);
+            changes.caveiraQuestions = currentCaveira.filter(q => !(q.source?.includes('Duelo FPS') || q.origin?.includes('FPS') || String(q.id || '').startsWith('fps-')));
+          }
+          if (!fsrs) {
+            const currentReviews = changes.reviews !== undefined ? changes.reviews : (get().reviews || []);
+            changes.reviews = currentReviews.filter(r => !(r.origin?.includes('FPS') || String(r.id || '').startsWith('rev_fps_')));
+          }
+          summary.push('Duelo CTB / CONTRAN');
+        }
+
+        // 5. Apagar dados da carreira e começar do zero
+        if (career) {
+          const prevUserStats = get().userStats || {};
+          changes.userStats = {
+            xp: 0,
+            medals: [],
+            totalStudyMinutes: 0,
+            avatar: prevUserStats.avatar || '/assets/gamification/avatar_male.png',
+            displayName: prevUserStats.displayName || '',
+            totalPurchases: coinsRewards ? 0 : (prevUserStats.totalPurchases || 0)
+          };
+          changes.xpHistory = [];
+          changes.streakData = { currentStreak: 0, lastCheckDate: null };
+          changes.weeklySprint = { goalHours: 35, currentMinutes: 0, weekStart: new Date().toISOString() };
+          changes.weeklyMissions = clean.weeklyMissions;
+          changes.dailyMissions = [];
+          changes.seasonalData = clean.seasonalData;
+          changes.syntaxLevel = 0;
+          changes.activeBoosts = { xpBoostActions: 0, streakShieldActive: false };
+          summary.push('Evolução de Carreira');
+        }
+
+        // 6. Resetar o mascote
+        if (mascot) {
+          changes.petData = clean.petData;
+          summary.push('Mascote K9');
+        }
+
+        // 7. Resetar as moedas e recompensas
+        if (coinsRewards) {
+          changes.coins = 250;
+          changes.unlockedThemes = ['blue'];
+          changes.activeTheme = 'blue';
+          changes.unlockedAvatars = [
+            '/assets/gamification/avatar_male.png',
+            '/assets/gamification/avatar_female.png'
+          ];
+          changes.activeBoosts = { xpBoostActions: 0, streakShieldActive: false };
+          if (!career) {
+            const prevUserStats = get().userStats || {};
+            changes.userStats = { ...prevUserStats, totalPurchases: 0 };
+          }
+          summary.push('Moedas & Recompensas');
+        }
+
+        // Aplica alterações atômicas no estado
+        set(changes);
+
+        // Sincroniza com a nuvem (Supabase)
+        const { saveToCloud } = get();
+        await saveToCloud();
+
+        return summary;
+      },
+
       executeTotalWipe: async () => {
         const { user } = get();
         console.log("🔴 PROTOCOLO DE DESTRUIÇÃO ABSOLUTA INICIADO...");

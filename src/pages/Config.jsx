@@ -1,9 +1,10 @@
 import { useStore, getCleanInitialState, PERSISTED_KEYS } from '../store/useStore';
 import { assetUrl } from '../lib/assets';
 import { toast } from 'sonner';
-import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle, Camera, BookOpen, ScanLine, ChevronUp, ChevronDown, Zap, FastForward, Layers } from 'lucide-react';
+import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle, Camera, BookOpen, ScanLine, ChevronUp, ChevronDown, Zap, FastForward, Layers, RotateCcw } from 'lucide-react';
 import ImportOCR from '../components/ImportOCR';
 import TopicLessonScanner from '../components/TopicLessonScanner';
+import SelectiveResetModal from '../components/SelectiveResetModal';
 import { parseDurationToSeconds, formatSecondsToClock, formatSecondsToFriendly, getSubjectVideoStats, formatMinutesToFriendly, calculateLessonsForGoal } from '../lib/durationHelpers';
 
 import { useState, useRef } from 'react';
@@ -17,6 +18,7 @@ export default function Config({
   const [editingSubjectId, setEditingSubjectId] = useState(null);
   const [draftSubject, setDraftSubject] = useState(null);
   const [showImportOCR, setShowImportOCR] = useState(false);
+  const [showResetModal, setShowResetModal] = useState(false);
   // Scanner de aulas por assunto
   const [scannerTopicIdx, setScannerTopicIdx] = useState(null); // índice do tópico sendo escaneado
   const modalBodyRef = useRef(null);
@@ -1014,24 +1016,18 @@ export default function Config({
       <div className="bg-red-50 p-5 sm:p-6 rounded-xl shadow-sm border border-red-200 mt-4 mb-6 relative overflow-hidden dark:bg-red-950/20 dark:border-red-900/50">
         <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-bl-full pointer-events-none"></div>
         <h3 className="text-lg font-black text-red-800 flex items-center gap-2 mb-2 dark:text-red-400">
-          <AlertTriangle className="text-red-600 w-5 h-5"/> Zona de Perigo (Reset Tático)
+          <AlertTriangle className="text-red-600 w-5 h-5"/> Zona de Perigo (Reset & Purga de Dados)
         </h3>
         <p className="text-sm text-red-700 mb-4 max-w-3xl dark:text-red-500/70">
-          Use este botão para apagar todos os dados de teste (Simulados, TAF, Revisões, Moedas e Ciclo) e zerar o progresso das disciplinas. Apenas a estrutura das matérias e assuntos será preservada. Esta ação é irreversível.
+          Gerenciamento modular de dados: selecione exatamente o que deseja apagar (tudo, somente disciplinas, somente Raio-X Caveira, somente FSRS, dados do Duelo CTB, carreira do zero, mascote K9 ou moedas/recompensas).
         </p>
-          <button onClick={() => {
-              setGlobalModal({
-                title: "Protocolo de Limpeza",
-                message: "ATENÇÃO: Isto apagará permanentemente simulados, TAF, revisões FSRS, moedas e limpará o seu ciclo. O progresso das aulas nas matérias voltará a ZERO. Confirma a limpeza total dos dados?",
-                onConfirm: () => {
-                  executeTacticalReset();
-                  toast.warning("Dados resetados para o padrão operacional.");
-                }
-              });
-            }} 
-            className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-bold transition-colors shadow-sm"
+        <div className="flex flex-wrap gap-3">
+          <button 
+            onClick={() => setShowResetModal(true)} 
+            className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-bold transition-all shadow-md shadow-red-600/20 flex items-center justify-center gap-2 cursor-pointer"
           >
-            Expurgar Dados Falsos
+            <RotateCcw className="w-4 h-4" />
+            Configurar Reset de Dados
           </button>
 
           <button onClick={() => {
@@ -1044,10 +1040,11 @@ export default function Config({
                 }
               });
             }} 
-            className="w-full sm:w-auto bg-white border-2 border-red-600 text-red-600 hover:bg-red-50 px-5 py-2.5 rounded-lg font-black transition-colors shadow-sm"
+            className="w-full sm:w-auto bg-transparent border-2 border-red-600 text-red-600 hover:bg-red-500/10 px-5 py-2.5 rounded-lg font-black transition-colors cursor-pointer"
           >
-            Zerar Sistema Completo
+            Zerar Tudo Imediatamente
           </button>
+        </div>
       </div>
       {/* Modal de Edição de Disciplina (Estilo Compacto Centralizado) */}
       {editingSubjectId && draftSubject && createPortal((
@@ -1546,6 +1543,13 @@ export default function Config({
           setSubjects={setSubjects}
           availableColors={availableColors}
           onClose={() => setShowImportOCR(false)}
+        />
+      )}
+
+      {showResetModal && (
+        <SelectiveResetModal
+          isOpen={showResetModal}
+          onClose={() => setShowResetModal(false)}
         />
       )}
 
