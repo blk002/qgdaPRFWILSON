@@ -378,9 +378,30 @@ export default function App() {
 
           <div className="flex items-center justify-between px-1 text-[11px] text-slate-400 dark:text-slate-500 font-medium">
             <span className="tracking-wide">Versão</span>
-            <span className="font-mono font-bold text-slate-600 dark:text-slate-400 bg-slate-200/60 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-300/60 dark:border-slate-700 text-[10px]">
-              {APP_VERSION}
-            </span>
+            <button
+              type="button"
+              onClick={async () => {
+                toast.loading("Limpando cache...", { id: 'reload-sw' });
+                try {
+                  if ('serviceWorker' in navigator) {
+                    const regs = await navigator.serviceWorker.getRegistrations();
+                    for (const r of regs) await r.unregister();
+                  }
+                  if ('caches' in window) {
+                    const ks = await caches.keys();
+                    await Promise.all(ks.map(k => caches.delete(k)));
+                  }
+                  window.location.reload();
+                } catch {
+                  window.location.reload();
+                }
+              }}
+              title="Clique para forçar atualização do aplicativo e limpar caches"
+              className="font-mono font-bold text-slate-600 dark:text-slate-400 bg-slate-200/60 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-300/60 dark:border-slate-700 text-[10px] hover:border-blue-400 hover:text-blue-500 transition-colors cursor-pointer flex items-center gap-1"
+            >
+              <span>{APP_VERSION}</span>
+              <RefreshCw className="w-2.5 h-2.5 opacity-60" />
+            </button>
           </div>
         </div>
       </aside>
@@ -397,9 +418,30 @@ export default function App() {
             </Link>
 
             <div className="flex items-center gap-2">
-              <span className="font-mono text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700">
-                {APP_VERSION}
-              </span>
+              <button
+                type="button"
+                onClick={async () => {
+                  toast.loading("Limpando cache...", { id: 'reload-sw' });
+                  try {
+                    if ('serviceWorker' in navigator) {
+                      const regs = await navigator.serviceWorker.getRegistrations();
+                      for (const r of regs) await r.unregister();
+                    }
+                    if ('caches' in window) {
+                      const ks = await caches.keys();
+                      await Promise.all(ks.map(k => caches.delete(k)));
+                    }
+                    window.location.reload();
+                  } catch {
+                    window.location.reload();
+                  }
+                }}
+                title="Clique para forçar atualização e limpar cache"
+                className="font-mono text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 hover:border-blue-400 hover:text-blue-500 flex items-center gap-1 cursor-pointer"
+              >
+                <span>{APP_VERSION}</span>
+                <RefreshCw className="w-2.5 h-2.5 opacity-60" />
+              </button>
               <div className="flex items-center gap-1 bg-yellow-500/10 dark:bg-yellow-500/15 px-2.5 py-1 rounded-full border border-yellow-500/20">
                 <Coins className="text-yellow-600 dark:text-yellow-400 w-3.5 h-3.5" />
                 <span className="font-black text-xs text-yellow-600 dark:text-yellow-400">{coins}</span>

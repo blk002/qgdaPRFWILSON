@@ -1,11 +1,12 @@
 import { useStore, getCleanInitialState, PERSISTED_KEYS } from '../store/useStore';
 import { assetUrl } from '../lib/assets';
 import { toast } from 'sonner';
-import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle, Camera, BookOpen, ScanLine, ChevronUp, ChevronDown, Zap, FastForward, Layers, RotateCcw } from 'lucide-react';
+import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle, Camera, BookOpen, ScanLine, ChevronUp, ChevronDown, Zap, FastForward, Layers, RotateCcw, RefreshCw } from 'lucide-react';
 import ImportOCR from '../components/ImportOCR';
 import TopicLessonScanner from '../components/TopicLessonScanner';
 import SelectiveResetModal from '../components/SelectiveResetModal';
 import { parseDurationToSeconds, formatSecondsToClock, formatSecondsToFriendly, getSubjectVideoStats, formatMinutesToFriendly, calculateLessonsForGoal } from '../lib/durationHelpers';
+import { APP_VERSION } from '../version';
 
 import { useState, useRef } from 'react';
 import { createPortal } from 'react-dom';
@@ -57,6 +58,29 @@ export default function Config({
     fillFullWeekCycle,
     getRelativeDateInfo
   } = useStore();
+
+  const handleForceUpdate = async () => {
+    toast.loading("Limpando caches e forçando atualização...", { id: 'force-update' });
+    try {
+      if ('serviceWorker' in navigator) {
+        const registrations = await navigator.serviceWorker.getRegistrations();
+        for (const reg of registrations) {
+          await reg.unregister();
+        }
+      }
+      if ('caches' in window) {
+        const keys = await caches.keys();
+        await Promise.all(keys.map(k => caches.delete(k)));
+      }
+      toast.success("Caches limpos! Recarregando página...", { id: 'force-update' });
+      setTimeout(() => {
+        window.location.reload();
+      }, 500);
+    } catch {
+      window.location.reload();
+    }
+  };
+
   const flatCycle = cycle.flat();
   const totalSlots = flatCycle.length;
   
@@ -1011,6 +1035,30 @@ export default function Config({
             />
           </label>
         </div>
+      </div>
+
+      {/* Central de Versão e Atualizações */}
+      <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 mt-4 mb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+        <div>
+          <div className="flex items-center gap-2 mb-1">
+            <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
+              Versão do Aplicativo
+            </h3>
+            <span className="font-mono font-bold text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
+              {APP_VERSION}
+            </span>
+          </div>
+          <p className="text-xs text-slate-500 dark:text-slate-400">
+            Se uma atualização recente não carregar automaticamente, use o botão ao lado para limpar o cache local e forçar o recarregamento.
+          </p>
+        </div>
+        <button
+          onClick={handleForceUpdate}
+          className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-bold text-xs transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
+        >
+          <RefreshCw className="w-4 h-4" />
+          Forçar Atualização / Limpar Cache
+        </button>
       </div>
 
       <div className="bg-red-50 p-5 sm:p-6 rounded-xl shadow-sm border border-red-200 mt-4 mb-6 relative overflow-hidden dark:bg-red-950/20 dark:border-red-900/50">
