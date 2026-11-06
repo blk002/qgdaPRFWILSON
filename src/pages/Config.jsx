@@ -1466,10 +1466,31 @@ export default function Config({
                 ))}
                 {(draftSubject.topics || []).length === 0 && (
                   <div className="text-center py-6 border border-dashed border-slate-800 rounded-xl bg-slate-900/50">
-                    <p className="text-[11px] font-bold text-slate-500 italic">Nenhum assunto cadastrado. Clique em "Add Assunto" acima.</p>
+                    <p className="text-[11px] font-bold text-slate-500 italic">Nenhum assunto cadastrado. Clique no botão abaixo para adicionar.</p>
                   </div>
                 )}
               </div>
+
+              {/* Botão Adicionar Assunto no Final da Lista de Aulas/Tópicos */}
+              <button
+                type="button"
+                onClick={() => {
+                  setDraftSubject(prev => {
+                    const newTopics = [...(prev.topics || [])];
+                    newTopics.push({ id: 't' + Date.now(), name: 'NOVO ASSUNTO', total: 0, completed: 0, lessons: [] });
+                    return { ...prev, topics: newTopics };
+                  });
+                  setTimeout(() => {
+                    if (modalBodyRef.current) {
+                      modalBodyRef.current.scrollTo({ top: modalBodyRef.current.scrollHeight, behavior: 'smooth' });
+                    }
+                  }, 60);
+                }}
+                className="w-full mt-4 py-3.5 bg-blue-600/15 hover:bg-blue-600/25 border-2 border-dashed border-blue-500/40 hover:border-blue-400 text-blue-400 hover:text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer group"
+              >
+                <Plus className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
+                <span>+ Adicionar Assunto</span>
+              </button>
             </div>
 
             {/* Fim do Conteúdo Rolável */}
