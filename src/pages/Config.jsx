@@ -1,7 +1,7 @@
 import { useStore, getCleanInitialState, PERSISTED_KEYS } from '../store/useStore';
 import { assetUrl } from '../lib/assets';
 import { toast } from 'sonner';
-import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle, Camera, BookOpen, ScanLine, ChevronUp, ChevronDown, Zap, FastForward, Layers, RotateCcw, RefreshCw } from 'lucide-react';
+import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle, Check, Camera, BookOpen, ScanLine, ChevronUp, ChevronDown, Zap, FastForward, Layers, RotateCcw, RefreshCw } from 'lucide-react';
 import ImportOCR from '../components/ImportOCR';
 import TopicLessonScanner from '../components/TopicLessonScanner';
 import SelectiveResetModal from '../components/SelectiveResetModal';
@@ -198,7 +198,8 @@ export default function Config({
           </button>
           <button onClick={() => {
               const newId = 'sub_' + Date.now();
-              setDraftSubject({ id: newId, name: '', color: 'bg-slate-200 text-slate-900', block: 'B1', speed: 1, topics: [] });
+              const defaultColor = (availableColors && availableColors[0]?.color) || 'bg-blue-600 text-white';
+              setDraftSubject({ id: newId, name: '', color: defaultColor, block: 'B1', speed: 1, topics: [] });
               setEditingSubjectId(newId);
             }} 
             className="bg-blue-100 text-blue-700 px-3 py-2 rounded-lg font-bold flex items-center gap-1 text-xs sm:text-sm">
@@ -1156,17 +1157,37 @@ export default function Config({
 
             {/* Cores */}
             <div className="mb-6">
-              <label className="block text-[10px] font-black text-slate-400 uppercase mb-3">Identidade Visual (Cor)</label>
-              <div className="flex gap-2.5 flex-wrap">
+              <div className="flex items-center justify-between mb-2.5">
+                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
+                  Identidade Visual ({availableColors?.length || 18} Cores Disponíveis)
+                </label>
+                {draftSubject.color && (
+                  <span className={`text-[10px] font-black px-2 py-0.5 rounded shadow-xs ${draftSubject.color}`}>
+                    Cor Selecionada
+                  </span>
+                )}
+              </div>
+              <div className="grid grid-cols-6 sm:grid-cols-9 gap-2.5 p-3 bg-slate-900/60 rounded-xl border border-slate-800">
                 {availableColors.map(c => {
                   const isSelected = draftSubject.color === c.color;
+                  const isDarkText = c.color.includes('text-slate-950') || c.color.includes('text-slate-900');
                   return (
                     <button
                       key={c.id}
+                      type="button"
                       onClick={() => setDraftSubject(prev => ({ ...prev, color: c.color }))}
-                      className={`w-8 h-8 rounded-lg transition-all ${isSelected ? 'ring-2 ring-blue-500 ring-offset-2 ring-offset-[#0f172a] shadow-[0_0_15px_rgba(59,130,246,0.5)] scale-110' : 'hover:scale-110'}`}
+                      title={c.label}
+                      className={`h-9 rounded-lg transition-all relative flex items-center justify-center cursor-pointer ${
+                        isSelected 
+                          ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0f172a] shadow-lg scale-105 z-10' 
+                          : 'hover:scale-105 opacity-85 hover:opacity-100'
+                      }`}
                     >
-                      <div className={`w-full h-full rounded-lg ${c.color.split(' ')[0]}`}></div>
+                      <div className={`w-full h-full rounded-lg ${c.color.split(' ')[0]} flex items-center justify-center shadow-xs`}>
+                        {isSelected && (
+                          <Check className={`w-4 h-4 stroke-[3] ${isDarkText ? 'text-slate-950' : 'text-white'}`} />
+                        )}
+                      </div>
                     </button>
                   );
                 })}

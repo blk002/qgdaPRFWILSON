@@ -36,17 +36,29 @@ import { PATENTES } from './hooks/useGamification';
 import { APP_VERSION } from './version';
 
 const availableColors = [
-  { id: 'slate', color: 'bg-slate-200 text-slate-900', label: 'Cinza' },
-  { id: 'blue', color: 'bg-blue-200 text-blue-900', label: 'Azul' },
-  { id: 'emerald', color: 'bg-emerald-200 text-emerald-900', label: 'Esmeralda' },
-  { id: 'red', color: 'bg-red-200 text-red-900', label: 'Vermelho' },
-  { id: 'yellow', color: 'bg-yellow-200 text-yellow-900', label: 'Amarelo' },
-  { id: 'purple', color: 'bg-purple-200 text-purple-900', label: 'Roxo' },
-  { id: 'orange', color: 'bg-orange-200 text-orange-900', label: 'Laranja' },
-  { id: 'indigo', color: 'bg-indigo-700 text-white', label: 'Anil' },
-  { id: 'rose', color: 'bg-rose-700 text-white', label: 'Rosa' },
-  { id: 'cyan', color: 'bg-cyan-700 text-white', label: 'Ciano' }
+  { id: 'blue', color: 'bg-blue-600 text-white', label: 'Azul Real' },
+  { id: 'emerald', color: 'bg-emerald-500 text-slate-950', label: 'Verde Esmeralda' },
+  { id: 'red', color: 'bg-red-600 text-white', label: 'Vermelho Fogo' },
+  { id: 'amber', color: 'bg-amber-400 text-slate-950', label: 'Amarelo Ouro' },
+  { id: 'purple', color: 'bg-purple-600 text-white', label: 'Roxo Elétrico' },
+  { id: 'orange', color: 'bg-orange-500 text-white', label: 'Laranja Chama' },
+  { id: 'cyan', color: 'bg-cyan-400 text-slate-950', label: 'Ciano Neon' },
+  { id: 'pink', color: 'bg-pink-500 text-white', label: 'Rosa Choque' },
+  { id: 'lime', color: 'bg-lime-400 text-slate-950', label: 'Verde Lima Fluor' },
+  { id: 'indigo', color: 'bg-indigo-700 text-white', label: 'Índigo Profundo' },
+  { id: 'fuchsia', color: 'bg-fuchsia-600 text-white', label: 'Fúcsia Magenta' },
+  { id: 'teal', color: 'bg-teal-600 text-white', label: 'Verde Petróleo' },
+  { id: 'sky', color: 'bg-sky-400 text-slate-950', label: 'Azul Céu' },
+  { id: 'rose', color: 'bg-rose-500 text-white', label: 'Coral Vivo' },
+  { id: 'forest', color: 'bg-green-700 text-white', label: 'Verde Floresta' },
+  { id: 'brown', color: 'bg-amber-800 text-white', label: 'Marrom Bronze' },
+  { id: 'wine', color: 'bg-rose-900 text-white', label: 'Vinho Bordô' },
+  { id: 'slate', color: 'bg-slate-500 text-white', label: 'Cinza Chumbo' }
 ];
+
+// Classes legadas mantidas para compatibilidade retroativa com dados existentes:
+// bg-slate-200 text-slate-900 bg-blue-200 text-blue-900 bg-emerald-200 text-emerald-900 bg-red-200 text-red-900
+// bg-yellow-200 text-yellow-900 bg-purple-200 text-purple-900 bg-orange-200 text-orange-900 bg-rose-700 bg-cyan-700
 
 export default function App() {
   const {

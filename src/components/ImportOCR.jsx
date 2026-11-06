@@ -116,7 +116,7 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
   const [selectedSubjectId, setSelectedSubjectId] = useState('');
   const [newSubjectName, setNewSubjectName] = useState('');
   const [newSubjectBlock] = useState('B1');
-  const [newSubjectColor] = useState('bg-slate-200 text-slate-900');
+  const [newSubjectColor] = useState('bg-blue-600 text-white');
   const [createNew, setCreateNew] = useState(Object.keys(subjects || {}).length === 0);
 
   // API Key
