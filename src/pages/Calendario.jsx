@@ -69,15 +69,14 @@ export default function Calendario() {
 
   // Estado do Modal de Transição de Matéria
   const [editingTransitionSub, setEditingTransitionSub] = useState(null);
-  const [tempAction, setTempAction] = useState('double_remaining');
+  const [tempAction, setTempAction] = useState('keep_fixed');
   const [tempRepId, setTempRepId] = useState('');
 
-  if (!calendarDate) return null;
+  const rawCalDate = calendarDate ? new Date(calendarDate) : new Date();
+  const calDate = isNaN(rawCalDate.getTime()) ? new Date() : rawCalDate;
 
   const subjectEstimates = getSubjectEstimates ? getSubjectEstimates() : [];
   const estimatedDate = getEstimatedCompletionDate ? getEstimatedCompletionDate() : { short: '', full: '', isLate: false, daysDiff: 0, examDateFormatted: '' };
-
-  const calDate = new Date(calendarDate);
   const year = calDate.getFullYear();
   const month = calDate.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
@@ -187,15 +186,25 @@ export default function Calendario() {
       let q = remainingLessonsQueue[effectiveSubId];
       let wasTransitioned = false;
 
-      // Se a matéria esgotou e o usuário configurou substituição explícita:
+      // Se a matéria esgotou e o usuário configurou substituição ou dobradinha explícita:
       if (!q || q.length === 0) {
         const originalSub = subjects[subId];
-        if (originalSub?.onCompleteAction === 'replace' && originalSub?.replacementSubjectId && subjects[originalSub.replacementSubjectId]) {
+        const action = originalSub?.onCompleteAction || 'keep_fixed';
+
+        if (action === 'replace' && originalSub?.replacementSubjectId && subjects[originalSub.replacementSubjectId]) {
           const repId = originalSub.replacementSubjectId;
           const repQ = remainingLessonsQueue[repId];
           if (repQ && repQ.length > 0) {
             effectiveSubId = repId;
             q = repQ;
+            wasTransitioned = true;
+          }
+        } else if (action === 'double_remaining') {
+          const fallbackId = daySubjects.find(sId => sId !== subId && remainingLessonsQueue[sId]?.length > 0)
+            || Object.keys(remainingLessonsQueue).find(sId => remainingLessonsQueue[sId]?.length > 0);
+          if (fallbackId) {
+            effectiveSubId = fallbackId;
+            q = remainingLessonsQueue[fallbackId];
             wasTransitioned = true;
           }
         }
@@ -277,10 +286,15 @@ export default function Calendario() {
   // Handlers do Gerenciador de Dia
   const handleOpenDayManager = (cellDateObj, dateKey) => {
     const diff = Math.round((cellDateObj.getTime() - todayDateObj.getTime()) / (1000 * 60 * 60 * 24));
+    if (diff < 0) return; // Dias passados não abrem o gerenciador
+
     const dayOfWeek = cellDateObj.getDay();
-    const weekIndex = (cycleWeekStart === 'monday') ? (dayOfWeek + 6) % 7 : dayOfWeek;
+    const weekIndex = (cycleScheduleType === 'weekly' && cycle.length === 7)
+      ? ((cycleWeekStart === 'monday') ? (dayOfWeek + 6) % 7 : dayOfWeek)
+      : ((currentDayIndex + diff) % Math.max(1, cycle.length) + Math.max(1, cycle.length)) % Math.max(1, cycle.length);
+
     const baseSubs = (cycle && cycle[weekIndex]) ? [...cycle[weekIndex]] : [];
-    const currentDaySubs = (calendarOverrides && calendarOverrides[dateKey]) ? [...calendarOverrides[dateKey]] : [...baseSubs];
+    const currentDaySubs = [...getDaySubjectsForDate(cellDateObj, dateKey)];
 
     setManagingDay({
       dateObj: cellDateObj,
@@ -305,7 +319,10 @@ export default function Calendario() {
     if (isAddingNewBlock && selectedNewSubjectId) {
       if (newBlockScope === 'until_finished' && addScheduleExtension) {
         addScheduleExtension(selectedNewSubjectId, dateKey);
-      } else if (!updatedSlots.includes(selectedNewSubjectId)) {
+        if (!updatedSlots.includes(selectedNewSubjectId)) {
+          updatedSlots.push(selectedNewSubjectId);
+        }
+      } else {
         updatedSlots.push(selectedNewSubjectId);
       }
     }
@@ -347,6 +364,10 @@ export default function Calendario() {
 
   const handleSaveTransition = () => {
     if (!editingTransitionSub) return;
+    if (tempAction === 'replace' && !tempRepId) {
+      toast.error("Selecione qual disciplina substituta deve entrar no lugar!");
+      return;
+    }
     if (updateSubject) {
       updateSubject(editingTransitionSub.id, {
         onCompleteAction: tempAction,
@@ -424,39 +445,42 @@ export default function Calendario() {
                 const isPast = diffDays < 0;
 
                 let bgClass = isPast 
-                  ? "bg-slate-50 text-slate-400 dark:bg-slate-900/40 dark:text-slate-500" 
+                  ? "bg-slate-50 text-slate-400 dark:bg-slate-900/40 dark:text-slate-500 cursor-default" 
                   : isTodayReal 
-                    ? "bg-blue-50 border-2 border-blue-500 shadow-sm text-blue-700 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300" 
-                    : "bg-white border border-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300";
+                    ? "bg-blue-50 border-2 border-blue-500 shadow-sm text-blue-700 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300 cursor-pointer hover:ring-2 hover:ring-blue-400 hover:shadow-md" 
+                    : "bg-white border border-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 cursor-pointer hover:ring-2 hover:ring-blue-400 hover:shadow-md";
 
                 const cellDateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
-                const isOverridden = Boolean(calendarOverrides && calendarOverrides[cellDateKey]);
+                const isOverridden = !isPast && Boolean(calendarOverrides && calendarOverrides[cellDateKey]);
                 
+                // Dias passados ficam limpos (sem exibir matérias)
                 let dayItemsToRender = [];
-                if (diffDays >= 0 && futureSchedule[cellDateKey] && futureSchedule[cellDateKey].length > 0) {
-                  dayItemsToRender = futureSchedule[cellDateKey];
-                } else {
-                  const baseIds = getDaySubjectsForDate(cellDateObj, cellDateKey);
-                  dayItemsToRender = baseIds.map(id => ({ id, isLast: false, isTransitioned: false }));
+                if (!isPast) {
+                  if (futureSchedule[cellDateKey] !== undefined) {
+                    dayItemsToRender = futureSchedule[cellDateKey];
+                  } else {
+                    const baseIds = getDaySubjectsForDate(cellDateObj, cellDateKey);
+                    dayItemsToRender = baseIds.map(id => ({ id, isLast: false, isTransitioned: false }));
+                  }
                 }
 
                 return (
                   <div 
                     key={day} 
-                    onClick={() => handleOpenDayManager(cellDateObj, cellDateKey)}
-                    className={`min-h-[5.5rem] md:min-h-[7.5rem] p-1 sm:p-1.5 rounded-md flex flex-col transition-all cursor-pointer group hover:ring-2 hover:ring-blue-400 hover:shadow-md ${bgClass}`}
-                    title="Clique para gerenciar matérias deste dia"
+                    onClick={() => !isPast && handleOpenDayManager(cellDateObj, cellDateKey)}
+                    className={`min-h-[5.5rem] md:min-h-[7.5rem] p-1 sm:p-1.5 rounded-md flex flex-col transition-all group ${bgClass}`}
+                    title={isPast ? "Dia já concluído / passado" : "Clique para gerenciar matérias deste dia"}
                   >
                     <div className="flex justify-between items-start mb-1 gap-0.5">
                       <div className="flex items-center gap-1">
-                        <span className="font-bold text-xs sm:text-sm px-1 group-hover:text-blue-500 transition-colors">{day}</span>
+                        <span className={`font-bold text-xs sm:text-sm px-1 transition-colors ${!isPast ? 'group-hover:text-blue-500' : ''}`}>{day}</span>
                         {isOverridden && (
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Dia com personalização manual avulsa" />
                         )}
                       </div>
                       <div className="flex items-center gap-1">
                         {isTodayReal && <span className="text-[9px] sm:text-[10px] font-black bg-blue-500 text-white px-1 sm:px-1.5 py-0.5 rounded-sm">HOJE</span>}
-                        <Settings className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
+                        {!isPast && <Settings className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />}
                       </div>
                     </div>
                     
