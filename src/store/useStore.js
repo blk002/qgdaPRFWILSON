@@ -242,6 +242,8 @@ export const useStore = create(
         await supabase.auth.signOut();
         set({ session: null, user: null });
         localStorage.removeItem('prf-qg-storage');
+        localStorage.removeItem('prf_qg_backups');
+        localStorage.removeItem('prf_caveira_questions');
         window.location.reload();
       },
 
@@ -350,7 +352,26 @@ export const useStore = create(
             try { window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA' }, '*'); } catch (_) {}
             return true;
           }
-          console.log('ℹ️ [Nuvem] Perfil pronto para uso.');
+
+          // Novo usuário sem perfil salvo ainda no Supabase: inicializa estado limpo e cria o perfil na nuvem
+          console.log('ℹ️ [Nuvem] Nova conta detectada! Inicializando perfil limpo para uso.');
+          try {
+            localStorage.removeItem('prf_qg_backups');
+            localStorage.removeItem('prf_caveira_questions');
+          } catch (_) {}
+          const freshState = getCleanInitialState();
+          set({
+            ...freshState,
+            caveiraQuestions: [],
+            isSyncing: false,
+            isLoadingFromCloud: false,
+            lastSyncedAt: null
+          });
+          get().checkAndResetWeekly();
+          get().checkAndAdvanceSeason();
+          get().checkAndResetDailyMissions();
+          await get().saveToCloud();
+          return true;
         } catch (error) {
           if (retryCount < 2) {
             console.warn(`⚠️ [Nuvem] Tentativa ${retryCount + 1} falhou (ou timeout). Tentando novamente...`);
@@ -401,7 +422,7 @@ export const useStore = create(
 
           toast.error("O Supabase está demorando para responder. Tente atualizar a página (F5).");
         } finally {
-          if (retryCount >= 2 || !get().isLoadingFromCloud) {
+          if (retryCount === 0 || retryCount >= 2 || !get().isLoadingFromCloud) {
              set({ isSyncing: false, isLoadingFromCloud: false });
           }
         }
