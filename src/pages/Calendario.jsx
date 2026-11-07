@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Calendar as CalendarIcon, 
@@ -8,20 +8,14 @@ import {
   Clock, 
   Trophy, 
   BookOpen, 
-  Layers, 
   Plus, 
   Trash2, 
-  Edit3, 
   Sparkles, 
-  AlertTriangle, 
-  ArrowRight, 
   Settings, 
   RotateCcw, 
   X, 
-  Info, 
   Zap, 
   Target,
-  Sun,
   Pin
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
@@ -58,6 +52,18 @@ export default function Calendario() {
     addFutureScheduleRule,
     updateSubject
   } = useStore();
+
+  // Limpeza automática de dead state legado (extensões +3ª antigas e regras sem versão v:2 de versões anteriores)
+  useEffect(() => {
+    const hasLegacyExtensions = Array.isArray(scheduleExtensions) && scheduleExtensions.length > 0;
+    const hasLegacyRules = Array.isArray(futureScheduleRules) && futureScheduleRules.some(r => !r || r.v !== 2);
+    if (hasLegacyExtensions || hasLegacyRules) {
+      useStore.setState({
+        scheduleExtensions: [],
+        futureScheduleRules: (futureScheduleRules || []).filter(r => r && r.v === 2)
+      });
+    }
+  }, [scheduleExtensions, futureScheduleRules]);
 
   // Estados de Interface
   const [managingDay, setManagingDay] = useState(null);
@@ -108,7 +114,7 @@ export default function Calendario() {
 
       const matchingRules = (futureScheduleRules || [])
         .filter(r => {
-          if (!r || !r.fromDate || r.fromDate > dateKey) return false;
+          if (!r || r.v !== 2 || !r.fromDate || r.fromDate > dateKey) return false;
           if (cycleScheduleType === 'weekly' && r.dayOfWeek !== undefined) {
             return r.dayOfWeek === targetDayOfWeek;
           }
@@ -121,19 +127,6 @@ export default function Calendario() {
       } else if (Array.isArray(cycle[cycleIndex])) {
         daySubjects = [...cycle[cycleIndex]];
       }
-    }
-
-    // 3. Extensões ativas (apenas quando não há override manual no dia)
-    if (scheduleExtensions && scheduleExtensions.length > 0) {
-      scheduleExtensions.forEach(ext => {
-        if (ext && ext.subjectId && ext.fromDate && ext.active !== false && dateKey >= ext.fromDate) {
-          const sub = subjects[ext.subjectId];
-          const hasRemaining = (sub?.topics || []).some(t => (t.completed || 0) < (t.total || 0));
-          if (hasRemaining && !daySubjects.includes(ext.subjectId)) {
-            daySubjects.push(ext.subjectId);
-          }
-        }
-      });
     }
 
     return daySubjects;
@@ -182,7 +175,7 @@ export default function Calendario() {
       
       const matchingRules = (futureScheduleRules || [])
         .filter(r => {
-          if (!r || !r.fromDate || r.fromDate > simDateKey) return false;
+          if (!r || r.v !== 2 || !r.fromDate || r.fromDate > simDateKey) return false;
           if (cycleScheduleType === 'weekly' && r.dayOfWeek !== undefined) {
             return r.dayOfWeek === targetDayOfWeek;
           }
@@ -194,16 +187,6 @@ export default function Calendario() {
         daySubjects = [...matchingRules[0].daySlots];
       } else if (cycle.length > 0 && cycle[cycleIndex]) {
         daySubjects = [...(cycle[cycleIndex] || [])];
-      }
-
-      if (scheduleExtensions && scheduleExtensions.length > 0) {
-        scheduleExtensions.forEach(ext => {
-          if (ext && ext.subjectId && ext.fromDate && ext.active !== false && simDateKey >= ext.fromDate) {
-            if (remainingLessonsQueue[ext.subjectId]?.length > 0 && !daySubjects.includes(ext.subjectId)) {
-              daySubjects.push(ext.subjectId);
-            }
-          }
-        });
       }
     }
 
@@ -229,8 +212,7 @@ export default function Calendario() {
           q = remainingLessonsQueue[repId];
           wasTransitioned = true;
         } else if (action === 'double_remaining') {
-          const fallbackId = daySubjects.find(sId => !visited.has(sId) && remainingLessonsQueue[sId]?.length > 0)
-            || Object.keys(remainingLessonsQueue).find(sId => !visited.has(sId) && remainingLessonsQueue[sId]?.length > 0);
+          const fallbackId = daySubjects.find(sId => !visited.has(sId) && remainingLessonsQueue[sId]?.length > 0);
           if (fallbackId) {
             visited.add(fallbackId);
             effectiveSubId = fallbackId;
@@ -278,11 +260,9 @@ export default function Calendario() {
         const isLast = q.length === 0;
         scheduledThisDay.push({ 
           id: effectiveSubId, 
-          originalId: subId,
           isLast, 
           count: consumed,
-          isTransitioned: wasTransitioned,
-          isCompletedSim: false
+          isTransitioned: wasTransitioned
         });
 
         if (isLast && !calCompletionDates[effectiveSubId]) {
@@ -327,18 +307,16 @@ export default function Calendario() {
 
     const hasCustomOverride = Boolean(calendarOverrides && Array.isArray(calendarOverrides[dateKey]));
     const hasFutureRuleOnDay = (futureScheduleRules || []).some(
-      r => r.fromDate <= dateKey && ((cycleScheduleType === 'weekly' && r.dayOfWeek !== undefined) ? r.dayOfWeek === dayOfWeek : (r.dayOfWeek === dayOfWeek || r.cycleIndex === weekIndex))
+      r => r && r.v === 2 && r.fromDate <= dateKey && ((cycleScheduleType === 'weekly' && r.dayOfWeek !== undefined) ? r.dayOfWeek === dayOfWeek : (r.dayOfWeek === dayOfWeek || r.cycleIndex === weekIndex))
     );
     const hasDiffFromBase = currentDaySubs.length !== baseSubs.length || currentDaySubs.some((id, idx) => id !== baseSubs[idx]);
 
     setManagingDay({
       dateObj: cellDateObj,
       dateKey,
-      diffDays: diff,
       dayOfWeek,
       weekIndex,
-      isCustomized: hasCustomOverride || hasFutureRuleOnDay || hasDiffFromBase,
-      baseSubs
+      isCustomized: hasCustomOverride || hasFutureRuleOnDay || hasDiffFromBase
     });
     setDaySlots(currentDaySubs);
     setSaveMode('future'); // padrão: aplicar desta data para o futuro (sem alterar o passado)
@@ -390,15 +368,11 @@ export default function Calendario() {
 
         // Remove regras futuras antigas que sobrescreviam este dia da semana
         const cleanedRules = (futureScheduleRules || []).filter(
-          r => r.dayOfWeek !== dayOfWeek && r.cycleIndex !== weekIndex
-        );
-        // Remove extensões de matérias que o usuário tirou explicitamente da grade
-        const cleanedExtensions = (scheduleExtensions || []).filter(
-          ext => ext && ext.subjectId && updatedSlots.includes(ext.subjectId)
+          r => r && r.v === 2 && r.dayOfWeek !== dayOfWeek && r.cycleIndex !== weekIndex
         );
         useStore.setState({
           futureScheduleRules: cleanedRules,
-          scheduleExtensions: cleanedExtensions
+          scheduleExtensions: []
         });
 
         toast.success(`Ciclo semanal base atualizado com sucesso!`);
@@ -415,7 +389,7 @@ export default function Calendario() {
 
     // Remove apenas regras futuras que afetam este dia da semana a partir desta data (preservando anteriores)
     const cleanedRules = (futureScheduleRules || []).filter(
-      r => !((r.dayOfWeek === dayOfWeek || r.cycleIndex === weekIndex) && r.fromDate >= dateKey)
+      r => r && r.v === 2 && !((r.dayOfWeek === dayOfWeek || r.cycleIndex === weekIndex) && r.fromDate >= dateKey)
     );
     useStore.setState({ futureScheduleRules: cleanedRules });
 
@@ -426,7 +400,10 @@ export default function Calendario() {
   // Handlers para Transição de Conclusão no Painel Lateral
   const handleOpenTransitionModal = (sub) => {
     setEditingTransitionSub(sub);
-    setTempAction(sub.onCompleteAction || 'keep_fixed');
+    const currentAct = (sub.onCompleteAction === 'replace' || sub.onCompleteAction === 'double_remaining')
+      ? sub.onCompleteAction
+      : 'keep_fixed';
+    setTempAction(currentAct);
     setTempRepId(sub.replacementSubjectId || '');
   };
 
@@ -649,7 +626,7 @@ export default function Calendario() {
                         <Sparkles className="w-3 h-3 text-amber-500" /> Regra ao concluir...
                       </button>
                       <span className="text-[10px] text-slate-400 font-medium">
-                        {sub.onCompleteAction === 'replace' ? '🔄 Substituir' : sub.onCompleteAction === 'double_remaining' ? '⚡ Dobrar Restante' : '📌 Manter Fixa'}
+                        {sub.onCompleteAction === 'replace' ? '🔄 Substituir' : sub.onCompleteAction === 'double_remaining' ? '⚡ Dobrar Dia' : '✅ Encerrar ao Fim'}
                       </span>
                     </div>
                   </>
@@ -880,8 +857,8 @@ export default function Calendario() {
                   className="mt-0.5"
                 />
                 <div className="flex flex-col">
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100">📌 Manter Matéria Fixa no Ciclo (Revisões/Questões)</span>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400">A disciplina permanece fixa nos seus dias da semana sem alterar a programação.</span>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100">✅ Encerrar Matéria na Data de Término (Liberar Vaga)</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">Assim que a última aula for concluída, a matéria deixa de aparecer nos dias seguintes.</span>
                 </div>
               </label>
 
@@ -895,8 +872,8 @@ export default function Calendario() {
                   className="mt-0.5"
                 />
                 <div className="flex flex-col">
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100">⚡ Dobrar Matéria Restante (ex: 2 aulas de Física)</span>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400">A outra disciplina do dia assume a vaga deixada, acelerando o término do edital.</span>
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100">⚡ Dobrar a Outra Matéria do Dia</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">A outra disciplina programada no mesmo dia assume a vaga deixada até concluir.</span>
                 </div>
               </label>
 

@@ -29,7 +29,6 @@ export default function Ciclo() {
     setCurrentDayIndex,
     studyHistory,
     calendarOverrides,
-    scheduleExtensions,
     futureScheduleRules
   } = useStore();
 
@@ -366,23 +365,18 @@ export default function Ciclo() {
                 const dayDateObj = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date();
                 const dayOfWeek = dayDateObj.getDay();
                 const matchingRules = (futureScheduleRules || [])
-                  .filter(r => r.fromDate <= dateInfo.fullDateStr && (r.dayOfWeek === dayOfWeek || r.cycleIndex === dayIndex))
+                  .filter(r => {
+                    if (!r || r.v !== 2 || !r.fromDate || r.fromDate > dateInfo.fullDateStr) return false;
+                    if (cycleScheduleType === 'weekly' && r.dayOfWeek !== undefined) {
+                      return r.dayOfWeek === dayOfWeek;
+                    }
+                    return r.dayOfWeek === dayOfWeek || r.cycleIndex === dayIndex;
+                  })
                   .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
 
-                if (matchingRules.length > 0) {
+                if (matchingRules.length > 0 && Array.isArray(matchingRules[0].daySlots)) {
                   daySubjects = [...matchingRules[0].daySlots];
                 }
-              }
-
-              if (scheduleExtensions && scheduleExtensions.length > 0) {
-                scheduleExtensions.forEach(ext => {
-                  if (ext.active !== false && dateInfo.fullDateStr >= ext.fromDate) {
-                    const s = subjects[ext.subjectId];
-                    if ((s?.topics || []).some(t => (t.completed || 0) < (t.total || 0))) {
-                      if (!daySubjects.includes(ext.subjectId)) daySubjects.push(ext.subjectId);
-                    }
-                  }
-                });
               }
               const isToday = dateInfo.isToday;
               const isPast = dateInfo.isPast;
@@ -415,8 +409,7 @@ export default function Ciclo() {
                         subject = rep;
                       }
                     } else if (action === "double_remaining") {
-                      const fallbackId = daySubjects.find(sId => sId !== originalSubId && (subjects[sId]?.topics || []).some(t => (t.completed || 0) < (t.total || 0)))
-                        || Object.keys(subjects).find(sId => sId !== originalSubId && (subjects[sId]?.topics || []).some(t => (t.completed || 0) < (t.total || 0)));
+                      const fallbackId = daySubjects.find(sId => sId !== originalSubId && (subjects[sId]?.topics || []).some(t => (t.completed || 0) < (t.total || 0)));
                       if (fallbackId && subjects[fallbackId]) {
                         subjectId = fallbackId;
                         subject = subjects[fallbackId];
@@ -536,8 +529,7 @@ export default function Ciclo() {
                             isReplaced = true;
                           }
                         } else if (action === "double_remaining") {
-                          const fallbackId = daySubjects.find(sId => sId !== originalSubId && (subjects[sId]?.topics || []).some(t => (t.completed || 0) < (t.total || 0)))
-                            || Object.keys(subjects).find(sId => sId !== originalSubId && (subjects[sId]?.topics || []).some(t => (t.completed || 0) < (t.total || 0)));
+                          const fallbackId = daySubjects.find(sId => sId !== originalSubId && (subjects[sId]?.topics || []).some(t => (t.completed || 0) < (t.total || 0)));
                           if (fallbackId && subjects[fallbackId]) {
                             subjectId = fallbackId;
                             subject = subjects[fallbackId];

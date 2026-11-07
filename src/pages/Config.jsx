@@ -257,13 +257,13 @@ export default function Config({
                     <span className="text-[9px] font-black bg-purple-100 text-purple-700 dark:bg-purple-950/70 dark:text-purple-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-purple-200 dark:border-purple-900" title={`Substitui por ${subjects[sub.replacementSubjectId].name} ao concluir`}>
                       <Shuffle className="w-2.5 h-2.5 text-purple-400" /> ➔ {subjects[sub.replacementSubjectId].name}
                     </span>
-                  ) : sub.onCompleteAction === 'ask' ? (
-                    <span className="text-[9px] font-black bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-slate-300 dark:border-slate-700" title="Decidir no dia da conclusão">
-                      <Clock className="w-2.5 h-2.5 text-slate-400" /> Decidir ao fim
+                  ) : sub.onCompleteAction === 'double_remaining' ? (
+                    <span className="text-[9px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-amber-200 dark:border-amber-900" title="Dobra a outra matéria do dia ao concluir">
+                      <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500" /> Dobra no Dia
                     </span>
                   ) : (
-                    <span className="text-[9px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-amber-200 dark:border-amber-900" title="Dobra matérias restantes do ciclo ao concluir">
-                      <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500" /> Dobra Restantes
+                    <span className="text-[9px] font-black bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-slate-300 dark:border-slate-700" title="Encerra e libera a vaga ao fim das aulas">
+                      <Clock className="w-2.5 h-2.5 text-slate-400" /> Encerra ao fim
                     </span>
                   )}
                 </div>
@@ -280,7 +280,7 @@ export default function Config({
                       ...sub, 
                       speed: sub.speed || 1,
                       timeGoalMinutes: currentTimeGoal,
-                      onCompleteAction: sub.onCompleteAction || 'double_remaining',
+                      onCompleteAction: (sub.onCompleteAction === 'replace' || sub.onCompleteAction === 'double_remaining') ? sub.onCompleteAction : 'keep_fixed',
                       replacementSubjectId: sub.replacementSubjectId || ''
                     });
                     setEditingSubjectId(sub.id);
@@ -1104,7 +1104,7 @@ export default function Config({
                   <RotateCcw className="w-3.5 h-3.5 text-blue-400" /> Transição ao Concluir Conteúdo (O Que Fazer com a Vaga?)
                 </label>
                 <span className="text-[10px] font-black text-blue-400 bg-blue-950/80 border border-blue-800 px-2 py-0.5 rounded uppercase">
-                  {draftSubject.onCompleteAction === 'replace' ? 'Substituir' : draftSubject.onCompleteAction === 'ask' ? 'Perguntar' : 'Dobrar Restantes'}
+                  {draftSubject.onCompleteAction === 'replace' ? 'Substituir' : draftSubject.onCompleteAction === 'double_remaining' ? 'Dobrar no Dia' : 'Encerrar ao Fim'}
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
@@ -1117,21 +1117,21 @@ export default function Config({
                   type="button"
                   onClick={() => setDraftSubject(prev => ({ ...prev, onCompleteAction: 'double_remaining' }))}
                   className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
-                    (draftSubject.onCompleteAction || 'double_remaining') === 'double_remaining'
+                    draftSubject.onCompleteAction === 'double_remaining'
                       ? 'bg-blue-950/50 border-blue-500 ring-2 ring-blue-500/30'
                       : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black text-white flex items-center gap-1.5">
-                      <Zap className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" /> Dobrar Restantes
+                      <Zap className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" /> Dobrar Matéria do Dia
                     </span>
-                    {(draftSubject.onCompleteAction || 'double_remaining') === 'double_remaining' && (
+                    {draftSubject.onCompleteAction === 'double_remaining' && (
                       <Check className="w-3.5 h-3.5 text-blue-400 stroke-[3]" />
                     )}
                   </div>
                   <p className="text-[10px] text-slate-400 leading-tight">
-                    A vaga é absorvida pelas outras matérias pendentes (ex: 2 aulas de Física por dia).
+                    A vaga é absorvida pela outra matéria pendente do mesmo dia (ex: 2 aulas de Física no dia).
                   </p>
                 </button>
 
@@ -1158,26 +1158,26 @@ export default function Config({
                   </p>
                 </button>
 
-                {/* Opção 3: Perguntar */}
+                {/* Opção 3: Encerrar ao Concluir */}
                 <button
                   type="button"
-                  onClick={() => setDraftSubject(prev => ({ ...prev, onCompleteAction: 'ask' }))}
+                  onClick={() => setDraftSubject(prev => ({ ...prev, onCompleteAction: 'keep_fixed' }))}
                   className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
-                    draftSubject.onCompleteAction === 'ask'
+                    (draftSubject.onCompleteAction !== 'replace' && draftSubject.onCompleteAction !== 'double_remaining')
                       ? 'bg-blue-950/50 border-blue-500 ring-2 ring-blue-500/30'
                       : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
                   }`}
                 >
                   <div className="flex items-center justify-between">
                     <span className="text-xs font-black text-white flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-purple-400" /> Perguntar Depois
+                      <Clock className="w-3.5 h-3.5 text-purple-400" /> Encerrar ao Fim
                     </span>
-                    {draftSubject.onCompleteAction === 'ask' && (
+                    {(draftSubject.onCompleteAction !== 'replace' && draftSubject.onCompleteAction !== 'double_remaining') && (
                       <Check className="w-3.5 h-3.5 text-blue-400 stroke-[3]" />
                     )}
                   </div>
                   <p className="text-[10px] text-slate-400 leading-tight">
-                    O sistema pausará o bloco e perguntará a sua decisão quando a última aula for assistida.
+                    Assim que a última aula for concluída, a matéria encerra e libera o horário nos dias seguintes.
                   </p>
                 </button>
               </div>

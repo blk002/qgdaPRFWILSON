@@ -518,32 +518,14 @@ export const useStore = create(
         delete next[dateStr];
         return { calendarOverrides: next };
       }),
-      addScheduleExtension: (arg1, arg2, arg3 = 'until_finished') => set(state => {
-        const isObj = arg1 && typeof arg1 === 'object';
-        const fromDate = isObj ? arg1.fromDate : arg2;
-        const subjectId = isObj ? arg1.subjectId : arg1;
-        const mode = isObj ? (arg1.mode || 'until_finished') : arg3;
-        if (!fromDate || !subjectId) return state;
-        return {
-          scheduleExtensions: [
-            ...(state.scheduleExtensions || []).filter(e => e && e.fromDate && e.subjectId && !(e.fromDate === fromDate && e.subjectId === subjectId)),
-            {
-              id: 'ext_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-              fromDate,
-              subjectId,
-              mode,
-              active: true
-            }
-          ]
-        };
-      }),
       addFutureScheduleRule: ({ fromDate, dayOfWeek, cycleIndex, daySlots }) => set(state => {
         if (!fromDate || !Array.isArray(daySlots)) return state;
         const isWeekly = (state.cycleScheduleType || 'weekly') === 'weekly';
         return {
+          scheduleExtensions: [],
           futureScheduleRules: [
             ...(state.futureScheduleRules || []).filter(r => {
-              if (!r || !r.fromDate) return false;
+              if (!r || r.v !== 2 || !r.fromDate) return false;
               const sameDay = (isWeekly && r.dayOfWeek !== undefined && dayOfWeek !== undefined)
                 ? r.dayOfWeek === dayOfWeek
                 : (r.dayOfWeek === dayOfWeek || r.cycleIndex === cycleIndex);
@@ -551,6 +533,7 @@ export const useStore = create(
             }),
             {
               id: 'rule_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+              v: 2,
               fromDate,
               dayOfWeek,
               cycleIndex,
@@ -560,30 +543,8 @@ export const useStore = create(
         };
       }),
       removeFutureScheduleRule: (ruleId) => set(state => ({
-        futureScheduleRules: (state.futureScheduleRules || []).filter(r => r.id !== ruleId)
+        futureScheduleRules: (state.futureScheduleRules || []).filter(r => r && r.v === 2 && r.id !== ruleId)
       })),
-      removeScheduleExtension: (extId) => set(state => ({
-        scheduleExtensions: (state.scheduleExtensions || []).filter(e => e.id !== extId)
-      })),
-      setScheduleFromDate: (fromDate, oldSubId, newSubId) => set(state => {
-        const newCycle = (state.cycle || []).map(day => 
-          day.map(sId => (sId === oldSubId ? newSubId : sId))
-        );
-        return {
-          cycle: newCycle,
-          scheduleExtensions: [
-            ...(state.scheduleExtensions || []),
-            {
-              id: 'rep_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-              fromDate,
-              subjectId: newSubId,
-              replacedSubjectId: oldSubId,
-              mode: 'until_finished',
-              active: true
-            }
-          ]
-        };
-      }),
       setCycle: (cycle) => set((state) => ({ cycle: typeof cycle === 'function' ? cycle(state.cycle) : cycle })),
       setCycleScheduleType: (cycleScheduleType) => set({ cycleScheduleType }),
       setCycleWeekStart: (cycleWeekStart) => set({ cycleWeekStart }),
@@ -2287,7 +2248,7 @@ export const useStore = create(
       },
 
       getSubjectEstimates: () => {
-        const { subjects, cycle, currentDayIndex, completedToday, subjectTimeGoal, calendarOverrides, scheduleExtensions, futureScheduleRules, cycleScheduleType = 'weekly', cycleWeekStart = 'sunday' } = get();
+        const { subjects, cycle, currentDayIndex, completedToday, subjectTimeGoal, calendarOverrides, futureScheduleRules, cycleScheduleType = 'weekly', cycleWeekStart = 'sunday' } = get();
         const estimates = [];
         const remainingClasses = {};
         const remainingMinutesDict = {};
@@ -2376,7 +2337,7 @@ export const useStore = create(
               }
               const matchingRules = (futureScheduleRules || [])
                 .filter(r => {
-                  if (!r || !r.fromDate || r.fromDate > simDateKey) return false;
+                  if (!r || r.v !== 2 || !r.fromDate || r.fromDate > simDateKey) return false;
                   if (cycleScheduleType === 'weekly' && r.dayOfWeek !== undefined) {
                     return r.dayOfWeek === targetDayOfWeek;
                   }
@@ -2388,16 +2349,6 @@ export const useStore = create(
                 daySubjects = [...matchingRules[0].daySlots];
               } else {
                 daySubjects = [...(cycle[cycleIndex] || [])];
-              }
-
-              if (scheduleExtensions && scheduleExtensions.length > 0) {
-                scheduleExtensions.forEach(ext => {
-                  if (ext && ext.subjectId && ext.fromDate && ext.active !== false && simDateKey >= ext.fromDate) {
-                    if (remainingLessonsQueue[ext.subjectId]?.length > 0 && !daySubjects.includes(ext.subjectId)) {
-                      daySubjects.push(ext.subjectId);
-                    }
-                  }
-                });
               }
             }
             
@@ -2420,8 +2371,7 @@ export const useStore = create(
                   effectiveSubId = repId;
                   q = remainingLessonsQueue[repId];
                 } else if (action === 'double_remaining') {
-                  const fallbackId = daySubjects.find(sId => !visited.has(sId) && remainingLessonsQueue[sId]?.length > 0)
-                    || Object.keys(remainingLessonsQueue).find(sId => !visited.has(sId) && remainingLessonsQueue[sId]?.length > 0);
+                  const fallbackId = daySubjects.find(sId => !visited.has(sId) && remainingLessonsQueue[sId]?.length > 0);
                   
                   if (fallbackId) {
                     visited.add(fallbackId);
