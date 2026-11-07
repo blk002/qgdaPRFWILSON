@@ -2270,7 +2270,7 @@ export const useStore = create(
       },
 
       getSubjectEstimates: () => {
-        const { subjects, cycle, currentDayIndex, completedToday, subjectTimeGoal, calendarOverrides, scheduleExtensions, futureScheduleRules } = get();
+        const { subjects, cycle, currentDayIndex, completedToday, subjectTimeGoal, calendarOverrides, scheduleExtensions, futureScheduleRules, cycleScheduleType = 'weekly', cycleWeekStart = 'sunday' } = get();
         const estimates = [];
         const remainingClasses = {};
         const remainingMinutesDict = {};
@@ -2354,7 +2354,11 @@ export const useStore = create(
             if (calendarOverrides && calendarOverrides[simDateKey]) {
               daySubjects = [...calendarOverrides[simDateKey]];
             } else {
-              const cycleIndex = (currentDayIndex + dayOffset) % cycle.length;
+              let cycleIndex = (currentDayIndex + dayOffset) % cycle.length;
+              if (cycleScheduleType === 'weekly' && cycle.length === 7) {
+                const targetDayOfWeek = targetSimDate.getDay();
+                cycleIndex = (cycleWeekStart === 'monday') ? (targetDayOfWeek + 6) % 7 : targetDayOfWeek;
+              }
               const matchingRules = (futureScheduleRules || [])
                 .filter(r => r.fromDate <= simDateKey && (r.dayOfWeek === targetSimDate.getDay() || r.cycleIndex === cycleIndex))
                 .sort((a, b) => b.fromDate.localeCompare(a.fromDate));

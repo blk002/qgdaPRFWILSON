@@ -117,6 +117,152 @@ export default function Calendario() {
     return [];
   };
 
+  // 3. Simulação dos 365 dias para sincronização e previsão de término das disciplinas
+  const futureSchedule = {}; // dateKey -> array of { id, count, isLast, isTransitioned, isCompletedSim }
+  const calCompletionDates = {}; // subjectId -> { dayOffset, dateObj, dateStr }
+  const remainingLessonsQueue = {};
+
+  Object.values(subjects || {}).forEach(sub => {
+    const spd = Math.max(0.5, Number(sub.speed) || 1);
+    const q = [];
+    (sub.topics || []).forEach(t => {
+      const completed = t.completed || 0;
+      const topicLessonsArr = t.lessons || [];
+      for (let idx = completed; idx < t.total; idx++) {
+        const lesson = topicLessonsArr[idx];
+        let mins = 60;
+        if (lesson?.duration) {
+          const parts = String(lesson.duration).split(':').map(Number);
+          if (parts.length === 3 && !parts.some(isNaN)) mins = parts[0] * 60 + parts[1] + parts[2] / 60;
+          else if (parts.length === 2 && !parts.some(isNaN)) mins = parts[0] + parts[1] / 60;
+        }
+        q.push({ durationMins: mins, accelMins: mins / spd });
+      }
+    });
+    remainingLessonsQueue[sub.id] = q;
+  });
+
+  for (let i = 0; i < 365; i++) {
+    if (cycle.length === 0 && (!calendarOverrides || Object.keys(calendarOverrides).length === 0)) break;
+
+    const targetSimDate = new Date(todayDateObj);
+    targetSimDate.setDate(targetSimDate.getDate() + i);
+    const simDateKey = `${targetSimDate.getFullYear()}-${String(targetSimDate.getMonth() + 1).padStart(2, '0')}-${String(targetSimDate.getDate()).padStart(2, '0')}`;
+
+    let daySubjects = [];
+    if (calendarOverrides && calendarOverrides[simDateKey]) {
+      daySubjects = [...calendarOverrides[simDateKey]];
+    } else {
+      const targetDayOfWeek = targetSimDate.getDay();
+      const cycleIndex = (cycleWeekStart === 'monday') ? (targetDayOfWeek + 6) % 7 : targetDayOfWeek;
+      
+      const matchingRules = (futureScheduleRules || [])
+        .filter(r => r.fromDate <= simDateKey && (r.dayOfWeek === targetDayOfWeek || r.cycleIndex === cycleIndex))
+        .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
+
+      if (matchingRules.length > 0) {
+        daySubjects = [...matchingRules[0].daySlots];
+      } else if (cycle.length > 0 && cycle[cycleIndex]) {
+        daySubjects = [...(cycle[cycleIndex] || [])];
+      }
+    }
+
+    if (scheduleExtensions && scheduleExtensions.length > 0) {
+      scheduleExtensions.forEach(ext => {
+        if (ext.active !== false && simDateKey >= ext.fromDate) {
+          if (remainingLessonsQueue[ext.subjectId]?.length > 0 && !daySubjects.includes(ext.subjectId)) {
+            daySubjects.push(ext.subjectId);
+          }
+        }
+      });
+    }
+
+    const scheduledThisDay = [];
+
+    daySubjects.forEach((subId, slotIdx) => {
+      if (i === 0 && completedToday.includes(slotIdx)) return;
+
+      let effectiveSubId = subId;
+      let q = remainingLessonsQueue[effectiveSubId];
+      let wasTransitioned = false;
+
+      // Se a matéria esgotou e o usuário configurou substituição explícita:
+      if (!q || q.length === 0) {
+        const originalSub = subjects[subId];
+        if (originalSub?.onCompleteAction === 'replace' && originalSub?.replacementSubjectId && subjects[originalSub.replacementSubjectId]) {
+          const repId = originalSub.replacementSubjectId;
+          const repQ = remainingLessonsQueue[repId];
+          if (repQ && repQ.length > 0) {
+            effectiveSubId = repId;
+            q = repQ;
+            wasTransitioned = true;
+          }
+        }
+      }
+
+      if (q && q.length > 0) {
+        const sub = subjects[effectiveSubId];
+        const goalMin = Number(sub?.timeGoalMinutes || subjectTimeGoal?.[effectiveSubId]) || 0;
+        let consumed = 0;
+        let accelAcc = 0;
+
+        while (q.length > 0) {
+          const nextL = q[0];
+          if (consumed === 0) {
+            consumed++;
+            accelAcc += nextL.accelMins;
+            q.shift();
+            if (goalMin === 0) break;
+            continue;
+          }
+
+          if (accelAcc >= goalMin * 0.85 && ((accelAcc + nextL.accelMins - goalMin) / goalMin) > 0.20) {
+            break;
+          }
+
+          if (accelAcc < goalMin) {
+            consumed++;
+            accelAcc += nextL.accelMins;
+            q.shift();
+          } else {
+            break;
+          }
+        }
+
+        const isLast = q.length === 0;
+        scheduledThisDay.push({ 
+          id: effectiveSubId, 
+          originalId: subId,
+          isLast, 
+          count: consumed,
+          isTransitioned: wasTransitioned,
+          isCompletedSim: false
+        });
+
+        if (isLast && !calCompletionDates[effectiveSubId]) {
+          const dStr = `${String(targetSimDate.getDate()).padStart(2, '0')}/${mesesNomesShort[targetSimDate.getMonth()]}/${targetSimDate.getFullYear()}`;
+          calCompletionDates[effectiveSubId] = {
+            dayOffset: i,
+            dateObj: new Date(targetSimDate),
+            dateStr: dStr
+          };
+        }
+      } else {
+        // Matéria já concluída na simulação: permanece na grade fixa no seu dia correspondente
+        scheduledThisDay.push({
+          id: effectiveSubId,
+          originalId: subId,
+          isLast: false,
+          count: 0,
+          isTransitioned: false,
+          isCompletedSim: true
+        });
+      }
+    });
+
+    futureSchedule[simDateKey] = scheduledThisDay;
+  }
+
   // Botão tático para fixar e limpar quaisquer extensões fantasmas (+3ª) ou regras antigas
   const handleFixCalendar = () => {
     useStore.setState({
@@ -282,7 +428,14 @@ export default function Calendario() {
 
                 const cellDateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isOverridden = Boolean(calendarOverrides && calendarOverrides[cellDateKey]);
-                const daySubjectIds = getDaySubjectsForDate(cellDateObj, cellDateKey);
+                
+                let dayItemsToRender = [];
+                if (diffDays >= 0 && futureSchedule[cellDateKey] && futureSchedule[cellDateKey].length > 0) {
+                  dayItemsToRender = futureSchedule[cellDateKey];
+                } else {
+                  const baseIds = getDaySubjectsForDate(cellDateObj, cellDateKey);
+                  dayItemsToRender = baseIds.map(id => ({ id, isLast: false, isTransitioned: false }));
+                }
 
                 return (
                   <div 
@@ -304,16 +457,30 @@ export default function Calendario() {
                       </div>
                     </div>
                     
-                    {daySubjectIds.length > 0 && (
+                    {dayItemsToRender.length > 0 && (
                       <div className="flex flex-col gap-0.5 sm:gap-1 pb-1 mt-auto">
-                        {daySubjectIds.map((subId, idx) => {
-                          const sub = subjects[subId];
+                        {dayItemsToRender.map((item, idx) => {
+                          const sub = subjects[item.id];
                           if (!sub) return null;
                           return (
                             <div key={idx} className={`flex items-center justify-between text-[10px] sm:text-[12px] font-bold px-1 sm:px-1.5 py-0.5 rounded-sm leading-tight mb-0.5 ${sub.color}`}>
                               <span className="truncate flex-1">
                                 {sub.name}
+                                {item.isTransitioned && (
+                                  <span className="opacity-80 text-[8px] font-black uppercase tracking-tight ml-1 bg-black/20 dark:bg-white/20 px-1 py-0.2 rounded">
+                                    SUBST.
+                                  </span>
+                                )}
                               </span>
+                              {item.isLast && (
+                                <span title={`Conclusão prevista de ${sub.name}!`} className="flex items-center ml-0.5 shrink-0">
+                                  <svg className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 animate-bounce" viewBox="0 0 24 24" fill="none">
+                                    <path d="M12 2L22 20H2L12 2Z" fill="white" stroke="#E81C23" strokeWidth="3" strokeLinejoin="round"/>
+                                    <path d="M12 8V14" stroke="#1A1A1A" strokeWidth="2.5" strokeLinecap="round"/>
+                                    <circle cx="12" cy="17.5" r="1.5" fill="#1A1A1A"/>
+                                  </svg>
+                                </span>
+                              )}
                             </div>
                           );
                         })}
@@ -340,7 +507,8 @@ export default function Calendario() {
             const currentSpeed = Number(sub.speed) || 1;
             const currentTimeGoal = Number(sub.timeGoalMinutes) || 0;
 
-            const displayDateStr = sub.dateStr;
+            const calFinish = calCompletionDates[sub.id];
+            const displayDateStr = calFinish ? calFinish.dateStr : sub.dateStr;
 
             return (
               <div key={sub.id} className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col gap-2 hover:border-blue-300 dark:hover:border-blue-900 transition-all bg-slate-50/70 dark:bg-slate-950/70 shadow-sm">
