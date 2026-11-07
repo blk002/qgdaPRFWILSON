@@ -1,10 +1,11 @@
 import { useStore, getCleanInitialState, PERSISTED_KEYS } from '../store/useStore';
 import { assetUrl } from '../lib/assets';
 import { toast } from 'sonner';
-import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle, Check, Camera, BookOpen, ScanLine, ChevronUp, ChevronDown, Zap, FastForward, Layers, RotateCcw, RefreshCw, Shuffle } from 'lucide-react';
+import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle, Check, Camera, BookOpen, ScanLine, ChevronUp, ChevronDown, Zap, FastForward, Layers, RotateCcw, RefreshCw, Shuffle, Share2, Download } from 'lucide-react';
 import ImportOCR from '../components/ImportOCR';
 import TopicLessonScanner from '../components/TopicLessonScanner';
 import SelectiveResetModal from '../components/SelectiveResetModal';
+import ShareSyllabusModal from '../components/ShareSyllabusModal';
 import { parseDurationToSeconds, formatSecondsToClock, formatSecondsToFriendly, getSubjectVideoStats, formatMinutesToFriendly, calculateLessonsForGoal } from '../lib/durationHelpers';
 import { APP_VERSION } from '../version';
 
@@ -20,6 +21,7 @@ export default function Config({
   const [draftSubject, setDraftSubject] = useState(null);
   const [showImportOCR, setShowImportOCR] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
+  const [shareModalConfig, setShareModalConfig] = useState(null); // { isOpen: boolean, tab: 'share'|'import', initialSubjectId: string|null }
   // Scanner de aulas por assunto
   const [scannerTopicIdx, setScannerTopicIdx] = useState(null); // índice do tópico sendo escaneado
   const modalBodyRef = useRef(null);
@@ -183,12 +185,31 @@ export default function Config({
         </div>
       </div>
 
-      <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 mb-6 flex justify-between items-center dark:bg-slate-900 dark:border-slate-800">
-        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 dark:text-slate-100"><Settings className="text-slate-600 w-5 h-5 dark:text-slate-300"/> Minhas Disciplinas</h3>
-        <div className="flex gap-2">
+      <div className="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 dark:bg-slate-900 dark:border-slate-800">
+        <div>
+          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 dark:text-slate-100">
+            <Settings className="text-slate-600 w-5 h-5 dark:text-slate-300"/> Minhas Disciplinas
+          </h3>
+          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Gerencie seu edital, cadastre videoaulas ou compartilhe com outros concurseiros.</p>
+        </div>
+        <div className="flex gap-2 flex-wrap w-full md:w-auto">
+          <button 
+            onClick={() => setShareModalConfig({ isOpen: true, tab: 'share', initialSubjectId: null })}
+            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all hover:scale-105 active:scale-95"
+            title="Compartilhar matérias, assuntos e videoaulas com outro usuário"
+          >
+            <Share2 className="w-4 h-4" /> Compartilhar Grade
+          </button>
+          <button 
+            onClick={() => setShareModalConfig({ isOpen: true, tab: 'import', initialSubjectId: null })}
+            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all hover:scale-105 active:scale-95"
+            title="Importar grade de matérias recebida de um colega"
+          >
+            <Download className="w-4 h-4" /> Importar Grade
+          </button>
           <button onClick={() => setShowImportOCR(true)}
-            className="bg-emerald-100 text-emerald-700 px-3 py-2 rounded-lg font-bold flex items-center gap-1 text-xs sm:text-sm dark:bg-emerald-900/30 dark:text-emerald-400 hover:scale-105 transition-transform">
-            <Camera className="w-4 h-4" /> Importar
+            className="bg-slate-100 text-slate-700 hover:bg-slate-200 px-3 py-2 rounded-lg font-bold flex items-center gap-1 text-xs sm:text-sm dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors">
+            <Camera className="w-4 h-4" /> OCR
           </button>
           <button onClick={() => {
               const newId = 'sub_' + Date.now();
@@ -206,7 +227,7 @@ export default function Config({
               });
               setEditingSubjectId(newId);
             }} 
-            className="bg-blue-100 text-blue-700 px-3 py-2 rounded-lg font-bold flex items-center gap-1 text-xs sm:text-sm">
+            className="bg-slate-100 text-slate-700 hover:bg-slate-200 px-3 py-2 rounded-lg font-bold flex items-center gap-1 text-xs sm:text-sm dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors">
             <Plus className="w-4 h-4" /> Nova
           </button>
         </div>
@@ -250,6 +271,13 @@ export default function Config({
                   )}
                 </div>
                 <div className="flex gap-1">
+                  <button 
+                    onClick={() => setShareModalConfig({ isOpen: true, tab: 'share', initialSubjectId: sub.id })}
+                    className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-blue-600 rounded dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800 transition-colors"
+                    title={`Compartilhar ${sub.name}`}
+                  >
+                    <Share2 className="w-4 h-4" />
+                  </button>
                   <button onClick={() => {
                     setDraftSubject({ 
                       ...sub, 
@@ -1495,6 +1523,16 @@ export default function Config({
         <SelectiveResetModal
           isOpen={showResetModal}
           onClose={() => setShowResetModal(false)}
+        />
+      )}
+
+      {shareModalConfig?.isOpen && (
+        <ShareSyllabusModal
+          subjects={subjects}
+          setSubjects={setSubjects}
+          initialSubjectId={shareModalConfig.initialSubjectId}
+          initialTab={shareModalConfig.tab || 'share'}
+          onClose={() => setShareModalConfig(null)}
         />
       )}
 
