@@ -21,7 +21,8 @@ import {
   Info, 
   Zap, 
   Target,
-  Sun
+  Sun,
+  Pin
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { toast } from 'sonner';
@@ -43,6 +44,7 @@ export default function Calendario() {
     cycle = [], 
     setCycle,
     cycleScheduleType = 'weekly',
+    cycleWeekStart = 'sunday',
     currentDayIndex = 0, 
     completedToday = [], 
     getEstimatedCompletionDate, 
@@ -96,278 +98,84 @@ export default function Calendario() {
   const today = new Date();
   const todayDateObj = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-  // Simulação dos 365 dias para renderização do calendário e sincronização exata de datas
-  const futureSchedule = {};
-  const dayVacancies = {}; // mapeia dateKey -> lista de vagas abertas
-  const calCompletionDates = {}; // mapeia subjectId -> { dayOffset, dateObj, dateStr }
-  const remainingLessonsQueue = {};
+  // Função principal: retorna as matérias fixas programadas para qualquer data do calendário
+  const getDaySubjectsForDate = (cellDateObj, dateKey) => {
+    // 1. Personalização manual explícita para este dia específico
+    if (calendarOverrides && calendarOverrides[dateKey]) {
+      return calendarOverrides[dateKey];
+    }
 
-  Object.values(subjects || {}).forEach(sub => {
-    const spd = Math.max(0.5, Number(sub.speed) || 1);
-    const q = [];
-    (sub.topics || []).forEach(t => {
-      const completed = t.completed || 0;
-      const topicLessonsArr = t.lessons || [];
-      for (let idx = completed; idx < t.total; idx++) {
-        const lesson = topicLessonsArr[idx];
-        let mins = 60;
-        if (lesson?.duration) {
-          const parts = String(lesson.duration).split(':').map(Number);
-          if (parts.length === 3 && !parts.some(isNaN)) mins = parts[0] * 60 + parts[1] + parts[2] / 60;
-          else if (parts.length === 2 && !parts.some(isNaN)) mins = parts[0] + parts[1] / 60;
-        }
-        q.push({ durationMins: mins, accelMins: mins / spd });
+    // 2. Modo Semanal Fixo: determinado estritamente pelo dia da semana real da data
+    if (cycle && cycle.length > 0) {
+      const dayOfWeek = cellDateObj.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
+      const weekIndex = (cycleWeekStart === 'monday') ? (dayOfWeek + 6) % 7 : dayOfWeek;
+      if (weekIndex < cycle.length && Array.isArray(cycle[weekIndex])) {
+        return cycle[weekIndex];
       }
+    }
+
+    return [];
+  };
+
+  // Botão tático para fixar e limpar quaisquer extensões fantasmas (+3ª) ou regras antigas
+  const handleFixCalendar = () => {
+    useStore.setState({
+      scheduleExtensions: [],
+      futureScheduleRules: [],
+      calendarOverrides: {}
     });
-    remainingLessonsQueue[sub.id] = q;
-  });
-
-  for (let i = 0; i < 365; i++) {
-    if (cycle.length === 0 && (!calendarOverrides || Object.keys(calendarOverrides).length === 0) && (!futureScheduleRules || futureScheduleRules.length === 0)) break;
-    
-    const targetSimDate = new Date(todayDateObj);
-    targetSimDate.setDate(targetSimDate.getDate() + i);
-    const simDateKey = `${targetSimDate.getFullYear()}-${String(targetSimDate.getMonth() + 1).padStart(2, '0')}-${String(targetSimDate.getDate()).padStart(2, '0')}`;
-
-    let daySubjects = [];
-    let isExplicitOverride = false;
-    
-    if (calendarOverrides && calendarOverrides[simDateKey]) {
-      daySubjects = [...calendarOverrides[simDateKey]];
-      isExplicitOverride = true;
-    } else {
-      const cycleIndex = (currentDayIndex + i) % Math.max(1, cycle.length);
-      const targetDayOfWeek = targetSimDate.getDay();
-      
-      // Procura regras de padrão para o futuro que comecem antes ou nesta data
-      const matchingRules = (futureScheduleRules || [])
-        .filter(r => r.fromDate <= simDateKey && (r.dayOfWeek === targetDayOfWeek || r.cycleIndex === cycleIndex))
-        .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
-
-      if (matchingRules.length > 0) {
-        daySubjects = [...matchingRules[0].daySlots];
-      } else if (cycle.length > 0) {
-        daySubjects = [...(cycle[cycleIndex] || [])];
-      }
-    }
-
-    // Extensões ativas (ex: 3ª matéria adicionada até zerar)
-    if (scheduleExtensions && scheduleExtensions.length > 0) {
-      scheduleExtensions.forEach(ext => {
-        if (ext.active !== false && simDateKey >= ext.fromDate) {
-          if (remainingLessonsQueue[ext.subjectId]?.length > 0 && !daySubjects.includes(ext.subjectId)) {
-            daySubjects.push(ext.subjectId);
-          }
-        }
-      });
-    }
-
-    const scheduledThisDay = [];
-    const vacanciesThisDay = [];
-
-    daySubjects.forEach((subId, slotIdx) => {
-      if (i === 0 && completedToday.includes(slotIdx)) return;
-
-      let effectiveSubId = subId;
-      let q = remainingLessonsQueue[effectiveSubId];
-      let wasTransitioned = false;
-
-      // Se a matéria esgotou suas aulas, verificar transição ou flag de vaga aberta
-      if (!q || q.length === 0) {
-        const originalSub = subjects[subId];
-        const action = originalSub?.onCompleteAction || 'double_remaining';
-
-        if (action === 'replace' && originalSub?.replacementSubjectId && subjects[originalSub.replacementSubjectId]) {
-          const repId = originalSub.replacementSubjectId;
-          const repQ = remainingLessonsQueue[repId];
-          if (repQ && repQ.length > 0) {
-            effectiveSubId = repId;
-            q = repQ;
-            wasTransitioned = true;
-          }
-        } else if (action === 'double_remaining') {
-          const fallbackId = daySubjects.find(sId => sId !== subId && remainingLessonsQueue[sId]?.length > 0)
-            || Object.keys(remainingLessonsQueue).find(sId => remainingLessonsQueue[sId]?.length > 0);
-          
-          if (fallbackId) {
-            effectiveSubId = fallbackId;
-            q = remainingLessonsQueue[fallbackId];
-            wasTransitioned = true;
-          }
-        }
-
-        // Registrar vaga aberta caso a original tenha zerado
-        if (!isExplicitOverride && originalSub) {
-          vacanciesThisDay.push({
-            slotIndex: slotIdx,
-            originalSubId: subId,
-            originalSubName: originalSub.name,
-            currentEffectiveSubId: wasTransitioned ? effectiveSubId : null,
-            transitionAction: action
-          });
-        }
-      }
-
-      if (q && q.length > 0) {
-        const sub = subjects[effectiveSubId];
-        const goalMin = Number(sub?.timeGoalMinutes || subjectTimeGoal?.[effectiveSubId]) || 0;
-        let consumed = 0;
-        let accelAcc = 0;
-
-        while (q.length > 0) {
-          const nextL = q[0];
-          if (consumed === 0) {
-            consumed++;
-            accelAcc += nextL.accelMins;
-            q.shift();
-            if (goalMin === 0) break;
-            continue;
-          }
-
-          if (accelAcc >= goalMin * 0.85 && ((accelAcc + nextL.accelMins - goalMin) / goalMin) > 0.20) {
-            break;
-          }
-
-          if (accelAcc < goalMin) {
-            consumed++;
-            accelAcc += nextL.accelMins;
-            q.shift();
-          } else {
-            break;
-          }
-        }
-
-        const isLast = q.length === 0;
-        scheduledThisDay.push({ 
-          id: effectiveSubId, 
-          originalId: subId,
-          isLast, 
-          count: consumed,
-          isTransitioned: wasTransitioned 
-        });
-
-        // Grava a data exata em que a matéria encerra no grid
-        if (isLast && !calCompletionDates[effectiveSubId]) {
-          const dStr = `${String(targetSimDate.getDate()).padStart(2, '0')}/${mesesNomesShort[targetSimDate.getMonth()]}/${targetSimDate.getFullYear()}`;
-          calCompletionDates[effectiveSubId] = {
-            dayOffset: i,
-            dateObj: new Date(targetSimDate),
-            dateStr: dStr
-          };
-        }
-      }
-    });
-
-    futureSchedule[i] = scheduledThisDay;
-    if (vacanciesThisDay.length > 0) {
-      dayVacancies[simDateKey] = vacanciesThisDay;
-    }
-  }
+    toast.success("Calendário 100% fixado no padrão do seu ciclo semanal!");
+  };
 
   // Handlers do Gerenciador de Dia
   const handleOpenDayManager = (cellDateObj, dateKey) => {
     const diff = Math.round((cellDateObj.getTime() - todayDateObj.getTime()) / (1000 * 60 * 60 * 24));
-    let currentDaySubs = [];
-    
-    // 1. Prioriza exatamente o que está simulado e visível na grade do calendário
-    if (diff >= 0 && futureSchedule[diff] && futureSchedule[diff].length > 0) {
-      currentDaySubs = futureSchedule[diff].map(item => item.id);
-    } else if (calendarOverrides && calendarOverrides[dateKey]) {
-      currentDaySubs = [...calendarOverrides[dateKey]];
-    } else {
-      const cIdx = ((currentDayIndex + Math.max(0, diff)) % Math.max(1, cycle.length));
-      const targetDayOfWeek = cellDateObj.getDay();
-      const matchingRules = (futureScheduleRules || [])
-        .filter(r => r.fromDate <= dateKey && (r.dayOfWeek === targetDayOfWeek || r.cycleIndex === cIdx))
-        .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
-
-      if (matchingRules.length > 0) {
-        currentDaySubs = [...matchingRules[0].daySlots];
-      } else if (cycle.length > 0) {
-        currentDaySubs = [...(cycle[cIdx] || [])];
-      }
-    }
-
-    // 2. Garante que qualquer extensão ativa para esta data (ex: 3ª matéria) esteja presente no gerenciador
-    if (scheduleExtensions && scheduleExtensions.length > 0) {
-      scheduleExtensions.forEach(ext => {
-        if (ext.active !== false && dateKey >= ext.fromDate) {
-          if (remainingLessonsQueue[ext.subjectId]?.length > 0 && !currentDaySubs.includes(ext.subjectId)) {
-            currentDaySubs.push(ext.subjectId);
-          }
-        }
-      });
-    }
-
-    const hasFutureRule = futureScheduleRules?.some(r => r.fromDate === dateKey && r.dayOfWeek === cellDateObj.getDay());
+    const dayOfWeek = cellDateObj.getDay();
+    const weekIndex = (cycleWeekStart === 'monday') ? (dayOfWeek + 6) % 7 : dayOfWeek;
+    const baseSubs = (cycle && cycle[weekIndex]) ? [...cycle[weekIndex]] : [];
+    const currentDaySubs = (calendarOverrides && calendarOverrides[dateKey]) ? [...calendarOverrides[dateKey]] : [...baseSubs];
 
     setManagingDay({
       dateObj: cellDateObj,
       dateKey,
       diffDays: diff,
+      dayOfWeek,
+      weekIndex,
       isCustomized: Boolean(calendarOverrides && calendarOverrides[dateKey]),
-      hasFutureRule,
-      vacancies: dayVacancies[dateKey] || []
+      baseSubs
     });
     setDaySlots(currentDaySubs);
-    setSaveMode('future'); // padrão recomendado: para o futuro
+    setSaveMode('single'); // padrão: salvar neste dia
     setIsAddingNewBlock(false);
     setSelectedNewSubjectId('');
-    setNewBlockScope('until_finished');
   };
 
   const handleSaveDayManager = () => {
     if (!managingDay) return;
-    const { dateKey, dateObj, diffDays } = managingDay;
-    const dayOfWeek = dateObj.getDay();
-    const cycleIndex = (currentDayIndex + Math.max(0, diffDays)) % Math.max(1, cycle.length);
-
+    const { dateKey, weekIndex } = managingDay;
     let updatedSlots = [...daySlots];
 
-    // Se estiver adicionando novo bloco
     if (isAddingNewBlock && selectedNewSubjectId) {
       if (!updatedSlots.includes(selectedNewSubjectId)) {
         updatedSlots.push(selectedNewSubjectId);
       }
-      if (newBlockScope === 'until_finished') {
-        if (addScheduleExtension) {
-          addScheduleExtension({
-            fromDate: dateKey,
-            subjectId: selectedNewSubjectId,
-            mode: 'until_finished'
-          });
-        }
-        toast.success(`3ª Matéria (${subjects[selectedNewSubjectId]?.name || 'Disciplina'}) estendida a partir de ${dateKey} até zerar!`);
-      }
     }
 
-    // Se o usuário removeu alguma matéria que era uma extensão iniciada nesta data:
-    const extsOnThisDate = (scheduleExtensions || []).filter(e => e.fromDate === dateKey);
-    extsOnThisDate.forEach(ext => {
-      if (!updatedSlots.includes(ext.subjectId) && removeScheduleExtension) {
-        removeScheduleExtension(ext.id);
-      }
-    });
-
     if (saveMode === 'single') {
-      // 1. Salvar APENAS neste dia
+      // Salva apenas nesta data específica
       if (setDayOverride) {
         setDayOverride(dateKey, updatedSlots);
-        toast.success(`Alterações salvas exclusivamente para o dia ${dateKey}!`);
+        toast.success(`Programação salva exclusivamente para ${dateKey}!`);
       }
-    } else if (saveMode === 'future') {
-      // 2. Tornar PADRÃO PARA O FUTURO (a partir desta data)
-      // Preserva todos os dias anteriores intactos!
-      if (addFutureScheduleRule) {
-        addFutureScheduleRule({
-          fromDate: dateKey,
-          dayOfWeek,
-          cycleIndex,
-          daySlots: updatedSlots
-        });
+    } else {
+      // Atualiza o ciclo semanal para todas as semanas neste dia
+      if (setCycle && cycle) {
+        const newCycle = [...cycle];
+        newCycle[weekIndex] = updatedSlots;
+        setCycle(newCycle);
+        if (removeDayOverride) removeDayOverride(dateKey);
+        toast.success(`Ciclo semanal atualizado e fixado com sucesso!`);
       }
-      if (removeDayOverride) removeDayOverride(dateKey);
-      toast.success(`Padrão definido para o futuro a partir de ${dateKey}! Todos os dias anteriores foram preservados.`);
     }
 
     setManagingDay(null);
@@ -375,46 +183,9 @@ export default function Calendario() {
 
   const handleResetDayToDefault = () => {
     if (!managingDay) return;
-    const { dateKey, dateObj } = managingDay;
-    const dayOfWeek = dateObj.getDay();
-
+    const { dateKey } = managingDay;
     if (removeDayOverride) removeDayOverride(dateKey);
-    
-    // Remove regras de futuro que começavam exatamente nesta data
-    const ruleToRemove = futureScheduleRules?.find(r => r.fromDate === dateKey && r.dayOfWeek === dayOfWeek);
-    if (ruleToRemove && removeFutureScheduleRule) {
-      removeFutureScheduleRule(ruleToRemove.id);
-    }
-
-    // Remove extensões que começavam exatamente nesta data
-    const extsToRemove = scheduleExtensions?.filter(e => e.fromDate === dateKey);
-    if (extsToRemove && extsToRemove.length > 0 && removeScheduleExtension) {
-      extsToRemove.forEach(e => removeScheduleExtension(e.id));
-    }
-
-    toast.success(`Customização do dia ${dateKey} removida. Padrão anterior restaurado!`);
-    setManagingDay(null);
-  };
-
-  const handleQuickFillVacancy = (vacancy, chosenSubId) => {
-    if (!managingDay) return;
-    const { dateKey, dateObj, diffDays } = managingDay;
-    const dayOfWeek = dateObj.getDay();
-    const cycleIndex = (currentDayIndex + Math.max(0, diffDays)) % Math.max(1, cycle.length);
-
-    const updatedSlots = daySlots.map((sId, idx) => idx === vacancy.slotIndex ? chosenSubId : sId);
-
-    // Cria regra para o futuro a partir de dateKey
-    if (addFutureScheduleRule) {
-      addFutureScheduleRule({
-        fromDate: dateKey,
-        dayOfWeek,
-        cycleIndex,
-        daySlots: updatedSlots
-      });
-    }
-
-    toast.success(`Vaga preenchida por ${subjects[chosenSubId]?.name || 'nova matéria'} a partir de ${dateKey} para o futuro! Dias anteriores preservados.`);
+    toast.success(`Programação restaurada para o padrão do ciclo semanal!`);
     setManagingDay(null);
   };
 
@@ -468,10 +239,19 @@ export default function Calendario() {
         </div>
 
         {/* Cabeçalho do Mês no Calendário */}
-        <div className="flex justify-between items-center mb-4 sm:mb-6">
-          <h2 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2 dark:text-slate-100">
-            <CalendarIcon className="text-blue-600 w-5 h-5 sm:w-6 sm:h-6" /> {mesesNomes[month]} {year}
-          </h2>
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
+          <div className="flex items-center gap-2">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2 dark:text-slate-100">
+              <CalendarIcon className="text-blue-600 w-5 h-5 sm:w-6 sm:h-6" /> {mesesNomes[month]} {year}
+            </h2>
+            <button
+              onClick={handleFixCalendar}
+              className="ml-2 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1 shadow-sm hover:scale-105 transition-all cursor-pointer"
+              title="Fixar a grade semanal e remover quaisquer extensões ou regras que alteravam a programação"
+            >
+              <Pin className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> Grade Semanal Fixa
+            </button>
+          </div>
           <div className="flex gap-1 sm:gap-2">
             <button onClick={() => setCalendarDate(new Date(year, month - 1, 1))} className="p-1.5 sm:p-2 bg-slate-50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full border border-slate-200 dark:bg-slate-950 dark:border-slate-800 cursor-pointer"><ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" /></button>
             <button onClick={() => setCalendarDate(new Date(year, month + 1, 1))} className="p-1.5 sm:p-2 bg-slate-50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full border border-slate-200 dark:bg-slate-950 dark:border-slate-800 cursor-pointer"><ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" /></button>
@@ -499,22 +279,17 @@ export default function Calendario() {
                   : isTodayReal 
                     ? "bg-blue-50 border-2 border-blue-500 shadow-sm text-blue-700 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300" 
                     : "bg-white border border-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300";
-                
-                let projectedSubjects = [];
-                if (diffDays >= 0 && futureSchedule[diffDays]) projectedSubjects = futureSchedule[diffDays];
 
                 const cellDateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isOverridden = Boolean(calendarOverrides && calendarOverrides[cellDateKey]);
-                const hasExtensions = scheduleExtensions?.some(e => e.active !== false && cellDateKey >= e.fromDate);
-                const hasFutureRule = futureScheduleRules?.some(r => r.fromDate <= cellDateKey && r.dayOfWeek === cellDateObj.getDay());
-                const vacancies = dayVacancies[cellDateKey] || [];
+                const daySubjectIds = getDaySubjectsForDate(cellDateObj, cellDateKey);
 
                 return (
                   <div 
                     key={day} 
                     onClick={() => handleOpenDayManager(cellDateObj, cellDateKey)}
                     className={`min-h-[5.5rem] md:min-h-[7.5rem] p-1 sm:p-1.5 rounded-md flex flex-col transition-all cursor-pointer group hover:ring-2 hover:ring-blue-400 hover:shadow-md ${bgClass}`}
-                    title="Clique para gerenciar matérias, adicionar bloco ou definir padrão para o futuro"
+                    title="Clique para gerenciar matérias deste dia"
                   >
                     <div className="flex justify-between items-start mb-1 gap-0.5">
                       <div className="flex items-center gap-1">
@@ -522,63 +297,27 @@ export default function Calendario() {
                         {isOverridden && (
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Dia com personalização manual avulsa" />
                         )}
-                        {hasFutureRule && !isOverridden && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500" title="Dia sob regra de padrão para o futuro" />
-                        )}
-                        {hasExtensions && (
-                          <span className="text-[8px] font-black text-emerald-400 bg-emerald-950/80 px-1 rounded border border-emerald-800" title="3ª Matéria Ativa (até zerar)">
-                            +3ª
-                          </span>
-                        )}
                       </div>
                       <div className="flex items-center gap-1">
                         {isTodayReal && <span className="text-[9px] sm:text-[10px] font-black bg-blue-500 text-white px-1 sm:px-1.5 py-0.5 rounded-sm">HOJE</span>}
                         <Settings className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />
                       </div>
                     </div>
-
-                    {/* Vagas Abertas em Destaque */}
-                    {diffDays >= 0 && vacancies.length > 0 && !isOverridden && (
-                      <div className="mb-1">
-                        {vacancies.map((v, vIdx) => (
-                          <div 
-                            key={vIdx}
-                            className="bg-amber-500/20 text-amber-800 dark:text-amber-300 border border-amber-400/40 px-1 py-0.5 rounded text-[8px] sm:text-[9px] font-black uppercase flex items-center gap-1 animate-pulse"
-                            title={`${v.originalSubName} concluiu seu conteúdo! Clique para definir quem assume a vaga.`}
-                          >
-                            <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500 shrink-0" />
-                            <span className="truncate">Vaga: {v.originalSubName}</span>
-                          </div>
-                        ))}
-                      </div>
-                    )}
                     
-                    {diffDays >= 0 && projectedSubjects.length > 0 && (
-                       <div className="flex flex-col gap-0.5 sm:gap-1 pb-1 mt-auto">
-                         {projectedSubjects.map((item, idx) => {
-                           const sub = subjects[item.id];
-                           if(!sub) return null;
-                           return (
-                             <div key={idx} className={`flex items-center justify-between text-[10px] sm:text-[12px] font-bold px-1 sm:px-1.5 py-0.5 rounded-sm leading-tight mb-0.5 ${sub.color}`}>
-                               <span className="truncate flex-1">
-                                 {sub.name}
-                                 {item.isTransitioned && (
-                                   <span className="opacity-80 text-[8px] font-black uppercase tracking-tight ml-1 bg-black/20 dark:bg-white/20 px-1 py-0.2 rounded">
-                                     2º BLOCO
-                                   </span>
-                                 )}
-                               </span>
-                               {item.isLast && (
-                                 <svg className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 shrink-0 ml-0.5" viewBox="0 0 24 24" fill="none">
-                                   <path d="M12 2L22 20H2L12 2Z" fill="white" stroke="#E81C23" strokeWidth="3" strokeLinejoin="round"/>
-                                   <path d="M12 8V14" stroke="#1A1A1A" strokeWidth="2.5" strokeLinecap="round"/>
-                                   <circle cx="12" cy="17.5" r="1.5" fill="#1A1A1A"/>
-                                 </svg>
-                               )}
-                             </div>
-                           );
-                         })}
-                       </div>
+                    {daySubjectIds.length > 0 && (
+                      <div className="flex flex-col gap-0.5 sm:gap-1 pb-1 mt-auto">
+                        {daySubjectIds.map((subId, idx) => {
+                          const sub = subjects[subId];
+                          if (!sub) return null;
+                          return (
+                            <div key={idx} className={`flex items-center justify-between text-[10px] sm:text-[12px] font-bold px-1 sm:px-1.5 py-0.5 rounded-sm leading-tight mb-0.5 ${sub.color}`}>
+                              <span className="truncate flex-1">
+                                {sub.name}
+                              </span>
+                            </div>
+                          );
+                        })}
+                      </div>
                     )}
                   </div>
                 );
@@ -601,9 +340,7 @@ export default function Calendario() {
             const currentSpeed = Number(sub.speed) || 1;
             const currentTimeGoal = Number(sub.timeGoalMinutes) || 0;
 
-            // Sincronização direta com a previsão do calendário
-            const calFinish = calCompletionDates[sub.id];
-            const displayDateStr = calFinish ? calFinish.dateStr : sub.dateStr;
+            const displayDateStr = sub.dateStr;
 
             return (
               <div key={sub.id} className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col gap-2 hover:border-blue-300 dark:hover:border-blue-900 transition-all bg-slate-50/70 dark:bg-slate-950/70 shadow-sm">
@@ -680,35 +417,6 @@ export default function Calendario() {
                 Ajuste os blocos deste dia e decida se a alteração se aplica apenas a esta data ou se torna o novo padrão para o futuro.
               </p>
             </div>
-
-            {/* Alerta de Vaga em Aberto */}
-            {managingDay.vacancies && managingDay.vacancies.length > 0 && (
-              <div className="bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800/60 rounded-xl p-3 flex flex-col gap-2">
-                <div className="flex items-center gap-2 text-amber-800 dark:text-amber-200 font-bold text-xs">
-                  <Zap className="w-4 h-4 text-amber-500 fill-amber-500" />
-                  <span>Vaga disponível: Matéria concluída</span>
-                </div>
-                {managingDay.vacancies.map((vac, vIdx) => (
-                  <div key={vIdx} className="text-xs text-slate-600 dark:text-slate-300 flex flex-col gap-2">
-                    <p>
-                      <strong>{vac.originalSubName}</strong> encerrou seu conteúdo nesta data. Como deseja preencher esta vaga?
-                    </p>
-                    <div className="flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const otherId = daySlots.find(sId => sId !== vac.originalSubId) || Object.keys(subjects)[0];
-                          handleQuickFillVacancy(vac, otherId);
-                        }}
-                        className="px-3 py-1.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg text-xs shadow-xs"
-                      >
-                        ⚡ Dobrar Matéria Restante (Para o Futuro a partir de {managingDay.dateKey})
-                      </button>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
 
             {/* Lista de Blocos Agendados para o Dia */}
             <div className="flex flex-col gap-2">
@@ -821,6 +529,25 @@ export default function Calendario() {
               </label>
 
               <div className="grid grid-cols-1 gap-2">
+                <label className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${saveMode === 'single' ? 'bg-blue-50 border-blue-500 dark:bg-blue-950/40 dark:border-blue-600' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'}`}>
+                  <input 
+                    type="radio" 
+                    name="saveModeRadio" 
+                    value="single" 
+                    checked={saveMode === 'single'} 
+                    onChange={() => setSaveMode('single')}
+                    className="mt-1"
+                  />
+                  <div className="flex flex-col">
+                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1">
+                      💾 Apenas neste dia ({managingDay.dateKey})
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      Modifica exclusivamente esta data. As demais semanas continuam seguindo a grade semanal fixa.
+                    </span>
+                  </div>
+                </label>
+
                 <label className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${saveMode === 'future' ? 'bg-emerald-50 border-emerald-500 dark:bg-emerald-950/40 dark:border-emerald-600' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'}`}>
                   <input 
                     type="radio" 
@@ -832,29 +559,10 @@ export default function Calendario() {
                   />
                   <div className="flex flex-col">
                     <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1">
-                      🚀 Tornar Padrão para o Futuro (a partir de {managingDay.dateKey})
+                      📌 Fixar em todas as {diasSemanaFull[managingDay.dayOfWeek]}s do Ciclo
                     </span>
                     <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Aplica esta grade para este dia da semana ({diasSemanaFull[managingDay.dateObj.getDay()]}) daqui em diante. <strong>Todos os dias anteriores continuam intactos!</strong>
-                    </span>
-                  </div>
-                </label>
-
-                <label className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${saveMode === 'single' ? 'bg-blue-50 border-blue-500 dark:bg-blue-950/40 dark:border-blue-600' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'}`}>
-                  <input 
-                    type="radio" 
-                    name="saveModeRadio" 
-                    value="single" 
-                    checked={saveMode === 'single'} 
-                    onChange={() => setSaveMode('single')}
-                    className="mt-1"
-                  />
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
-                      💾 Apenas neste dia ({managingDay.dateKey})
-                    </span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Modifica exclusivamente esta data. As semanas seguintes e anteriores não serão alteradas.
+                      Atualiza o ciclo semanal. Todas as {diasSemanaFull[managingDay.dayOfWeek]}s passarão a ter esta programação fixa.
                     </span>
                   </div>
                 </label>
@@ -869,16 +577,16 @@ export default function Calendario() {
                 className={`w-full py-2.5 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 ${saveMode === 'future' ? 'bg-emerald-600 hover:bg-emerald-700' : 'bg-blue-600 hover:bg-blue-700'}`}
               >
                 <CheckCircle className="w-4 h-4" /> 
-                {saveMode === 'future' ? `Confirmar e Tornar Padrão de ${managingDay.dateKey} em Diante` : 'Salvar Alterações para este Dia'}
+                {saveMode === 'future' ? `Fixar em todas as ${diasSemanaFull[managingDay.dayOfWeek]}s do Ciclo` : 'Salvar Alterações para este Dia'}
               </button>
 
-              {(managingDay.isCustomized || managingDay.hasFutureRule) && (
+              {managingDay.isCustomized && (
                 <button
                   type="button"
                   onClick={handleResetDayToDefault}
                   className="w-full py-2 text-slate-500 hover:text-red-500 text-xs font-bold transition-colors flex items-center justify-center gap-1"
                 >
-                  <RotateCcw className="w-3.5 h-3.5" /> Restaurar Padrão Anterior (Remover Customização)
+                  <RotateCcw className="w-3.5 h-3.5" /> Restaurar Padrão do Ciclo Semanal
                 </button>
               )}
             </div>
