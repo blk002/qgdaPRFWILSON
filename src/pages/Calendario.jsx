@@ -155,7 +155,7 @@ export default function Calendario() {
     if (scheduleExtensions && scheduleExtensions.length > 0) {
       scheduleExtensions.forEach(ext => {
         if (ext.active !== false && simDateKey >= ext.fromDate) {
-          if (remainingLessonsQueue[ext.subjectId]?.length > 0) {
+          if (remainingLessonsQueue[ext.subjectId]?.length > 0 && !daySubjects.includes(ext.subjectId)) {
             daySubjects.push(ext.subjectId);
           }
         }
@@ -269,10 +269,11 @@ export default function Calendario() {
     const diff = Math.round((cellDateObj.getTime() - todayDateObj.getTime()) / (1000 * 60 * 60 * 24));
     let currentDaySubs = [];
     
-    if (calendarOverrides && calendarOverrides[dateKey]) {
-      currentDaySubs = [...calendarOverrides[dateKey]];
-    } else if (diff >= 0 && futureSchedule[diff]) {
+    // 1. Prioriza exatamente o que está simulado e visível na grade do calendário
+    if (diff >= 0 && futureSchedule[diff] && futureSchedule[diff].length > 0) {
       currentDaySubs = futureSchedule[diff].map(item => item.id);
+    } else if (calendarOverrides && calendarOverrides[dateKey]) {
+      currentDaySubs = [...calendarOverrides[dateKey]];
     } else {
       const cIdx = ((currentDayIndex + Math.max(0, diff)) % Math.max(1, cycle.length));
       const targetDayOfWeek = cellDateObj.getDay();
@@ -285,6 +286,17 @@ export default function Calendario() {
       } else if (cycle.length > 0) {
         currentDaySubs = [...(cycle[cIdx] || [])];
       }
+    }
+
+    // 2. Garante que qualquer extensão ativa para esta data (ex: 3ª matéria) esteja presente no gerenciador
+    if (scheduleExtensions && scheduleExtensions.length > 0) {
+      scheduleExtensions.forEach(ext => {
+        if (ext.active !== false && dateKey >= ext.fromDate) {
+          if (remainingLessonsQueue[ext.subjectId]?.length > 0 && !currentDaySubs.includes(ext.subjectId)) {
+            currentDaySubs.push(ext.subjectId);
+          }
+        }
+      });
     }
 
     const hasFutureRule = futureScheduleRules?.some(r => r.fromDate === dateKey && r.dayOfWeek === cellDateObj.getDay());
@@ -314,6 +326,9 @@ export default function Calendario() {
 
     // Se estiver adicionando novo bloco
     if (isAddingNewBlock && selectedNewSubjectId) {
+      if (!updatedSlots.includes(selectedNewSubjectId)) {
+        updatedSlots.push(selectedNewSubjectId);
+      }
       if (newBlockScope === 'until_finished') {
         if (addScheduleExtension) {
           addScheduleExtension({
@@ -323,10 +338,16 @@ export default function Calendario() {
           });
         }
         toast.success(`3ª Matéria (${subjects[selectedNewSubjectId]?.name || 'Disciplina'}) estendida a partir de ${dateKey} até zerar!`);
-      } else {
-        updatedSlots.push(selectedNewSubjectId);
       }
     }
+
+    // Se o usuário removeu alguma matéria que era uma extensão iniciada nesta data:
+    const extsOnThisDate = (scheduleExtensions || []).filter(e => e.fromDate === dateKey);
+    extsOnThisDate.forEach(ext => {
+      if (!updatedSlots.includes(ext.subjectId) && removeScheduleExtension) {
+        removeScheduleExtension(ext.id);
+      }
+    });
 
     if (saveMode === 'single') {
       // 1. Salvar APENAS neste dia
@@ -363,6 +384,12 @@ export default function Calendario() {
     const ruleToRemove = futureScheduleRules?.find(r => r.fromDate === dateKey && r.dayOfWeek === dayOfWeek);
     if (ruleToRemove && removeFutureScheduleRule) {
       removeFutureScheduleRule(ruleToRemove.id);
+    }
+
+    // Remove extensões que começavam exatamente nesta data
+    const extsToRemove = scheduleExtensions?.filter(e => e.fromDate === dateKey);
+    if (extsToRemove && extsToRemove.length > 0 && removeScheduleExtension) {
+      extsToRemove.forEach(e => removeScheduleExtension(e.id));
     }
 
     toast.success(`Customização do dia ${dateKey} removida. Padrão anterior restaurado!`);

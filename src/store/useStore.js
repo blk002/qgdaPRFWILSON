@@ -2369,7 +2369,7 @@ export const useStore = create(
             if (scheduleExtensions && scheduleExtensions.length > 0) {
               scheduleExtensions.forEach(ext => {
                 if (ext.active !== false && simDateKey >= ext.fromDate) {
-                  if (remainingLessonsQueue[ext.subjectId]?.length > 0) {
+                  if (remainingLessonsQueue[ext.subjectId]?.length > 0 && !daySubjects.includes(ext.subjectId)) {
                     daySubjects.push(ext.subjectId);
                   }
                 }
