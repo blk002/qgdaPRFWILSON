@@ -656,67 +656,6 @@ export default function Calendario() {
             );
           })}
         </div>
-
-        {/* Seção de Regras para o Futuro e Extensões Ativas */}
-        {((futureScheduleRules && futureScheduleRules.length > 0) || (scheduleExtensions && scheduleExtensions.length > 0)) && (
-          <div className="mt-6 pt-4 border-t border-slate-200 dark:border-slate-800">
-            <h4 className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-2 flex items-center gap-1.5">
-              <Sparkles className="w-3.5 h-3.5 text-amber-500" /> Padrões Futuros & Extensões
-            </h4>
-            <div className="flex flex-col gap-2">
-              {/* Regras de Padrão para o Futuro */}
-              {futureScheduleRules?.map(rule => {
-                const dayName = diasSemanaFull[rule.dayOfWeek] || `Dia ${rule.dayOfWeek}`;
-                return (
-                  <div key={rule.id} className="bg-emerald-50 dark:bg-emerald-950/40 p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 border border-emerald-200 dark:border-emerald-800">
-                    <div className="flex flex-col">
-                      <span className="font-bold text-emerald-900 dark:text-emerald-200">
-                        Padrão: {dayName}
-                      </span>
-                      <span className="text-[10px] text-emerald-700 dark:text-emerald-400">
-                        A partir de {rule.fromDate} ({rule.daySlots.length} blocos)
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => {
-                        if (removeFutureScheduleRule) removeFutureScheduleRule(rule.id);
-                        toast.success('Padrão para o futuro removido! Grade base restaurada.');
-                      }}
-                      className="p-1.5 text-emerald-700 hover:text-red-500 rounded hover:bg-emerald-100 dark:hover:bg-emerald-900/40"
-                      title="Excluir este padrão futuro e restaurar o original"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                );
-              })}
-
-              {/* 3ª Matéria Estendida */}
-              {scheduleExtensions?.map(ext => {
-                const sub = subjects[ext.subjectId];
-                return (
-                  <div key={ext.id} className="bg-slate-100 dark:bg-slate-800 p-2.5 rounded-xl text-xs flex items-center justify-between gap-2 border border-slate-200 dark:border-slate-700">
-                    <div className="flex flex-col">
-                      <span className="font-bold text-slate-800 dark:text-slate-200">
-                        + {sub?.name || 'Disciplina'} (3ª Matéria)
-                      </span>
-                      <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                        A partir de {ext.fromDate} (até zerar aulas)
-                      </span>
-                    </div>
-                    <button
-                      onClick={() => removeScheduleExtension && removeScheduleExtension(ext.id)}
-                      className="p-1.5 text-slate-400 hover:text-red-500 rounded"
-                      title="Remover esta extensão"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-        )}
       </div>
 
       {/* MODAL: GERENCIADOR DE DIA DO CALENDÁRIO */}
