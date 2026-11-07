@@ -518,30 +518,47 @@ export const useStore = create(
         delete next[dateStr];
         return { calendarOverrides: next };
       }),
-      addScheduleExtension: ({ fromDate, subjectId, mode = 'until_finished' }) => set(state => ({
-        scheduleExtensions: [
-          ...(state.scheduleExtensions || []).filter(e => !(e.fromDate === fromDate && e.subjectId === subjectId)),
-          {
-            id: 'ext_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-            fromDate,
-            subjectId,
-            mode,
-            active: true
-          }
-        ]
-      })),
-      addFutureScheduleRule: ({ fromDate, dayOfWeek, cycleIndex, daySlots }) => set(state => ({
-        futureScheduleRules: [
-          ...(state.futureScheduleRules || []).filter(r => !(r.fromDate === fromDate && (r.dayOfWeek === dayOfWeek || r.cycleIndex === cycleIndex))),
-          {
-            id: 'rule_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
-            fromDate,
-            dayOfWeek,
-            cycleIndex,
-            daySlots: [...daySlots]
-          }
-        ]
-      })),
+      addScheduleExtension: (arg1, arg2, arg3 = 'until_finished') => set(state => {
+        const isObj = arg1 && typeof arg1 === 'object';
+        const fromDate = isObj ? arg1.fromDate : arg2;
+        const subjectId = isObj ? arg1.subjectId : arg1;
+        const mode = isObj ? (arg1.mode || 'until_finished') : arg3;
+        if (!fromDate || !subjectId) return state;
+        return {
+          scheduleExtensions: [
+            ...(state.scheduleExtensions || []).filter(e => e && e.fromDate && e.subjectId && !(e.fromDate === fromDate && e.subjectId === subjectId)),
+            {
+              id: 'ext_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+              fromDate,
+              subjectId,
+              mode,
+              active: true
+            }
+          ]
+        };
+      }),
+      addFutureScheduleRule: ({ fromDate, dayOfWeek, cycleIndex, daySlots }) => set(state => {
+        if (!fromDate || !Array.isArray(daySlots)) return state;
+        const isWeekly = (state.cycleScheduleType || 'weekly') === 'weekly';
+        return {
+          futureScheduleRules: [
+            ...(state.futureScheduleRules || []).filter(r => {
+              if (!r || !r.fromDate) return false;
+              const sameDay = (isWeekly && r.dayOfWeek !== undefined && dayOfWeek !== undefined)
+                ? r.dayOfWeek === dayOfWeek
+                : (r.dayOfWeek === dayOfWeek || r.cycleIndex === cycleIndex);
+              return !(sameDay && r.fromDate >= fromDate);
+            }),
+            {
+              id: 'rule_' + Date.now() + '_' + Math.random().toString(36).substr(2, 4),
+              fromDate,
+              dayOfWeek,
+              cycleIndex,
+              daySlots: [...daySlots]
+            }
+          ]
+        };
+      }),
       removeFutureScheduleRule: (ruleId) => set(state => ({
         futureScheduleRules: (state.futureScheduleRules || []).filter(r => r.id !== ruleId)
       })),
@@ -2352,13 +2369,19 @@ export const useStore = create(
             if (calendarOverrides && Array.isArray(calendarOverrides[simDateKey])) {
               daySubjects = [...calendarOverrides[simDateKey]];
             } else {
-              let cycleIndex = (currentDayIndex + dayOffset) % cycle.length;
+              let cycleIndex = (currentDayIndex + dayOffset) % Math.max(1, cycle.length);
+              const targetDayOfWeek = targetSimDate.getDay();
               if (cycleScheduleType === 'weekly' && cycle.length === 7) {
-                const targetDayOfWeek = targetSimDate.getDay();
                 cycleIndex = (cycleWeekStart === 'monday') ? (targetDayOfWeek + 6) % 7 : targetDayOfWeek;
               }
               const matchingRules = (futureScheduleRules || [])
-                .filter(r => r.fromDate <= simDateKey && (r.dayOfWeek === targetSimDate.getDay() || r.cycleIndex === cycleIndex))
+                .filter(r => {
+                  if (!r || !r.fromDate || r.fromDate > simDateKey) return false;
+                  if (cycleScheduleType === 'weekly' && r.dayOfWeek !== undefined) {
+                    return r.dayOfWeek === targetDayOfWeek;
+                  }
+                  return r.dayOfWeek === targetDayOfWeek || r.cycleIndex === cycleIndex;
+                })
                 .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
 
               if (matchingRules.length > 0 && Array.isArray(matchingRules[0].daySlots)) {
@@ -2369,7 +2392,7 @@ export const useStore = create(
 
               if (scheduleExtensions && scheduleExtensions.length > 0) {
                 scheduleExtensions.forEach(ext => {
-                  if (ext.active !== false && simDateKey >= ext.fromDate) {
+                  if (ext && ext.subjectId && ext.fromDate && ext.active !== false && simDateKey >= ext.fromDate) {
                     if (remainingLessonsQueue[ext.subjectId]?.length > 0 && !daySubjects.includes(ext.subjectId)) {
                       daySubjects.push(ext.subjectId);
                     }
@@ -2385,26 +2408,30 @@ export const useStore = create(
               let effectiveSubId = subId;
               let q = remainingLessonsQueue[effectiveSubId];
 
-              // Se a matéria original esgotou suas aulas, verificar a regra de transição explícita
-              if (!q || q.length === 0) {
-                const originalSub = subjects[subId];
-                const action = originalSub?.onCompleteAction || 'keep_fixed';
+              // Se a matéria original esgotou suas aulas, verificar a regra de transição explícita (suporta cadeia de substituições)
+              const visited = new Set([effectiveSubId]);
+              while (!q || q.length === 0) {
+                const currentSub = subjects[effectiveSubId];
+                const action = currentSub?.onCompleteAction || 'keep_fixed';
 
-                if (action === 'replace' && originalSub?.replacementSubjectId && subjects[originalSub.replacementSubjectId]) {
-                  const repId = originalSub.replacementSubjectId;
-                  const repQ = remainingLessonsQueue[repId];
-                  if (repQ && repQ.length > 0) {
-                    effectiveSubId = repId;
-                    q = repQ;
-                  }
+                if (action === 'replace' && currentSub?.replacementSubjectId && subjects[currentSub.replacementSubjectId] && !visited.has(currentSub.replacementSubjectId)) {
+                  const repId = currentSub.replacementSubjectId;
+                  visited.add(repId);
+                  effectiveSubId = repId;
+                  q = remainingLessonsQueue[repId];
                 } else if (action === 'double_remaining') {
-                  const fallbackId = daySubjects.find(sId => sId !== subId && remainingLessonsQueue[sId]?.length > 0)
-                    || Object.keys(remainingLessonsQueue).find(sId => remainingLessonsQueue[sId]?.length > 0);
+                  const fallbackId = daySubjects.find(sId => !visited.has(sId) && remainingLessonsQueue[sId]?.length > 0)
+                    || Object.keys(remainingLessonsQueue).find(sId => !visited.has(sId) && remainingLessonsQueue[sId]?.length > 0);
                   
                   if (fallbackId) {
+                    visited.add(fallbackId);
                     effectiveSubId = fallbackId;
                     q = remainingLessonsQueue[fallbackId];
+                  } else {
+                    break;
                   }
+                } else {
+                  break;
                 }
               }
 
