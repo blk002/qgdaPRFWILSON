@@ -407,7 +407,7 @@ export default function Ciclo() {
                   // Transição inteligente se a matéria original já foi concluída
                   const isOrigDone = (subject.topics || []).every(t => (t.completed || 0) >= (t.total || 0));
                   if (isOrigDone) {
-                    const action = subject.onCompleteAction || "double_remaining";
+                    const action = subject.onCompleteAction || "keep_fixed";
                     if (action === "replace" && subject.replacementSubjectId && subjects[subject.replacementSubjectId]) {
                       const rep = subjects[subject.replacementSubjectId];
                       if ((rep.topics || []).some(t => (t.completed || 0) < (t.total || 0))) {
@@ -527,7 +527,7 @@ export default function Ciclo() {
                       let isDoubled = false;
                       let isReplaced = false;
                       if (isOriginalDone) {
-                        const action = subject.onCompleteAction || "double_remaining";
+                        const action = subject.onCompleteAction || "keep_fixed";
                         if (action === "replace" && subject.replacementSubjectId && subjects[subject.replacementSubjectId]) {
                           const rep = subjects[subject.replacementSubjectId];
                           if ((rep.topics || []).some(t => (t.completed || 0) < (t.total || 0))) {

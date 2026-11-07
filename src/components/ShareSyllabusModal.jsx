@@ -6,7 +6,7 @@ import {
   Clock, Video, MessageCircle 
 } from 'lucide-react';
 import { toast } from 'sonner';
-import { formatSecondsToFriendly } from '../lib/durationHelpers';
+import { formatSecondsToFriendly, parseDurationToSeconds } from '../lib/durationHelpers';
 
 /**
  * Codifica objeto em Base64 seguro para UTF-8 (compatível com acentos em português)
@@ -86,7 +86,7 @@ function normalizeSubjectsData(parsed) {
       block: sub.block || 'B1',
       speed: Number(sub.speed) || 1,
       timeGoalMinutes: Number(sub.timeGoalMinutes) || 0,
-      onCompleteAction: sub.onCompleteAction || 'double_remaining',
+      onCompleteAction: sub.onCompleteAction || 'keep_fixed',
       replacementSubjectId: sub.replacementSubjectId || '',
       topics: Array.isArray(sub.topics) ? sub.topics.map((t, tIdx) => ({
         id: t.id || `t_${Date.now()}_${tIdx}`,
@@ -94,12 +94,16 @@ function normalizeSubjectsData(parsed) {
         total: Number(t.total) || (Array.isArray(t.lessons) ? t.lessons.length : 0),
         completed: Number(t.completed) || 0,
         notes: t.notes || '',
-        lessons: Array.isArray(t.lessons) ? t.lessons.map((l, lIdx) => ({
-          id: l.id || `l_${Date.now()}_${lIdx}`,
-          title: String(l.title || `Aula ${lIdx + 1}`).trim(),
-          duration: Number(l.duration) || 0,
-          completed: Boolean(l.completed)
-        })) : []
+        lessons: Array.isArray(t.lessons) ? t.lessons.map((l, lIdx) => {
+          const lessonName = String(l.name || l.title || `Aula ${lIdx + 1}`).trim();
+          return {
+            id: l.id || `l_${Date.now()}_${lIdx}`,
+            name: lessonName,
+            title: lessonName,
+            duration: l.duration !== undefined && l.duration !== null && String(l.duration).trim() !== '' ? String(l.duration) : '60:00',
+            completed: Boolean(l.completed)
+          };
+        }) : []
       })) : []
     };
   });
@@ -130,7 +134,6 @@ export default function ShareSyllabusModal({
   // --- ESTADO DA ABA IMPORTAR ---
   const [importInputText, setImportInputText] = useState('');
   const [importMode, setImportMode] = useState('merge'); // 'merge' | 'replace'
-  const [fileError, setFileError] = useState(null);
 
   // Selecionar/deselecionar matérias na exportação
   const allSubjectIds = useMemo(() => Object.keys(subjects || {}), [subjects]);
@@ -164,10 +167,12 @@ export default function ShareSyllabusModal({
         if (Array.isArray(t.lessons) && t.lessons.length > 0) {
           lessonsCount += t.lessons.length;
           t.lessons.forEach(l => {
-            totalSecs += Number(l.duration) || 0;
+            totalSecs += parseDurationToSeconds(l.duration) || (Number(l.duration) || 3600);
           });
         } else {
-          lessonsCount += Number(t.total) || 0;
+          const count = Number(t.total) || 0;
+          lessonsCount += count;
+          totalSecs += count * 3600;
         }
       });
     });
@@ -285,20 +290,23 @@ ${code}
   };
 
   // --- PARSE E PREVIEW DA IMPORTAÇÃO ---
-  const parsedImportedSubjects = useMemo(() => {
-    setFileError(null);
-    if (!importInputText.trim()) return null;
+  const { parsedImportedSubjects, fileError } = useMemo(() => {
+    if (!importInputText.trim()) return { parsedImportedSubjects: null, fileError: null };
     try {
       const parsed = decodePayload(importInputText);
       const normalized = normalizeSubjectsData(parsed);
       if (!normalized) {
-        setFileError("O código ou arquivo não contém dados de matérias válidos do QG da PRF.");
-        return null;
+        return {
+          parsedImportedSubjects: null,
+          fileError: "O código ou arquivo não contém dados de matérias válidos do QG da PRF."
+        };
       }
-      return normalized;
-    } catch (_) {
-      setFileError("Código ou arquivo inválido. Verifique se copiou o texto completo.");
-      return null;
+      return { parsedImportedSubjects: normalized, fileError: null };
+    } catch {
+      return {
+        parsedImportedSubjects: null,
+        fileError: "Código ou arquivo inválido. Verifique se copiou o texto completo."
+      };
     }
   }, [importInputText]);
 
@@ -316,10 +324,12 @@ ${code}
         if (Array.isArray(t.lessons) && t.lessons.length > 0) {
           lessons += t.lessons.length;
           t.lessons.forEach(l => {
-            totalSecs += Number(l.duration) || 0;
+            totalSecs += parseDurationToSeconds(l.duration) || (Number(l.duration) || 3600);
           });
         } else {
-          lessons += Number(t.total) || 0;
+          const count = Number(t.total) || 0;
+          lessons += count;
+          totalSecs += count * 3600;
         }
       });
     });
@@ -371,7 +381,7 @@ ${code}
             const curTopics = [...(cur.topics || [])];
             
             (importedSub.topics || []).forEach(impTopic => {
-              const curTopicIdx = curTopics.findIndex(t => t.name.toLowerCase() === impTopic.name.toLowerCase());
+              const curTopicIdx = curTopics.findIndex(t => (t.name || '').toLowerCase() === (impTopic.name || '').toLowerCase());
               if (curTopicIdx >= 0) {
                 // Mescla aulas do tópico
                 const existingLessons = curTopics[curTopicIdx].lessons || [];
@@ -380,7 +390,8 @@ ${code}
                 // Adiciona apenas aulas que não existem ainda
                 const newLessons = [...existingLessons];
                 importedLessons.forEach(il => {
-                  if (!newLessons.some(el => el.title.toLowerCase() === il.title.toLowerCase())) {
+                  const ilName = (il.name || il.title || '').toLowerCase();
+                  if (!newLessons.some(el => (el.name || el.title || '').toLowerCase() === ilName)) {
                     newLessons.push(il);
                   }
                 });

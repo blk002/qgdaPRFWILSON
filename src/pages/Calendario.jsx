@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { 
   Calendar as CalendarIcon, 
@@ -49,18 +49,13 @@ export default function Calendario() {
     completedToday = [], 
     getEstimatedCompletionDate, 
     getSubjectEstimates,
-    targetExamDate,
     subjectTimeGoal = {},
     calendarOverrides = {},
     setDayOverride,
     removeDayOverride,
     scheduleExtensions = [],
     addScheduleExtension,
-    removeScheduleExtension,
     futureScheduleRules = [],
-    addFutureScheduleRule,
-    removeFutureScheduleRule,
-    setScheduleFromDate,
     updateSubject
   } = useStore();
 
@@ -105,12 +100,16 @@ export default function Calendario() {
       return calendarOverrides[dateKey];
     }
 
-    // 2. Modo Semanal Fixo: determinado estritamente pelo dia da semana real da data
+    // 2. Ciclo Semanal Fixo ou Sequencial
     if (cycle && cycle.length > 0) {
-      const dayOfWeek = cellDateObj.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
-      const weekIndex = (cycleWeekStart === 'monday') ? (dayOfWeek + 6) % 7 : dayOfWeek;
-      if (weekIndex < cycle.length && Array.isArray(cycle[weekIndex])) {
-        return cycle[weekIndex];
+      if (cycleScheduleType === 'weekly' && cycle.length === 7) {
+        const dayOfWeek = cellDateObj.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
+        const weekIndex = (cycleWeekStart === 'monday') ? (dayOfWeek + 6) % 7 : dayOfWeek;
+        return Array.isArray(cycle[weekIndex]) ? cycle[weekIndex] : [];
+      } else {
+        const diff = Math.round((cellDateObj.getTime() - todayDateObj.getTime()) / (1000 * 60 * 60 * 24));
+        const cIdx = ((currentDayIndex + diff) % cycle.length + cycle.length) % cycle.length;
+        return Array.isArray(cycle[cIdx]) ? cycle[cIdx] : [];
       }
     }
 
@@ -154,7 +153,9 @@ export default function Calendario() {
       daySubjects = [...calendarOverrides[simDateKey]];
     } else {
       const targetDayOfWeek = targetSimDate.getDay();
-      const cycleIndex = (cycleWeekStart === 'monday') ? (targetDayOfWeek + 6) % 7 : targetDayOfWeek;
+      const cycleIndex = (cycleScheduleType === 'weekly' && cycle.length === 7)
+        ? ((cycleWeekStart === 'monday') ? (targetDayOfWeek + 6) % 7 : targetDayOfWeek)
+        : (currentDayIndex + i) % Math.max(1, cycle.length);
       
       const matchingRules = (futureScheduleRules || [])
         .filter(r => r.fromDate <= simDateKey && (r.dayOfWeek === targetDayOfWeek || r.cycleIndex === cycleIndex))
@@ -302,7 +303,9 @@ export default function Calendario() {
     let updatedSlots = [...daySlots];
 
     if (isAddingNewBlock && selectedNewSubjectId) {
-      if (!updatedSlots.includes(selectedNewSubjectId)) {
+      if (newBlockScope === 'until_finished' && addScheduleExtension) {
+        addScheduleExtension(selectedNewSubjectId, dateKey);
+      } else if (!updatedSlots.includes(selectedNewSubjectId)) {
         updatedSlots.push(selectedNewSubjectId);
       }
     }
@@ -338,7 +341,7 @@ export default function Calendario() {
   // Handlers para Transição de Conclusão no Painel Lateral
   const handleOpenTransitionModal = (sub) => {
     setEditingTransitionSub(sub);
-    setTempAction(sub.onCompleteAction || 'double_remaining');
+    setTempAction(sub.onCompleteAction || 'keep_fixed');
     setTempRepId(sub.replacementSubjectId || '');
   };
 
@@ -552,7 +555,7 @@ export default function Calendario() {
                         <Sparkles className="w-3 h-3 text-amber-500" /> Regra ao concluir...
                       </button>
                       <span className="text-[10px] text-slate-400 font-medium">
-                        {sub.onCompleteAction === 'replace' ? '🔄 Substituir' : '⚡ Dobrar Restante'}
+                        {sub.onCompleteAction === 'replace' ? '🔄 Substituir' : sub.onCompleteAction === 'double_remaining' ? '⚡ Dobrar Restante' : '📌 Manter Fixa'}
                       </span>
                     </div>
                   </>
@@ -787,6 +790,21 @@ export default function Calendario() {
             </div>
 
             <div className="flex flex-col gap-2.5">
+              <label className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${tempAction === 'keep_fixed' ? 'bg-blue-50 border-blue-500 dark:bg-blue-950/40 dark:border-blue-600' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'}`}>
+                <input 
+                  type="radio" 
+                  name="modalAction" 
+                  value="keep_fixed" 
+                  checked={tempAction === 'keep_fixed'} 
+                  onChange={() => setTempAction('keep_fixed')}
+                  className="mt-0.5"
+                />
+                <div className="flex flex-col">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100">📌 Manter Matéria Fixa no Ciclo (Revisões/Questões)</span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400">A disciplina permanece fixa nos seus dias da semana sem alterar a programação.</span>
+                </div>
+              </label>
+
               <label className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${tempAction === 'double_remaining' ? 'bg-blue-50 border-blue-500 dark:bg-blue-950/40 dark:border-blue-600' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'}`}>
                 <input 
                   type="radio" 

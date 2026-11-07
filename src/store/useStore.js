@@ -2342,8 +2342,6 @@ export const useStore = create(
         const maxSimulationDays = 1500;
         let consecutiveNoProgressDays = 0; 
 
-        const subjectsInCycle = new Set(cycle.flat());
-
         if (cycle.length > 0) {
           while (!allDone && dayOffset < maxSimulationDays) {
             const targetSimDate = new Date(todayDateObj);
@@ -2387,10 +2385,10 @@ export const useStore = create(
               let effectiveSubId = subId;
               let q = remainingLessonsQueue[effectiveSubId];
 
-              // Se a matéria original esgotou suas aulas, verificar a regra de transição
+              // Se a matéria original esgotou suas aulas, verificar a regra de transição explícita
               if (!q || q.length === 0) {
                 const originalSub = subjects[subId];
-                const action = originalSub?.onCompleteAction || 'double_remaining';
+                const action = originalSub?.onCompleteAction || 'keep_fixed';
 
                 if (action === 'replace' && originalSub?.replacementSubjectId && subjects[originalSub.replacementSubjectId]) {
                   const repId = originalSub.replacementSubjectId;
