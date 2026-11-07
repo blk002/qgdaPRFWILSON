@@ -92,27 +92,48 @@ export default function Calendario() {
   const today = new Date();
   const todayDateObj = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-  // Função principal: retorna as matérias fixas programadas para qualquer data do calendário
+  // Função principal: retorna as matérias programadas para qualquer data do calendário
   const getDaySubjectsForDate = (cellDateObj, dateKey) => {
-    // 1. Personalização manual explícita para este dia específico
-    if (calendarOverrides && calendarOverrides[dateKey]) {
-      return calendarOverrides[dateKey];
+    // 1. Personalização manual explícita para este dia específico (prioridade absoluta)
+    if (calendarOverrides && Array.isArray(calendarOverrides[dateKey])) {
+      return [...calendarOverrides[dateKey]];
     }
 
-    // 2. Ciclo Semanal Fixo ou Sequencial
+    let daySubjects = [];
+
+    // 2. Ciclo Semanal Fixo ou Sequencial + Regras Futuras
     if (cycle && cycle.length > 0) {
-      if (cycleScheduleType === 'weekly' && cycle.length === 7) {
-        const dayOfWeek = cellDateObj.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
-        const weekIndex = (cycleWeekStart === 'monday') ? (dayOfWeek + 6) % 7 : dayOfWeek;
-        return Array.isArray(cycle[weekIndex]) ? cycle[weekIndex] : [];
-      } else {
-        const diff = Math.round((cellDateObj.getTime() - todayDateObj.getTime()) / (1000 * 60 * 60 * 24));
-        const cIdx = ((currentDayIndex + diff) % cycle.length + cycle.length) % cycle.length;
-        return Array.isArray(cycle[cIdx]) ? cycle[cIdx] : [];
+      const targetDayOfWeek = cellDateObj.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
+      const diff = Math.round((cellDateObj.getTime() - todayDateObj.getTime()) / (1000 * 60 * 60 * 24));
+      const cycleIndex = (cycleScheduleType === 'weekly' && cycle.length === 7)
+        ? ((cycleWeekStart === 'monday') ? (targetDayOfWeek + 6) % 7 : targetDayOfWeek)
+        : ((currentDayIndex + diff) % cycle.length + cycle.length) % cycle.length;
+
+      const matchingRules = (futureScheduleRules || [])
+        .filter(r => r.fromDate <= dateKey && (r.dayOfWeek === targetDayOfWeek || r.cycleIndex === cycleIndex))
+        .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
+
+      if (matchingRules.length > 0 && Array.isArray(matchingRules[0].daySlots)) {
+        daySubjects = [...matchingRules[0].daySlots];
+      } else if (Array.isArray(cycle[cycleIndex])) {
+        daySubjects = [...cycle[cycleIndex]];
       }
     }
 
-    return [];
+    // 3. Extensões ativas (apenas quando não há override manual no dia)
+    if (scheduleExtensions && scheduleExtensions.length > 0) {
+      scheduleExtensions.forEach(ext => {
+        if (ext.active !== false && dateKey >= ext.fromDate) {
+          const sub = subjects[ext.subjectId];
+          const hasRemaining = (sub?.topics || []).some(t => (t.completed || 0) < (t.total || 0));
+          if (hasRemaining && !daySubjects.includes(ext.subjectId)) {
+            daySubjects.push(ext.subjectId);
+          }
+        }
+      });
+    }
+
+    return daySubjects;
   };
 
   // 3. Simulação dos 365 dias para sincronização e previsão de término das disciplinas
@@ -148,7 +169,7 @@ export default function Calendario() {
     const simDateKey = `${targetSimDate.getFullYear()}-${String(targetSimDate.getMonth() + 1).padStart(2, '0')}-${String(targetSimDate.getDate()).padStart(2, '0')}`;
 
     let daySubjects = [];
-    if (calendarOverrides && calendarOverrides[simDateKey]) {
+    if (calendarOverrides && Array.isArray(calendarOverrides[simDateKey])) {
       daySubjects = [...calendarOverrides[simDateKey]];
     } else {
       const targetDayOfWeek = targetSimDate.getDay();
@@ -160,21 +181,21 @@ export default function Calendario() {
         .filter(r => r.fromDate <= simDateKey && (r.dayOfWeek === targetDayOfWeek || r.cycleIndex === cycleIndex))
         .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
 
-      if (matchingRules.length > 0) {
+      if (matchingRules.length > 0 && Array.isArray(matchingRules[0].daySlots)) {
         daySubjects = [...matchingRules[0].daySlots];
       } else if (cycle.length > 0 && cycle[cycleIndex]) {
         daySubjects = [...(cycle[cycleIndex] || [])];
       }
-    }
 
-    if (scheduleExtensions && scheduleExtensions.length > 0) {
-      scheduleExtensions.forEach(ext => {
-        if (ext.active !== false && simDateKey >= ext.fromDate) {
-          if (remainingLessonsQueue[ext.subjectId]?.length > 0 && !daySubjects.includes(ext.subjectId)) {
-            daySubjects.push(ext.subjectId);
+      if (scheduleExtensions && scheduleExtensions.length > 0) {
+        scheduleExtensions.forEach(ext => {
+          if (ext.active !== false && simDateKey >= ext.fromDate) {
+            if (remainingLessonsQueue[ext.subjectId]?.length > 0 && !daySubjects.includes(ext.subjectId)) {
+              daySubjects.push(ext.subjectId);
+            }
           }
-        }
-      });
+        });
+      }
     }
 
     const scheduledThisDay = [];
@@ -293,8 +314,17 @@ export default function Calendario() {
       ? ((cycleWeekStart === 'monday') ? (dayOfWeek + 6) % 7 : dayOfWeek)
       : ((currentDayIndex + diff) % Math.max(1, cycle.length) + Math.max(1, cycle.length)) % Math.max(1, cycle.length);
 
-    const baseSubs = (cycle && cycle[weekIndex]) ? [...cycle[weekIndex]] : [];
-    const currentDaySubs = [...getDaySubjectsForDate(cellDateObj, dateKey)];
+    const baseSubs = (cycle && Array.isArray(cycle[weekIndex])) ? [...cycle[weekIndex]] : [];
+    // Lê exatamente as matérias visíveis neste card do calendário
+    const currentDaySubs = futureSchedule[dateKey] !== undefined
+      ? futureSchedule[dateKey].map(item => item.id)
+      : [...getDaySubjectsForDate(cellDateObj, dateKey)];
+
+    const hasCustomOverride = Boolean(calendarOverrides && Array.isArray(calendarOverrides[dateKey]));
+    const hasFutureRuleOnDay = (futureScheduleRules || []).some(
+      r => r.fromDate <= dateKey && (r.dayOfWeek === dayOfWeek || r.cycleIndex === weekIndex)
+    );
+    const hasDiffFromBase = currentDaySubs.length !== baseSubs.length || currentDaySubs.some((id, idx) => id !== baseSubs[idx]);
 
     setManagingDay({
       dateObj: cellDateObj,
@@ -302,7 +332,7 @@ export default function Calendario() {
       diffDays: diff,
       dayOfWeek,
       weekIndex,
-      isCustomized: Boolean(calendarOverrides && calendarOverrides[dateKey]),
+      isCustomized: hasCustomOverride || hasFutureRuleOnDay || hasDiffFromBase,
       baseSubs
     });
     setDaySlots(currentDaySubs);
@@ -313,7 +343,7 @@ export default function Calendario() {
 
   const handleSaveDayManager = () => {
     if (!managingDay) return;
-    const { dateKey, weekIndex } = managingDay;
+    const { dateKey, dayOfWeek, weekIndex } = managingDay;
     let updatedSlots = [...daySlots];
 
     if (isAddingNewBlock && selectedNewSubjectId) {
@@ -328,18 +358,32 @@ export default function Calendario() {
     }
 
     if (saveMode === 'single') {
-      // Salva apenas nesta data específica
+      // Salva apenas nesta data específica (prioridade absoluta sobre regras e extensões)
       if (setDayOverride) {
         setDayOverride(dateKey, updatedSlots);
         toast.success(`Programação salva exclusivamente para ${dateKey}!`);
       }
     } else {
-      // Atualiza o ciclo semanal para todas as semanas neste dia
+      // Atualiza o ciclo semanal para todas as semanas neste dia e limpa regras antigas conflitantes
       if (setCycle && cycle) {
         const newCycle = [...cycle];
         newCycle[weekIndex] = updatedSlots;
         setCycle(newCycle);
         if (removeDayOverride) removeDayOverride(dateKey);
+
+        // Remove regras futuras antigas que sobrescreviam este dia da semana
+        const cleanedRules = (futureScheduleRules || []).filter(
+          r => r.dayOfWeek !== dayOfWeek && r.cycleIndex !== weekIndex
+        );
+        // Remove extensões de matérias que o usuário tirou explicitamente da grade
+        const cleanedExtensions = (scheduleExtensions || []).filter(
+          ext => updatedSlots.includes(ext.subjectId)
+        );
+        useStore.setState({
+          futureScheduleRules: cleanedRules,
+          scheduleExtensions: cleanedExtensions
+        });
+
         toast.success(`Ciclo semanal atualizado e fixado com sucesso!`);
       }
     }
@@ -349,8 +393,14 @@ export default function Calendario() {
 
   const handleResetDayToDefault = () => {
     if (!managingDay) return;
-    const { dateKey } = managingDay;
+    const { dateKey, dayOfWeek, weekIndex } = managingDay;
     if (removeDayOverride) removeDayOverride(dateKey);
+
+    const cleanedRules = (futureScheduleRules || []).filter(
+      r => r.dayOfWeek !== dayOfWeek && r.cycleIndex !== weekIndex
+    );
+    useStore.setState({ futureScheduleRules: cleanedRules });
+
     toast.success(`Programação restaurada para o padrão do ciclo semanal!`);
     setManagingDay(null);
   };

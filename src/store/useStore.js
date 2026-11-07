@@ -2349,7 +2349,7 @@ export const useStore = create(
             const simDateKey = `${targetSimDate.getFullYear()}-${String(targetSimDate.getMonth() + 1).padStart(2, '0')}-${String(targetSimDate.getDate()).padStart(2, '0')}`;
 
             let daySubjects = [];
-            if (calendarOverrides && calendarOverrides[simDateKey]) {
+            if (calendarOverrides && Array.isArray(calendarOverrides[simDateKey])) {
               daySubjects = [...calendarOverrides[simDateKey]];
             } else {
               let cycleIndex = (currentDayIndex + dayOffset) % cycle.length;
@@ -2361,21 +2361,21 @@ export const useStore = create(
                 .filter(r => r.fromDate <= simDateKey && (r.dayOfWeek === targetSimDate.getDay() || r.cycleIndex === cycleIndex))
                 .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
 
-              if (matchingRules.length > 0) {
+              if (matchingRules.length > 0 && Array.isArray(matchingRules[0].daySlots)) {
                 daySubjects = [...matchingRules[0].daySlots];
               } else {
                 daySubjects = [...(cycle[cycleIndex] || [])];
               }
-            }
 
-            if (scheduleExtensions && scheduleExtensions.length > 0) {
-              scheduleExtensions.forEach(ext => {
-                if (ext.active !== false && simDateKey >= ext.fromDate) {
-                  if (remainingLessonsQueue[ext.subjectId]?.length > 0 && !daySubjects.includes(ext.subjectId)) {
-                    daySubjects.push(ext.subjectId);
+              if (scheduleExtensions && scheduleExtensions.length > 0) {
+                scheduleExtensions.forEach(ext => {
+                  if (ext.active !== false && simDateKey >= ext.fromDate) {
+                    if (remainingLessonsQueue[ext.subjectId]?.length > 0 && !daySubjects.includes(ext.subjectId)) {
+                      daySubjects.push(ext.subjectId);
+                    }
                   }
-                }
-              });
+                });
+              }
             }
             
             let progressMadeToday = false;
