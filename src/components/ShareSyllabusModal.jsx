@@ -86,6 +86,7 @@ function normalizeSubjectsData(parsed) {
       block: sub.block || 'B1',
       speed: Number(sub.speed) || 1,
       timeGoalMinutes: Number(sub.timeGoalMinutes) || 0,
+      lessonsPerBlock: Number(sub.lessonsPerBlock) || 0,
       onCompleteAction: sub.onCompleteAction || 'keep_fixed',
       replacementSubjectId: sub.replacementSubjectId || '',
       topics: Array.isArray(sub.topics) ? sub.topics.map((t, tIdx) => ({

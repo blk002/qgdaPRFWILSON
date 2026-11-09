@@ -2452,7 +2452,9 @@ export const useStore = create(
           remainingLessonsQueue[subject.id] = queue;
 
           // Estimativa de aulas por bloco
-          if (goalMin > 0 && queue.length > 0) {
+          if (Number(subject.lessonsPerBlock) > 0) {
+            classesPerBlockDict[subject.id] = Math.floor(Number(subject.lessonsPerBlock));
+          } else if (goalMin > 0 && queue.length > 0) {
             const avgAccel = remainingAccelMinutes / queue.length;
             classesPerBlockDict[subject.id] = Math.max(1, Math.round(goalMin / Math.max(1, avgAccel)));
           } else {
@@ -2556,18 +2558,27 @@ export const useStore = create(
               if (q && q.length > 0) {
                 const sub = subjects[effectiveSubId];
                 const goalMin = Number(sub?.timeGoalMinutes || subjectTimeGoal?.[effectiveSubId]) || 0;
+                const lessonsN = Math.floor(Number(sub?.lessonsPerBlock) || 0);
                 
                 let slotCount = 0;
                 let slotAccelMins = 0;
 
                 while (q.length > 0) {
+                  if (lessonsN > 0 && slotCount >= lessonsN) break;
                   const nextLesson = q[0];
                   if (slotCount === 0) {
                     slotCount++;
                     slotAccelMins += nextLesson.accelMins;
                     q.shift();
                     progressMadeToday = true;
-                    if (goalMin === 0) break;
+                    if (goalMin === 0 && lessonsN === 0) break;
+                    continue;
+                  }
+
+                  if (lessonsN > 0) {
+                    slotCount++;
+                    slotAccelMins += nextLesson.accelMins;
+                    q.shift();
                     continue;
                   }
 
@@ -2881,10 +2892,31 @@ export const useStore = create(
           ...state.subjects,
           [subjectId]: {
             ...state.subjects[subjectId],
-            timeGoalMinutes: minutes
+            timeGoalMinutes: minutes,
+            // Meta de tempo e quantidade fixa de aulas são mutuamente exclusivas
+            lessonsPerBlock: minutes > 0 ? 0 : (state.subjects[subjectId].lessonsPerBlock || 0)
           }
         } : state.subjects
       })),
+
+      // Define uma quantidade fixa de aulas por bloco (0 = desativado). Desliga a meta de tempo quando > 0.
+      setSubjectLessonsPerBlock: (subjectId, lessons) => set(state => {
+        const n = Math.min(50, Math.max(0, Math.floor(Number(lessons) || 0)));
+        if (!state.subjects[subjectId]) return state;
+        return {
+          subjectTimeGoal: n > 0
+            ? { ...state.subjectTimeGoal, [subjectId]: 0 }
+            : state.subjectTimeGoal,
+          subjects: {
+            ...state.subjects,
+            [subjectId]: {
+              ...state.subjects[subjectId],
+              lessonsPerBlock: n,
+              timeGoalMinutes: n > 0 ? 0 : (state.subjects[subjectId].timeGoalMinutes || 0)
+            }
+          }
+        };
+      }),
 
       setPushSettings: (pushSettings) => set({ pushSettings }),
 

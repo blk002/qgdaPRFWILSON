@@ -462,11 +462,12 @@ export default function Ciclo() {
                       const currentCompleted = t.completed + tempIncrement;
                       const spd = Number(subject.speed) || 1;
                       const goalMin = Number(subject.timeGoalMinutes || subjectTimeGoal?.[subjectId]) || 0;
+                      const lessonsN = Math.floor(Number(subject.lessonsPerBlock) || 0);
                       
                       let count = 1;
-                      if (goalMin > 0) {
+                      if (goalMin > 0 || lessonsN > 0) {
                         const remainingInTopic = t.total - currentCompleted;
-                        const suggestion = calculateLessonsForGoal(t.lessons || [], currentCompleted, spd, goalMin, t.total);
+                        const suggestion = calculateLessonsForGoal(t.lessons || [], currentCompleted, spd, goalMin, t.total, lessonsN);
                         count = Math.min(remainingInTopic, Math.max(1, suggestion.count));
                         dayTotalSeconds += suggestion.totalOrigSec;
                         dayAcceleratedSeconds += suggestion.totalAccelSec;
@@ -667,10 +668,11 @@ export default function Ciclo() {
                             currentTotal = t.total;
                             spd = Number(subject.speed) || 1;
                             goalMin = Number(subject.timeGoalMinutes || subjectTimeGoal?.[subjectId]) || 0;
+                            const lessonsN = Math.floor(Number(subject.lessonsPerBlock) || 0);
 
-                            if (goalMin > 0) {
+                            if (goalMin > 0 || lessonsN > 0) {
                               const remainingInTopic = t.total - currentCompleted;
-                              const suggestion = calculateLessonsForGoal(t.lessons || [], currentCompleted, spd, goalMin, t.total);
+                              const suggestion = calculateLessonsForGoal(t.lessons || [], currentCompleted, spd, goalMin, t.total, lessonsN);
                               blockCount = Math.min(remainingInTopic, Math.max(1, suggestion.count));
                               blockAccelSec = suggestion.totalAccelSec;
                               blockOrigSec = suggestion.totalOrigSec;

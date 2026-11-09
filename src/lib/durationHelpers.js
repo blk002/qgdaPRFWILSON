@@ -164,7 +164,39 @@ export const formatMinutesToFriendly = (mins) => {
  * @param {number|null} totalClassesCount - Total de aulas cadastradas no tópico
  * @returns {{ count: number, totalAccelSec: number, totalOrigSec: number, fits: boolean, lessonsList: Array }}
  */
-export const calculateLessonsForGoal = (lessons = [], startIndex = 0, speed = 1, goalMinutes = 0, totalClassesCount = null) => {
+export const calculateLessonsForGoal = (lessons = [], startIndex = 0, speed = 1, goalMinutes = 0, totalClassesCount = null, lessonsPerBlock = 0) => {
+  const fixedCount = Math.floor(Number(lessonsPerBlock) || 0);
+
+  // Modo "quantidade fixa de aulas por bloco": ignora a meta de tempo
+  if (fixedCount > 0) {
+    const spdFixed = Math.max(0.5, Number(speed) || 1);
+    const maxAvail = totalClassesCount !== null
+      ? Math.max(0, totalClassesCount - startIndex)
+      : (Array.isArray(lessons) ? Math.max(0, lessons.length - startIndex) : 0);
+    const take = Math.min(fixedCount, maxAvail);
+    let accel = 0;
+    let orig = 0;
+    const picked = [];
+    for (let i = 0; i < take; i++) {
+      const lessonIdx = startIndex + i;
+      const lesson = lessons?.[lessonIdx];
+      const durStr = typeof lesson === 'object' ? (lesson?.duration || '') : String(lesson || '');
+      const origSec = parseDurationToSeconds(durStr);
+      const effectiveOrig = origSec > 0 ? origSec : 3600;
+      const accelSec = Math.round(effectiveOrig / spdFixed);
+      accel += accelSec;
+      orig += effectiveOrig;
+      picked.push({
+        index: lessonIdx,
+        name: lesson?.name || `Aula ${lessonIdx + 1}`,
+        origSec: effectiveOrig,
+        accelSec,
+        durStr: durStr || '60:00'
+      });
+    }
+    return { count: take, totalAccelSec: accel, totalOrigSec: orig, fits: true, lessonsList: picked };
+  }
+
   if (!goalMinutes || goalMinutes <= 0) {
     return { count: 1, totalAccelSec: 0, totalOrigSec: 0, fits: true, lessonsList: [] };
   }

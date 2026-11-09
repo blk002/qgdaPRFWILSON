@@ -46,6 +46,7 @@ export default function Config({
     setSubjectGoal,
     subjectTimeGoal,
     setSubjectTimeGoal,
+    setSubjectLessonsPerBlock,
     pushSettings,
     setPushSettings,
     pushTime,
@@ -412,7 +413,11 @@ export default function Config({
                     <span className="text-xs text-slate-500 dark:text-slate-400 font-medium ml-1">
                       {st.totalLessons} {st.totalLessons === 1 ? 'aula' : 'aulas'}
                     </span>
-                    {currentTimeGoal > 0 && (
+                    {Number(sub.lessonsPerBlock) > 0 ? (
+                      <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-emerald-200 dark:border-emerald-800">
+                        <Target className="w-2.5 h-2.5" /> Bloco: {sub.lessonsPerBlock} {Number(sub.lessonsPerBlock) === 1 ? 'aula' : 'aulas'}
+                      </span>
+                    ) : currentTimeGoal > 0 && (
                       <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-emerald-200 dark:border-emerald-800">
                         <Target className="w-2.5 h-2.5" /> Bloco: {formatMinutesToFriendly(currentTimeGoal)}
                       </span>
@@ -475,13 +480,15 @@ export default function Config({
                       { label: '1h30', val: 90 },
                       { label: '2h', val: 120 }
                     ].map(preset => {
-                      const isSel = currentTimeGoal === preset.val;
+                      const lessonsN = Number(sub.lessonsPerBlock) || 0;
+                      const isSel = lessonsN === 0 && currentTimeGoal === preset.val;
                       return (
                         <button
                           key={preset.val}
                           type="button"
                           onClick={() => {
                             setSubjectTimeGoal(sub.id, preset.val);
+                            if (preset.val === 0) setSubjectLessonsPerBlock(sub.id, 0);
                             toast.success(`${sub.name}: Meta por bloco definida em ${preset.label}!`, { duration: 1200 });
                           }}
                           className={`px-1.5 py-1 rounded-lg text-[10px] font-black transition-all ${
@@ -494,6 +501,25 @@ export default function Config({
                         </button>
                       );
                     })}
+                    <div
+                      className={`flex items-center gap-1 pl-1.5 pr-1 py-0.5 rounded-lg border transition-all ${
+                        Number(sub.lessonsPerBlock) > 0
+                          ? 'border-emerald-500 ring-2 ring-emerald-400 bg-emerald-50 dark:bg-emerald-950/40'
+                          : 'border-slate-200 dark:border-slate-700'
+                      }`}
+                      title="Quantidade fixa de aulas por bloco (deixe vazio para desativar)"
+                    >
+                      <input
+                        type="number"
+                        min="0"
+                        max="50"
+                        placeholder="Nº"
+                        value={Number(sub.lessonsPerBlock) > 0 ? sub.lessonsPerBlock : ''}
+                        onChange={(e) => setSubjectLessonsPerBlock(sub.id, e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
+                        className="w-9 bg-transparent text-center text-[10px] font-black text-emerald-600 dark:text-emerald-400 outline-none placeholder:text-slate-400"
+                      />
+                      <span className="text-[10px] font-black text-slate-500 dark:text-slate-400">aulas</span>
+                    </div>
                   </div>
                 </div>
               </div>
@@ -1050,7 +1076,7 @@ export default function Config({
                   <Target className="w-3.5 h-3.5 text-emerald-400" /> Meta de Tempo por Bloco no Ciclo (Distribuição Automática)
                 </label>
                 <span className="text-xs font-black text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-2 py-0.5 rounded">
-                  {draftSubject.timeGoalMinutes > 0 ? formatMinutesToFriendly(draftSubject.timeGoalMinutes) : 'Sem meta (1 aula)'}
+                  {draftSubject.timeGoalMinutes > 0 ? formatMinutesToFriendly(draftSubject.timeGoalMinutes) : (Number(draftSubject.lessonsPerBlock) > 0 ? `${draftSubject.lessonsPerBlock} aulas fixas` : 'Sem meta (1 aula)')}
                 </span>
               </div>
               <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
@@ -1066,12 +1092,12 @@ export default function Config({
                   { label: '1h 30m', val: 90 },
                   { label: '2h', val: 120 }
                 ].map(preset => {
-                  const isSel = (draftSubject.timeGoalMinutes || 0) === preset.val;
+                  const isSel = !(Number(draftSubject.lessonsPerBlock) > 0) && (draftSubject.timeGoalMinutes || 0) === preset.val;
                   return (
                     <button
                       key={preset.val}
                       type="button"
-                      onClick={() => setDraftSubject(prev => ({ ...prev, timeGoalMinutes: preset.val }))}
+                      onClick={() => setDraftSubject(prev => ({ ...prev, timeGoalMinutes: preset.val, lessonsPerBlock: 0 }))}
                       className={`py-1.5 rounded-lg text-xs font-black transition-all ${
                         isSel
                           ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-400'
@@ -1096,12 +1122,55 @@ export default function Config({
                     value={draftSubject.timeGoalMinutes || 0}
                     onChange={(e) => {
                       const val = Math.max(0, parseInt(e.target.value) || 0);
-                      setDraftSubject(prev => ({ ...prev, timeGoalMinutes: val }));
+                      setDraftSubject(prev => ({ ...prev, timeGoalMinutes: val, lessonsPerBlock: val > 0 ? 0 : (prev.lessonsPerBlock || 0) }));
                     }}
                     className="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-center font-black text-emerald-400 outline-none focus:border-emerald-500"
                   />
                   <span className="text-slate-500 font-bold">min</span>
                 </div>
+              </div>
+
+              {/* Quantidade fixa de aulas por bloco */}
+              <div className={`mt-2 flex flex-col gap-2 bg-[#020617] p-2.5 rounded-lg border text-xs ${Number(draftSubject.lessonsPerBlock) > 0 ? 'border-emerald-500' : 'border-slate-800'}`}>
+                <div className="flex items-center justify-between">
+                  <span className="text-slate-400 font-bold">Ou: quantidade fixa de aulas por bloco:</span>
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="number"
+                      min="0"
+                      max="50"
+                      placeholder="0"
+                      value={Number(draftSubject.lessonsPerBlock) > 0 ? draftSubject.lessonsPerBlock : ''}
+                      onChange={(e) => {
+                        const val = Math.min(50, Math.max(0, parseInt(e.target.value) || 0));
+                        setDraftSubject(prev => ({ ...prev, lessonsPerBlock: val, timeGoalMinutes: val > 0 ? 0 : (prev.timeGoalMinutes || 0) }));
+                      }}
+                      className="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-center font-black text-emerald-400 outline-none focus:border-emerald-500"
+                    />
+                    <span className="text-slate-500 font-bold">aulas</span>
+                  </div>
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[2, 3, 4, 5, 6, 8, 10].map(n => (
+                    <button
+                      key={n}
+                      type="button"
+                      onClick={() => setDraftSubject(prev => ({ ...prev, lessonsPerBlock: n, timeGoalMinutes: 0 }))}
+                      className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-all ${
+                        Number(draftSubject.lessonsPerBlock) === n
+                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-400'
+                          : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-white hover:border-slate-700'
+                      }`}
+                    >
+                      {n} aulas
+                    </button>
+                  ))}
+                </div>
+                {Number(draftSubject.lessonsPerBlock) > 0 && (
+                  <p className="text-[11px] text-emerald-300 font-medium">
+                    Cada bloco terá exatamente <strong>{draftSubject.lessonsPerBlock} {Number(draftSubject.lessonsPerBlock) === 1 ? 'aula' : 'aulas'}</strong> (a meta de tempo fica desativada).
+                  </p>
+                )}
               </div>
 
               {/* Preview de quantas aulas cabem */}
@@ -1479,7 +1548,7 @@ export default function Config({
                     toast.error("Por favor, defina um nome para a disciplina.");
                     return;
                   }
-                  setSubjects(prev => ({ ...prev, [draftSubject.id]: draftSubject }));
+                  setSubjects(prev => ({ ...prev, [draftSubject.id]: { ...draftSubject, lessonsPerBlock: Math.max(0, Math.floor(Number(draftSubject.lessonsPerBlock) || 0)) } }));
                   if (draftSubject.timeGoalMinutes !== undefined) {
                     setSubjectTimeGoal(draftSubject.id, draftSubject.timeGoalMinutes || 0);
                   }

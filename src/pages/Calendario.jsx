@@ -228,16 +228,25 @@ export default function Calendario() {
       if (q && q.length > 0) {
         const sub = subjects[effectiveSubId];
         const goalMin = Number(sub?.timeGoalMinutes || subjectTimeGoal?.[effectiveSubId]) || 0;
+        const lessonsN = Math.floor(Number(sub?.lessonsPerBlock) || 0);
         let consumed = 0;
         let accelAcc = 0;
 
         while (q.length > 0) {
+          if (lessonsN > 0 && consumed >= lessonsN) break;
           const nextL = q[0];
           if (consumed === 0) {
             consumed++;
             accelAcc += nextL.accelMins;
             q.shift();
-            if (goalMin === 0) break;
+            if (goalMin === 0 && lessonsN === 0) break;
+            continue;
+          }
+
+          if (lessonsN > 0) {
+            consumed++;
+            accelAcc += nextL.accelMins;
+            q.shift();
             continue;
           }
 
