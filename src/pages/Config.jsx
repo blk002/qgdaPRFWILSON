@@ -1,7 +1,7 @@
 import { useStore, getCleanInitialState, PERSISTED_KEYS } from '../store/useStore';
 import { assetUrl } from '../lib/assets';
 import { toast } from 'sonner';
-import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle, Check, Camera, BookOpen, ScanLine, ChevronUp, ChevronDown, Zap, FastForward, Layers, RotateCcw, RefreshCw, Shuffle, Share2, Download } from 'lucide-react';
+import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle, Check, Camera, BookOpen, ScanLine, ChevronUp, ChevronDown, ChevronsUp, ChevronsDown, Zap, FastForward, Layers, RotateCcw, RefreshCw, Shuffle, Share2, Download } from 'lucide-react';
 import ImportOCR from '../components/ImportOCR';
 import TopicLessonScanner from '../components/TopicLessonScanner';
 import SelectiveResetModal from '../components/SelectiveResetModal';
@@ -1330,39 +1330,99 @@ export default function Config({
               </div>
               
               <div className="space-y-3">
-                {(draftSubject.topics || []).map((topic, idx) => (
-                  <div key={topic.id} className="bg-slate-900/60 border border-slate-800 rounded-xl p-3">
-                    {/* Linha do nome do assunto */}
-                    <div className="flex gap-2 items-center mb-2">
-                      <input 
-                        type="text" 
-                        value={topic.name}
-                        onChange={(e) => setDraftSubject(prev => {
-                          const newTopics = [...prev.topics];
-                          newTopics[idx] = { ...newTopics[idx], name: e.target.value };
-                          return { ...prev, topics: newTopics };
-                        })}
-                        className="flex-1 bg-transparent border-b border-slate-700 pb-1 font-bold text-xs text-white outline-none focus:border-blue-500 transition-colors"
-                        placeholder="Nome do Assunto..."
-                      />
-                      {/* Botão escanear aulas */}
-                      <button
-                        onClick={() => setScannerTopicIdx(idx)}
-                        title="Adicionar aulas via Vision AI"
-                        className="flex items-center gap-1 text-[9px] font-black text-violet-400 bg-violet-900/30 px-2 py-1 rounded tracking-widest uppercase hover:text-white hover:bg-violet-600 transition-colors shrink-0"
-                      >
-                        <ScanLine className="w-3 h-3"/> Scan
-                      </button>
-                      <button 
-                        onClick={() => setDraftSubject(prev => ({
-                          ...prev,
-                          topics: prev.topics.filter((_, i) => i !== idx)
-                        }))}
-                        className="p-1 text-slate-600 hover:text-red-500 transition-colors"
-                      >
-                        <Trash2 className="w-3.5 h-3.5"/>
-                      </button>
-                    </div>
+                {(() => {
+                  const topicsList = draftSubject.topics || [];
+                  const moveTopic = (from, to) => {
+                    if (from < 0 || to < 0 || from >= topicsList.length || to >= topicsList.length) return;
+                    setDraftSubject(prev => {
+                      const newTopics = [...(prev.topics || [])];
+                      const [moved] = newTopics.splice(from, 1);
+                      newTopics.splice(to, 0, moved);
+                      return { ...prev, topics: newTopics };
+                    });
+                  };
+
+                  return topicsList.map((topic, idx) => {
+                    const isFirstTopic = idx === 0;
+                    const isLastTopic = idx === topicsList.length - 1;
+
+                    return (
+                      <div key={topic.id} className="bg-slate-900/60 border border-slate-800 rounded-xl p-3">
+                        {/* Linha do nome do assunto + Controles de posição */}
+                        <div className="flex gap-2 items-center mb-2">
+                          {/* Controles de ordenação de assunto */}
+                          <div className="flex items-center gap-0.5 bg-slate-950/80 border border-slate-800 rounded-lg p-0.5 shrink-0">
+                            <button
+                              type="button"
+                              onClick={() => moveTopic(idx, 0)}
+                              disabled={isFirstTopic}
+                              className="p-1 text-slate-500 hover:text-blue-400 hover:bg-slate-800 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                              title="Mover para o Topo (Primeiro assunto)"
+                            >
+                              <ChevronsUp className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveTopic(idx, idx - 1)}
+                              disabled={isFirstTopic}
+                              className="p-1 text-slate-500 hover:text-blue-400 hover:bg-slate-800 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                              title="Mover 1 posição para cima"
+                            >
+                              <ChevronUp className="w-3.5 h-3.5" />
+                            </button>
+                            <span className="text-[10px] font-black text-slate-400 px-1 font-mono select-none">
+                              #{idx + 1}
+                            </span>
+                            <button
+                              type="button"
+                              onClick={() => moveTopic(idx, idx + 1)}
+                              disabled={isLastTopic}
+                              className="p-1 text-slate-500 hover:text-blue-400 hover:bg-slate-800 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                              title="Mover 1 posição para baixo"
+                            >
+                              <ChevronDown className="w-3.5 h-3.5" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => moveTopic(idx, topicsList.length - 1)}
+                              disabled={isLastTopic}
+                              className="p-1 text-slate-500 hover:text-blue-400 hover:bg-slate-800 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
+                              title="Mover para o Fim (Último assunto)"
+                            >
+                              <ChevronsDown className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          <input 
+                            type="text" 
+                            value={topic.name}
+                            onChange={(e) => setDraftSubject(prev => {
+                              const newTopics = [...prev.topics];
+                              newTopics[idx] = { ...newTopics[idx], name: e.target.value };
+                              return { ...prev, topics: newTopics };
+                            })}
+                            className="flex-1 bg-transparent border-b border-slate-700 pb-1 font-bold text-xs text-white outline-none focus:border-blue-500 transition-colors"
+                            placeholder="Nome do Assunto..."
+                          />
+                          {/* Botão escanear aulas */}
+                          <button
+                            onClick={() => setScannerTopicIdx(idx)}
+                            title="Adicionar aulas via Vision AI"
+                            className="flex items-center gap-1 text-[9px] font-black text-violet-400 bg-violet-900/30 px-2 py-1 rounded tracking-widest uppercase hover:text-white hover:bg-violet-600 transition-colors shrink-0 cursor-pointer"
+                          >
+                            <ScanLine className="w-3 h-3"/> Scan
+                          </button>
+                          <button 
+                            onClick={() => setDraftSubject(prev => ({
+                              ...prev,
+                              topics: prev.topics.filter((_, i) => i !== idx)
+                            }))}
+                            className="p-1 text-slate-600 hover:text-red-500 transition-colors cursor-pointer"
+                            title="Excluir assunto"
+                          >
+                            <Trash2 className="w-3.5 h-3.5"/>
+                          </button>
+                        </div>
 
                     {/* Lista de aulas internas */}
                     {(topic.lessons && topic.lessons.length > 0) ? (
@@ -1507,7 +1567,9 @@ export default function Config({
                       </div>
                     )}
                   </div>
-                ))}
+                    );
+                  });
+                })()}
                 {(draftSubject.topics || []).length === 0 && (
                   <div className="text-center py-6 border border-dashed border-slate-800 rounded-xl bg-slate-900/50">
                     <p className="text-[11px] font-bold text-slate-500 italic">Nenhum assunto cadastrado. Clique no botão abaixo para adicionar.</p>
