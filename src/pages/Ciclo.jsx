@@ -34,31 +34,65 @@ export default function Ciclo() {
 
   const pendingReviews = getPendingReviews().slice(0, 4);
 
+  // Resolve as matérias efetivas de um dia do ciclo (considerando overrides, regras futuras e ciclo base)
+  const getEffectiveDaySubjects = (dayIndex) => {
+    const dateInfo = getRelativeDateInfo(dayIndex);
+    let daySubjects = Array.isArray(cycle?.[dayIndex]) ? [...cycle[dayIndex]] : [];
+
+    if (calendarOverrides && Array.isArray(calendarOverrides[dateInfo.fullDateStr])) {
+      return [...calendarOverrides[dateInfo.fullDateStr]];
+    }
+
+    const parts = String(dateInfo.fullDateStr).split('-').map(Number);
+    const dayDateObj = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date();
+    const dayOfWeek = dayDateObj.getDay();
+    const matchingRules = (futureScheduleRules || [])
+      .filter(r => {
+        if (!r || r.v !== 2 || !r.fromDate || r.fromDate > dateInfo.fullDateStr) return false;
+        if (cycleScheduleType === 'weekly' && r.dayOfWeek !== undefined) {
+          return r.dayOfWeek === dayOfWeek;
+        }
+        return r.dayOfWeek === dayOfWeek || r.cycleIndex === dayIndex;
+      })
+      .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
+
+    if (matchingRules.length > 0 && Array.isArray(matchingRules[0].daySlots)) {
+      daySubjects = [...matchingRules[0].daySlots];
+    }
+
+    return daySubjects;
+  };
+
   // Sincroniza o dia atual quando em modo semanal
   useEffect(() => {
-    if (cycleScheduleType === 'weekly' && cycle && cycle.length > 0) {
+    if (cycleScheduleType === 'weekly') {
       const today = new Date();
       const currentRealDOW = today.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
       const currentWeekIndex = (cycleWeekStart === 'monday') ? (currentRealDOW + 6) % 7 : currentRealDOW;
-      if (currentWeekIndex < cycle.length && currentDayIndex !== currentWeekIndex) {
+      if (currentDayIndex !== currentWeekIndex) {
         setCurrentDayIndex(currentWeekIndex);
       }
     }
-  }, [cycleScheduleType, cycleWeekStart, cycle, currentDayIndex, setCurrentDayIndex]);
+  }, [cycleScheduleType, cycleWeekStart, currentDayIndex, setCurrentDayIndex]);
 
   const visibleDays = (() => {
-    if (!cycle || cycle.length === 0) return [];
     if (cycleScheduleType === 'weekly') {
-      return cycle.map((daySubjects, dayIndex) => ({ daySubjects, dayIndex }));
+      return Array.from({ length: 7 }, (_, dayIndex) => ({
+        daySubjects: getEffectiveDaySubjects(dayIndex),
+        dayIndex
+      }));
     }
+    if (!cycle || cycle.length === 0) return [];
     const safeCurrentDayIndex = currentDayIndex % cycle.length;
     const result = [];
     for (let i = 0; i < cycle.length; i++) {
       const dayIndex = (safeCurrentDayIndex + i) % cycle.length;
-      result.push({ daySubjects: cycle[dayIndex], dayIndex });
+      result.push({ daySubjects: getEffectiveDaySubjects(dayIndex), dayIndex });
     }
     return result;
   })();
+
+  const todayTotalSlots = getEffectiveDaySubjects(currentDayIndex).length;
 
   const scrollContainerRef = useRef(null);
 
@@ -129,14 +163,14 @@ export default function Ciclo() {
 
   // Ao completar a meta do dia, dispara o confetti
   useEffect(() => {
-    const totalSlots = cycle[currentDayIndex]?.length || 0;
+    const totalSlots = todayTotalSlots;
     if (completedToday.length === totalSlots && totalSlots > 0 && prevCompletedLength.current < totalSlots) {
       setTimeout(() => {
         setTriggerConfetti(true);
       }, 0);
     }
     prevCompletedLength.current = completedToday.length;
-  }, [completedToday.length, cycle, currentDayIndex, setTriggerConfetti]);
+  }, [completedToday.length, todayTotalSlots, setTriggerConfetti]);
 
   return (
     <div className="fade-in w-full pb-10">
@@ -199,7 +233,7 @@ export default function Ciclo() {
         )}
       </div>
 
-      {completedToday.length === (cycle[currentDayIndex]?.length || 0) && completedToday.length > 0 && (
+      {completedToday.length === todayTotalSlots && completedToday.length > 0 && (
         <div className="bg-emerald-500 p-5 md:p-6 rounded-xl shadow-md mb-8 flex flex-col md:flex-row items-center justify-between gap-5 text-white fade-in border border-emerald-600">
           <div className="text-center md:text-left flex items-center gap-4">
             <div className="bg-white/20 p-3 rounded-full dark:bg-slate-900"><Trophy className="text-yellow-300 w-8 h-8" /></div>
@@ -224,7 +258,7 @@ export default function Ciclo() {
           </h3>
           <div className="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-3 py-1 rounded-full text-[10px] font-black uppercase flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
-            Queimar Teoria: {completedToday.length} / {cycle[currentDayIndex]?.length || 0} Slots
+            Queimar Teoria: {completedToday.length} / {todayTotalSlots} Slots
           </div>
         </div>
         
@@ -514,6 +548,26 @@ export default function Ciclo() {
                   </div>
 
                   <div className="p-2 sm:p-4 flex flex-col gap-2 sm:gap-4 flex-1">
+                    {daySubjects.length === 0 && (
+                      <div className="flex flex-col items-center justify-center text-center p-6 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30 flex-1 min-h-[160px] gap-2">
+                        <Calendar className="w-6 h-6 text-slate-400 dark:text-slate-600" />
+                        <span className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                          Dia Livre / Descanso
+                        </span>
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500 max-w-[210px] leading-relaxed">
+                          Nenhum bloco agendado neste dia. Para programar matérias aqui, clique no dia pelo Calendário.
+                        </p>
+                        {!isPast && (
+                          <button
+                            type="button"
+                            onClick={() => navigate('/calendario')}
+                            className="mt-1 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white dark:bg-blue-950/50 dark:text-blue-400 dark:hover:bg-blue-600 dark:hover:text-white border border-blue-200 dark:border-blue-800/60 transition-colors cursor-pointer"
+                          >
+                            Agendar no Calendário
+                          </button>
+                        )}
+                      </div>
+                    )}
                     {daySubjects.map((originalSubId, slotIndex) => {
                       let subjectId = originalSubId;
                       let subject = subjects[subjectId];

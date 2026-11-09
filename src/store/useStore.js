@@ -112,7 +112,7 @@ export const getCleanInitialState = () => ({
   subjects: {},
   pushEnabled: false,
   pushTime: '08:00',
-  cycle: [],
+  cycle: [[], [], [], [], [], [], []],
   currentDayIndex: 0,
   completedToday: [],
   targetExamDate: '2026-08-15',
@@ -336,6 +336,23 @@ export const useStore = create(
             }
             if (!cleanData.petData) {
               cleanData.petData = getCleanInitialState().petData;
+            }
+            if ((cleanData.cycleScheduleType || 'weekly') === 'weekly') {
+              cleanData.cycle = Array.from({ length: 7 }, (_, i) => Array.isArray(cleanData.cycle?.[i]) ? cleanData.cycle[i] : []);
+              const isCycleCompletelyEmpty = cleanData.cycle.every(d => !Array.isArray(d) || d.length === 0);
+              if (isCycleCompletelyEmpty && Array.isArray(cleanData.futureScheduleRules) && cleanData.futureScheduleRules.length > 0) {
+                const sortedAsc = [...cleanData.futureScheduleRules]
+                  .filter(r => r && r.v === 2 && Array.isArray(r.daySlots) && r.daySlots.length > 0)
+                  .sort((a, b) => String(a.fromDate || '').localeCompare(String(b.fromDate || '')));
+                sortedAsc.forEach(r => {
+                  const idx = (cleanData.cycleWeekStart === 'monday' && r.dayOfWeek !== undefined)
+                    ? (r.dayOfWeek + 6) % 7
+                    : (r.cycleIndex ?? r.dayOfWeek);
+                  if (idx !== undefined && idx >= 0 && idx < 7 && (!cleanData.cycle[idx] || cleanData.cycle[idx].length === 0)) {
+                    cleanData.cycle[idx] = [...r.daySlots];
+                  }
+                });
+              }
             }
             // Preserva e mescla questões do Caveira sincronizadas (limpando lote pré-v3 corrompido uma única vez)
             const isCloudCleanedV3 = localStorage.getItem('prf_caveira_cloud_v3_cleaned') === 'true';
@@ -567,7 +584,27 @@ export const useStore = create(
       addFutureScheduleRule: ({ fromDate, dayOfWeek, cycleIndex, daySlots }) => set(state => {
         if (!fromDate || !Array.isArray(daySlots)) return state;
         const isWeekly = (state.cycleScheduleType || 'weekly') === 'weekly';
+        const nextCycle = isWeekly
+          ? Array.from({ length: 7 }, (_, i) => Array.isArray(state.cycle?.[i]) ? [...state.cycle[i]] : [])
+          : [...(state.cycle || [])];
+
+        const hadPriorRuleForDay = (state.futureScheduleRules || []).some(r => {
+          if (!r || r.v !== 2 || !r.fromDate || r.fromDate >= fromDate) return false;
+          return (isWeekly && r.dayOfWeek !== undefined && dayOfWeek !== undefined)
+            ? r.dayOfWeek === dayOfWeek
+            : (r.dayOfWeek === dayOfWeek || r.cycleIndex === cycleIndex);
+        });
+
+        const targetIdx = isWeekly
+          ? ((state.cycleWeekStart === 'monday' && dayOfWeek !== undefined) ? (dayOfWeek + 6) % 7 : (cycleIndex ?? dayOfWeek))
+          : cycleIndex;
+
+        if (targetIdx !== undefined && targetIdx >= 0 && (!nextCycle[targetIdx] || nextCycle[targetIdx].length === 0) && !hadPriorRuleForDay) {
+          nextCycle[targetIdx] = [...daySlots];
+        }
+
         return {
+          cycle: nextCycle,
           futureScheduleRules: [
             ...(state.futureScheduleRules || []).filter(r => {
               if (!r || r.v !== 2 || !r.fromDate) return false;
@@ -1685,14 +1722,60 @@ export const useStore = create(
 
       handleReplaceSubject: (dayIndex, slotIndex, oldSubjectId, newSubjectId) => {
         if (!newSubjectId) return;
+        const dateInfo = get().getRelativeDateInfo?.(dayIndex);
+        const fullDateStr = dateInfo?.fullDateStr;
         set(state => {
-          const newCycle = state.cycle.map((daySlots, dIdx) => {
-            if (dIdx !== dayIndex) return daySlots;
-            return daySlots.map((subId, sIdx) => 
+          const isWeekly = (state.cycleScheduleType || 'weekly') === 'weekly';
+          const baseCycle = isWeekly
+            ? Array.from({ length: 7 }, (_, i) => Array.isArray(state.cycle?.[i]) ? [...state.cycle[i]] : [])
+            : [...(state.cycle || [])];
+
+          const newCycle = baseCycle.map((daySlots, dIdx) => {
+            if (dIdx !== dayIndex || !Array.isArray(daySlots)) return daySlots;
+            return daySlots.map((subId, sIdx) =>
               sIdx === slotIndex && subId === oldSubjectId ? newSubjectId : subId
             );
           });
-          return { cycle: newCycle };
+
+          const nextOverrides = { ...(state.calendarOverrides || {}) };
+          if (fullDateStr && Array.isArray(nextOverrides[fullDateStr])) {
+            nextOverrides[fullDateStr] = nextOverrides[fullDateStr].map((subId, sIdx) =>
+              sIdx === slotIndex && subId === oldSubjectId ? newSubjectId : subId
+            );
+          }
+
+          let nextRules = state.futureScheduleRules || [];
+          if (fullDateStr && Array.isArray(nextRules) && nextRules.length > 0) {
+            const parts = String(fullDateStr).split('-').map(Number);
+            const dayDateObj = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date();
+            const dayOfWeek = dayDateObj.getDay();
+            const matchingRules = nextRules
+              .filter(r => {
+                if (!r || r.v !== 2 || !r.fromDate || r.fromDate > fullDateStr) return false;
+                if (isWeekly && r.dayOfWeek !== undefined) return r.dayOfWeek === dayOfWeek;
+                return r.dayOfWeek === dayOfWeek || r.cycleIndex === dayIndex;
+              })
+              .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
+
+            if (matchingRules.length > 0) {
+              const activeRuleId = matchingRules[0].id;
+              nextRules = nextRules.map(r => {
+                if (!r || r.id !== activeRuleId || !Array.isArray(r.daySlots)) return r;
+                return {
+                  ...r,
+                  daySlots: r.daySlots.map((subId, sIdx) =>
+                    sIdx === slotIndex && subId === oldSubjectId ? newSubjectId : subId
+                  )
+                };
+              });
+            }
+          }
+
+          return {
+            cycle: newCycle,
+            calendarOverrides: nextOverrides,
+            futureScheduleRules: nextRules
+          };
         });
       },
 
@@ -1869,7 +1952,8 @@ export const useStore = create(
           }
         }
 
-        const nextIndex = (currentDayIndex + 1) % cycle.length;
+        const cycleLen = (get().cycleScheduleType || 'weekly') === 'weekly' ? 7 : Math.max(1, cycle.length);
+        const nextIndex = (currentDayIndex + 1) % cycleLen;
         setCurrentDayIndex(nextIndex);
         setCompletedToday([]);
 
@@ -1933,7 +2017,7 @@ export const useStore = create(
         // 1. Apagar somente as disciplinas
         if (subjects) {
           changes.subjects = {};
-          changes.cycle = [];
+          changes.cycle = [[], [], [], [], [], [], []];
           changes.currentDayIndex = 0;
           changes.cycleDayNames = [];
           changes.completedToday = [];
@@ -2399,7 +2483,12 @@ export const useStore = create(
         const maxSimulationDays = 1500;
         let consecutiveNoProgressDays = 0; 
 
-        if (cycle.length > 0) {
+        const hasAnySchedule =
+          (Array.isArray(cycle) && cycle.some(d => Array.isArray(d) && d.length > 0)) ||
+          (Array.isArray(futureScheduleRules) && futureScheduleRules.length > 0) ||
+          (calendarOverrides && Object.keys(calendarOverrides).length > 0);
+
+        if (hasAnySchedule) {
           while (!allDone && dayOffset < maxSimulationDays) {
             const targetSimDate = new Date(todayDateObj);
             targetSimDate.setDate(targetSimDate.getDate() + dayOffset);
@@ -2411,7 +2500,7 @@ export const useStore = create(
             } else {
               let cycleIndex = (currentDayIndex + dayOffset) % Math.max(1, cycle.length);
               const targetDayOfWeek = targetSimDate.getDay();
-              if (cycleScheduleType === 'weekly' && cycle.length === 7) {
+              if (cycleScheduleType === 'weekly') {
                 cycleIndex = (cycleWeekStart === 'monday') ? (targetDayOfWeek + 6) % 7 : targetDayOfWeek;
               }
               const matchingRules = (futureScheduleRules || [])

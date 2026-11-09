@@ -49,7 +49,11 @@ export default function Config({
     pushSettings,
     setPushSettings,
     pushTime,
-    setPushTime
+    setPushTime,
+    futureScheduleRules,
+    cycleScheduleType,
+    cycleWeekStart,
+    getRelativeDateInfo
   } = useStore();
 
   const handleForceUpdate = async () => {
@@ -74,7 +78,32 @@ export default function Config({
     }
   };
 
-  const flatCycle = cycle.flat();
+  const effectiveCycleDays = (() => {
+    const isWeekly = (cycleScheduleType || 'weekly') === 'weekly';
+    const dayCount = isWeekly ? 7 : (cycle?.length || 0);
+    return Array.from({ length: dayCount }, (_, dayIndex) => {
+      const baseSlots = Array.isArray(cycle?.[dayIndex]) ? cycle[dayIndex] : [];
+      if (baseSlots.length > 0) return baseSlots;
+      const dateInfo = getRelativeDateInfo ? getRelativeDateInfo(dayIndex) : null;
+      const fullDateStr = dateInfo?.fullDateStr;
+      const dayOfWeek = isWeekly
+        ? (cycleWeekStart === 'monday' ? (dayIndex + 1) % 7 : dayIndex)
+        : undefined;
+      const matchingRules = (futureScheduleRules || [])
+        .filter(r => {
+          if (!r || r.v !== 2 || !Array.isArray(r.daySlots)) return false;
+          if (fullDateStr && r.fromDate && r.fromDate > fullDateStr) return false;
+          if (isWeekly && r.dayOfWeek !== undefined && dayOfWeek !== undefined) {
+            return r.dayOfWeek === dayOfWeek;
+          }
+          return r.cycleIndex === dayIndex || (dayOfWeek !== undefined && r.dayOfWeek === dayOfWeek);
+        })
+        .sort((a, b) => String(b.fromDate || '').localeCompare(String(a.fromDate || '')));
+      return matchingRules.length > 0 ? matchingRules[0].daySlots : baseSlots;
+    });
+  })();
+
+  const flatCycle = effectiveCycleDays.flat();
   const totalSlots = flatCycle.length;
   
   let b1Count = 0; let b2Count = 0; let b3Count = 0;

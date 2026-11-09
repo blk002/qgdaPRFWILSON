@@ -357,8 +357,9 @@ export default function Calendario() {
       toast.success(`Programação definida de ${dateKey} para o futuro! Os dias anteriores não foram alterados.`);
     } else {
       // 3. Atualiza o ciclo semanal base para todas as semanas neste dia e limpa regras antigas conflitantes
-      if (setCycle && cycle) {
-        const newCycle = [...cycle];
+      if (setCycle) {
+        const totalDays = cycleScheduleType === 'weekly' ? 7 : Math.max((cycle || []).length, weekIndex + 1);
+        const newCycle = Array.from({ length: totalDays }, (_, i) => Array.isArray(cycle?.[i]) ? [...cycle[i]] : []);
         newCycle[weekIndex] = updatedSlots;
         setCycle(newCycle);
         if (removeDayOverride) removeDayOverride(dateKey);
