@@ -1,0 +1,1 @@
+var e=e=>{if(!e||typeof e!=`string`)return``;if(/^(data:|blob:|https?:)/i.test(e))return e;let t=`/qgdaPRFWILSON/`.replace(/\/?$/,`/`);return t!==`/`&&e.startsWith(t)?e:t+e.replace(/^\//,``)};export{e as t};

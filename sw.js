@@ -1,4 +1,4 @@
-const CACHE_NAME = 'qg-prf-cache-v105';
+const CACHE_NAME = 'qg-prf-cache-v106';
 // Base derivada da localização do próprio SW (ex.: '/qgdaPRFWILSON/')
 const BASE = self.location.pathname.replace(/sw\.js$/, '');
 
@@ -57,7 +57,10 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => caches.match(request))
+        .catch(async () => {
+          const cached = (await caches.match(request)) || (await caches.match(BASE));
+          return cached || new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
+        })
     );
     return;
   }
@@ -73,7 +76,10 @@ self.addEventListener('fetch', (event) => {
           }
           return networkResponse;
         })
-        .catch(() => caches.match(request))
+        .catch(async () => {
+          const cached = await caches.match(request);
+          return cached || new Response('', { status: 504 });
+        })
     );
   }
 });
@@ -95,7 +101,7 @@ self.addEventListener('push', (event) => {
     icon: BASE + 'favicon.svg',
     badge: BASE + 'favicon.svg',
     vibrate: [100, 50, 100],
-    data: data.data || { url: BASE + '#/hoje' },
+    data: data.data || { url: BASE + '#/' },
     actions: [
       { action: 'open', title: 'Estudar Agora' }
     ]
@@ -114,6 +120,7 @@ self.addEventListener('notificationclick', (event) => {
   if (event.notification.data && event.notification.data.url) {
     targetUrl = event.notification.data.url;
   }
+  const resolvedUrl = new URL(targetUrl, self.location.origin).href;
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
@@ -121,15 +128,15 @@ self.addEventListener('notificationclick', (event) => {
       for (const client of windowClients) {
         if (client.url.includes(self.location.origin) && 'focus' in client) {
           return client.focus().then((focusedClient) => {
-            if (focusedClient.url !== self.location.origin + targetUrl) {
-              return focusedClient.navigate(targetUrl);
+            if (focusedClient && focusedClient.url !== resolvedUrl && 'navigate' in focusedClient) {
+              return focusedClient.navigate(resolvedUrl);
             }
           });
         }
       }
       // Se não houver, abre uma nova janela
       if (self.clients.openWindow) {
-        return self.clients.openWindow(targetUrl);
+        return self.clients.openWindow(resolvedUrl);
       }
     })
   );

@@ -1,1 +1,0 @@
-var e=e=>!e||/^(data:|blob:|https?:)/i.test(e)?e:`/qgdaPRFWILSON/`.replace(/\/?$/,`/`)+e.replace(/^\//,``);export{e as t};
