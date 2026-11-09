@@ -19,6 +19,7 @@ export default function Ciclo() {
     advanceDay,
     getSubjectProgress,
     getRelativeDateInfo,
+    getLocalDateStr,
     reviews,
     setClassConfirmModal,
     setReplaceSubjectModal,
@@ -34,9 +35,33 @@ export default function Ciclo() {
 
   const pendingReviews = getPendingReviews().slice(0, 4);
 
+  const [weekOffset, setWeekOffset] = useState(0);
+  const MAX_WEEK_OFFSET = 26;
+
+  // Informações de data de um dia do ciclo, deslocado em N semanas para o futuro (modo semanal)
+  const getDateInfo = (dayIndex, week = 0) => {
+    const base = getRelativeDateInfo(dayIndex);
+    if (!week || cycleScheduleType !== 'weekly') return base;
+    const diasSemana = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
+    const dayDiff = (base.dayDiff || 0) + week * 7;
+    const target = new Date();
+    target.setDate(target.getDate() + dayDiff);
+    return {
+      ...base,
+      title: diasSemana[target.getDay()],
+      shortName: diasSemana[target.getDay()],
+      dateStr: `${String(target.getDate()).padStart(2, '0')}/${String(target.getMonth() + 1).padStart(2, '0')}`,
+      fullDateStr: getLocalDateStr(target),
+      isToday: false,
+      isPast: false,
+      isFuture: true,
+      dayDiff
+    };
+  };
+
   // Resolve as matérias efetivas de um dia do ciclo (considerando overrides, regras futuras e ciclo base)
-  const getEffectiveDaySubjects = (dayIndex) => {
-    const dateInfo = getRelativeDateInfo(dayIndex);
+  const getEffectiveDaySubjects = (dayIndex, week = 0) => {
+    const dateInfo = getDateInfo(dayIndex, week);
     let daySubjects = Array.isArray(cycle?.[dayIndex]) ? [...cycle[dayIndex]] : [];
 
     if (calendarOverrides && Array.isArray(calendarOverrides[dateInfo.fullDateStr])) {
@@ -77,20 +102,36 @@ export default function Ciclo() {
 
   const visibleDays = (() => {
     if (cycleScheduleType === 'weekly') {
-      return Array.from({ length: 7 }, (_, dayIndex) => ({
-        daySubjects: getEffectiveDaySubjects(dayIndex),
-        dayIndex
-      }));
+      // Inclui as semanas intermediárias para que a simulação de aulas seja sequencial até a semana exibida
+      const result = [];
+      for (let week = 0; week <= weekOffset; week++) {
+        for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+          result.push({
+            daySubjects: getEffectiveDaySubjects(dayIndex, week),
+            dayIndex,
+            week,
+            dateInfo: getDateInfo(dayIndex, week)
+          });
+        }
+      }
+      return result;
     }
     if (!cycle || cycle.length === 0) return [];
     const safeCurrentDayIndex = currentDayIndex % cycle.length;
     const result = [];
     for (let i = 0; i < cycle.length; i++) {
       const dayIndex = (safeCurrentDayIndex + i) % cycle.length;
-      result.push({ daySubjects: getEffectiveDaySubjects(dayIndex), dayIndex });
+      result.push({ daySubjects: getEffectiveDaySubjects(dayIndex), dayIndex, week: 0, dateInfo: getRelativeDateInfo(dayIndex) });
     }
     return result;
   })();
+
+  const shownDays = visibleDays.filter(d => d.week === weekOffset);
+
+  // Rótulo do intervalo da semana exibida
+  const weekRangeLabel = shownDays.length > 0
+    ? `${shownDays[0].dateInfo.dateStr} – ${shownDays[shownDays.length - 1].dateInfo.dateStr}`
+    : '';
 
   const todayTotalSlots = getEffectiveDaySubjects(currentDayIndex).length;
 
@@ -134,6 +175,15 @@ export default function Ciclo() {
     }, 250);
     return () => clearTimeout(timer);
   }, [currentDayIndex]);
+
+  // Ao trocar de semana, rola para o primeiro dia exibido
+  useEffect(() => {
+    if (weekOffset === 0) return;
+    const timer = setTimeout(() => {
+      if (scrollContainerRef.current) scrollContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
+    }, 80);
+    return () => clearTimeout(timer);
+  }, [weekOffset]);
 
   const { setTriggerConfetti, ConfettiCanvas } = useConfetti();
   const prevCompletedLength = useRef(completedToday.length);
@@ -317,14 +367,42 @@ export default function Ciclo() {
         <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
           <Layers className="w-4 h-4 text-blue-500" /> Fila de Conteúdo Novo / Avanço
           <span className="text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold ml-1">
-            {visibleDays.length} {visibleDays.length === 1 ? 'dia' : 'dias'}
+            {shownDays.length} {shownDays.length === 1 ? 'dia' : 'dias'}
           </span>
         </h3>
 
-        <div className="flex items-center gap-2 self-end sm:self-auto">
+        <div className="flex items-center gap-2 self-end sm:self-auto flex-wrap justify-end">
+          {cycleScheduleType === 'weekly' && (
+            <div className="flex items-center gap-1 bg-slate-100 dark:bg-slate-800/80 p-0.5 rounded-lg border border-slate-200 dark:border-slate-700/60">
+              <button
+                type="button"
+                disabled={weekOffset === 0}
+                onClick={() => setWeekOffset(w => Math.max(0, w - 1))}
+                className="px-2 py-1.5 hover:bg-white dark:hover:bg-slate-700 rounded-md text-xs font-bold text-slate-600 dark:text-slate-300 transition-colors cursor-pointer active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
+                title="Semana anterior"
+                aria-label="Semana anterior"
+              >
+                <ChevronLeft className="w-4 h-4" /> Semana
+              </button>
+              <span className="px-2 text-[11px] font-black text-slate-700 dark:text-slate-200 whitespace-nowrap">
+                {weekOffset === 0 ? 'Esta semana' : weekOffset === 1 ? 'Próxima semana' : `+${weekOffset} semanas`}
+                <span className="ml-1.5 text-[10px] font-bold text-slate-400">{weekRangeLabel}</span>
+              </span>
+              <button
+                type="button"
+                disabled={weekOffset >= MAX_WEEK_OFFSET}
+                onClick={() => setWeekOffset(w => Math.min(MAX_WEEK_OFFSET, w + 1))}
+                className="px-2 py-1.5 hover:bg-white dark:hover:bg-slate-700 rounded-md text-xs font-bold text-slate-600 dark:text-slate-300 transition-colors cursor-pointer active:scale-95 disabled:opacity-30 disabled:cursor-not-allowed flex items-center gap-1"
+                title="Próxima semana"
+                aria-label="Próxima semana"
+              >
+                Semana <ChevronRight className="w-4 h-4" />
+              </button>
+            </div>
+          )}
           <button 
             type="button"
-            onClick={() => scrollToDay(currentDayIndex, true)}
+            onClick={() => { setWeekOffset(0); setTimeout(() => scrollToDay(currentDayIndex, true), 60); }}
             className="px-3 py-1.5 text-xs font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 hover:bg-blue-100 dark:hover:bg-blue-900/60 border border-blue-200 dark:border-blue-800 rounded-lg transition-all flex items-center gap-1.5 cursor-pointer shadow-xs active:scale-95"
             title="Rolar direto para o dia de hoje"
           >
@@ -355,8 +433,7 @@ export default function Ciclo() {
 
       {/* Barra de atalhos rápidos para todos os dias do ciclo */}
       <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar-x pb-2 mb-4 -mx-2 px-2 sm:mx-0 sm:px-0">
-        {visibleDays.map(({ dayIndex }) => {
-          const dateInfo = getRelativeDateInfo(dayIndex);
+        {shownDays.map(({ dayIndex, dateInfo }) => {
           const isToday = dateInfo.isToday;
           const isPast = dateInfo.isPast;
           return (
@@ -388,8 +465,7 @@ export default function Ciclo() {
         <div className="flex gap-2.5 sm:gap-4 items-stretch w-full min-w-max">
           {(() => {
             const simulatedIncrements = {};
-            return visibleDays.map(({ daySubjects: rawDaySubjects, dayIndex }) => {
-              const dateInfo = getRelativeDateInfo(dayIndex);
+            return visibleDays.map(({ daySubjects: rawDaySubjects, dayIndex, week, dateInfo }) => {
               let daySubjects = [...(rawDaySubjects || [])];
 
               if (calendarOverrides && calendarOverrides[dateInfo.fullDateStr]) {
@@ -424,7 +500,7 @@ export default function Ciclo() {
                 dayTotalSeconds = pastMinutes * 60;
                 dayAcceleratedSeconds = dayTotalSeconds;
               } else {
-                const tempSim = { ...simulatedIncrements };
+                const tempSim = week !== weekOffset ? simulatedIncrements : { ...simulatedIncrements };
                 for (let i = 0; i < daySubjects.length; i++) {
                   const originalSubId = daySubjects[i];
                   let subjectId = originalSubId;
@@ -489,6 +565,9 @@ export default function Ciclo() {
               }
 
               const hasAcceleration = dayAcceleratedSeconds > 0 && dayAcceleratedSeconds < dayTotalSeconds;
+
+              // Semanas intermediárias só alimentam a simulação sequencial de aulas (não são exibidas)
+              if (week !== weekOffset) return null;
 
               return (
                 <div id={`cycle-day-${dayIndex}`} key={dayIndex} className={`flex-1 min-w-[290px] sm:min-w-[310px] md:min-w-[325px] max-w-[380px] flex flex-col rounded-2xl border-2 transition-all mt-2 ${
