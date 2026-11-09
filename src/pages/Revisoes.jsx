@@ -155,8 +155,10 @@ export default function Revisoes() {
     ? Math.round((perfReviews.reduce((acc, r) => acc + r.lastPerformance, 0) / perfReviews.length) * 100) 
     : 0;
 
-  const rYear = new Date(reviewCalendarDate).getFullYear();
-  const rMonth = new Date(reviewCalendarDate).getMonth();
+  const rawRevDate = reviewCalendarDate ? new Date(reviewCalendarDate) : new Date();
+  const safeRevDate = isNaN(rawRevDate.getTime()) ? new Date() : rawRevDate;
+  const rYear = safeRevDate.getFullYear();
+  const rMonth = safeRevDate.getMonth();
   const rDaysInMonth = new Date(rYear, rMonth + 1, 0).getDate();
   const rFirstDayIndex = new Date(rYear, rMonth, 1).getDay();
   const mesesNomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];

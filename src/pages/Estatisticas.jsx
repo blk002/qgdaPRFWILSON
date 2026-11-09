@@ -796,7 +796,7 @@ export default function Estatisticas() {
                            
                            <div className="flex items-center gap-2">
                               <div className="flex-1 bg-slate-100 dark:bg-slate-800 h-1 rounded-full">
-                                 <div className="bg-blue-500 h-full rounded-full" style={{ width: `${(topic.completed / topic.total) * 100}%` }}></div>
+                                 <div className="bg-blue-500 h-full rounded-full" style={{ width: `${topic.total > 0 ? Math.min(100, (topic.completed / topic.total) * 100) : 0}%` }}></div>
                               </div>
                               <button 
                                 onClick={() => {

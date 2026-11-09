@@ -4,6 +4,7 @@ import { HashRouter } from 'react-router-dom';
 import './index.css'
 import App from './App.jsx'
 import ErrorBoundary from './components/ErrorBoundary.jsx'
+import { APP_VERSION } from './version'
 
 // Auto-recuperação contra chunk cache antigo (Failed to fetch dynamically imported module)
 window.addEventListener('vite:preloadError', (event) => {
@@ -39,11 +40,12 @@ if ('serviceWorker' in navigator) {
       });
     }
   } else {
-    // Limpa caches antigos (pré-v50) que usavam Stale-While-Revalidate no index.html
+    // Limpa caches antigos mantendo apenas o cache da versão atual
+    const expectedCache = `qg-prf-cache-${APP_VERSION.split('.')[0]}`;
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {
-          if (name !== 'qg-prf-cache-v96') {
+          if (name !== expectedCache) {
             caches.delete(name);
           }
         });

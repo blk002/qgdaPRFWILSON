@@ -66,7 +66,8 @@ export default function Simulados() {
     
     const ptsObj = simulados.map((sim, index) => {
       const x = (index / (totalSimulados - 1 || 1)) * chartWidth;
-      const y = chartHeight - (sim.liquida / maxScore) * chartHeight;
+      const clampedVal = Math.max(0, Math.min(maxScore, Number(sim.liquida) || 0));
+      const y = chartHeight - (clampedVal / maxScore) * chartHeight;
       return { x, y, val: sim.liquida, sim };
     });
     
@@ -255,7 +256,7 @@ export default function Simulados() {
               </div>
             </div>
             <div className="w-full bg-slate-100 rounded-full h-1.5 dark:bg-slate-800">
-              <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${(mediaLiquida/120)*100}%` }}></div>
+              <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${Math.max(0, Math.min(100, (mediaLiquida / 120) * 100))}%` }}></div>
             </div>
           </div>
 
@@ -268,7 +269,7 @@ export default function Simulados() {
               </div>
             </div>
             <div className="w-full bg-slate-100 rounded-full h-1.5 dark:bg-slate-800">
-              <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${(recorde/120)*100}%` }}></div>
+              <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${Math.max(0, Math.min(100, (recorde / 120) * 100))}%` }}></div>
             </div>
           </div>
 

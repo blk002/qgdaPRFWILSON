@@ -47,7 +47,7 @@ class SoundManager {
     const now = ctx.currentTime;
 
     // 1. White noise burst for gunpowder blast
-    const bufferSize = ctx.sampleRate * 0.22;
+    const bufferSize = Math.floor(ctx.sampleRate * 0.22);
     const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const output = noiseBuffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
@@ -70,6 +70,7 @@ class SoundManager {
     filter.connect(noiseGain);
     noiseGain.connect(ctx.destination);
     whiteNoise.start(now);
+    whiteNoise.stop(now + 0.22);
 
     // 2. Low-end punch
     const punchOsc = ctx.createOscillator();
@@ -117,7 +118,7 @@ class SoundManager {
     const now = ctx.currentTime;
 
     // Heavy cannon/magnum blast from NPC
-    const bufferSize = ctx.sampleRate * 0.55;
+    const bufferSize = Math.floor(ctx.sampleRate * 0.55);
     const noiseBuffer = ctx.createBuffer(1, bufferSize, ctx.sampleRate);
     const output = noiseBuffer.getChannelData(0);
     for (let i = 0; i < bufferSize; i++) {
@@ -140,6 +141,7 @@ class SoundManager {
     lowpass.connect(gain);
     gain.connect(ctx.destination);
     noise.start(now);
+    noise.stop(now + 0.55);
 
     // Sub-bass thud
     const sub = ctx.createOscillator();

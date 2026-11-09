@@ -96,7 +96,16 @@ export default function DueloFPS() {
   });
   const totalGeneratedCountRef = useRef<number>(1);
   const containerRef = useRef<HTMLDivElement | null>(null);
+  const executionTimerRef = useRef<number | null>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  useEffect(() => {
+    return () => {
+      if (executionTimerRef.current !== null) {
+        window.clearTimeout(executionTimerRef.current);
+      }
+    };
+  }, []);
 
   // Estatísticas de tópicos locais para a aba Raio-X
   const [fpsTopicStatsVersion, setFpsTopicStatsVersion] = useState<number>(0);
@@ -133,6 +142,7 @@ export default function DueloFPS() {
       try {
         const addCaveira = (useStore.getState() as any).addCaveiraQuestion;
         if (typeof addCaveira === 'function') {
+          const nowIso = new Date().toISOString();
           addCaveira({
             id: `fps-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`,
             subject: question.category === 'CTB' ? 'Legislação de Trânsito (CTB)' : 'Resoluções do CONTRAN',
@@ -140,13 +150,18 @@ export default function DueloFPS() {
             bloco: 'Bloco II',
             topic: question.topic || (question.category === 'CTB' ? 'CTB - Geral' : 'CONTRAN - Geral'),
             content: question.statement,
+            statement: question.statement,
+            userChoice: playerChoice === true ? 'C' : playerChoice === false ? 'E' : '-',
+            correctChoice: question.answer ? 'C' : 'E',
             userAnswer: playerChoice === true ? 'CERTO' : playerChoice === false ? 'ERRADO' : 'TEMPO_ESGOTADO',
             correctAnswer: question.answer ? 'CERTO' : 'ERRADO',
+            correct: isHit,
             hit: isHit,
             durationSeconds: Math.round(spentSeconds),
-            date: new Date().toISOString(),
-            confidence: playerChoice === null ? 'duvida' : 'alta',
-            errorReason: reason === 'TIMEOUT' ? 'atencao' : 'conteudo',
+            timestamp: nowIso,
+            date: nowIso,
+            confidence: playerChoice === null ? 'duvida' : 'sabia',
+            errorReason: reason === 'TIMEOUT' ? 'Atenção' : 'Conteúdo',
             explanation: `${question.explanation} [Base Legal: ${question.legalBasis}]`,
             teacherComment: question.explanation,
             source: 'Duelo FPS (Alvo Legal)',
@@ -228,6 +243,10 @@ export default function DueloFPS() {
   };
 
   const startNewGame = useCallback(() => {
+    if (executionTimerRef.current !== null) {
+      window.clearTimeout(executionTimerRef.current);
+      executionTimerRef.current = null;
+    }
     soundFX.playWeaponReady();
     setActiveTab('arena');
     setScore(0);
@@ -268,7 +287,11 @@ export default function DueloFPS() {
       // Registra no Raio-X Caveira e no banco de tópicos
       recordQuestionAttempt(currentQuestion, playerChoice, false, spent, reason);
 
-      window.setTimeout(() => {
+      if (executionTimerRef.current !== null) {
+        window.clearTimeout(executionTimerRef.current);
+      }
+      executionTimerRef.current = window.setTimeout(() => {
+        executionTimerRef.current = null;
         setGameState('gameover');
       }, 1250);
     },
@@ -369,6 +392,21 @@ export default function DueloFPS() {
     }
   }, [gameState, timeLeft, triggerNpcExecution]);
 
+  const toggleMute = () => {
+    const next = !isMuted;
+    setIsMuted(next);
+    soundFX.muted = next;
+  };
+
+  const toggleFullscreen = useCallback(() => {
+    if (!containerRef.current) return;
+    if (!document.fullscreenElement) {
+      containerRef.current.requestFullscreen?.().then(() => setIsFullscreen(true)).catch(() => {});
+    } else {
+      document.exitFullscreen?.().then(() => setIsFullscreen(false)).catch(() => {});
+    }
+  }, []);
+
   // Teclas de atalho para atirar
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -397,22 +435,7 @@ export default function DueloFPS() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState, startNewGame]);
-
-  const toggleMute = () => {
-    const next = !isMuted;
-    setIsMuted(next);
-    soundFX.muted = next;
-  };
-
-  const toggleFullscreen = () => {
-    if (!containerRef.current) return;
-    if (!document.fullscreenElement) {
-      containerRef.current.requestFullscreen?.().then(() => setIsFullscreen(true)).catch(() => {});
-    } else {
-      document.exitFullscreen?.().then(() => setIsFullscreen(false)).catch(() => {});
-    }
-  };
+  }, [gameState, startNewGame, toggleFullscreen]);
 
   const filteredVadeMecum = useMemo(() => {
     const list: Array<{

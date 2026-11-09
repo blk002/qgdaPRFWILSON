@@ -7,7 +7,8 @@ import { PET_FOODS, PET_LEVELS } from '../data/petConstants';
 export function cleanAlternativeText(rawText, letter) {
   if (!rawText || typeof rawText !== 'string') return '';
   let clean = rawText.trim();
-  const letterPrefixRegex = new RegExp(`^\\(?\\s*${letter || '[A-E]'}\\s*[\\).\\-–—:]?\\s+`, 'i');
+  const safeLetter = letter && /^[A-Za-z0-9]$/.test(String(letter).trim()) ? String(letter).trim() : '[A-E]';
+  const letterPrefixRegex = new RegExp(`^\\(?\\s*${safeLetter}\\s*[\\).\\-–—:]?\\s+`, 'i');
   clean = clean.replace(letterPrefixRegex, '').trim();
   const isOnlyPercentage = /^\d+(?:[.,]\d+)?\s*%\s*$/.test(clean);
   if (!isOnlyPercentage) {
@@ -164,8 +165,8 @@ export const getCleanInitialState = () => ({
   cycleWeekStart: 'sunday',
   cycleDayNames: [],
   calendarOverrides: {},
-  scheduleExtensions: [],
   futureScheduleRules: [],
+  xpHistory: [],
   petData: {
     name: 'Recruta K9',
     hunger: 85,
@@ -189,20 +190,22 @@ export const getCleanInitialState = () => ({
     totalCareCount: 0,
     lastTick: Date.now()
   },
-  caveiraQuestions: (() => {
-    try {
-      if (localStorage.getItem('prf_caveira_schema') !== 'v3_strict_clean') {
-        localStorage.removeItem('prf_caveira_questions');
-        localStorage.setItem('prf_caveira_schema', 'v3_strict_clean');
-        return [];
-      }
-      const saved = localStorage.getItem('prf_caveira_questions');
-      return saved ? JSON.parse(saved) : [];
-    } catch (_) {
+  caveiraQuestions: [],
+});
+
+const getInitialLocalCaveiraQuestions = () => {
+  try {
+    if (localStorage.getItem('prf_caveira_schema') !== 'v3_strict_clean') {
+      localStorage.removeItem('prf_caveira_questions');
+      localStorage.setItem('prf_caveira_schema', 'v3_strict_clean');
       return [];
     }
-  })(),
-});
+    const saved = localStorage.getItem('prf_caveira_questions');
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+};
 
 // Fonte única de verdade das chaves persistidas (nuvem, backup local,
 // export/import e gatilho de auto-save). Mantê-la única evita divergências
@@ -216,14 +219,17 @@ export const PERSISTED_KEYS = [
   'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate', 'pushEnabled', 'pushTime',
   'enableSounds', 'activeBoosts', 'dailyReviewStats', 'syntaxLevel',
   'activeTheme', 'unlockedThemes', 'dailyGoalMinutes', 'subjectGoals', 'subjectTimeGoal', 'pushSettings',
-  'cycleScheduleType', 'cycleWeekStart', 'cycleDayNames', 'calendarOverrides', 'scheduleExtensions', 'futureScheduleRules', 'petData', 'caveiraQuestions'
+  'cycleScheduleType', 'cycleWeekStart', 'cycleDayNames', 'calendarOverrides', 'futureScheduleRules', 'xpHistory', 'petData', 'caveiraQuestions'
 ];
 
 export const useStore = create(
     (set, get) => ({
       // --- ESTADOS INICIAIS (NUVEM) ---
       ...getCleanInitialState(),
+      caveiraQuestions: getInitialLocalCaveiraQuestions(),
       isSyncing: true,
+      isLoadingFromCloud: false,
+      isSavingToCloud: false,
       // Marca temporal da última versão sincronizada da nuvem (controle de concorrência)
       lastSyncedAt: null,
 
@@ -344,11 +350,12 @@ export const useStore = create(
             cleanData.caveiraQuestions = Array.from(mergedMap.values());
             try { localStorage.setItem('prf_caveira_questions', JSON.stringify(cleanData.caveiraQuestions)); } catch (_) {}
             
-            set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false, lastSyncedAt: remoteUpdatedAt });
+            set({ ...cleanData, lastSyncedAt: remoteUpdatedAt });
             get().checkAndResetWeekly();
             get().checkAndAdvanceSeason();
             get().checkAndResetDailyMissions();
             get().syncAndRepairCaveiraReviews?.();
+            set({ isSyncing: false, isLoadingFromCloud: false });
             try { window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA' }, '*'); } catch (_) {}
             return true;
           }
@@ -363,13 +370,12 @@ export const useStore = create(
           set({
             ...freshState,
             caveiraQuestions: [],
-            isSyncing: false,
-            isLoadingFromCloud: false,
             lastSyncedAt: null
           });
           get().checkAndResetWeekly();
           get().checkAndAdvanceSeason();
           get().checkAndResetDailyMissions();
+          set({ isSyncing: false, isLoadingFromCloud: false });
           await get().saveToCloud();
           return true;
         } catch (error) {
@@ -407,10 +413,11 @@ export const useStore = create(
                 backupCaveira.forEach(q => mergedMap.set(q.id, { ...(mergedMap.get(q.id) || {}), ...q }));
                 cleanData.caveiraQuestions = Array.from(mergedMap.values());
                 
-                set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false });
+                set({ ...cleanData });
                 get().checkAndResetWeekly();
                 get().checkAndAdvanceSeason();
                 get().checkAndResetDailyMissions();
+                set({ isSyncing: false, isLoadingFromCloud: false });
 
                 toast.info(`⚠️ Usando backup local off-line (${backupDate}) devido a erro de conexão.`);
                 return true;
@@ -430,9 +437,11 @@ export const useStore = create(
       },
 
       saveToCloud: async () => {
-        const { user, isLoadingFromCloud, lastSyncedAt, ...state } = get();
-        if (!user || isLoadingFromCloud) return;
+        const { user, isLoadingFromCloud, isSavingToCloud, lastSyncedAt, ...state } = get();
+        if (!user || isLoadingFromCloud || isSavingToCloud) return;
 
+        clearTimeout(useStore._debounceTimer);
+        set({ isSavingToCloud: true });
         console.log('📤 [Nuvem] Despachando dados para o servidor...');
 
         // --- GUARDA DE CONCORRÊNCIA (proteção multi-dispositivo) ---
@@ -446,6 +455,7 @@ export const useStore = create(
             if (remoteUpdatedAt && new Date(remoteUpdatedAt) > new Date(lastSyncedAt)) {
               console.warn('⚠️ [Nuvem] Versão remota mais recente detectada. Sincronizando para evitar perda de dados.');
               toast.info('🔄 Dados atualizados em outro dispositivo. Carregando a versão mais recente...');
+              set({ isSavingToCloud: false });
               await get().loadFromCloud();
               return;
             }
@@ -504,6 +514,8 @@ export const useStore = create(
         } catch (error) {
           console.error('❌ [Nuvem] Erro no Upload:', error.message);
           // Omitimos o toast de erro para não poluir a interface se for apenas oscilação
+        } finally {
+          set({ isSavingToCloud: false });
         }
       },
 
@@ -515,6 +527,19 @@ export const useStore = create(
 
       // --- SETTERS BÁSICOS ---
       setSubjects: (subjects) => set((state) => ({ subjects: typeof subjects === 'function' ? subjects(state.subjects) : subjects })),
+      updateSubject: (subjectId, updates) => set((state) => {
+        const sub = state.subjects[subjectId];
+        if (!sub) return state;
+        return {
+          subjects: {
+            ...state.subjects,
+            [subjectId]: {
+              ...sub,
+              ...(typeof updates === 'function' ? updates(sub) : updates)
+            }
+          }
+        };
+      }),
       setSubjectSpeed: (subjectId, speed) => set((state) => {
         const sub = state.subjects[subjectId];
         if (!sub) return state;
@@ -543,7 +568,6 @@ export const useStore = create(
         if (!fromDate || !Array.isArray(daySlots)) return state;
         const isWeekly = (state.cycleScheduleType || 'weekly') === 'weekly';
         return {
-          scheduleExtensions: [],
           futureScheduleRules: [
             ...(state.futureScheduleRules || []).filter(r => {
               if (!r || r.v !== 2 || !r.fromDate) return false;
@@ -653,8 +677,11 @@ export const useStore = create(
         let s = card.stability || 0;
         let d = card.difficulty || 0;
         const today = getTodayDate();
-        const lastDate = card.lastReviewDate ? new Date(card.lastReviewDate) : today;
-        const t = Math.max(0, Math.floor((today - lastDate) / (1000 * 60 * 60 * 24)));
+        const lastDateObj = card.lastReviewDate ? new Date(card.lastReviewDate) : today;
+        const lastLocalNoon = isNaN(lastDateObj.getTime())
+          ? today
+          : new Date(lastDateObj.getFullYear(), lastDateObj.getMonth(), lastDateObj.getDate(), 12, 0, 0);
+        const t = Math.max(0, Math.round((today - lastLocalNoon) / (1000 * 60 * 60 * 24)));
 
         // Probabilidade de Retenção Atual (R) baseado no Fator Exato para 90% em t=S
         const factor = Math.pow(0.9, 1 / -0.5) - 1; 
@@ -663,15 +690,17 @@ export const useStore = create(
         if (s === 0) {
           // Inicialização (Primeira Vez)
           s = w[g - 1];
-          d = w[4] - w[5] * (g - 3);
+          d = Math.min(10, Math.max(1, w[4] - w[5] * (g - 3)));
         } else {
           // Atualização de Dificuldade
           d = d - w[6] * (g - 3);
           d = Math.min(10, Math.max(1, d + w[6] * (w[4] - d) / 10)); // Mean reversion
 
           if (g > 1) {
-            // Sucesso
-            const s_growth = (1 + Math.exp(w[8]) * (11 - d) * Math.pow(s, -w[9]) * (Math.exp(w[10] * (1 - retrievability)) - 1));
+            // Sucesso (com penalidade Hard w[15] e bônus Easy w[16])
+            const hardPenalty = g === 2 ? w[15] : 1;
+            const easyBonus = g === 4 ? w[16] : 1;
+            const s_growth = 1 + Math.exp(w[8]) * (11 - d) * Math.pow(s, -w[9]) * (Math.exp(w[10] * (1 - retrievability)) - 1) * hardPenalty * easyBonus;
             s = s * s_growth;
           } else {
             // Falha (Again)
@@ -735,11 +764,10 @@ export const useStore = create(
 
         const { petData, playSound } = get();
         const currentInv = petData?.foodInventory?.[foodId] || 0;
+        if (currentInv <= 0) return false;
         
         let newInv = { ...(petData?.foodInventory || {}) };
-        if (currentInv > 0) {
-          newInv[foodId] = currentInv - 1;
-        }
+        newInv[foodId] = currentInv - 1;
 
         const newHunger = Math.min(100, (petData?.hunger || 0) + food.hunger);
         const newEnergy = Math.min(100, (petData?.energy || 0) + food.energy);
@@ -875,7 +903,7 @@ export const useStore = create(
           petData: {
             ...petData,
             fun: 100,
-            energy: Math.max(10, (petData?.energy || 100) - 15),
+            energy: Math.max(10, (petData?.energy ?? 100) - 15),
             xp: newXp,
             level: newLevel
           }
@@ -1255,7 +1283,7 @@ export const useStore = create(
           stability: 0,
           difficulty: 0,
           lastReviewDate: null,
-          lastPerformance: 0.0
+          lastPerformance: undefined
         };
 
         const updatedQuestions = caveiraQuestions.map(q => q.id === question.id ? { ...q, fsrsCreated: true } : q);
@@ -1474,7 +1502,7 @@ export const useStore = create(
               stability: 0,
               difficulty: 0,
               lastReviewDate: null,
-              lastPerformance: 0.0
+              lastPerformance: undefined
             });
             return { ...q, alternatives: sanitizedQAlts, fsrsCreated: true };
           }
@@ -1512,11 +1540,19 @@ export const useStore = create(
           boostUsed = true;
         }
 
+        const todayStr = get().getLocalDateStr();
         set((state) => {
           const stateActiveBoosts = state.activeBoosts || { xpBoostActions: 0, streakShieldActive: false };
+          const prevHistory = Array.isArray(state.xpHistory) ? state.xpHistory : [];
+          const existingIdx = prevHistory.findIndex(h => h && h.date === todayStr);
+          const nextHistory = existingIdx >= 0
+            ? prevHistory.map((h, i) => i === existingIdx ? { ...h, xp: (h.xp || 0) + finalAmount } : h)
+            : [...prevHistory.slice(-29), { date: todayStr, xp: finalAmount }];
+
           return {
             userStats: { ...state.userStats, xp: state.userStats.xp + finalAmount },
             seasonalData: { ...state.seasonalData, seasonXp: state.seasonalData.seasonXp + finalAmount },
+            xpHistory: nextHistory,
             activeBoosts: boostUsed ? {
               ...stateActiveBoosts,
               xpBoostActions: Math.max(0, stateActiveBoosts.xpBoostActions - 1)
@@ -1701,10 +1737,12 @@ export const useStore = create(
         const topics = [...subject.topics];
         const topicIndex = topics.findIndex(t => t.id === activeTopic.id);
         
+        let actualWatched = 0;
         if (topicIndex !== -1) {
           const currentCompleted = topics[topicIndex].completed;
           const total = topics[topicIndex].total;
           const newCompleted = Math.min(total, currentCompleted + amountWatched);
+          actualWatched = Math.max(0, newCompleted - currentCompleted);
           
           if (newCompleted > currentCompleted) {
             // Calcular minutos reais: usa duração da aula se disponível (lessons[]), senão 60min por aula
@@ -1714,14 +1752,15 @@ export const useStore = create(
               const lesson = topicLessonsArr[i];
               if (lesson?.duration) {
                 // Parse MM:SS or HH:MM:SS -> minutos
-                const parts = lesson.duration.split(':').map(Number);
-                let mins = 0;
-                if (parts.length === 3) {
+                const parts = String(lesson.duration).split(':').map(Number);
+                let mins = 60;
+                if (parts.length === 3 && !parts.some(n => !Number.isFinite(n) || n < 0)) {
                   mins = parts[0] * 60 + parts[1] + parts[2] / 60;
-                } else if (parts.length === 2) {
+                } else if (parts.length === 2 && !parts.some(n => !Number.isFinite(n) || n < 0)) {
                   mins = parts[0] + parts[1] / 60;
                 } else {
-                  mins = 60;
+                  const numMins = Number(lesson.duration);
+                  if (Number.isFinite(numMins) && numMins > 0) mins = numMins;
                 }
                 addedMinutes += (mins / effectiveSpeed);
               } else {
@@ -1729,11 +1768,13 @@ export const useStore = create(
               }
             }
             addedMinutes = Math.round(addedMinutes);
-            if (addedMinutes === 0 && (newCompleted - currentCompleted) > 0) addedMinutes = Math.round((60 * (newCompleted - currentCompleted)) / effectiveSpeed);
+            if (!Number.isFinite(addedMinutes) || (addedMinutes === 0 && actualWatched > 0)) {
+              addedMinutes = Math.round((60 * actualWatched) / effectiveSpeed);
+            }
             
-            addXP(100 * (newCompleted - currentCompleted), "Progresso em disciplina");
-            setUserStats(prev => ({ ...prev, totalStudyMinutes: prev.totalStudyMinutes + addedMinutes }));
-            setWeeklySprint(prev => ({ ...prev, currentMinutes: prev.currentMinutes + addedMinutes }));
+            addXP(100 * actualWatched, "Progresso em disciplina");
+            setUserStats(prev => ({ ...prev, totalStudyMinutes: (prev.totalStudyMinutes || 0) + addedMinutes }));
+            setWeeklySprint(prev => ({ ...prev, currentMinutes: (prev.currentMinutes || 0) + addedMinutes }));
             
             const todayStr = getLocalDateStr(get().getTodayDate());
             set(state => ({
@@ -1766,7 +1807,7 @@ export const useStore = create(
                 stability: 0,
                 difficulty: 0,
                 lastReviewDate: null,
-                lastPerformance: 0.75 
+                lastPerformance: undefined
               });
             }
             setReviews(rPrev => [...rPrev, ...newReviews]);
@@ -1778,10 +1819,12 @@ export const useStore = create(
         newSubjects[subjectId] = subject;
         
         set({ subjects: newSubjects });
-        setCoins(prev => prev + (10 * amountWatched));
+        if (actualWatched > 0) {
+          setCoins(prev => prev + (10 * actualWatched));
+          get().updateMissionProgress('study', actualWatched);
+          get().updateDailyMissionProgress('study', actualWatched);
+        }
         setCompletedToday(prev => !prev.includes(slotIndex) ? [...prev, slotIndex] : prev);
-        get().updateMissionProgress('study', amountWatched);
-        get().updateDailyMissionProgress('study', amountWatched);
         get().boostPetWithStudy('class');
       },
 
@@ -1855,25 +1898,20 @@ export const useStore = create(
       },
 
       executeTacticalReset: async () => {
+        const clean = getCleanInitialState();
         set((state) => ({
-          subjects: {},
-          cycle: [],
-          simulados: [],
-          tafHistory: [],
-          reviews: [],
-          coins: 0,
-          currentDayIndex: 0,
-          // todayStr dinâmico via getLocalDateStr()
-          calendarDate: new Date(),
-          reviewCalendarDate: new Date(),
-          userStats: { xp: 0, medals: [], totalStudyMinutes: 0 },
-          reviewStats: { totalDone: 0, correct: 0, streak: 0 },
-          streakData: { currentStreak: 0, lastCheckDate: null },
-          weeklySprint: { ...state.weeklySprint, currentMinutes: 0 },
-          completedToday: [],
-          tafTrainingStatus: { lastDoneDate: null },
-          seasonalData: { ...state.seasonalData, seasonXp: 0 },
-          weeklyMissions: state.weeklyMissions.map(m => ({ ...m, current: 0, completed: false, claimed: false }))
+          ...clean,
+          isDarkMode: state.isDarkMode,
+          activeTheme: state.activeTheme || 'blue',
+          unlockedThemes: state.unlockedThemes || ['blue'],
+          unlockedAvatars: state.unlockedAvatars || clean.unlockedAvatars,
+          enableSounds: state.enableSounds ?? true,
+          targetExamDate: state.targetExamDate || clean.targetExamDate,
+          userStats: {
+            ...clean.userStats,
+            avatar: state.userStats?.avatar || clean.userStats.avatar,
+            displayName: state.userStats?.displayName || ''
+          }
         }));
         
         // Sincroniza o reset com a nuvem imediatamente
@@ -1896,8 +1934,13 @@ export const useStore = create(
         if (subjects) {
           changes.subjects = {};
           changes.cycle = [];
+          changes.currentDayIndex = 0;
+          changes.cycleDayNames = [];
           changes.completedToday = [];
           changes.subjectGoals = {};
+          changes.subjectTimeGoal = {};
+          changes.calendarOverrides = {};
+          changes.futureScheduleRules = [];
           changes.studyHistory = {};
           summary.push('Disciplinas & Ciclo');
         }
@@ -1906,7 +1949,7 @@ export const useStore = create(
         if (raioXCaveira) {
           changes.caveiraQuestions = [];
           const currentReviews = changes.reviews !== undefined ? changes.reviews : (get().reviews || []);
-          changes.reviews = currentReviews.filter(r => !(r.isCaveiraQuestion || String(r.id || '').startsWith('rev_caveira_') || String(r.topicName || '').startsWith('[Caveira]')));
+          changes.reviews = currentReviews.filter(r => !(r.isCaveiraQuestion || String(r.id || '').startsWith('rev_caveira_') || String(r.topicName || '').startsWith('[Caveira')));
           try { localStorage.removeItem('prf_caveira_questions'); } catch (_) {}
           try { window.postMessage({ source: 'QG_WEB_APP', type: 'CLEAR_SESSION' }, '*'); } catch (_) {}
           summary.push('Raio-X Caveira');
@@ -1933,11 +1976,11 @@ export const useStore = create(
           } catch (_) {}
           if (!raioXCaveira) {
             const currentCaveira = changes.caveiraQuestions !== undefined ? changes.caveiraQuestions : (get().caveiraQuestions || []);
-            changes.caveiraQuestions = currentCaveira.filter(q => !(q.source?.includes('Duelo FPS') || q.origin?.includes('FPS') || String(q.id || '').startsWith('fps-')));
+            changes.caveiraQuestions = currentCaveira.filter(q => !(q.source?.includes('Duelo') || q.origin?.includes('FPS') || String(q.id || '').startsWith('fps-') || String(q.id || '').startsWith('duelo_')));
           }
           if (!fsrs) {
             const currentReviews = changes.reviews !== undefined ? changes.reviews : (get().reviews || []);
-            changes.reviews = currentReviews.filter(r => !(r.origin?.includes('FPS') || String(r.id || '').startsWith('rev_fps_')));
+            changes.reviews = currentReviews.filter(r => !(r.origin?.includes('FPS') || String(r.id || '').startsWith('rev_fps_') || String(r.id || '').startsWith('rev_caveira_duelo_')));
           }
           summary.push('Duelo CTB / CONTRAN');
         }
@@ -1958,6 +2001,7 @@ export const useStore = create(
           changes.weeklySprint = { goalHours: 35, currentMinutes: 0, weekStart: new Date().toISOString() };
           changes.weeklyMissions = clean.weeklyMissions;
           changes.dailyMissions = [];
+          changes.lastDailyResetDate = null;
           changes.seasonalData = clean.seasonalData;
           changes.syntaxLevel = 0;
           changes.activeBoosts = { xpBoostActions: 0, streakShieldActive: false };
@@ -2000,6 +2044,14 @@ export const useStore = create(
       executeTotalWipe: async () => {
         const { user } = get();
         console.log("🔴 PROTOCOLO DE DESTRUIÇÃO ABSOLUTA INICIADO...");
+        clearTimeout(useStore._debounceTimer);
+        try {
+          localStorage.removeItem('prf_caveira_questions');
+          localStorage.removeItem('prf_qg_backups');
+          localStorage.removeItem('alvo_legal_seen_statements_v1');
+          localStorage.removeItem('alvo_legal_high_score_v1');
+          localStorage.removeItem('qg_duelo_fps_topic_stats_v1');
+        } catch (_) {}
         
         const cleanState = getCleanInitialState();
 
@@ -2082,7 +2134,7 @@ export const useStore = create(
       },
 
       unlockAvatar: (avatarPath, cost) => {
-        const { coins, unlockedAvatars, setCoins } = get();
+        const { coins, unlockedAvatars, setCoins, unlockMedal } = get();
         if (coins < cost) {
           toast.error("Moedas insuficientes para desbloquear este avatar!");
           return false;
@@ -2093,8 +2145,14 @@ export const useStore = create(
         }
         setCoins(c => c - cost);
         set(state => ({
-          unlockedAvatars: [...state.unlockedAvatars, avatarPath]
+          unlockedAvatars: [...state.unlockedAvatars, avatarPath],
+          userStats: {
+            ...state.userStats,
+            totalPurchases: (state.userStats?.totalPurchases || 0) + 1
+          }
         }));
+        const newPurchases = (get().userStats?.totalPurchases || 0);
+        if (newPurchases >= 5) unlockMedal('investidor');
         toast.success("Avatar desbloqueado com sucesso! 🎉");
         get().playSound('levelUp');
         return true;
@@ -2487,6 +2545,7 @@ export const useStore = create(
         });
 
         return estimates.sort((a, b) => {
+          if (a.remaining === 0 && b.remaining === 0) return 0;
           if (a.remaining === 0) return -1;
           if (b.remaining === 0) return 1;
           return a.dateObj - b.dateObj;
@@ -2501,7 +2560,8 @@ export const useStore = create(
 
         const lastSubject = unfinished[unfinished.length - 1];
         const completionDate = lastSubject.dateObj;
-        const examDateObj = new Date(`${targetExamDate}T00:00:00`);
+        const parsedExam = new Date(`${targetExamDate || '2026-08-15'}T00:00:00`);
+        const examDateObj = isNaN(parsedExam.getTime()) ? new Date('2026-08-15T00:00:00') : parsedExam;
         
         const isLate = completionDate > examDateObj;
         const daysDiff = Math.round((completionDate - examDateObj) / (1000 * 60 * 60 * 24));
@@ -2528,17 +2588,20 @@ export const useStore = create(
       },
 
       checkAndResetWeekly: () => {
-        const { weeklySprint, getStartOfWeek } = get();
+        const { weeklySprint, getStartOfWeek, getLocalDateStr } = get();
         const now = new Date();
-        const currentWeekStart = getStartOfWeek(now).toISOString();
-        const sprintWeekStart = weeklySprint.weekStart ? getStartOfWeek(new Date(weeklySprint.weekStart)).toISOString() : null;
+        const currentMonday = getStartOfWeek(now);
+        const currentWeekStartStr = getLocalDateStr(currentMonday);
+        const sprintWeekStartStr = weeklySprint?.weekStart
+          ? getLocalDateStr(getStartOfWeek(new Date(weeklySprint.weekStart)))
+          : null;
 
-        if (!sprintWeekStart || currentWeekStart !== sprintWeekStart) {
+        if (!sprintWeekStartStr || currentWeekStartStr !== sprintWeekStartStr) {
           set(state => ({
             weeklySprint: {
               ...state.weeklySprint,
               currentMinutes: 0,
-              weekStart: currentWeekStart
+              weekStart: currentMonday.toISOString()
             },
             weeklyMissions: state.weeklyMissions.map(m => ({
               ...m,
@@ -2628,6 +2691,10 @@ export const useStore = create(
           }
 
           if (reward.id === 10) { // Escudo de Streak
+            if (get().activeBoosts?.streakShieldActive) {
+              toast.info("O Escudo de Streak já está ativo!");
+              return false;
+            }
             set(state => {
               const activeBoosts = state.activeBoosts || { xpBoostActions: 0, streakShieldActive: false };
               return {

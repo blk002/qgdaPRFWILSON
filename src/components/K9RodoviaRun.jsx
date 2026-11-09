@@ -28,6 +28,10 @@ export default function K9RodoviaRun({
   const animFrameRef = useRef(null);
   const lastSpawnRef = useRef(0);
   const speedRef = useRef(5);
+  const scoreRef = useRef(0);
+  const livesRef = useRef(3);
+  const obstaclesRef = useRef([]);
+  const itemsRef = useRef([]);
   const hasReportedGameOverRef = useRef(false);
 
   const { setTriggerConfetti } = useConfetti();
@@ -43,6 +47,10 @@ export default function K9RodoviaRun({
 
   const startGame = () => {
     hasReportedGameOverRef.current = false;
+    scoreRef.current = 0;
+    livesRef.current = 3;
+    obstaclesRef.current = [];
+    itemsRef.current = [];
     setGameState('playing');
     setScore(0);
     setCoinsCollected(0);
@@ -76,10 +84,11 @@ export default function K9RodoviaRun({
       setK9Y(k9Ref.current.y);
 
       // 2. Pontuação progressiva
-      setScore(s => s + 1);
+      scoreRef.current += 1;
+      setScore(scoreRef.current);
 
       // Aumento gradual de velocidade a cada 400 pts
-      speedRef.current = Math.min(11, 5.5 + Math.floor(score / 400) * 0.8);
+      speedRef.current = Math.min(11, 5.5 + Math.floor(scoreRef.current / 400) * 0.8);
 
       const now = Date.now();
 
@@ -91,80 +100,84 @@ export default function K9RodoviaRun({
           x: 600,
           type: Math.random() > 0.4 ? 'cone' : 'radar'
         };
-        setObstacles(prev => [...prev, newObs]);
+        obstaclesRef.current = [...obstaclesRef.current, newObs];
 
         // Spawner de Moedas / Ossos
         if (Math.random() > 0.3) {
-          setItems(prev => [
-            ...prev,
+          itemsRef.current = [
+            ...itemsRef.current,
             {
               id: Math.random(),
               x: 600 + (Math.random() > 0.5 ? 80 : 0),
               y: Math.random() > 0.5 ? 70 : 20, // no chão ou no ar
               type: Math.random() > 0.3 ? 'coin' : 'bone'
             }
-          ]);
+          ];
         }
       }
 
       // 4. Mover obstáculos e checar colisão
-      setObstacles(prev => {
-        const next = [];
-        for (let obs of prev) {
-          const newX = obs.x - speedRef.current;
-          
-          // Checagem de colisão com o K9
-          // K9 fica em x = 80 a 140
-          if (newX > 70 && newX < 125) {
-            // Se o K9 não pulou alto o suficiente (altura < 50)
-            if (k9Ref.current.y < 45) {
-              // Colisão detectada!
-              setLives(l => {
-                const remaining = l - 1;
-                if (remaining <= 0) {
-                  setGameState('gameover');
-                }
-                return remaining;
-              });
-              // Não readiciona o obstáculo atingido
-              continue;
-            }
-          }
+      const nextObs = [];
+      let lostLives = 0;
+      for (const obs of obstaclesRef.current) {
+        const newX = obs.x - speedRef.current;
 
-          if (newX > -50) {
-            next.push({ ...obs, x: newX });
-          }
+        // Checagem de colisão com o K9 (K9 fica em x = 80 a 140)
+        if (newX > 70 && newX < 125 && k9Ref.current.y < 45) {
+          lostLives += 1;
+          continue;
         }
-        return next;
-      });
+
+        if (newX > -50) {
+          nextObs.push({ ...obs, x: newX });
+        }
+      }
+      obstaclesRef.current = nextObs;
+      setObstacles(nextObs);
+
+      if (lostLives > 0) {
+        livesRef.current = Math.max(0, livesRef.current - lostLives);
+        setLives(livesRef.current);
+        if (livesRef.current <= 0) {
+          setGameState('gameover');
+          return;
+        }
+      }
 
       // 5. Mover e coletar itens
-      setItems(prev => {
-        const next = [];
-        for (let it of prev) {
-          const newX = it.x - speedRef.current;
+      const nextItems = [];
+      let addedCoins = 0;
+      let bonusScore = 0;
+      for (const it of itemsRef.current) {
+        const newX = it.x - speedRef.current;
 
-          // Coleta pelo K9
-          if (newX > 70 && newX < 135) {
-            const distY = Math.abs(k9Ref.current.y - it.y);
-            if (distY < 45) {
-              // Coletou!
-              if (it.type === 'coin') {
-                setCoinsCollected(c => c + 1);
-                setScore(s => s + 50);
-              } else {
-                setScore(s => s + 100);
-              }
-              continue;
+        if (newX > 70 && newX < 135) {
+          const distY = Math.abs(k9Ref.current.y - it.y);
+          if (distY < 45) {
+            if (it.type === 'coin') {
+              addedCoins += 1;
+              bonusScore += 50;
+            } else {
+              bonusScore += 100;
             }
-          }
-
-          if (newX > -50) {
-            next.push({ ...it, x: newX });
+            continue;
           }
         }
-        return next;
-      });
+
+        if (newX > -50) {
+          nextItems.push({ ...it, x: newX });
+        }
+      }
+      itemsRef.current = nextItems;
+      setItems(nextItems);
+
+      if (addedCoins > 0) {
+        setCoinsCollected(c => c + addedCoins);
+      }
+      if (bonusScore > 0) {
+        scoreRef.current += bonusScore;
+        setScore(scoreRef.current);
+      }
 
       animFrameRef.current = requestAnimationFrame(gameLoop);
     };
@@ -175,7 +188,7 @@ export default function K9RodoviaRun({
       isMounted = false;
       if (animFrameRef.current) cancelAnimationFrame(animFrameRef.current);
     };
-  }, [gameState, score]);
+  }, [gameState]);
 
   // Checa e salva recorde ao morrer
   useEffect(() => {

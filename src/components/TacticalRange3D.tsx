@@ -133,11 +133,12 @@ export const TacticalRange3D: React.FC<TacticalRange3DProps> = ({
   }, [externalShotCommand]);
 
   const updateBoardCanvasRef = useRef<(() => void) | null>(null);
+  const halfSecTick = Math.floor(timeLeft * 2);
   useEffect(() => {
     if (updateBoardCanvasRef.current) {
       updateBoardCanvasRef.current();
     }
-  }, [currentQuestion, roundNumber, Math.floor(timeLeft * 2), gameState]);
+  }, [currentQuestion, roundNumber, halfSecTick, gameState]);
 
   useEffect(() => {
     const container = canvasMountRef.current;

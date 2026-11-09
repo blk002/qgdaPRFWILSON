@@ -240,6 +240,7 @@ export default function App() {
 
   // --- MONITOR DE PROMOÇÃO ---
   useEffect(() => {
+    if (isSyncing) return;
     const currentP = useStore.getState().getCurrentPatente();
     if (!currentP) return;
 
@@ -258,7 +259,7 @@ export default function App() {
       }
       lastPatenteId.current = currentP.id;
     }
-  }, [userStats?.xp]);
+  }, [userStats?.xp, isSyncing]);
 
   if (!session) {
     return <Login />;

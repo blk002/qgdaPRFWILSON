@@ -12,6 +12,7 @@ export default function PomodoroTimer() {
   const [sessionMinutes, setSessionMinutes] = useState(25);
 
   const timerRef = useRef(null);
+  const timeLeftRef = useRef(25 * 60);
 
   const handleComplete = useCallback(() => {
     setIsRunning(false);
@@ -20,20 +21,24 @@ export default function PomodoroTimer() {
     playSound('levelUp');
 
     toast.success(`Sessão de ${sessionMinutes}m concluída! XP contabilizado no histórico diário.`);
+    timeLeftRef.current = mode * 60;
     setTimeLeft(mode * 60);
   }, [addStudyMinutes, sessionMinutes, playSound, mode]);
 
   useEffect(() => {
+    timeLeftRef.current = timeLeft;
+  }, [timeLeft]);
+
+  useEffect(() => {
     if (isRunning && !isPaused) {
       timerRef.current = setInterval(() => {
-        setTimeLeft((prev) => {
-          if (prev <= 1) {
-            clearInterval(timerRef.current);
-            handleComplete();
-            return 0;
-          }
-          return prev - 1;
-        });
+        if (timeLeftRef.current <= 1) {
+          clearInterval(timerRef.current);
+          handleComplete();
+        } else {
+          timeLeftRef.current -= 1;
+          setTimeLeft(timeLeftRef.current);
+        }
       }, 1000);
     } else {
       clearInterval(timerRef.current);

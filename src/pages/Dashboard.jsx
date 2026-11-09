@@ -12,12 +12,14 @@ import {
 import { motion, AnimatePresence } from 'framer-motion';
 
 function XpSparkline({ xpHistory }) {
-  const { isDarkMode } = useStore();
+  const { isDarkMode, getLocalDateStr } = useStore();
   const today = new Date();
   const days = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(today);
     d.setDate(d.getDate() - (6 - i));
-    const key = d.toISOString().split('T')[0];
+    const key = getLocalDateStr
+      ? getLocalDateStr(d)
+      : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
     const label = d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.','');
     const entry = (xpHistory || []).find(h => h.date === key);
     return { key, label, xp: entry?.xp || 0 };
@@ -189,9 +191,16 @@ export default function Dashboard() {
 
   const acertoRate = reviewStats.totalDone > 0 
     ? Math.round((reviewStats.correct / reviewStats.totalDone) * 100) : 0;
+  const last7DayKeys = new Set(
+    Array.from({ length: 7 }, (_, i) => {
+      const d = new Date();
+      d.setDate(d.getDate() - i);
+      return useStore.getState().getLocalDateStr(d);
+    })
+  );
   const xpThisWeek = (xpHistory || [])
-    .filter(h => { const d = new Date(h.date); const now = new Date(); return (now - d) <= 7 * 86400000; })
-    .reduce((sum, h) => sum + h.xp, 0);
+    .filter(h => h && last7DayKeys.has(h.date))
+    .reduce((sum, h) => sum + (h.xp || 0), 0);
 
   const kpis = [
     { label: 'Ofensiva', value: `${streakData.currentStreak}d`, sub: 'dias consecutivos', icon: Flame, color: 'text-orange-500', glow: 'hover:shadow-orange-500/10 hover:border-orange-500/30' },

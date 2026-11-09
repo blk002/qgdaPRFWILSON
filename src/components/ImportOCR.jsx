@@ -332,6 +332,13 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
       total: 1,
       completed: 0,
       duration: lesson.duration,
+      lessons: [{
+        id: 'l_' + Date.now() + '_' + idx,
+        name: lesson.name,
+        title: lesson.name,
+        duration: lesson.duration || '60:00',
+        completed: false
+      }],
       notes: ''
     }));
 

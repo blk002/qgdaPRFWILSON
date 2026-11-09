@@ -399,7 +399,9 @@ export default function Ciclo() {
                   const isSlotCompleted = isToday && completedToday.includes(i);
                   if (isSlotCompleted) continue;
                   // Transição inteligente se a matéria original já foi concluída
-                  const isOrigDone = (subject.topics || []).every(t => (t.completed || 0) >= (t.total || 0));
+                  const isOrigDone = (subject.topics || []).length > 0 &&
+                    (subject.topics || []).some(t => (t.total || 0) > 0) &&
+                    (subject.topics || []).every(t => (t.completed || 0) >= (t.total || 0));
                   if (isOrigDone) {
                     const action = subject.onCompleteAction || "keep_fixed";
                     if (action === "replace" && subject.replacementSubjectId && subjects[subject.replacementSubjectId]) {
@@ -516,7 +518,9 @@ export default function Ciclo() {
                       let subjectId = originalSubId;
                       let subject = subjects[subjectId];
                       if (!subject) return null;
-                      const isOriginalDone = (subject.topics || []).every(t => (t.completed || 0) >= (t.total || 0));
+                      const isOriginalDone = (subject.topics || []).length > 0 &&
+                        (subject.topics || []).some(t => (t.total || 0) > 0) &&
+                        (subject.topics || []).every(t => (t.completed || 0) >= (t.total || 0));
                       let isDoubled = false;
                       let isReplaced = false;
                       if (isOriginalDone) {
@@ -767,7 +771,7 @@ export default function Ciclo() {
                                     <span className="text-[8px] sm:text-[10px] font-black text-blue-600">{currentCompleted}/{currentTotal} Aulas</span>
                                   </div>
                                   <div className="w-full bg-slate-200 rounded-full h-1 dark:bg-slate-800">
-                                    <div className="bg-blue-500 h-1 rounded-full" style={{ width: `${(currentCompleted / currentTotal) * 100}%` }}></div>
+                                    <div className="bg-blue-500 h-1 rounded-full" style={{ width: `${currentTotal > 0 ? Math.min(100, (currentCompleted / currentTotal) * 100) : 0}%` }}></div>
                                   </div>
                                 </div>
 

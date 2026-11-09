@@ -749,7 +749,7 @@ export default function Config({
               const url = URL.createObjectURL(blob);
               const a = document.createElement('a');
               a.href = url;
-              a.download = `qg-prf-backup-${new Date().toISOString().split('T')[0]}.json`;
+              a.download = `qg-prf-backup-${useStore.getState().getLocalDateStr()}.json`;
               a.click();
               URL.revokeObjectURL(url);
               toast.success("Backup exportado com sucesso!");
@@ -881,9 +881,6 @@ export default function Config({
               </div>
               <button 
                 onClick={() => {
-                  if (draftSubject.name && draftSubject.name.trim() !== "") {
-                    setSubjects(prev => ({ ...prev, [draftSubject.id]: draftSubject }));
-                  }
                   setEditingSubjectId(null);
                   setDraftSubject(null);
                 }}

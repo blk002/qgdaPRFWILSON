@@ -47,23 +47,20 @@ export default function Calendario() {
     calendarOverrides = {},
     setDayOverride,
     removeDayOverride,
-    scheduleExtensions = [],
     futureScheduleRules = [],
     addFutureScheduleRule,
     updateSubject
   } = useStore();
 
-  // Limpeza automática de dead state legado (extensões +3ª antigas e regras sem versão v:2 de versões anteriores)
+  // Limpeza automática de regras sem versão v:2 de versões anteriores
   useEffect(() => {
-    const hasLegacyExtensions = Array.isArray(scheduleExtensions) && scheduleExtensions.length > 0;
     const hasLegacyRules = Array.isArray(futureScheduleRules) && futureScheduleRules.some(r => !r || r.v !== 2);
-    if (hasLegacyExtensions || hasLegacyRules) {
+    if (hasLegacyRules) {
       useStore.setState({
-        scheduleExtensions: [],
         futureScheduleRules: (futureScheduleRules || []).filter(r => r && r.v === 2)
       });
     }
-  }, [scheduleExtensions, futureScheduleRules]);
+  }, [futureScheduleRules]);
 
   // Estados de Interface
   const [managingDay, setManagingDay] = useState(null);
@@ -371,8 +368,7 @@ export default function Calendario() {
           r => r && r.v === 2 && r.dayOfWeek !== dayOfWeek && r.cycleIndex !== weekIndex
         );
         useStore.setState({
-          futureScheduleRules: cleanedRules,
-          scheduleExtensions: []
+          futureScheduleRules: cleanedRules
         });
 
         toast.success(`Ciclo semanal base atualizado com sucesso!`);

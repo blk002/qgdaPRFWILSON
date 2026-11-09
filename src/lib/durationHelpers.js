@@ -7,19 +7,25 @@
  */
 export const parseDurationToSeconds = (dur) => {
   if (!dur) return 0;
-  if (typeof dur === 'number') return Math.round(dur * 60);
+  if (typeof dur === 'number') return Number.isFinite(dur) && dur > 0 ? Math.round(dur * 60) : 0;
   const str = String(dur).trim();
   if (!str || str === '00:00') return 0;
 
-  const parts = str.split(':').map(Number);
-  if (parts.length === 3 && !parts.some(isNaN)) {
-    return parts[0] * 3600 + parts[1] * 60 + parts[2];
+  if (str.includes(':')) {
+    const rawParts = str.split(':');
+    if (rawParts.some(p => p.trim() === '')) return 0;
+    const parts = rawParts.map(Number);
+    if (parts.some(n => !Number.isFinite(n) || n < 0)) return 0;
+    if (parts.length === 3) {
+      return Math.round(parts[0] * 3600 + parts[1] * 60 + parts[2]);
+    }
+    if (parts.length === 2) {
+      return Math.round(parts[0] * 60 + parts[1]);
+    }
+    return 0;
   }
-  if (parts.length === 2 && !parts.some(isNaN)) {
-    return parts[0] * 60 + parts[1];
-  }
-  const numeric = parseFloat(str);
-  if (!isNaN(numeric)) return Math.round(numeric * 60);
+  const numeric = Number(str);
+  if (Number.isFinite(numeric) && numeric > 0) return Math.round(numeric * 60);
   return 0;
 };
 
@@ -138,7 +144,7 @@ export const getSubjectVideoStats = (subject, overrideSpeed = null) => {
  * Formata minutos em texto amigável (ex: 90 -> '1h 30m', 60 -> '1h', 45 -> '45m')
  */
 export const formatMinutesToFriendly = (mins) => {
-  const m = Number(mins) || 0;
+  const m = Math.round(Number(mins) || 0);
   if (m <= 0) return '0m';
   const h = Math.floor(m / 60);
   const remM = m % 60;

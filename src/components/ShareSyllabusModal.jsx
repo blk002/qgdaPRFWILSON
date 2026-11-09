@@ -279,9 +279,11 @@ ${code}
     const a = document.createElement('a');
     a.href = url;
     
+    const nowLocal = new Date();
+    const localDateStr = `${nowLocal.getFullYear()}-${String(nowLocal.getMonth() + 1).padStart(2, '0')}-${String(nowLocal.getDate()).padStart(2, '0')}`;
     const filename = selectedSubjectIds.length === 1 
       ? `grade-${(subjects[selectedSubjectIds[0]]?.name || 'materia').toLowerCase().replace(/\s+/g, '-')}.json`
-      : `grade-estudos-prf-${new Date().toISOString().split('T')[0]}.json`;
+      : `grade-estudos-prf-${localDateStr}.json`;
 
     a.download = filename;
     a.click();
