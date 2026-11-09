@@ -15,6 +15,7 @@ export default function Ciclo() {
     completedToday,
     setCompletedToday,
     cycle,
+    cycleSlotCounts,
     currentDayIndex,
     advanceDay,
     getSubjectProgress,
@@ -30,6 +31,7 @@ export default function Ciclo() {
     setCurrentDayIndex,
     studyHistory,
     calendarOverrides,
+    calendarOverrideCounts,
     futureScheduleRules
   } = useStore();
 
@@ -59,13 +61,17 @@ export default function Ciclo() {
     };
   };
 
-  // Resolve as matérias efetivas de um dia do ciclo (considerando overrides, regras futuras e ciclo base)
-  const getEffectiveDaySubjects = (dayIndex, week = 0) => {
+  // Resolve as matérias e quantidades de aulas por bloco efetivas de um dia do ciclo
+  const getEffectiveDaySchedule = (dayIndex, week = 0) => {
     const dateInfo = getDateInfo(dayIndex, week);
     let daySubjects = Array.isArray(cycle?.[dayIndex]) ? [...cycle[dayIndex]] : [];
+    let daySlotCounts = Array.isArray(cycleSlotCounts?.[dayIndex]) ? [...cycleSlotCounts[dayIndex]] : [];
 
     if (calendarOverrides && Array.isArray(calendarOverrides[dateInfo.fullDateStr])) {
-      return [...calendarOverrides[dateInfo.fullDateStr]];
+      return {
+        daySubjects: [...calendarOverrides[dateInfo.fullDateStr]],
+        daySlotCounts: Array.isArray(calendarOverrideCounts?.[dateInfo.fullDateStr]) ? [...calendarOverrideCounts[dateInfo.fullDateStr]] : []
+      };
     }
 
     const parts = String(dateInfo.fullDateStr).split('-').map(Number);
@@ -83,10 +89,13 @@ export default function Ciclo() {
 
     if (matchingRules.length > 0 && Array.isArray(matchingRules[0].daySlots)) {
       daySubjects = [...matchingRules[0].daySlots];
+      daySlotCounts = Array.isArray(matchingRules[0].slotCounts) ? [...matchingRules[0].slotCounts] : [];
     }
 
-    return daySubjects;
+    return { daySubjects, daySlotCounts };
   };
+
+  const getEffectiveDaySubjects = (dayIndex, week = 0) => getEffectiveDaySchedule(dayIndex, week).daySubjects;
 
   // Sincroniza o dia atual quando em modo semanal
   useEffect(() => {
@@ -106,8 +115,10 @@ export default function Ciclo() {
       const result = [];
       for (let week = 0; week <= weekOffset; week++) {
         for (let dayIndex = 0; dayIndex < 7; dayIndex++) {
+          const sched = getEffectiveDaySchedule(dayIndex, week);
           result.push({
-            daySubjects: getEffectiveDaySubjects(dayIndex, week),
+            daySubjects: sched.daySubjects,
+            daySlotCounts: sched.daySlotCounts,
             dayIndex,
             week,
             dateInfo: getDateInfo(dayIndex, week)
@@ -121,7 +132,8 @@ export default function Ciclo() {
     const result = [];
     for (let i = 0; i < cycle.length; i++) {
       const dayIndex = (safeCurrentDayIndex + i) % cycle.length;
-      result.push({ daySubjects: getEffectiveDaySubjects(dayIndex), dayIndex, week: 0, dateInfo: getRelativeDateInfo(dayIndex) });
+      const sched = getEffectiveDaySchedule(dayIndex);
+      result.push({ daySubjects: sched.daySubjects, daySlotCounts: sched.daySlotCounts, dayIndex, week: 0, dateInfo: getRelativeDateInfo(dayIndex) });
     }
     return result;
   })();
@@ -465,29 +477,10 @@ export default function Ciclo() {
         <div className="flex gap-2.5 sm:gap-4 items-stretch w-full min-w-max">
           {(() => {
             const simulatedIncrements = {};
-            return visibleDays.map(({ daySubjects: rawDaySubjects, dayIndex, week, dateInfo }) => {
+            return visibleDays.map(({ daySubjects: rawDaySubjects, daySlotCounts: rawSlotCounts, dayIndex, week, dateInfo }) => {
               let daySubjects = [...(rawDaySubjects || [])];
+              let daySlotCounts = [...(rawSlotCounts || [])];
 
-              if (calendarOverrides && calendarOverrides[dateInfo.fullDateStr]) {
-                daySubjects = [...calendarOverrides[dateInfo.fullDateStr]];
-              } else {
-                const parts = String(dateInfo.fullDateStr).split('-').map(Number);
-                const dayDateObj = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date();
-                const dayOfWeek = dayDateObj.getDay();
-                const matchingRules = (futureScheduleRules || [])
-                  .filter(r => {
-                    if (!r || r.v !== 2 || !r.fromDate || r.fromDate > dateInfo.fullDateStr) return false;
-                    if (cycleScheduleType === 'weekly' && r.dayOfWeek !== undefined) {
-                      return r.dayOfWeek === dayOfWeek;
-                    }
-                    return r.dayOfWeek === dayOfWeek || r.cycleIndex === dayIndex;
-                  })
-                  .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
-
-                if (matchingRules.length > 0 && Array.isArray(matchingRules[0].daySlots)) {
-                  daySubjects = [...matchingRules[0].daySlots];
-                }
-              }
               const isToday = dateInfo.isToday;
               const isPast = dateInfo.isPast;
               
@@ -512,6 +505,7 @@ export default function Ciclo() {
                   const isOrigDone = (subject.topics || []).length > 0 &&
                     (subject.topics || []).some(t => (t.total || 0) > 0) &&
                     (subject.topics || []).every(t => (t.completed || 0) >= (t.total || 0));
+                  let wasSlotTransitioned = false;
                   if (isOrigDone) {
                     const action = subject.onCompleteAction || "keep_fixed";
                     if (action === "replace" && subject.replacementSubjectId && subjects[subject.replacementSubjectId]) {
@@ -519,17 +513,20 @@ export default function Ciclo() {
                       if ((rep.topics || []).some(t => (t.completed || 0) < (t.total || 0))) {
                         subjectId = subject.replacementSubjectId;
                         subject = rep;
+                        wasSlotTransitioned = true;
                       }
                     } else if (action === "double_remaining") {
                       const fallbackId = daySubjects.find(sId => sId !== originalSubId && (subjects[sId]?.topics || []).some(t => (t.completed || 0) < (t.total || 0)));
                       if (fallbackId && subjects[fallbackId]) {
                         subjectId = fallbackId;
                         subject = subjects[fallbackId];
+                        wasSlotTransitioned = true;
                       }
                     }
                   }
 
                   let tempIncrement = tempSim[subjectId] || 0;
+                  const customSlotLessons = !wasSlotTransitioned ? Math.floor(Number(daySlotCounts?.[i]) || 0) : 0;
 
                   const topics = subject.topics || [];
                   for (let t of topics) {
@@ -537,8 +534,8 @@ export default function Ciclo() {
                     if (tempIncrement < remaining) {
                       const currentCompleted = t.completed + tempIncrement;
                       const spd = Number(subject.speed) || 1;
-                      const goalMin = Number(subject.timeGoalMinutes || subjectTimeGoal?.[subjectId]) || 0;
-                      const lessonsN = Math.floor(Number(subject.lessonsPerBlock) || 0);
+                      const lessonsN = customSlotLessons > 0 ? customSlotLessons : Math.floor(Number(subject.lessonsPerBlock) || 0);
+                      const goalMin = customSlotLessons > 0 ? 0 : (Number(subject.timeGoalMinutes || subjectTimeGoal?.[subjectId]) || 0);
                       
                       let count = 1;
                       if (goalMin > 0 || lessonsN > 0) {
@@ -746,8 +743,9 @@ export default function Ciclo() {
                             currentCompleted = t.completed + tempIncrement;
                             currentTotal = t.total;
                             spd = Number(subject.speed) || 1;
-                            goalMin = Number(subject.timeGoalMinutes || subjectTimeGoal?.[subjectId]) || 0;
-                            const lessonsN = Math.floor(Number(subject.lessonsPerBlock) || 0);
+                            const customSlotLessons = (!isDoubled && !isReplaced) ? Math.floor(Number(daySlotCounts?.[slotIndex]) || 0) : 0;
+                            const lessonsN = customSlotLessons > 0 ? customSlotLessons : Math.floor(Number(subject.lessonsPerBlock) || 0);
+                            goalMin = customSlotLessons > 0 ? 0 : (Number(subject.timeGoalMinutes || subjectTimeGoal?.[subjectId]) || 0);
 
                             if (goalMin > 0 || lessonsN > 0) {
                               const remainingInTopic = t.total - currentCompleted;

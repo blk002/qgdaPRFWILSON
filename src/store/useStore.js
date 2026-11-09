@@ -164,7 +164,9 @@ export const getCleanInitialState = () => ({
   cycleScheduleType: 'weekly',
   cycleWeekStart: 'sunday',
   cycleDayNames: [],
+  cycleSlotCounts: [[], [], [], [], [], [], []],
   calendarOverrides: {},
+  calendarOverrideCounts: {},
   futureScheduleRules: [],
   xpHistory: [],
   petData: {
@@ -219,7 +221,7 @@ export const PERSISTED_KEYS = [
   'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate', 'pushEnabled', 'pushTime',
   'enableSounds', 'activeBoosts', 'dailyReviewStats', 'syntaxLevel',
   'activeTheme', 'unlockedThemes', 'dailyGoalMinutes', 'subjectGoals', 'subjectTimeGoal', 'pushSettings',
-  'cycleScheduleType', 'cycleWeekStart', 'cycleDayNames', 'calendarOverrides', 'futureScheduleRules', 'xpHistory', 'petData', 'caveiraQuestions'
+  'cycleScheduleType', 'cycleWeekStart', 'cycleDayNames', 'cycleSlotCounts', 'calendarOverrides', 'calendarOverrideCounts', 'futureScheduleRules', 'xpHistory', 'petData', 'caveiraQuestions'
 ];
 
 export const useStore = create(
@@ -339,6 +341,7 @@ export const useStore = create(
             }
             if ((cleanData.cycleScheduleType || 'weekly') === 'weekly') {
               cleanData.cycle = Array.from({ length: 7 }, (_, i) => Array.isArray(cleanData.cycle?.[i]) ? cleanData.cycle[i] : []);
+              cleanData.cycleSlotCounts = Array.from({ length: 7 }, (_, i) => Array.isArray(cleanData.cycleSlotCounts?.[i]) ? cleanData.cycleSlotCounts[i] : []);
               const isCycleCompletelyEmpty = cleanData.cycle.every(d => !Array.isArray(d) || d.length === 0);
               if (isCycleCompletelyEmpty && Array.isArray(cleanData.futureScheduleRules) && cleanData.futureScheduleRules.length > 0) {
                 const sortedAsc = [...cleanData.futureScheduleRules]
@@ -350,9 +353,15 @@ export const useStore = create(
                     : (r.cycleIndex ?? r.dayOfWeek);
                   if (idx !== undefined && idx >= 0 && idx < 7 && (!cleanData.cycle[idx] || cleanData.cycle[idx].length === 0)) {
                     cleanData.cycle[idx] = [...r.daySlots];
+                    if (Array.isArray(r.slotCounts)) {
+                      cleanData.cycleSlotCounts[idx] = [...r.slotCounts];
+                    }
                   }
                 });
               }
+            }
+            if (!cleanData.calendarOverrideCounts) {
+              cleanData.calendarOverrideCounts = {};
             }
             // Preserva e mescla questões do Caveira sincronizadas (limpando lote pré-v3 corrompido uma única vez)
             const isCloudCleanedV3 = localStorage.getItem('prf_caveira_cloud_v3_cleaned') === 'true';
@@ -570,23 +579,33 @@ export const useStore = create(
           }
         };
       }),
-      setDayOverride: (dateStr, subjectIds) => set(state => ({
+      setCycleSlotCounts: (cycleSlotCounts) => set({ cycleSlotCounts }),
+      setDayOverride: (dateStr, subjectIds, slotCounts = []) => set(state => ({
         calendarOverrides: {
           ...(state.calendarOverrides || {}),
           [dateStr]: subjectIds
+        },
+        calendarOverrideCounts: {
+          ...(state.calendarOverrideCounts || {}),
+          [dateStr]: Array.isArray(slotCounts) ? [...slotCounts] : []
         }
       })),
       removeDayOverride: (dateStr) => set(state => {
         const next = { ...(state.calendarOverrides || {}) };
+        const nextCounts = { ...(state.calendarOverrideCounts || {}) };
         delete next[dateStr];
-        return { calendarOverrides: next };
+        delete nextCounts[dateStr];
+        return { calendarOverrides: next, calendarOverrideCounts: nextCounts };
       }),
-      addFutureScheduleRule: ({ fromDate, dayOfWeek, cycleIndex, daySlots }) => set(state => {
+      addFutureScheduleRule: ({ fromDate, dayOfWeek, cycleIndex, daySlots, slotCounts = [] }) => set(state => {
         if (!fromDate || !Array.isArray(daySlots)) return state;
         const isWeekly = (state.cycleScheduleType || 'weekly') === 'weekly';
         const nextCycle = isWeekly
           ? Array.from({ length: 7 }, (_, i) => Array.isArray(state.cycle?.[i]) ? [...state.cycle[i]] : [])
           : [...(state.cycle || [])];
+        const nextCycleSlotCounts = isWeekly
+          ? Array.from({ length: 7 }, (_, i) => Array.isArray(state.cycleSlotCounts?.[i]) ? [...state.cycleSlotCounts[i]] : [])
+          : [...(state.cycleSlotCounts || [])];
 
         const hadPriorRuleForDay = (state.futureScheduleRules || []).some(r => {
           if (!r || r.v !== 2 || !r.fromDate || r.fromDate >= fromDate) return false;
@@ -601,10 +620,12 @@ export const useStore = create(
 
         if (targetIdx !== undefined && targetIdx >= 0 && (!nextCycle[targetIdx] || nextCycle[targetIdx].length === 0) && !hadPriorRuleForDay) {
           nextCycle[targetIdx] = [...daySlots];
+          nextCycleSlotCounts[targetIdx] = Array.isArray(slotCounts) ? [...slotCounts] : [];
         }
 
         return {
           cycle: nextCycle,
+          cycleSlotCounts: nextCycleSlotCounts,
           futureScheduleRules: [
             ...(state.futureScheduleRules || []).filter(r => {
               if (!r || r.v !== 2 || !r.fromDate) return false;
@@ -619,7 +640,8 @@ export const useStore = create(
               fromDate,
               dayOfWeek,
               cycleIndex,
-              daySlots: [...daySlots]
+              daySlots: [...daySlots],
+              slotCounts: Array.isArray(slotCounts) ? [...slotCounts] : []
             }
           ]
         };
@@ -2018,12 +2040,14 @@ export const useStore = create(
         if (subjects) {
           changes.subjects = {};
           changes.cycle = [[], [], [], [], [], [], []];
+          changes.cycleSlotCounts = [[], [], [], [], [], [], []];
           changes.currentDayIndex = 0;
           changes.cycleDayNames = [];
           changes.completedToday = [];
           changes.subjectGoals = {};
           changes.subjectTimeGoal = {};
           changes.calendarOverrides = {};
+          changes.calendarOverrideCounts = {};
           changes.futureScheduleRules = [];
           changes.studyHistory = {};
           summary.push('Disciplinas & Ciclo');
@@ -2411,7 +2435,7 @@ export const useStore = create(
       },
 
       getSubjectEstimates: () => {
-        const { subjects, cycle, currentDayIndex, completedToday, subjectTimeGoal, calendarOverrides, futureScheduleRules, cycleScheduleType = 'weekly', cycleWeekStart = 'sunday' } = get();
+        const { subjects, cycle, cycleSlotCounts, currentDayIndex, completedToday, subjectTimeGoal, calendarOverrides, calendarOverrideCounts, futureScheduleRules, cycleScheduleType = 'weekly', cycleWeekStart = 'sunday' } = get();
         const estimates = [];
         const remainingClasses = {};
         const remainingMinutesDict = {};
@@ -2497,8 +2521,10 @@ export const useStore = create(
             const simDateKey = `${targetSimDate.getFullYear()}-${String(targetSimDate.getMonth() + 1).padStart(2, '0')}-${String(targetSimDate.getDate()).padStart(2, '0')}`;
 
             let daySubjects = [];
+            let daySlotCounts = [];
             if (calendarOverrides && Array.isArray(calendarOverrides[simDateKey])) {
               daySubjects = [...calendarOverrides[simDateKey]];
+              daySlotCounts = Array.isArray(calendarOverrideCounts?.[simDateKey]) ? [...calendarOverrideCounts[simDateKey]] : [];
             } else {
               let cycleIndex = (currentDayIndex + dayOffset) % Math.max(1, cycle.length);
               const targetDayOfWeek = targetSimDate.getDay();
@@ -2517,8 +2543,10 @@ export const useStore = create(
 
               if (matchingRules.length > 0 && Array.isArray(matchingRules[0].daySlots)) {
                 daySubjects = [...matchingRules[0].daySlots];
+                daySlotCounts = Array.isArray(matchingRules[0].slotCounts) ? [...matchingRules[0].slotCounts] : [];
               } else {
                 daySubjects = [...(cycle[cycleIndex] || [])];
+                daySlotCounts = Array.isArray(cycleSlotCounts?.[cycleIndex]) ? [...cycleSlotCounts[cycleIndex]] : [];
               }
             }
             
@@ -2528,6 +2556,7 @@ export const useStore = create(
               
               let effectiveSubId = subId;
               let q = remainingLessonsQueue[effectiveSubId];
+              let wasTransitioned = false;
 
               // Se a matéria original esgotou suas aulas, verificar a regra de transição explícita (suporta cadeia de substituições)
               const visited = new Set([effectiveSubId]);
@@ -2540,6 +2569,7 @@ export const useStore = create(
                   visited.add(repId);
                   effectiveSubId = repId;
                   q = remainingLessonsQueue[repId];
+                  wasTransitioned = true;
                 } else if (action === 'double_remaining') {
                   const fallbackId = daySubjects.find(sId => !visited.has(sId) && remainingLessonsQueue[sId]?.length > 0);
                   
@@ -2547,6 +2577,7 @@ export const useStore = create(
                     visited.add(fallbackId);
                     effectiveSubId = fallbackId;
                     q = remainingLessonsQueue[fallbackId];
+                    wasTransitioned = true;
                   } else {
                     break;
                   }
@@ -2557,8 +2588,9 @@ export const useStore = create(
 
               if (q && q.length > 0) {
                 const sub = subjects[effectiveSubId];
-                const goalMin = Number(sub?.timeGoalMinutes || subjectTimeGoal?.[effectiveSubId]) || 0;
-                const lessonsN = Math.floor(Number(sub?.lessonsPerBlock) || 0);
+                const customSlotLessons = !wasTransitioned ? Math.floor(Number(daySlotCounts?.[slotIdx]) || 0) : 0;
+                const lessonsN = customSlotLessons > 0 ? customSlotLessons : Math.floor(Number(sub?.lessonsPerBlock) || 0);
+                const goalMin = customSlotLessons > 0 ? 0 : (Number(sub?.timeGoalMinutes || subjectTimeGoal?.[effectiveSubId]) || 0);
                 
                 let slotCount = 0;
                 let slotAccelMins = 0;

@@ -37,6 +37,8 @@ export default function Calendario() {
     subjects = {}, 
     cycle = [], 
     setCycle,
+    cycleSlotCounts = [],
+    setCycleSlotCounts,
     cycleScheduleType = 'weekly',
     cycleWeekStart = 'sunday',
     currentDayIndex = 0, 
@@ -45,6 +47,7 @@ export default function Calendario() {
     getSubjectEstimates,
     subjectTimeGoal = {},
     calendarOverrides = {},
+    calendarOverrideCounts = {},
     setDayOverride,
     removeDayOverride,
     futureScheduleRules = [],
@@ -65,6 +68,7 @@ export default function Calendario() {
   // Estados de Interface
   const [managingDay, setManagingDay] = useState(null);
   const [daySlots, setDaySlots] = useState([]);
+  const [daySlotCounts, setDaySlotCounts] = useState([]);
   const [saveMode, setSaveMode] = useState('future'); // 'single' | 'future' | 'all'
 
   // Estado do Modal de Transição de Matéria
@@ -92,14 +96,18 @@ export default function Calendario() {
   const today = new Date();
   const todayDateObj = new Date(today.getFullYear(), today.getMonth(), today.getDate());
 
-  // Função principal: retorna as matérias programadas para qualquer data do calendário
-  const getDaySubjectsForDate = (cellDateObj, dateKey) => {
+  // Função principal: retorna as matérias e quantidades de aulas por bloco programadas para qualquer data do calendário
+  const getDayScheduleForDate = (cellDateObj, dateKey) => {
     // 1. Personalização manual explícita para este dia específico (prioridade absoluta)
     if (calendarOverrides && Array.isArray(calendarOverrides[dateKey])) {
-      return [...calendarOverrides[dateKey]];
+      return {
+        daySubjects: [...calendarOverrides[dateKey]],
+        daySlotCounts: Array.isArray(calendarOverrideCounts?.[dateKey]) ? [...calendarOverrideCounts[dateKey]] : []
+      };
     }
 
     let daySubjects = [];
+    let slotCounts = [];
 
     // 2. Ciclo Semanal Fixo ou Sequencial + Regras Futuras
     if (cycle && cycle.length > 0) {
@@ -121,13 +129,17 @@ export default function Calendario() {
 
       if (matchingRules.length > 0 && Array.isArray(matchingRules[0].daySlots)) {
         daySubjects = [...matchingRules[0].daySlots];
+        slotCounts = Array.isArray(matchingRules[0].slotCounts) ? [...matchingRules[0].slotCounts] : [];
       } else if (Array.isArray(cycle[cycleIndex])) {
         daySubjects = [...cycle[cycleIndex]];
+        slotCounts = Array.isArray(cycleSlotCounts?.[cycleIndex]) ? [...cycleSlotCounts[cycleIndex]] : [];
       }
     }
 
-    return daySubjects;
+    return { daySubjects, daySlotCounts: slotCounts };
   };
+
+  const getDaySubjectsForDate = (cellDateObj, dateKey) => getDayScheduleForDate(cellDateObj, dateKey).daySubjects;
 
   // 3. Simulação dos 730 dias para sincronização e previsão de término das disciplinas
   const futureSchedule = {}; // dateKey -> array of { id, count, isLast, isTransitioned }
@@ -161,31 +173,7 @@ export default function Calendario() {
     targetSimDate.setDate(targetSimDate.getDate() + i);
     const simDateKey = `${targetSimDate.getFullYear()}-${String(targetSimDate.getMonth() + 1).padStart(2, '0')}-${String(targetSimDate.getDate()).padStart(2, '0')}`;
 
-    let daySubjects = [];
-    if (calendarOverrides && Array.isArray(calendarOverrides[simDateKey])) {
-      daySubjects = [...calendarOverrides[simDateKey]];
-    } else {
-      const targetDayOfWeek = targetSimDate.getDay();
-      const cycleIndex = (cycleScheduleType === 'weekly' && cycle.length === 7)
-        ? ((cycleWeekStart === 'monday') ? (targetDayOfWeek + 6) % 7 : targetDayOfWeek)
-        : (currentDayIndex + i) % Math.max(1, cycle.length);
-      
-      const matchingRules = (futureScheduleRules || [])
-        .filter(r => {
-          if (!r || r.v !== 2 || !r.fromDate || r.fromDate > simDateKey) return false;
-          if (cycleScheduleType === 'weekly' && r.dayOfWeek !== undefined) {
-            return r.dayOfWeek === targetDayOfWeek;
-          }
-          return r.dayOfWeek === targetDayOfWeek || r.cycleIndex === cycleIndex;
-        })
-        .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
-
-      if (matchingRules.length > 0 && Array.isArray(matchingRules[0].daySlots)) {
-        daySubjects = [...matchingRules[0].daySlots];
-      } else if (cycle.length > 0 && cycle[cycleIndex]) {
-        daySubjects = [...(cycle[cycleIndex] || [])];
-      }
-    }
+    const { daySubjects, daySlotCounts: simSlotCounts } = getDayScheduleForDate(targetSimDate, simDateKey);
 
     const scheduledThisDay = [];
 
@@ -227,8 +215,9 @@ export default function Calendario() {
       // Assim que uma matéria conclui todas as suas aulas na data de término (isLast), ela NÃO aparece nos dias seguintes.
       if (q && q.length > 0) {
         const sub = subjects[effectiveSubId];
-        const goalMin = Number(sub?.timeGoalMinutes || subjectTimeGoal?.[effectiveSubId]) || 0;
-        const lessonsN = Math.floor(Number(sub?.lessonsPerBlock) || 0);
+        const customSlotLessons = !wasTransitioned ? Math.floor(Number(simSlotCounts?.[slotIdx]) || 0) : 0;
+        const lessonsN = customSlotLessons > 0 ? customSlotLessons : Math.floor(Number(sub?.lessonsPerBlock) || 0);
+        const goalMin = customSlotLessons > 0 ? 0 : (Number(sub?.timeGoalMinutes || subjectTimeGoal?.[effectiveSubId]) || 0);
         let consumed = 0;
         let accelAcc = 0;
 
@@ -268,6 +257,7 @@ export default function Calendario() {
           id: effectiveSubId, 
           isLast, 
           count: consumed,
+          customCount: customSlotLessons,
           isTransitioned: wasTransitioned
         });
 
@@ -290,7 +280,8 @@ export default function Calendario() {
     useStore.setState({
       scheduleExtensions: [],
       futureScheduleRules: [],
-      calendarOverrides: {}
+      calendarOverrides: {},
+      calendarOverrideCounts: {}
     });
     toast.success("Calendário 100% fixado no padrão do seu ciclo semanal!");
   };
@@ -306,10 +297,14 @@ export default function Calendario() {
       : ((currentDayIndex + diff) % Math.max(1, cycle.length) + Math.max(1, cycle.length)) % Math.max(1, cycle.length);
 
     const baseSubs = (cycle && Array.isArray(cycle[weekIndex])) ? [...cycle[weekIndex]] : [];
-    // Lê exatamente as matérias visíveis neste card do calendário
-    const currentDaySubs = futureSchedule[dateKey] !== undefined
-      ? futureSchedule[dateKey].map(item => item.id)
-      : [...getDaySubjectsForDate(cellDateObj, dateKey)];
+    const { daySubjects: scheduledSubs, daySlotCounts: scheduledCounts } = getDayScheduleForDate(cellDateObj, dateKey);
+
+    // Lê as matérias configuradas ou exibidas neste card do calendário
+    const currentDaySubs = scheduledSubs.length > 0
+      ? scheduledSubs
+      : (futureSchedule[dateKey] !== undefined ? futureSchedule[dateKey].map(item => item.id) : []);
+
+    const currentDayCounts = currentDaySubs.map((_, idx) => Math.max(0, Math.floor(Number(scheduledCounts?.[idx]) || 0)));
 
     const hasCustomOverride = Boolean(calendarOverrides && Array.isArray(calendarOverrides[dateKey]));
     const hasFutureRuleOnDay = (futureScheduleRules || []).some(
@@ -325,6 +320,7 @@ export default function Calendario() {
       isCustomized: hasCustomOverride || hasFutureRuleOnDay || hasDiffFromBase
     });
     setDaySlots(currentDaySubs);
+    setDaySlotCounts(currentDayCounts);
     setSaveMode('future'); // padrão: aplicar desta data para o futuro (sem alterar o passado)
   };
 
@@ -332,11 +328,12 @@ export default function Calendario() {
     if (!managingDay) return;
     const { dateKey, dayOfWeek, weekIndex } = managingDay;
     const updatedSlots = [...daySlots];
+    const updatedCounts = updatedSlots.map((_, idx) => Math.max(0, Math.floor(Number(daySlotCounts?.[idx]) || 0)));
 
     if (saveMode === 'single') {
       // 1. Salva apenas nesta data específica (prioridade absoluta sobre regras e extensões)
       if (setDayOverride) {
-        setDayOverride(dateKey, updatedSlots);
+        setDayOverride(dateKey, updatedSlots, updatedCounts);
         toast.success(`Programação salva exclusivamente para ${dateKey}!`);
       }
     } else if (saveMode === 'future') {
@@ -346,11 +343,13 @@ export default function Calendario() {
           fromDate: dateKey,
           dayOfWeek,
           cycleIndex: weekIndex,
-          daySlots: updatedSlots
+          daySlots: updatedSlots,
+          slotCounts: updatedCounts
         });
       }
       // Remove overrides avulsos desta data em diante neste mesmo dia da semana para que a regra futura prevaleça
       const nextOverrides = { ...(calendarOverrides || {}) };
+      const nextOverrideCounts = { ...(calendarOverrideCounts || {}) };
       Object.keys(nextOverrides).forEach(dKey => {
         if (dKey >= dateKey) {
           const parts = dKey.split('-').map(Number);
@@ -358,19 +357,23 @@ export default function Calendario() {
             const dObj = new Date(parts[0], parts[1] - 1, parts[2]);
             if (dObj.getDay() === dayOfWeek) {
               delete nextOverrides[dKey];
+              delete nextOverrideCounts[dKey];
             }
           }
         }
       });
-      useStore.setState({ calendarOverrides: nextOverrides });
+      useStore.setState({ calendarOverrides: nextOverrides, calendarOverrideCounts: nextOverrideCounts });
       toast.success(`Programação definida de ${dateKey} para o futuro! Os dias anteriores não foram alterados.`);
     } else {
       // 3. Atualiza o ciclo semanal base para todas as semanas neste dia e limpa regras antigas conflitantes
       if (setCycle) {
         const totalDays = cycleScheduleType === 'weekly' ? 7 : Math.max((cycle || []).length, weekIndex + 1);
         const newCycle = Array.from({ length: totalDays }, (_, i) => Array.isArray(cycle?.[i]) ? [...cycle[i]] : []);
+        const newCycleSlotCounts = Array.from({ length: totalDays }, (_, i) => Array.isArray(cycleSlotCounts?.[i]) ? [...cycleSlotCounts[i]] : []);
         newCycle[weekIndex] = updatedSlots;
+        newCycleSlotCounts[weekIndex] = updatedCounts;
         setCycle(newCycle);
+        if (setCycleSlotCounts) setCycleSlotCounts(newCycleSlotCounts);
         if (removeDayOverride) removeDayOverride(dateKey);
 
         // Remove regras futuras antigas que sobrescreviam este dia da semana
@@ -552,6 +555,14 @@ export default function Calendario() {
                                   </span>
                                 )}
                               </span>
+                              {(item.count > 1 || item.customCount > 0) && (
+                                <span
+                                  className="ml-1 px-1 py-0.2 rounded text-[8px] sm:text-[9px] font-black bg-black/25 dark:bg-white/20 shrink-0"
+                                  title={`${item.count} ${item.count === 1 ? 'aula prevista' : 'aulas previstas'} neste bloco`}
+                                >
+                                  {item.count}a
+                                </span>
+                              )}
                               {item.isLast && (
                                 <span title={`Conclusão prevista de ${sub.name}!`} className="flex items-center ml-0.5 shrink-0">
                                   <svg className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 animate-bounce" viewBox="0 0 24 24" fill="none">
@@ -679,32 +690,107 @@ export default function Calendario() {
               ) : (
                 daySlots.map((subId, idx) => {
                   const sub = subjects[subId];
+                  const slotCountVal = Math.max(0, Math.floor(Number(daySlotCounts?.[idx]) || 0));
+                  const defaultLabel = sub
+                    ? (Number(sub.lessonsPerBlock) > 0
+                        ? `Padrão (${sub.lessonsPerBlock}a)`
+                        : (Number(sub.timeGoalMinutes || subjectTimeGoal?.[subId]) > 0
+                            ? `Padrão (${formatMinutesToFriendly(Number(sub.timeGoalMinutes || subjectTimeGoal?.[subId]))})`
+                            : 'Padrão (1a)'))
+                    : 'Padrão';
+
+                  const updateSlotCount = (val) => {
+                    const next = [...daySlotCounts];
+                    while (next.length < daySlots.length) next.push(0);
+                    next[idx] = Math.min(50, Math.max(0, Math.floor(Number(val) || 0)));
+                    setDaySlotCounts(next);
+                  };
+
                   return (
-                    <div key={idx} className="flex items-center gap-2 bg-slate-50 dark:bg-slate-800/50 p-2 rounded-xl border border-slate-200 dark:border-slate-700">
-                      <span className="text-xs font-black text-slate-400 w-6 text-center">
-                        #{idx + 1}
-                      </span>
-                      <select
-                        value={subId}
-                        onChange={(e) => {
-                          const newSlots = [...daySlots];
-                          newSlots[idx] = e.target.value;
-                          setDaySlots(newSlots);
-                        }}
-                        className={`flex-1 text-xs font-bold p-2 rounded-lg border border-slate-200 dark:border-slate-700 outline-none cursor-pointer ${sub ? sub.color : 'bg-white text-slate-800'}`}
-                      >
-                        {Object.values(subjects).map(s => (
-                          <option key={s.id} value={s.id} className="bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100">{s.name}</option>
-                        ))}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => setDaySlots(daySlots.filter((_, i) => i !== idx))}
-                        className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
-                        title="Remover este bloco"
-                      >
-                        <Trash2 className="w-4 h-4" />
-                      </button>
+                    <div key={idx} className="flex flex-col gap-2 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                      <div className="flex items-center gap-2">
+                        <span className="text-xs font-black text-slate-400 w-6 text-center">
+                          #{idx + 1}
+                        </span>
+                        <select
+                          value={subId}
+                          onChange={(e) => {
+                            const newSlots = [...daySlots];
+                            newSlots[idx] = e.target.value;
+                            setDaySlots(newSlots);
+                          }}
+                          className={`flex-1 text-xs font-bold p-2 rounded-lg border border-slate-200 dark:border-slate-700 outline-none cursor-pointer ${sub ? sub.color : 'bg-white text-slate-800'}`}
+                        >
+                          {Object.values(subjects).map(s => (
+                            <option key={s.id} value={s.id} className="bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100">{s.name}</option>
+                          ))}
+                        </select>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setDaySlots(daySlots.filter((_, i) => i !== idx));
+                            setDaySlotCounts((daySlotCounts || []).filter((_, i) => i !== idx));
+                          }}
+                          className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
+                          title="Remover este bloco"
+                        >
+                          <Trash2 className="w-4 h-4" />
+                        </button>
+                      </div>
+
+                      {/* Seletor de Quantidade de Aulas neste Dia para este Bloco */}
+                      <div className="flex flex-wrap items-center justify-between gap-1.5 pl-8 pr-1 pt-1 border-t border-slate-200/70 dark:border-slate-700/60">
+                        <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                          Qtd. de aulas neste dia:
+                        </span>
+                        <div className="flex flex-wrap items-center gap-1">
+                          <button
+                            type="button"
+                            onClick={() => updateSlotCount(0)}
+                            className={`px-2 py-1 rounded-md text-[10px] font-black transition-all cursor-pointer ${
+                              slotCountVal === 0
+                                ? 'bg-blue-600 text-white shadow-xs'
+                                : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:text-slate-800 dark:hover:text-white'
+                            }`}
+                            title="Usar a configuração padrão da disciplina"
+                          >
+                            {defaultLabel}
+                          </button>
+                          {[1, 2, 3, 4, 5].map(n => (
+                            <button
+                              key={n}
+                              type="button"
+                              onClick={() => updateSlotCount(n)}
+                              className={`px-2 py-1 rounded-md text-[10px] font-black transition-all cursor-pointer ${
+                                slotCountVal === n
+                                  ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-400'
+                                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:text-slate-900 dark:hover:text-white'
+                              }`}
+                            >
+                              {n} {n === 1 ? 'aula' : 'aulas'}
+                            </button>
+                          ))}
+                          <div
+                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border ${
+                              slotCountVal > 5
+                                ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-400'
+                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'
+                            }`}
+                            title="Digitar outra quantidade de aulas para este dia"
+                          >
+                            <input
+                              type="number"
+                              min="0"
+                              max="50"
+                              placeholder="Nº"
+                              value={slotCountVal > 0 ? slotCountVal : ''}
+                              onChange={(e) => updateSlotCount(e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
+                              className="w-8 bg-transparent text-center text-[10px] font-black text-emerald-600 dark:text-emerald-400 outline-none"
+                            />
+                            <span className="text-[9px] font-bold text-slate-400">aulas</span>
+                          </div>
+                        </div>
+                      </div>
                     </div>
                   );
                 })
@@ -719,6 +805,7 @@ export default function Calendario() {
                   const firstSubId = Object.keys(subjects)[0] || '';
                   if (firstSubId) {
                     setDaySlots([...daySlots, firstSubId]);
+                    setDaySlotCounts([...(daySlotCounts || []), 0]);
                   }
                 }}
                 className="w-full py-2 border-2 border-dashed border-blue-300 dark:border-blue-900 bg-blue-50/50 hover:bg-blue-100 dark:bg-blue-950/30 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
