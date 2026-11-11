@@ -3,14 +3,32 @@ import { createPortal } from 'react-dom';
 import {
   X, AlertTriangle, Trash2, CheckSquare, Square,
   RotateCcw, BookOpen, Skull, Brain, Target, Trophy,
-  Dog, Coins, ShieldAlert, Check, Loader2
+  Dog, Coins, ShieldAlert, Check, Loader2, CheckCircle2, CalendarX
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { useStore } from '../store/useStore';
 
+const RESET_ITEM_KEYS = [
+  'subjects',
+  'watchedLessons',
+  'calendarSchedule',
+  'raioXCaveira',
+  'fsrs',
+  'dueloCTB',
+  'career',
+  'mascot',
+  'coinsRewards'
+];
+
+const buildSelectionMap = (checked) =>
+  RESET_ITEM_KEYS.reduce((acc, key) => ({ ...acc, [key]: checked }), { all: checked });
+
 export default function SelectiveResetModal({ isOpen, onClose }) {
   const {
     subjects = {},
+    cycle = [],
+    calendarOverrides = {},
+    futureScheduleRules = [],
     caveiraQuestions = [],
     reviews = [],
     userStats = {},
@@ -19,16 +37,7 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
     executeSelectiveReset
   } = useStore();
 
-  const [selected, setSelected] = useState({
-    all: false,
-    subjects: false,
-    raioXCaveira: false,
-    fsrs: false,
-    dueloCTB: false,
-    career: false,
-    mascot: false,
-    coinsRewards: false
-  });
+  const [selected, setSelected] = useState(() => buildSelectionMap(false));
 
   const [confirmStep, setConfirmStep] = useState(false);
   const [confirmText, setConfirmText] = useState('');
@@ -38,6 +47,16 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
 
   // Contadores dinâmicos para visualização do usuário
   const subjectsCount = Object.keys(subjects).length;
+  const watchedCount = Object.values(subjects).reduce(
+    (sum, sub) => sum + (sub?.topics || []).reduce((tSum, t) => tSum + (Number(t?.completed) || 0), 0),
+    0
+  );
+  const cycleSlotsCount = (Array.isArray(cycle) ? cycle : []).reduce(
+    (sum, day) => sum + (Array.isArray(day) ? day.length : 0),
+    0
+  );
+  const calendarAdjustmentsCount =
+    Object.keys(calendarOverrides || {}).length + (Array.isArray(futureScheduleRules) ? futureScheduleRules.length : 0);
   const caveiraCount = caveiraQuestions.length;
   const reviewsCount = reviews.length;
   const xpCount = userStats.xp || 0;
@@ -48,16 +67,7 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
   } catch (_) {}
 
   const toggleAll = (checked) => {
-    setSelected({
-      all: checked,
-      subjects: checked,
-      raioXCaveira: checked,
-      fsrs: checked,
-      dueloCTB: checked,
-      career: checked,
-      mascot: checked,
-      coinsRewards: checked
-    });
+    setSelected(buildSelectionMap(checked));
   };
 
   const toggleItem = (key) => {
@@ -66,20 +76,16 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
       // Se desmarcou qualquer item, "all" não pode ser true
       if (prev[key]) {
         next.all = false;
-      } else {
-        // Se todos os 7 itens estiverem marcados, marca "all"
-        const items = ['subjects', 'raioXCaveira', 'fsrs', 'dueloCTB', 'career', 'mascot', 'coinsRewards'];
-        if (items.every(k => k === key ? true : next[k])) {
-          next.all = true;
-        }
+      } else if (RESET_ITEM_KEYS.every(k => next[k])) {
+        next.all = true;
       }
       return next;
     });
   };
 
   const selectedCount = selected.all
-    ? 7
-    : ['subjects', 'raioXCaveira', 'fsrs', 'dueloCTB', 'career', 'mascot', 'coinsRewards'].filter(k => selected[k]).length;
+    ? RESET_ITEM_KEYS.length
+    : RESET_ITEM_KEYS.filter(k => selected[k]).length;
 
   const handleStartConfirmation = () => {
     if (selectedCount === 0) {
@@ -114,6 +120,10 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
     }
   };
 
+  const calendarBadge = calendarAdjustmentsCount > 0
+    ? `${cycleSlotsCount} no ciclo • ${calendarAdjustmentsCount} ajuste${calendarAdjustmentsCount !== 1 ? 's' : ''}`
+    : `${cycleSlotsCount} bloco${cycleSlotsCount !== 1 ? 's' : ''} no ciclo`;
+
   const resetOptions = [
     {
       key: 'subjects',
@@ -123,6 +133,24 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
       icon: BookOpen,
       iconColor: 'text-blue-400',
       iconBg: 'bg-blue-500/10 border-blue-500/20'
+    },
+    {
+      key: 'watchedLessons',
+      title: 'Aulas Assistidas (Zerar Progresso)',
+      desc: 'Desmarca todas as aulas concluídas e blocos finalizados hoje, mantendo suas matérias, assuntos e aulas.',
+      badge: `${watchedCount} aula${watchedCount !== 1 ? 's' : ''} assistida${watchedCount !== 1 ? 's' : ''}`,
+      icon: CheckCircle2,
+      iconColor: 'text-sky-400',
+      iconBg: 'bg-sky-500/10 border-sky-500/20'
+    },
+    {
+      key: 'calendarSchedule',
+      title: 'Matérias do Calendário & Ciclo',
+      desc: 'Remove todas as matérias colocadas no ciclo semanal, regras futuras e edições do calendário, sem apagar as disciplinas.',
+      badge: calendarBadge,
+      icon: CalendarX,
+      iconColor: 'text-indigo-400',
+      iconBg: 'bg-indigo-500/10 border-indigo-500/20'
     },
     {
       key: 'raioXCaveira',

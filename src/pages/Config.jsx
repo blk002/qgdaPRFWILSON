@@ -889,7 +889,7 @@ export default function Config({
           <AlertTriangle className="text-red-600 w-5 h-5"/> Zona de Perigo (Reset & Purga de Dados)
         </h3>
         <p className="text-sm text-red-700 mb-4 max-w-3xl dark:text-red-500/70">
-          Gerenciamento modular de dados: selecione exatamente o que deseja apagar (tudo, somente disciplinas, somente Raio-X Caveira, somente FSRS, dados do Duelo CTB, carreira do zero, mascote K9 ou moedas/recompensas).
+          Gerenciamento modular de dados: selecione exatamente o que deseja apagar (tudo, disciplinas, aulas assistidas, matérias do calendário, Raio-X Caveira, FSRS, Duelo CTB, carreira, mascote K9 ou moedas/recompensas).
         </p>
         <div className="flex flex-wrap gap-3">
           <button 

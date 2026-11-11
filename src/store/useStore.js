@@ -2559,7 +2559,18 @@ export const useStore = create(
       },
 
       executeSelectiveReset: async (options = {}) => {
-        const { all, subjects, raioXCaveira, fsrs, dueloCTB, career, mascot, coinsRewards } = options;
+        const {
+          all,
+          subjects,
+          watchedLessons,
+          calendarSchedule,
+          raioXCaveira,
+          fsrs,
+          dueloCTB,
+          career,
+          mascot,
+          coinsRewards
+        } = options;
 
         if (all) {
           return await get().executeTotalWipe();
@@ -2577,6 +2588,7 @@ export const useStore = create(
           changes.currentDayIndex = 0;
           changes.cycleDayNames = [];
           changes.completedToday = [];
+          changes.completedTodayDate = null;
           changes.subjectGoals = {};
           changes.subjectTimeGoal = {};
           changes.calendarOverrides = {};
@@ -2584,6 +2596,43 @@ export const useStore = create(
           changes.futureScheduleRules = [];
           changes.studyHistory = {};
           summary.push('Disciplinas & Ciclo');
+        }
+
+        // 1b. Zerar somente as aulas assistidas (mantendo matérias, assuntos e aulas cadastradas)
+        if (watchedLessons && !subjects) {
+          const currentSubjects = get().subjects || {};
+          const resetSubjects = {};
+          Object.entries(currentSubjects).forEach(([id, sub]) => {
+            resetSubjects[id] = {
+              ...sub,
+              topics: (sub.topics || []).map(t => ({
+                ...t,
+                completed: 0,
+                ...(Array.isArray(t.lessons)
+                  ? { lessons: t.lessons.map(l => ({ ...l, completed: false })) }
+                  : {})
+              }))
+            };
+          });
+          changes.subjects = resetSubjects;
+          changes.completedToday = [];
+          changes.completedTodayDate = null;
+          summary.push('Aulas Assistidas');
+        }
+
+        // 1c. Remover somente as matérias colocadas no calendário e no ciclo
+        if (calendarSchedule && !subjects) {
+          const isWeekly = (get().cycleScheduleType || 'weekly') === 'weekly';
+          changes.cycle = isWeekly ? [[], [], [], [], [], [], []] : [];
+          changes.cycleSlotCounts = isWeekly ? [[], [], [], [], [], [], []] : [];
+          changes.currentDayIndex = 0;
+          changes.cycleDayNames = [];
+          changes.completedToday = [];
+          changes.completedTodayDate = null;
+          changes.calendarOverrides = {};
+          changes.calendarOverrideCounts = {};
+          changes.futureScheduleRules = [];
+          summary.push('Calendário & Ciclo');
         }
 
         // 2. Apagar somente o Raio-X Caveira
