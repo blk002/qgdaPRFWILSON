@@ -24,8 +24,13 @@ export default function Revisoes() {
     setReviewCalendarDate,
     setReviewModal,
     syncAndRepairCaveiraReviews,
-    advanceFutureReviews
+    advanceFutureReviews,
+    todayKey
   } = useStore();
+
+  useEffect(() => {
+    setReviewCalendarDate(new Date());
+  }, [setReviewCalendarDate]);
 
   useEffect(() => {
     syncAndRepairCaveiraReviews?.();
@@ -47,6 +52,7 @@ export default function Revisoes() {
   }, [caveiraQuestions]);
   
   if (!reviewCalendarDate) return null; // Safety check
+  void todayKey;
   const todayStr = getLocalDateStr();
 
   const isCaveiraCard = (rev) => Boolean(
@@ -587,6 +593,7 @@ export default function Revisoes() {
             <span className="text-white font-bold text-sm bg-slate-800 px-3 py-1 rounded-full border border-slate-700">{mesesNomes[rMonth]} {rYear}</span>
             <div className="flex gap-1">
               <button onClick={() => setReviewCalendarDate(new Date(rYear, rMonth - 1, 1))} className="p-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-white transition-colors"><ChevronLeft className="w-4 h-4" /></button>
+              <button onClick={() => setReviewCalendarDate(new Date())} className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 rounded-md text-white text-xs font-bold transition-colors" title="Voltar para o mês atual">Hoje</button>
               <button onClick={() => setReviewCalendarDate(new Date(rYear, rMonth + 1, 1))} className="p-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-white transition-colors"><ChevronRight className="w-4 h-4" /></button>
             </div>
           </div>

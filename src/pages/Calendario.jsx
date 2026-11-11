@@ -21,6 +21,7 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { toast } from 'sonner';
+import { parseDurationToSeconds, calculateLessonsForGoal } from '../lib/durationHelpers';
 
 function formatMinutesToFriendly(minutes) {
   if (!minutes || minutes <= 0) return '0 min';
@@ -53,6 +54,7 @@ export default function Calendario() {
     todayKey,
     targetExamDate,
     getLocalDateStr,
+    getCycleIndexForDate,
     getEstimatedCompletionDate, 
     getSubjectEstimates,
     subjectTimeGoal = {},
@@ -145,10 +147,11 @@ export default function Calendario() {
     // 2. Ciclo Semanal Fixo ou Sequencial + Regras Futuras
     if (cycle && cycle.length > 0) {
       const targetDayOfWeek = cellDateObj.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
-      const diff = Math.round((cellDateObj.getTime() - todayDateObj.getTime()) / (1000 * 60 * 60 * 24));
-      const cycleIndex = (cycleScheduleType === 'weekly' && cycle.length === 7)
-        ? ((cycleWeekStart === 'monday') ? (targetDayOfWeek + 6) % 7 : targetDayOfWeek)
-        : ((currentDayIndex + diff) % cycle.length + cycle.length) % cycle.length;
+      const cycleIndex = getCycleIndexForDate
+        ? getCycleIndexForDate(cellDateObj, todayDateObj)
+        : ((cycleScheduleType === 'weekly')
+          ? ((cycleWeekStart === 'monday') ? (targetDayOfWeek + 6) % 7 : targetDayOfWeek)
+          : ((currentDayIndex + Math.round((cellDateObj.getTime() - todayDateObj.getTime()) / (1000 * 60 * 60 * 24))) % cycle.length + cycle.length) % cycle.length);
 
       const matchingRules = (futureScheduleRules || [])
         .filter(r => {
@@ -170,14 +173,14 @@ export default function Calendario() {
     }
 
     return { daySubjects, daySlotCounts: slotCounts };
-  }, [calendarOverrides, calendarOverrideCounts, cycle, cycleSlotCounts, cycleScheduleType, cycleWeekStart, currentDayIndex, futureScheduleRules, todayDateObj]);
+  }, [calendarOverrides, calendarOverrideCounts, cycle, cycleSlotCounts, cycleScheduleType, cycleWeekStart, currentDayIndex, futureScheduleRules, getCycleIndexForDate, todayDateObj]);
 
   const getDaySubjectsForDate = (cellDateObj, dateKey) => getDayScheduleForDate(cellDateObj, dateKey).daySubjects;
 
   // 3. Simulação dos 730 dias para sincronização e previsão de término das disciplinas (memoizada)
   const { futureSchedule, calCompletionDates, remainingLessonsQueue } = useMemo(() => {
   const futureSchedule = {}; // dateKey -> array of { id, count, isLast, isTransitioned }
-  const calCompletionDates = {}; // subjectId -> { dayOffset, dateObj, dateStr }
+  const calCompletionDates = {}; // subjectId -> { dayOffset, dateStr, dateObj }
   const remainingLessonsQueue = {};
 
   Object.values(subjects || {}).forEach(sub => {
@@ -188,13 +191,9 @@ export default function Calendario() {
       const topicLessonsArr = t.lessons || [];
       for (let idx = completed; idx < t.total; idx++) {
         const lesson = topicLessonsArr[idx];
-        let mins = 60;
-        if (lesson?.duration) {
-          const parts = String(lesson.duration).split(':').map(Number);
-          if (parts.length === 3 && !parts.some(isNaN)) mins = parts[0] * 60 + parts[1] + parts[2] / 60;
-          else if (parts.length === 2 && !parts.some(isNaN)) mins = parts[0] + parts[1] / 60;
-        }
-        q.push({ durationMins: mins, accelMins: mins / spd });
+        const origSec = parseDurationToSeconds(lesson?.duration);
+        const mins = (origSec > 0 ? origSec : 3600) / 60;
+        q.push({ duration: lesson?.duration, durationMins: mins, accelMins: mins / spd });
       }
     });
     remainingLessonsQueue[sub.id] = q;
@@ -249,42 +248,14 @@ export default function Calendario() {
       // Assim que uma matéria conclui todas as suas aulas na data de término (isLast), ela NÃO aparece nos dias seguintes.
       if (q && q.length > 0) {
         const sub = subjects[effectiveSubId];
+        const spd = Math.max(0.5, Number(sub?.speed) || 1);
         const customSlotLessons = !wasTransitioned ? Math.floor(Number(simSlotCounts?.[slotIdx]) || 0) : 0;
         const lessonsN = customSlotLessons > 0 ? customSlotLessons : Math.floor(Number(sub?.lessonsPerBlock) || 0);
         const goalMin = customSlotLessons > 0 ? 0 : (Number(sub?.timeGoalMinutes || subjectTimeGoal?.[effectiveSubId]) || 0);
-        let consumed = 0;
-        let accelAcc = 0;
 
-        while (q.length > 0) {
-          if (lessonsN > 0 && consumed >= lessonsN) break;
-          const nextL = q[0];
-          if (consumed === 0) {
-            consumed++;
-            accelAcc += nextL.accelMins;
-            q.shift();
-            if (goalMin === 0 && lessonsN === 0) break;
-            continue;
-          }
-
-          if (lessonsN > 0) {
-            consumed++;
-            accelAcc += nextL.accelMins;
-            q.shift();
-            continue;
-          }
-
-          if (accelAcc >= goalMin * 0.85 && ((accelAcc + nextL.accelMins - goalMin) / goalMin) > 0.20) {
-            break;
-          }
-
-          if (accelAcc < goalMin) {
-            consumed++;
-            accelAcc += nextL.accelMins;
-            q.shift();
-          } else {
-            break;
-          }
-        }
+        const suggestion = calculateLessonsForGoal(q, 0, spd, goalMin, q.length, lessonsN);
+        const consumed = Math.min(q.length, Math.max(1, suggestion.count || 1));
+        q.splice(0, consumed);
 
         const isLast = q.length === 0;
         scheduledThisDay.push({ 
@@ -310,7 +281,8 @@ export default function Calendario() {
   }
 
   return { futureSchedule, calCompletionDates, remainingLessonsQueue };
-  }, [subjects, cycle, calendarOverrides, futureScheduleRules, completedToday, subjectTimeGoal, getDayScheduleForDate, todayDateObj]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [subjects, cycle, cycleSlotCounts, cycleScheduleType, cycleWeekStart, currentDayIndex, completedToday, calendarOverrides, calendarOverrideCounts, futureScheduleRules, subjectTimeGoal, todayKey, getDayScheduleForDate, todayDateObj]);
 
   // Botão tático para fixar e limpar quaisquer extensões fantasmas (+3ª) ou regras antigas
   const handleFixCalendar = () => {
@@ -329,9 +301,11 @@ export default function Calendario() {
     if (diff < 0) return; // Dias passados não abrem o gerenciador
 
     const dayOfWeek = cellDateObj.getDay();
-    const weekIndex = (cycleScheduleType === 'weekly' && cycle.length === 7)
-      ? ((cycleWeekStart === 'monday') ? (dayOfWeek + 6) % 7 : dayOfWeek)
-      : ((currentDayIndex + diff) % Math.max(1, cycle.length) + Math.max(1, cycle.length)) % Math.max(1, cycle.length);
+    const weekIndex = getCycleIndexForDate
+      ? getCycleIndexForDate(cellDateObj, todayDateObj)
+      : ((cycleScheduleType === 'weekly')
+        ? ((cycleWeekStart === 'monday') ? (dayOfWeek + 6) % 7 : dayOfWeek)
+        : ((currentDayIndex + diff) % Math.max(1, cycle.length) + Math.max(1, cycle.length)) % Math.max(1, cycle.length));
 
     const baseSubs = (cycle && Array.isArray(cycle[weekIndex])) ? [...cycle[weekIndex]] : [];
     const { daySubjects: scheduledSubs, daySlotCounts: scheduledCounts } = getDayScheduleForDate(cellDateObj, dateKey);

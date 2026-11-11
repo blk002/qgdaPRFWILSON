@@ -4,7 +4,7 @@ import { useStore } from '../store/useStore';
 import { toast } from 'sonner';
 
 export default function PomodoroTimer() {
-  const { addStudyMinutes, playSound } = useStore();
+  const { addStudyMinutes, playSound, getLocalDateStr } = useStore();
   const [mode, setMode] = useState(25); // minutes
   const [timeLeft, setTimeLeft] = useState(25 * 60);
   const [isRunning, setIsRunning] = useState(false);
@@ -13,17 +13,25 @@ export default function PomodoroTimer() {
 
   const timerRef = useRef(null);
   const timeLeftRef = useRef(25 * 60);
+  const endAtRef = useRef(null);
+  const remainingWhenPausedRef = useRef(25 * 60);
+  const sessionStartDateRef = useRef(null);
 
   const handleComplete = useCallback(() => {
+    clearInterval(timerRef.current);
+    endAtRef.current = null;
     setIsRunning(false);
     setIsPaused(false);
-    addStudyMinutes(sessionMinutes);
+    const startDateStr = sessionStartDateRef.current || (getLocalDateStr ? getLocalDateStr() : null);
+    sessionStartDateRef.current = null;
+    addStudyMinutes(sessionMinutes, startDateStr);
     playSound('levelUp');
 
     toast.success(`Sessão de ${sessionMinutes}m concluída! XP contabilizado no histórico diário.`);
     timeLeftRef.current = mode * 60;
+    remainingWhenPausedRef.current = mode * 60;
     setTimeLeft(mode * 60);
-  }, [addStudyMinutes, sessionMinutes, playSound, mode]);
+  }, [addStudyMinutes, sessionMinutes, playSound, mode, getLocalDateStr]);
 
   useEffect(() => {
     timeLeftRef.current = timeLeft;
@@ -31,15 +39,35 @@ export default function PomodoroTimer() {
 
   useEffect(() => {
     if (isRunning && !isPaused) {
-      timerRef.current = setInterval(() => {
-        if (timeLeftRef.current <= 1) {
-          clearInterval(timerRef.current);
+      if (!endAtRef.current) {
+        endAtRef.current = Date.now() + timeLeftRef.current * 1000;
+      }
+
+      const syncRemaining = () => {
+        if (!endAtRef.current) return;
+        const rem = Math.max(0, Math.ceil((endAtRef.current - Date.now()) / 1000));
+        if (rem <= 0) {
           handleComplete();
         } else {
-          timeLeftRef.current -= 1;
-          setTimeLeft(timeLeftRef.current);
+          timeLeftRef.current = rem;
+          setTimeLeft(rem);
         }
-      }, 1000);
+      };
+
+      syncRemaining();
+      timerRef.current = setInterval(syncRemaining, 500);
+
+      const handleVisibilityChange = () => {
+        if (document.visibilityState === 'visible') {
+          syncRemaining();
+        }
+      };
+      document.addEventListener('visibilitychange', handleVisibilityChange);
+
+      return () => {
+        clearInterval(timerRef.current);
+        document.removeEventListener('visibilitychange', handleVisibilityChange);
+      };
     } else {
       clearInterval(timerRef.current);
     }
@@ -48,16 +76,37 @@ export default function PomodoroTimer() {
 
   const handleStart = () => {
     if (!isRunning) {
+      sessionStartDateRef.current = getLocalDateStr ? getLocalDateStr() : null;
+      const initialSec = timeLeftRef.current > 0 ? timeLeftRef.current : mode * 60;
+      remainingWhenPausedRef.current = initialSec;
+      endAtRef.current = Date.now() + initialSec * 1000;
       setIsRunning(true);
       setIsPaused(false);
     } else if (isPaused) {
+      const remSec = remainingWhenPausedRef.current > 0 ? remainingWhenPausedRef.current : timeLeftRef.current;
+      endAtRef.current = Date.now() + remSec * 1000;
       setIsPaused(false);
     }
   };
 
-  const handlePause = () => setIsPaused(true);
+  const handlePause = () => {
+    if (endAtRef.current) {
+      const rem = Math.max(1, Math.ceil((endAtRef.current - Date.now()) / 1000));
+      remainingWhenPausedRef.current = rem;
+      timeLeftRef.current = rem;
+      setTimeLeft(rem);
+      endAtRef.current = null;
+    } else {
+      remainingWhenPausedRef.current = timeLeftRef.current;
+    }
+    setIsPaused(true);
+  };
 
   const handleStop = () => {
+    endAtRef.current = null;
+    sessionStartDateRef.current = null;
+    remainingWhenPausedRef.current = mode * 60;
+    timeLeftRef.current = mode * 60;
     setIsRunning(false);
     setIsPaused(false);
     setTimeLeft(mode * 60);
@@ -66,6 +115,10 @@ export default function PomodoroTimer() {
 
 
   const changeMode = (mins) => {
+    endAtRef.current = null;
+    sessionStartDateRef.current = null;
+    remainingWhenPausedRef.current = mins * 60;
+    timeLeftRef.current = mins * 60;
     setMode(mins);
     setSessionMinutes(mins);
     setTimeLeft(mins * 60);

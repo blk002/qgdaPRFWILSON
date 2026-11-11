@@ -3,6 +3,7 @@ import { supabase } from '../lib/supabaseClient';
 import { toast } from 'sonner';
 import { PATENTES, MEDALHAS } from '../hooks/useGamification';
 import { PET_FOODS, PET_LEVELS } from '../data/petConstants';
+import { parseDurationToSeconds, calculateLessonsForGoal } from '../lib/durationHelpers';
 
 export function cleanAlternativeText(rawText, letter) {
   if (!rawText || typeof rawText !== 'string') return '';
@@ -217,7 +218,7 @@ export const PERSISTED_KEYS = [
   'subjects', 'cycle', 'currentDayIndex', 'completedToday', 'completedTodayDate', 'targetExamDate',
   'coins', 'userStats', 'streakData', 'weeklySprint', 'reviews',
   'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus',
-  'isDarkMode', 'activeTab', 'reviewCalendarDate',
+  'isDarkMode', 'activeTab',
   'seasonalData', 'weeklyMissions', 'studyHistory',
   'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate', 'pushEnabled', 'pushTime',
   'enableSounds', 'activeBoosts', 'dailyReviewStats', 'syntaxLevel',
@@ -231,16 +232,198 @@ const localTodayStr = () => {
   return new Date(d.getTime() - d.getTimezoneOffset() * 60 * 1000).toISOString().split('T')[0];
 };
 
+const LOCAL_STATE_STORAGE_KEY = 'prf_qg_local_state';
+
+// Normaliza dados vindos da nuvem, snapshot local ou backup local garantindo padrões seguros para campos novos/ausentes
+const normalizeHydratedState = (raw, currentCaveira = []) => {
+  const defaults = getCleanInitialState();
+  const { isSyncing: _s, lastSyncedAt: _l, _keyTimestamps: _kt, ...cleanData } = raw || {};
+  delete cleanData.calendarDate;
+  delete cleanData.reviewCalendarDate;
+  delete cleanData.reviewCalendarDate;
+
+  if (cleanData.completedTodayDate === undefined) cleanData.completedTodayDate = null;
+  if (!Array.isArray(cleanData.completedToday)) cleanData.completedToday = [];
+  if (!cleanData.studyHistory) cleanData.studyHistory = {};
+  if (!cleanData.unlockedAvatars || cleanData.unlockedAvatars.length === 0) {
+    cleanData.unlockedAvatars = [...defaults.unlockedAvatars];
+  }
+  if (!cleanData.dailyMissions) cleanData.dailyMissions = [];
+  if (!cleanData.lastDailyResetDate) cleanData.lastDailyResetDate = null;
+  if (cleanData.userStats && !cleanData.userStats.avatar) {
+    cleanData.userStats.avatar = '/assets/gamification/avatar_male.png';
+  }
+  if (cleanData.userStats && cleanData.userStats.totalPurchases === undefined) {
+    cleanData.userStats.totalPurchases = 0;
+  }
+  if (!cleanData.activeBoosts) {
+    cleanData.activeBoosts = { xpBoostActions: 0, streakShieldActive: false };
+  }
+  if (!cleanData.dailyReviewStats) cleanData.dailyReviewStats = {};
+  if (cleanData.syntaxLevel === undefined) cleanData.syntaxLevel = 0;
+  if (cleanData.enableSounds === undefined) cleanData.enableSounds = true;
+  if (cleanData.streakData && cleanData.streakData.hasHadBreak === undefined) {
+    cleanData.streakData.hasHadBreak = false;
+  }
+  if (!cleanData.activeTheme) cleanData.activeTheme = 'blue';
+  if (!cleanData.unlockedThemes) cleanData.unlockedThemes = ['blue'];
+  if (cleanData.dailyGoalMinutes === undefined) cleanData.dailyGoalMinutes = 240;
+  if (!cleanData.subjectGoals) cleanData.subjectGoals = {};
+  if (!cleanData.subjectTimeGoal) cleanData.subjectTimeGoal = {};
+  if (!cleanData.pushSettings) {
+    cleanData.pushSettings = { enabled: false, streakWarning: true, reviewsPending: true };
+  }
+  if (!cleanData.petData) cleanData.petData = defaults.petData;
+  if ((cleanData.cycleScheduleType || 'weekly') === 'weekly') {
+    cleanData.cycle = Array.from({ length: 7 }, (_, i) => Array.isArray(cleanData.cycle?.[i]) ? cleanData.cycle[i] : []);
+    cleanData.cycleSlotCounts = Array.from({ length: 7 }, (_, i) => Array.isArray(cleanData.cycleSlotCounts?.[i]) ? cleanData.cycleSlotCounts[i] : []);
+    const isCycleCompletelyEmpty = cleanData.cycle.every(d => !Array.isArray(d) || d.length === 0);
+    if (isCycleCompletelyEmpty && Array.isArray(cleanData.futureScheduleRules) && cleanData.futureScheduleRules.length > 0) {
+      const sortedAsc = [...cleanData.futureScheduleRules]
+        .filter(r => r && r.v === 2 && Array.isArray(r.daySlots) && r.daySlots.length > 0)
+        .sort((a, b) => String(a.fromDate || '').localeCompare(String(b.fromDate || '')));
+      sortedAsc.forEach(r => {
+        const idx = (cleanData.cycleWeekStart === 'monday' && r.dayOfWeek !== undefined)
+          ? (r.dayOfWeek + 6) % 7
+          : (r.cycleIndex ?? r.dayOfWeek);
+        if (idx !== undefined && idx >= 0 && idx < 7 && (!cleanData.cycle[idx] || cleanData.cycle[idx].length === 0)) {
+          cleanData.cycle[idx] = [...r.daySlots];
+          if (Array.isArray(r.slotCounts)) {
+            cleanData.cycleSlotCounts[idx] = [...r.slotCounts];
+          }
+        }
+      });
+    }
+  }
+  if (!cleanData.calendarOverrideCounts) cleanData.calendarOverrideCounts = {};
+
+  // Mescla caveiraQuestions preservando lote limpo v3
+  const isCloudCleanedV3 = localStorage.getItem('prf_caveira_cloud_v3_cleaned') === 'true';
+  const incomingCaveira = isCloudCleanedV3 ? (cleanData.caveiraQuestions || []) : [];
+  if (!isCloudCleanedV3) {
+    try { localStorage.setItem('prf_caveira_cloud_v3_cleaned', 'true'); } catch (_) {}
+  }
+  const mergedMap = new Map();
+  incomingCaveira.forEach(q => { if (q && q.id) mergedMap.set(q.id, q); });
+  (currentCaveira || []).forEach(q => { if (q && q.id) mergedMap.set(q.id, { ...(mergedMap.get(q.id) || {}), ...q }); });
+  cleanData.caveiraQuestions = Array.from(mergedMap.values());
+
+  return cleanData;
+};
+
+const readLocalSnapshot = () => {
+  try {
+    const raw = localStorage.getItem(LOCAL_STATE_STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (!parsed || typeof parsed !== 'object' || !parsed.data) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+};
+
+const writeLocalSnapshot = (state, { dirty = true, savedAt = new Date().toISOString(), keyTimestamps = null } = {}) => {
+  try {
+    const prevSnap = readLocalSnapshot();
+    const data = {};
+    PERSISTED_KEYS.forEach(key => {
+      if (key === 'caveiraQuestions') return; // caveiraQuestions já possui chave própria
+      if (state[key] !== undefined) data[key] = state[key];
+    });
+    const payload = {
+      savedAt,
+      dirty,
+      userId: state.user?.id || prevSnap?.userId || null,
+      keyTimestamps: keyTimestamps || prevSnap?.keyTimestamps || {},
+      data
+    };
+    localStorage.setItem(LOCAL_STATE_STORAGE_KEY, JSON.stringify(payload));
+    return true;
+  } catch (err) {
+    // Trata QuotaExceededError ou falhas de escrita sem quebrar a aplicação
+    console.warn('⚠️ [Snapshot Local] Falha ao gravar estado local:', err?.name || err?.message);
+    return false;
+  }
+};
+
+const hasMeaningfulUserData = (data) => {
+  if (!data || typeof data !== 'object') return false;
+  const hasSubjects = data.subjects && Object.keys(data.subjects).length > 0;
+  const hasReviews = Array.isArray(data.reviews) && data.reviews.length > 0;
+  const hasCycle = Array.isArray(data.cycle) && data.cycle.some(d => Array.isArray(d) && d.length > 0);
+  const hasHistory = data.studyHistory && Object.keys(data.studyHistory).length > 0;
+  const hasXp = (data.userStats?.xp || 0) > 0 || (data.userStats?.totalStudyMinutes || 0) > 0;
+  return Boolean(hasSubjects || hasReviews || hasCycle || hasHistory || hasXp);
+};
+
+// Faz merge chave a chave entre nuvem e estado local sem descartar alterações locais
+const mergeCloudAndLocalData = (remoteRaw, localState, localKeyTimestamps = {}, remoteUpdatedAt = null, lastSyncedAt = null) => {
+  const merged = { ...(remoteRaw || {}) };
+  const remoteKeyTs = (remoteRaw && typeof remoteRaw._keyTimestamps === 'object') ? remoteRaw._keyTimestamps : {};
+
+  PERSISTED_KEYS.forEach(key => {
+    if (key === 'caveiraQuestions') return;
+    const localVal = localState[key];
+    const remoteVal = remoteRaw?.[key];
+    if (localVal === undefined) return;
+    if (remoteVal === undefined) {
+      merged[key] = localVal;
+      return;
+    }
+
+    const lTs = localKeyTimestamps?.[key] ? new Date(localKeyTimestamps[key]).getTime() : 0;
+    const rTs = remoteKeyTs?.[key]
+      ? new Date(remoteKeyTs[key]).getTime()
+      : (remoteUpdatedAt ? new Date(remoteUpdatedAt).getTime() : 0);
+    const baseTs = lastSyncedAt ? new Date(lastSyncedAt).getTime() : 0;
+
+    // Se a chave local foi modificada após o último sync (ou não há como decidir), preserva o local a menos que a chave remota tenha timestamp comprovadamente mais novo
+    const localModifiedSinceSync = lTs > 0 && lTs > baseTs;
+    if (localModifiedSinceSync) {
+      if (rTs > lTs && remoteKeyTs?.[key]) {
+        merged[key] = remoteVal;
+      } else {
+        merged[key] = localVal;
+      }
+    } else if (rTs > 0 && lTs === 0 && baseTs > 0 && rTs > baseTs) {
+      merged[key] = remoteVal;
+    } else {
+      // Na dúvida entre dois estados divergentes sem timestamp por chave na nuvem, preserva o local
+      merged[key] = localVal;
+    }
+  });
+
+  // Reutiliza a lógica de merge por ID para caveiraQuestions
+  const mergedCaveira = new Map();
+  (remoteRaw?.caveiraQuestions || []).forEach(q => { if (q && q.id) mergedCaveira.set(q.id, q); });
+  (localState?.caveiraQuestions || []).forEach(q => { if (q && q.id) mergedCaveira.set(q.id, { ...(mergedCaveira.get(q.id) || {}), ...q }); });
+  merged.caveiraQuestions = Array.from(mergedCaveira.values());
+  merged._keyTimestamps = { ...remoteKeyTs, ...(localKeyTimestamps || {}) };
+
+  return merged;
+};
+
+const getInitialHydratedLocalState = () => {
+  const base = getCleanInitialState();
+  const snap = readLocalSnapshot();
+  if (!snap || !snap.data) return base;
+  const normalized = normalizeHydratedState(snap.data, getInitialLocalCaveiraQuestions());
+  return { ...base, ...normalized };
+};
+
 export const useStore = create(
     (set, get) => ({
-      // --- ESTADOS INICIAIS (NUVEM) ---
-      ...getCleanInitialState(),
+      // --- ESTADOS INICIAIS (HIDRATADOS DO SNAPSHOT LOCAL + NUVEM) ---
+      ...getInitialHydratedLocalState(),
       // Chave volátil (não persistida) que muda na virada do dia real e força re-render das telas.
       todayKey: localTodayStr(),
       caveiraQuestions: getInitialLocalCaveiraQuestions(),
       isSyncing: true,
       isLoadingFromCloud: false,
       isSavingToCloud: false,
+      savePending: false,
+      hasUnsyncedChanges: Boolean(readLocalSnapshot()?.dirty),
       // Marca temporal da última versão sincronizada da nuvem (controle de concorrência)
       lastSyncedAt: null,
 
@@ -261,6 +444,7 @@ export const useStore = create(
         localStorage.removeItem('prf-qg-storage');
         localStorage.removeItem('prf_qg_backups');
         localStorage.removeItem('prf_caveira_questions');
+        localStorage.removeItem(LOCAL_STATE_STORAGE_KEY);
         window.location.reload();
       },
 
@@ -274,142 +458,160 @@ export const useStore = create(
           set({ isSyncing: true, isLoadingFromCloud: true });
         }
 
-        try {
-          // Timeout ultra-rápido de 2.5 segundos para não travar o usuário
-          const timeoutPromise = new Promise((_, reject) => 
-            setTimeout(() => reject(new Error("Timeout")), 2500)
+        const applyHydratedCloudRecord = (rawFullData, remoteUpdatedAt) => {
+          const currentCaveira = get().caveiraQuestions || [];
+          let cleanData = normalizeHydratedState(rawFullData, currentCaveira);
+
+          // A1: Compara snapshot local com a nuvem — se o local tiver alterações não enviadas e for mais novo, faz merge preservando o local e reenfileira o envio
+          const localSnap = readLocalSnapshot();
+          const isSameUserOrAnon = !localSnap?.userId || localSnap.userId === user.id;
+          const localIsNewerAndDirty = Boolean(
+            localSnap &&
+            isSameUserOrAnon &&
+            localSnap.dirty &&
+            localSnap.savedAt &&
+            (!remoteUpdatedAt || new Date(localSnap.savedAt) > new Date(remoteUpdatedAt))
           );
 
-          const fetchPromise = supabase.from('profiles').select('full_data, updated_at').eq('id', user.id).limit(1);
-          const { data, error } = await Promise.race([fetchPromise, timeoutPromise]);
+          if (localIsNewerAndDirty) {
+            console.log('💾 [Snapshot Local] Estado local mais recente que a nuvem detectado. Mesclando alterações pendentes...');
+            const mergedRaw = mergeCloudAndLocalData(
+              rawFullData,
+              { ...localSnap.data, caveiraQuestions: currentCaveira },
+              localSnap.keyTimestamps || {},
+              remoteUpdatedAt,
+              get().lastSyncedAt
+            );
+            cleanData = normalizeHydratedState(mergedRaw, currentCaveira);
+          }
+
+          try { localStorage.setItem('prf_caveira_questions', JSON.stringify(cleanData.caveiraQuestions)); } catch (_) {}
+
+          set({
+            ...cleanData,
+            lastSyncedAt: remoteUpdatedAt,
+            hasUnsyncedChanges: localIsNewerAndDirty
+          });
+          get().syncDayRollover();
+          get().checkAndResetWeekly();
+          get().checkAndAdvanceSeason();
+          get().checkAndResetDailyMissions();
+          get().syncAndRepairCaveiraReviews?.();
+          set({ isSyncing: false, isLoadingFromCloud: false });
+
+          if (localIsNewerAndDirty) {
+            writeLocalSnapshot(get(), {
+              dirty: true,
+              savedAt: localSnap.savedAt,
+              keyTimestamps: localSnap.keyTimestamps
+            });
+            setTimeout(() => { get().saveToCloud(); }, 150);
+          } else {
+            writeLocalSnapshot(get(), {
+              dirty: false,
+              savedAt: remoteUpdatedAt || new Date().toISOString(),
+              keyTimestamps: rawFullData?._keyTimestamps || {}
+            });
+          }
+
+          try { window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA' }, '*'); } catch (_) {}
+          return true;
+        };
+
+        try {
+          // Timeout ultra-rápido de 2.5 segundos para não travar o usuário
+          const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+          let timerId;
+          const timeoutPromise = new Promise((_, reject) => {
+            timerId = setTimeout(() => {
+              controller?.abort();
+              reject(new Error("Timeout"));
+            }, 2500);
+          });
+
+          let fetchQuery = supabase.from('profiles').select('full_data, updated_at').eq('id', user.id).limit(1);
+          if (controller && typeof fetchQuery.abortSignal === 'function') {
+            fetchQuery = fetchQuery.abortSignal(controller.signal);
+          }
+          const { data, error } = await Promise.race([fetchQuery, timeoutPromise]).finally(() => clearTimeout(timerId));
 
           if (error) throw error;
 
           if (data && data.length > 0 && data[0].full_data) {
             console.log("✅ [Nuvem] Dados sincronizados com sucesso.");
-            const remoteUpdatedAt = data[0].updated_at || null;
-            const { isSyncing: _, lastSyncedAt: __, ...cleanData } = data[0].full_data;
-            // calendarDate não é mais persistido: o Calendário sempre abre no mês atual
-            delete cleanData.calendarDate;
-            if (cleanData.reviewCalendarDate) cleanData.reviewCalendarDate = new Date(cleanData.reviewCalendarDate);
-            // Retrocompatibilidade: dados antigos não têm a data de referência do completedToday
-            if (cleanData.completedTodayDate === undefined) cleanData.completedTodayDate = null;
-            if (!Array.isArray(cleanData.completedToday)) cleanData.completedToday = [];
-            
-            if (!cleanData.studyHistory) {
-              cleanData.studyHistory = {};
-            }
+            return applyHydratedCloudRecord(data[0].full_data, data[0].updated_at || null);
+          }
 
-            // Retrocompatibilidade para gamificação/avatares/missões diárias
-            if (!cleanData.unlockedAvatars || cleanData.unlockedAvatars.length === 0) {
-              cleanData.unlockedAvatars = [
-                '/assets/gamification/avatar_male.png',
-                '/assets/gamification/avatar_female.png'
-              ];
-            }
-            if (!cleanData.dailyMissions) {
-              cleanData.dailyMissions = [];
-            }
-            if (!cleanData.lastDailyResetDate) {
-              cleanData.lastDailyResetDate = null;
-            }
-            if (cleanData.userStats && !cleanData.userStats.avatar) {
-              cleanData.userStats.avatar = '/assets/gamification/avatar_male.png';
-            }
-            if (cleanData.userStats && cleanData.userStats.totalPurchases === undefined) {
-              cleanData.userStats.totalPurchases = 0;
-            }
-            if (!cleanData.activeBoosts) {
-              cleanData.activeBoosts = { xpBoostActions: 0, streakShieldActive: false };
-            }
-            if (!cleanData.dailyReviewStats) {
-              cleanData.dailyReviewStats = {};
-            }
-            if (cleanData.syntaxLevel === undefined) {
-              cleanData.syntaxLevel = 0;
-            }
-            if (cleanData.enableSounds === undefined) {
-              cleanData.enableSounds = true;
-            }
-            if (cleanData.streakData && cleanData.streakData.hasHadBreak === undefined) {
-              cleanData.streakData.hasHadBreak = false;
-            }
-            if (!cleanData.activeTheme) {
-              cleanData.activeTheme = 'blue';
-            }
-            if (!cleanData.unlockedThemes) {
-              cleanData.unlockedThemes = ['blue'];
-            }
-            if (cleanData.dailyGoalMinutes === undefined) {
-              cleanData.dailyGoalMinutes = 240;
-            }
-            if (!cleanData.subjectGoals) {
-              cleanData.subjectGoals = {};
-            }
-            if (!cleanData.pushSettings) {
-              cleanData.pushSettings = { enabled: false, streakWarning: true, reviewsPending: true };
-            }
-            if (!cleanData.petData) {
-              cleanData.petData = getCleanInitialState().petData;
-            }
-            if ((cleanData.cycleScheduleType || 'weekly') === 'weekly') {
-              cleanData.cycle = Array.from({ length: 7 }, (_, i) => Array.isArray(cleanData.cycle?.[i]) ? cleanData.cycle[i] : []);
-              cleanData.cycleSlotCounts = Array.from({ length: 7 }, (_, i) => Array.isArray(cleanData.cycleSlotCounts?.[i]) ? cleanData.cycleSlotCounts[i] : []);
-              const isCycleCompletelyEmpty = cleanData.cycle.every(d => !Array.isArray(d) || d.length === 0);
-              if (isCycleCompletelyEmpty && Array.isArray(cleanData.futureScheduleRules) && cleanData.futureScheduleRules.length > 0) {
-                const sortedAsc = [...cleanData.futureScheduleRules]
-                  .filter(r => r && r.v === 2 && Array.isArray(r.daySlots) && r.daySlots.length > 0)
-                  .sort((a, b) => String(a.fromDate || '').localeCompare(String(b.fromDate || '')));
-                sortedAsc.forEach(r => {
-                  const idx = (cleanData.cycleWeekStart === 'monday' && r.dayOfWeek !== undefined)
-                    ? (r.dayOfWeek + 6) % 7
-                    : (r.cycleIndex ?? r.dayOfWeek);
-                  if (idx !== undefined && idx >= 0 && idx < 7 && (!cleanData.cycle[idx] || cleanData.cycle[idx].length === 0)) {
-                    cleanData.cycle[idx] = [...r.daySlots];
-                    if (Array.isArray(r.slotCounts)) {
-                      cleanData.cycleSlotCounts[idx] = [...r.slotCounts];
-                    }
-                  }
-                });
+          // A4: Segurança contra falso "nova conta" (ex.: sessão expirada ou RLS retornando [] sem erro)
+          // 1) Verifica se a sessão de autenticação está realmente válida
+          const { data: sessionCheck, error: sessionErr } = await supabase.auth.getSession();
+          const activeSession = sessionCheck?.session;
+          if (sessionErr || !activeSession || activeSession.user?.id !== user.id) {
+            throw new Error("Sessão expirada ou inválida durante leitura do perfil.");
+          }
+
+          // 2) Segunda leitura de confirmação para garantir que a linha realmente não existe
+          const { data: confirmData, error: confirmErr } = await supabase
+            .from('profiles')
+            .select('full_data, updated_at')
+            .eq('id', user.id)
+            .limit(1);
+          if (confirmErr) throw confirmErr;
+
+          if (confirmData && confirmData.length > 0 && confirmData[0].full_data) {
+            console.log("✅ [Nuvem] Dados confirmados na segunda leitura.");
+            return applyHydratedCloudRecord(confirmData[0].full_data, confirmData[0].updated_at || null);
+          }
+
+          // 3) NUNCA apaga prf_qg_backups nem prf_caveira_questions aqui.
+          // Se houver snapshot local ou backup com dados reais, oferece restaurá-lo em vez de criar perfil vazio por cima.
+          const localSnap = readLocalSnapshot();
+          let candidateLocalData = (!localSnap?.userId || localSnap.userId === user.id) && hasMeaningfulUserData(localSnap?.data)
+            ? localSnap.data
+            : null;
+          let candidateSourceLabel = 'snapshot local';
+
+          if (!candidateLocalData) {
+            try {
+              const backupsJson = localStorage.getItem('prf_qg_backups');
+              const backups = backupsJson ? JSON.parse(backupsJson) : [];
+              if (backups?.[0]?.data && hasMeaningfulUserData(backups[0].data)) {
+                candidateLocalData = backups[0].data;
+                candidateSourceLabel = `backup local (${new Date(backups[0].timestamp).toLocaleString()})`;
               }
-            }
-            if (!cleanData.calendarOverrideCounts) {
-              cleanData.calendarOverrideCounts = {};
-            }
-            // Preserva e mescla questões do Caveira sincronizadas (limpando lote pré-v3 corrompido uma única vez)
-            const isCloudCleanedV3 = localStorage.getItem('prf_caveira_cloud_v3_cleaned') === 'true';
-            const currentCaveira = get().caveiraQuestions || [];
-            const remoteCaveira = isCloudCleanedV3 ? (cleanData.caveiraQuestions || []) : [];
-            if (!isCloudCleanedV3) {
-              try { localStorage.setItem('prf_caveira_cloud_v3_cleaned', 'true'); } catch (_) {}
-            }
-            const mergedMap = new Map();
-            remoteCaveira.forEach(q => { if (q && q.id) mergedMap.set(q.id, q); });
-            currentCaveira.forEach(q => { if (q && q.id) mergedMap.set(q.id, { ...(mergedMap.get(q.id) || {}), ...q }); });
-            cleanData.caveiraQuestions = Array.from(mergedMap.values());
-            try { localStorage.setItem('prf_caveira_questions', JSON.stringify(cleanData.caveiraQuestions)); } catch (_) {}
-            
-            set({ ...cleanData, lastSyncedAt: remoteUpdatedAt });
+            } catch (_) {}
+          }
+
+          if (candidateLocalData) {
+            console.warn(`⚠️ [Nuvem] Perfil remoto vazio, mas há dados no ${candidateSourceLabel}. Preservando dados locais.`);
+            const restored = normalizeHydratedState(candidateLocalData, get().caveiraQuestions || []);
+            set({
+              ...restored,
+              lastSyncedAt: null,
+              isSyncing: false,
+              isLoadingFromCloud: false,
+              hasUnsyncedChanges: true,
+              globalModal: {
+                title: 'Dados Locais Encontrados',
+                message: `Sua conta na nuvem ainda não possui dados salvos, mas encontramos seu progresso no ${candidateSourceLabel}. Deseja restaurar e sincronizar esses dados na nuvem agora?`,
+                onConfirm: () => {
+                  get().saveToCloud();
+                }
+              }
+            });
             get().syncDayRollover();
             get().checkAndResetWeekly();
             get().checkAndAdvanceSeason();
             get().checkAndResetDailyMissions();
-            get().syncAndRepairCaveiraReviews?.();
-            set({ isSyncing: false, isLoadingFromCloud: false });
-            try { window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA' }, '*'); } catch (_) {}
             return true;
           }
 
-          // Novo usuário sem perfil salvo ainda no Supabase: inicializa estado limpo e cria o perfil na nuvem
-          console.log('ℹ️ [Nuvem] Nova conta detectada! Inicializando perfil limpo para uso.');
-          try {
-            localStorage.removeItem('prf_qg_backups');
-            localStorage.removeItem('prf_caveira_questions');
-          } catch (_) {}
+          // Conta genuinamente nova e sem dados locais prévios
+          console.log('ℹ️ [Nuvem] Nova conta confirmada! Inicializando perfil limpo para uso.');
           const freshState = getCleanInitialState();
           set({
             ...freshState,
-            caveiraQuestions: [],
+            caveiraQuestions: get().caveiraQuestions || [],
             lastSyncedAt: null
           });
           get().syncDayRollover();
@@ -426,49 +628,36 @@ export const useStore = create(
           }
           console.error('❌ [Nuvem] Falha após retentativas:', error.message);
           
-          // Tentar carregar do backup local
+          // Tentar carregar do snapshot local mais recente ou do backup local
           try {
+            const localSnap = readLocalSnapshot();
             const backupsJson = localStorage.getItem('prf_qg_backups');
-            if (backupsJson) {
-              const backups = JSON.parse(backupsJson);
-              if (backups && backups.length > 0) {
-                const latestBackup = backups[0];
-                const backupDate = new Date(latestBackup.timestamp).toLocaleString();
-                console.log(`💡 [Backup Local] Carregando backup criado em ${backupDate}`);
-                
-                const cleanData = latestBackup.data;
-                delete cleanData.calendarDate;
-                if (cleanData.reviewCalendarDate) cleanData.reviewCalendarDate = new Date(cleanData.reviewCalendarDate);
-                if (cleanData.completedTodayDate === undefined) cleanData.completedTodayDate = null;
-                if (!Array.isArray(cleanData.completedToday)) cleanData.completedToday = [];
-                if (!cleanData.petData) {
-                  cleanData.petData = getCleanInitialState().petData;
-                }
-                // Preserva e mescla questões do Caveira sincronizadas
-                const isCloudCleanedV3 = localStorage.getItem('prf_caveira_cloud_v3_cleaned') === 'true';
-                const currentCaveira = get().caveiraQuestions || [];
-                const backupCaveira = isCloudCleanedV3 ? (cleanData.caveiraQuestions || []) : [];
-                if (!isCloudCleanedV3) {
-                  try { localStorage.setItem('prf_caveira_cloud_v3_cleaned', 'true'); } catch (_) {}
-                }
-                const mergedMap = new Map();
-                currentCaveira.forEach(q => mergedMap.set(q.id, q));
-                backupCaveira.forEach(q => mergedMap.set(q.id, { ...(mergedMap.get(q.id) || {}), ...q }));
-                cleanData.caveiraQuestions = Array.from(mergedMap.values());
-                
-                set({ ...cleanData });
-                get().syncDayRollover();
-                get().checkAndResetWeekly();
-                get().checkAndAdvanceSeason();
-                get().checkAndResetDailyMissions();
-                set({ isSyncing: false, isLoadingFromCloud: false });
+            const backups = backupsJson ? JSON.parse(backupsJson) : [];
+            const latestBackup = backups && backups.length > 0 ? backups[0] : null;
 
-                toast.info(`⚠️ Usando backup local off-line (${backupDate}) devido a erro de conexão.`);
-                return true;
-              }
+            const snapTs = localSnap?.savedAt ? new Date(localSnap.savedAt).getTime() : 0;
+            const backupTs = latestBackup?.timestamp ? Number(latestBackup.timestamp) : 0;
+
+            const chosenRaw = (snapTs >= backupTs && localSnap?.data) ? localSnap.data : latestBackup?.data;
+            const chosenDateStr = (snapTs >= backupTs && localSnap?.savedAt)
+              ? new Date(localSnap.savedAt).toLocaleString()
+              : (latestBackup ? new Date(latestBackup.timestamp).toLocaleString() : null);
+
+            if (chosenRaw) {
+              console.log(`💡 [Estado Offline] Carregando dados locais de ${chosenDateStr}`);
+              const cleanData = normalizeHydratedState(chosenRaw, get().caveiraQuestions || []);
+              set({ ...cleanData });
+              get().syncDayRollover();
+              get().checkAndResetWeekly();
+              get().checkAndAdvanceSeason();
+              get().checkAndResetDailyMissions();
+              set({ isSyncing: false, isLoadingFromCloud: false });
+
+              toast.info(`⚠️ Usando dados salvos localmente (${chosenDateStr}) devido a erro de conexão.`);
+              return true;
             }
           } catch (backupErr) {
-            console.error("Falha ao restaurar backup local:", backupErr);
+            console.error("Falha ao restaurar dados locais:", backupErr);
           }
 
           toast.error("O Supabase está demorando para responder. Tente atualizar a página (F5).");
@@ -482,63 +671,129 @@ export const useStore = create(
 
       saveToCloud: async () => {
         const { user, isLoadingFromCloud, isSavingToCloud, lastSyncedAt, ...state } = get();
-        if (!user || isLoadingFromCloud || isSavingToCloud) return;
+        if (!user || isLoadingFromCloud) return;
+
+        // A2: Se um save já está em andamento, não descarta: marca savePending para rodar logo após o término
+        if (isSavingToCloud) {
+          useStore._savePending = true;
+          set({ savePending: true, hasUnsyncedChanges: true });
+          return;
+        }
 
         clearTimeout(useStore._debounceTimer);
+        clearTimeout(useStore._retryTimer);
         set({ isSavingToCloud: true });
         console.log('📤 [Nuvem] Despachando dados para o servidor...');
 
-        // --- GUARDA DE CONCORRÊNCIA (proteção multi-dispositivo) ---
-        // Se já temos uma baseline e a nuvem tiver uma versão mais recente,
-        // significa que outro dispositivo gravou — recarregamos em vez de sobrescrever.
-        if (lastSyncedAt) {
-          try {
-            const { data: remoteMeta } = await supabase
-              .from('profiles').select('updated_at').eq('id', user.id).limit(1);
-            const remoteUpdatedAt = remoteMeta?.[0]?.updated_at;
-            if (remoteUpdatedAt && new Date(remoteUpdatedAt) > new Date(lastSyncedAt)) {
-              console.warn('⚠️ [Nuvem] Versão remota mais recente detectada. Sincronizando para evitar perda de dados.');
-              toast.info('🔄 Dados atualizados em outro dispositivo. Carregando a versão mais recente...');
-              set({ isSavingToCloud: false });
-              await get().loadFromCloud();
-              return;
-            }
-          } catch (guardErr) {
-            // Falha na verificação não bloqueia o salvamento (evita perda de dados)
-            console.warn('Verificação de conflito ignorada:', guardErr?.message);
-          }
-        }
+        const buildPayload = (srcState) => {
+          const payload = {};
+          PERSISTED_KEYS.forEach(key => { if (srcState[key] !== undefined) payload[key] = srcState[key]; });
+          payload._keyTimestamps = { ...(useStore._keyTimestamps || {}) };
+          return payload;
+        };
 
-        const dataToSave = {};
-        PERSISTED_KEYS.forEach(key => { if (state[key] !== undefined) dataToSave[key] = state[key]; });
-
+        let dataToSave = buildPayload(state);
         const newUpdatedAt = new Date().toISOString();
+        let finalSyncedAt = newUpdatedAt;
+        const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
+        let timeoutId;
 
         try {
-          // Timeout de 5 segundos para o salvamento
-          const timeoutPromise = new Promise((_, reject) => setTimeout(() => reject(new Error("Timeout Nuvem")), 5000));
+          // Timeout de 5 segundos com AbortController
+          const timeoutPromise = new Promise((_, reject) => {
+            timeoutId = setTimeout(() => {
+              controller?.abort();
+              reject(new Error("Timeout Nuvem"));
+            }, 5000);
+          });
 
           const savePromise = (async () => {
-             const { data: updateData, error: updateError } = await supabase
+            // A3: Trava otimista usando .eq('updated_at', lastSyncedAt) quando já temos lastSyncedAt
+            let updateQuery = supabase
               .from('profiles')
               .update({ full_data: dataToSave, updated_at: newUpdatedAt })
-              .eq('id', user.id)
-              .select();
+              .eq('id', user.id);
+            if (lastSyncedAt) {
+              updateQuery = updateQuery.eq('updated_at', lastSyncedAt);
+            }
+            if (controller && typeof updateQuery.abortSignal === 'function') {
+              updateQuery = updateQuery.abortSignal(controller.signal);
+            }
 
+            const { data: updateData, error: updateError } = await updateQuery.select('updated_at');
             if (updateError) throw updateError;
 
+            // Se 0 linhas foram afetadas: ou o perfil ainda não existe, ou houve conflito de concorrência
             if (!updateData || updateData.length === 0) {
-              const { error: insertError } = await supabase
+              let checkQuery = supabase
                 .from('profiles')
-                .insert({ id: user.id, full_data: dataToSave, updated_at: newUpdatedAt });
-              if (insertError) throw insertError;
+                .select('full_data, updated_at')
+                .eq('id', user.id)
+                .limit(1);
+              if (controller && typeof checkQuery.abortSignal === 'function') {
+                checkQuery = checkQuery.abortSignal(controller.signal);
+              }
+              const { data: existingRows, error: checkErr } = await checkQuery;
+              if (checkErr) throw checkErr;
+
+              if (!existingRows || existingRows.length === 0) {
+                // Perfil ainda não existe: faz o insert inicial
+                let insertQuery = supabase
+                  .from('profiles')
+                  .insert({ id: user.id, full_data: dataToSave, updated_at: newUpdatedAt });
+                if (controller && typeof insertQuery.abortSignal === 'function') {
+                  insertQuery = insertQuery.abortSignal(controller.signal);
+                }
+                const { error: insertError } = await insertQuery;
+                if (insertError) throw insertError;
+              } else {
+                // Conflito real: outro dispositivo atualizou updated_at. Faz merge por chave sem descartar alterações locais!
+                const remoteRow = existingRows[0];
+                const remoteUpdatedAt = remoteRow.updated_at || null;
+                const mergedRaw = mergeCloudAndLocalData(
+                  remoteRow.full_data || {},
+                  dataToSave,
+                  useStore._keyTimestamps || {},
+                  remoteUpdatedAt,
+                  lastSyncedAt
+                );
+                const normalizedMerged = normalizeHydratedState(mergedRaw, get().caveiraQuestions || []);
+                dataToSave = {
+                  ...normalizedMerged,
+                  _keyTimestamps: mergedRaw._keyTimestamps || {}
+                };
+                finalSyncedAt = new Date().toISOString();
+
+                let conflictUpdateQuery = supabase
+                  .from('profiles')
+                  .update({ full_data: dataToSave, updated_at: finalSyncedAt })
+                  .eq('id', user.id);
+                if (remoteUpdatedAt) {
+                  conflictUpdateQuery = conflictUpdateQuery.eq('updated_at', remoteUpdatedAt);
+                }
+                if (controller && typeof conflictUpdateQuery.abortSignal === 'function') {
+                  conflictUpdateQuery = conflictUpdateQuery.abortSignal(controller.signal);
+                }
+                const { error: conflictErr } = await conflictUpdateQuery;
+                if (conflictErr) throw conflictErr;
+
+                set({ ...normalizedMerged });
+                toast.info('🔄 Sincronizado com outro dispositivo preservando suas alterações locais.', { id: 'sync-merge-toast' });
+              }
             }
           })();
 
-           await Promise.race([savePromise, timeoutPromise]);
+          await Promise.race([savePromise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
 
           // Atualiza a baseline de sincronização após gravação bem-sucedida
-          set({ lastSyncedAt: newUpdatedAt });
+          useStore._retryCount = 0;
+          useStore._unsyncedToastShown = false;
+          set({ lastSyncedAt: finalSyncedAt, hasUnsyncedChanges: false });
+          writeLocalSnapshot(get(), {
+            dirty: false,
+            savedAt: finalSyncedAt,
+            keyTimestamps: useStore._keyTimestamps || {}
+          });
 
           // Backup local automático (últimos 3 backups)
           try {
@@ -556,10 +811,67 @@ export const useStore = create(
 
           toast.success("Nuvem atualizada! ☁️", { duration: 800 });
         } catch (error) {
-          console.error('❌ [Nuvem] Erro no Upload:', error.message);
-          // Omitimos o toast de erro para não poluir a interface se for apenas oscilação
+          clearTimeout(timeoutId);
+          // A3: Em caso de timeout/abort, relê o updated_at remoto para checar se o servidor concluiu a gravação
+          let recoveredFromTimeout = false;
+          try {
+            const { data: verifyData } = await supabase
+              .from('profiles')
+              .select('updated_at')
+              .eq('id', user.id)
+              .limit(1);
+            if (verifyData?.[0]?.updated_at === finalSyncedAt) {
+              recoveredFromTimeout = true;
+              useStore._retryCount = 0;
+              useStore._unsyncedToastShown = false;
+              set({ lastSyncedAt: finalSyncedAt, hasUnsyncedChanges: false });
+              writeLocalSnapshot(get(), {
+                dirty: false,
+                savedAt: finalSyncedAt,
+                keyTimestamps: useStore._keyTimestamps || {}
+              });
+            }
+          } catch (_) {}
+
+          if (!recoveredFromTimeout) {
+            console.error('❌ [Nuvem] Erro no Upload:', error.message);
+            set({ hasUnsyncedChanges: true });
+            writeLocalSnapshot(get(), {
+              dirty: true,
+              savedAt: new Date().toISOString(),
+              keyTimestamps: useStore._keyTimestamps || {}
+            });
+
+            // A2: Backoff de retentativa automática (5 s, 15 s, 60 s) e aviso discreto único
+            const retryDelays = [5000, 15000, 60000];
+            const attempt = Math.min(useStore._retryCount || 0, retryDelays.length - 1);
+            const delayMs = retryDelays[attempt];
+            useStore._retryCount = (useStore._retryCount || 0) + 1;
+
+            if (!useStore._unsyncedToastShown) {
+              useStore._unsyncedToastShown = true;
+              toast.warning('⚠️ Alterações não sincronizadas (salvas no dispositivo). Tentando reenviar...', {
+                id: 'unsynced-changes-toast',
+                duration: 4000
+              });
+            }
+
+            clearTimeout(useStore._retryTimer);
+            useStore._retryTimer = setTimeout(() => {
+              get().saveToCloud();
+            }, delayMs);
+          }
         } finally {
           set({ isSavingToCloud: false });
+          // A2: Se houve alteração enquanto salvava, dispara novo save imediatamente
+          if (useStore._savePending) {
+            useStore._savePending = false;
+            set({ savePending: false });
+            clearTimeout(useStore._debounceTimer);
+            useStore._debounceTimer = setTimeout(() => {
+              get().saveToCloud();
+            }, 100);
+          }
         }
       },
 
@@ -1721,7 +2033,7 @@ export const useStore = create(
           nextDateStr: getLocalDateStr(nextDate),
           lastReviewDate: fsrsUpdate.lastReviewDate,
           lastPerformance: performance,
-          trend: performance - (review.lastPerformance || 0.75)
+          trend: performance - (review.lastPerformance ?? 0.75)
         };
 
         setReviews(newReviews);
@@ -1848,11 +2160,72 @@ export const useStore = create(
         return localDate.toISOString().split('T')[0];
       },
 
-      addStudyMinutes: (minutes) => {
+      getEffectiveStreak: () => {
+        const { streakData, activeBoosts, getLocalDateStr } = get();
+        const current = streakData?.currentStreak || 0;
+        const lastCheckDate = streakData?.lastCheckDate;
+        if (!lastCheckDate || current <= 0) return 0;
+        const today = getLocalDateStr();
+        if (lastCheckDate === today) return current;
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = getLocalDateStr(yesterday);
+        if (lastCheckDate === yesterdayStr) return current;
+        if (activeBoosts?.streakShieldActive) return current;
+        return 0;
+      },
+
+      registerStudyActivity: () => {
+        const { getLocalDateStr, streakData, setStreakData, setCoins } = get();
+        const today = getLocalDateStr();
+        const lastCheckDate = streakData?.lastCheckDate || null;
+        if (lastCheckDate === today) return;
+
+        let newStreak = streakData?.currentStreak || 0;
+        let newHasHadBreak = Boolean(streakData?.hasHadBreak);
+
+        const yesterday = new Date();
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayStr = getLocalDateStr(yesterday);
+
+        if (lastCheckDate === yesterdayStr) {
+          newStreak += 1;
+        } else if (!lastCheckDate) {
+          // Primeiro estudo da conta: inicia ofensiva sem marcar quebra (evita medalha Fênix indevida no dia 7)
+          newStreak = 1;
+        } else {
+          // Havia lastCheckDate anterior a ontem -> houve quebra real
+          const activeBoosts = get().activeBoosts || { xpBoostActions: 0, streakShieldActive: false };
+          if (activeBoosts.streakShieldActive) {
+            set(state => ({
+              activeBoosts: {
+                ...(state.activeBoosts || {}),
+                streakShieldActive: false
+              }
+            }));
+            toast.success("🛡️ Escudo de Streak consumido! Sua ofensiva foi protegida.");
+            newStreak = streakData?.currentStreak || 1;
+          } else {
+            newStreak = 1;
+            newHasHadBreak = true;
+          }
+        }
+
+        setStreakData({ lastCheckDate: today, currentStreak: newStreak, hasHadBreak: newHasHadBreak });
+        if (newStreak === 7) {
+          setCoins(c => c + 100);
+          if (newHasHadBreak) {
+            get().unlockMedal('fenix');
+          }
+        }
+      },
+
+      // Nota: tanto PomodoroTimer (via addStudyMinutes) quanto watchClass somam minutos em studyHistory e weeklySprint.
+      addStudyMinutes: (minutes, dateStrOverride = null) => {
         const { getLocalDateStr, setUserStats, setWeeklySprint, addXP } = get();
         if (minutes <= 0) return;
         
-        const todayStr = getLocalDateStr();
+        const targetDateStr = dateStrOverride || getLocalDateStr();
         setUserStats(prev => ({ ...prev, totalStudyMinutes: (prev.totalStudyMinutes || 0) + minutes }));
         setWeeklySprint(prev => ({ ...prev, currentMinutes: (prev.currentMinutes || 0) + minutes }));
         
@@ -1862,10 +2235,11 @@ export const useStore = create(
         set(state => ({
           studyHistory: {
             ...state.studyHistory,
-            [todayStr]: (state.studyHistory?.[todayStr] || 0) + minutes
+            [targetDateStr]: (state.studyHistory?.[targetDateStr] || 0) + minutes
           }
         }));
         get().updateDailyMissionProgress('minutes', minutes);
+        get().registerStudyActivity();
       },
 
       watchClass: (subjectId, slotIndex, amountWatched = 1, speed = null) => {
@@ -1895,22 +2269,9 @@ export const useStore = create(
             let addedMinutes = 0;
             for (let i = currentCompleted; i < newCompleted; i++) {
               const lesson = topicLessonsArr[i];
-              if (lesson?.duration) {
-                // Parse MM:SS or HH:MM:SS -> minutos
-                const parts = String(lesson.duration).split(':').map(Number);
-                let mins = 60;
-                if (parts.length === 3 && !parts.some(n => !Number.isFinite(n) || n < 0)) {
-                  mins = parts[0] * 60 + parts[1] + parts[2] / 60;
-                } else if (parts.length === 2 && !parts.some(n => !Number.isFinite(n) || n < 0)) {
-                  mins = parts[0] + parts[1] / 60;
-                } else {
-                  const numMins = Number(lesson.duration);
-                  if (Number.isFinite(numMins) && numMins > 0) mins = numMins;
-                }
-                addedMinutes += (mins / effectiveSpeed);
-              } else {
-                addedMinutes += (60 / effectiveSpeed); // fallback: 60min por aula
-              }
+              const origSec = parseDurationToSeconds(lesson?.duration);
+              const mins = (origSec > 0 ? origSec : 3600) / 60;
+              addedMinutes += (mins / effectiveSpeed);
             }
             addedMinutes = Math.round(addedMinutes);
             if (!Number.isFinite(addedMinutes) || (addedMinutes === 0 && actualWatched > 0)) {
@@ -1968,51 +2329,17 @@ export const useStore = create(
           setCoins(prev => prev + (10 * actualWatched));
           get().updateMissionProgress('study', actualWatched);
           get().updateDailyMissionProgress('study', actualWatched);
+          get().registerStudyActivity();
         }
         setCompletedToday(prev => !prev.includes(slotIndex) ? [...prev, slotIndex] : prev);
         get().boostPetWithStudy('class');
       },
 
       advanceDay: () => {
-        const { cycle, getLocalDateStr, streakData, setStreakData, setCoins, currentDayIndex, setCurrentDayIndex, setCompletedToday } = get();
+        const { cycle, currentDayIndex, setCurrentDayIndex, setCompletedToday } = get();
         if (cycle.length === 0) return;
         
-        const today = getLocalDateStr();
-        const lastCheckDate = streakData.lastCheckDate;
-        let newStreak = streakData.currentStreak;
-        let newHasHadBreak = streakData.hasHadBreak || false;
-
-        if (lastCheckDate !== today) {
-          const yesterday = new Date(); yesterday.setDate(yesterday.getDate() - 1);
-          const yesterdayStr = getLocalDateStr(yesterday);
-          if (lastCheckDate === yesterdayStr) {
-            newStreak += 1;
-          } else {
-            // Se quebrou streak, verifica escudo
-            const activeBoosts = get().activeBoosts || { xpBoostActions: 0, streakShieldActive: false };
-            if (activeBoosts.streakShieldActive) {
-              set(state => ({
-                activeBoosts: {
-                  ...(state.activeBoosts || {}),
-                  streakShieldActive: false
-                }
-              }));
-              toast.success("🛡️ Escudo de Streak consumido! Sua ofensiva foi protegida.");
-              newStreak = streakData.currentStreak || 1;
-            } else {
-              newStreak = 1;
-              newHasHadBreak = true; // Registra que houve uma quebra/pausa
-            }
-          }
-
-          setStreakData({ lastCheckDate: today, currentStreak: newStreak, hasHadBreak: newHasHadBreak });
-          if (newStreak === 7) {
-            setCoins(c => c + 100);
-            if (newHasHadBreak) {
-              get().unlockMedal('fenix');
-            }
-          }
-        }
+        get().registerStudyActivity();
 
         // Em modo semanal o "dia do ciclo" é sempre o dia real da semana (Ciclo.jsx o resincroniza),
         // então avançar não mexe no índice nem nos blocos concluídos: só streak/moedas acima.
@@ -2197,9 +2524,13 @@ export const useStore = create(
         const { user } = get();
         console.log("🔴 PROTOCOLO DE DESTRUIÇÃO ABSOLUTA INICIADO...");
         clearTimeout(useStore._debounceTimer);
+        clearTimeout(useStore._localDebounceTimer);
+        clearTimeout(useStore._retryTimer);
+        useStore._keyTimestamps = {};
         try {
           localStorage.removeItem('prf_caveira_questions');
           localStorage.removeItem('prf_qg_backups');
+          localStorage.removeItem(LOCAL_STATE_STORAGE_KEY);
           localStorage.removeItem('alvo_legal_seen_statements_v1');
           localStorage.removeItem('alvo_legal_high_score_v1');
           localStorage.removeItem('qg_duelo_fps_topic_stats_v1');
@@ -2420,8 +2751,23 @@ export const useStore = create(
         return t === 0 ? 0 : Math.round((c / t) * 100);
       },
 
+      getCycleIndexForDate: (targetDateInput, baseTodayInput = null) => {
+        const { cycle = [], currentDayIndex = 0, cycleScheduleType = 'weekly', cycleWeekStart = 'sunday' } = get();
+        const targetDate = targetDateInput instanceof Date ? targetDateInput : new Date(targetDateInput || Date.now());
+        if (cycleScheduleType === 'weekly') {
+          const targetDOW = targetDate.getDay();
+          return (cycleWeekStart === 'monday') ? (targetDOW + 6) % 7 : targetDOW;
+        }
+        const cycleLen = Math.max(1, cycle.length);
+        const rawToday = baseTodayInput instanceof Date ? baseTodayInput : get().getTodayDate();
+        const t0 = new Date(rawToday.getFullYear(), rawToday.getMonth(), rawToday.getDate());
+        const t1 = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+        const diffDays = Math.round((t1.getTime() - t0.getTime()) / (1000 * 60 * 60 * 24));
+        return ((currentDayIndex + diffDays) % cycleLen + cycleLen) % cycleLen;
+      },
+
       getRelativeDateInfo: (idx) => {
-        const { currentDayIndex, cycle, cycleScheduleType, cycleWeekStart, cycleDayNames } = get();
+        const { currentDayIndex, cycle, cycleScheduleType } = get();
         const today = new Date();
         const diasSemana = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
         const nomesCompletosSemana = [
@@ -2435,8 +2781,7 @@ export const useStore = create(
         ];
 
         if (cycleScheduleType === 'weekly') {
-          const currentRealDOW = today.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
-          const currentWeekIndex = (cycleWeekStart === 'monday') ? (currentRealDOW + 6) % 7 : currentRealDOW;
+          const currentWeekIndex = get().getCycleIndexForDate(today, today);
           const dayDiff = idx - currentWeekIndex;
           
           const targetDate = new Date(today);
@@ -2446,7 +2791,7 @@ export const useStore = create(
           const isToday = dayDiff === 0;
           const isPast = dayDiff < 0;
           const isFuture = dayDiff > 0;
-          const customName = cycleDayNames && cycleDayNames[idx];
+          const customName = get().cycleDayNames && get().cycleDayNames[idx];
           
           return {
             title: isToday ? 'HOJE' : diasSemana[targetDOW],
@@ -2479,7 +2824,7 @@ export const useStore = create(
       },
 
       getSubjectEstimates: () => {
-        const { subjects, cycle, cycleSlotCounts, currentDayIndex, completedToday: rawCompletedToday, completedTodayDate, subjectTimeGoal, calendarOverrides, calendarOverrideCounts, futureScheduleRules, cycleScheduleType = 'weekly', cycleWeekStart = 'sunday' } = get();
+        const { subjects, cycle, cycleSlotCounts, completedToday: rawCompletedToday, completedTodayDate, subjectTimeGoal, calendarOverrides, calendarOverrideCounts, futureScheduleRules, cycleScheduleType = 'weekly' } = get();
         // completedToday de outro dia nunca é válido
         const completedToday = completedTodayDate === get().getLocalDateStr() ? (rawCompletedToday || []) : [];
         const estimates = [];
@@ -2503,16 +2848,12 @@ export const useStore = create(
             const topicLessonsArr = t.lessons || [];
             for (let i = completed; i < t.total; i++) {
               const lesson = topicLessonsArr[i];
-              let mins = 60;
-              if (lesson?.duration) {
-                const parts = String(lesson.duration).split(':').map(Number);
-                if (parts.length === 3 && !parts.some(isNaN)) mins = parts[0] * 60 + parts[1] + parts[2] / 60;
-                else if (parts.length === 2 && !parts.some(isNaN)) mins = parts[0] + parts[1] / 60;
-              }
+              const origSec = parseDurationToSeconds(lesson?.duration);
+              const mins = (origSec > 0 ? origSec : 3600) / 60;
               const accelMins = mins / spd;
               remainingMinutes += mins;
               remainingAccelMinutes += accelMins;
-              queue.push({ durationMins: mins, accelMins });
+              queue.push({ duration: lesson?.duration, durationMins: mins, accelMins });
             }
           });
 
@@ -2572,11 +2913,8 @@ export const useStore = create(
               daySubjects = [...calendarOverrides[simDateKey]];
               daySlotCounts = Array.isArray(calendarOverrideCounts?.[simDateKey]) ? [...calendarOverrideCounts[simDateKey]] : [];
             } else {
-              let cycleIndex = (currentDayIndex + dayOffset) % Math.max(1, cycle.length);
+              const cycleIndex = get().getCycleIndexForDate(targetSimDate, todayDateObj);
               const targetDayOfWeek = targetSimDate.getDay();
-              if (cycleScheduleType === 'weekly') {
-                cycleIndex = (cycleWeekStart === 'monday') ? (targetDayOfWeek + 6) % 7 : targetDayOfWeek;
-              }
               const matchingRules = (futureScheduleRules || [])
                 .filter(r => {
                   if (!r || r.v !== 2 || !r.fromDate || r.fromDate > simDateKey) return false;
@@ -2634,46 +2972,15 @@ export const useStore = create(
 
               if (q && q.length > 0) {
                 const sub = subjects[effectiveSubId];
+                const spd = Math.max(0.5, Number(sub?.speed) || 1);
                 const customSlotLessons = !wasTransitioned ? Math.floor(Number(daySlotCounts?.[slotIdx]) || 0) : 0;
                 const lessonsN = customSlotLessons > 0 ? customSlotLessons : Math.floor(Number(sub?.lessonsPerBlock) || 0);
                 const goalMin = customSlotLessons > 0 ? 0 : (Number(sub?.timeGoalMinutes || subjectTimeGoal?.[effectiveSubId]) || 0);
                 
-                let slotCount = 0;
-                let slotAccelMins = 0;
-
-                while (q.length > 0) {
-                  if (lessonsN > 0 && slotCount >= lessonsN) break;
-                  const nextLesson = q[0];
-                  if (slotCount === 0) {
-                    slotCount++;
-                    slotAccelMins += nextLesson.accelMins;
-                    q.shift();
-                    progressMadeToday = true;
-                    if (goalMin === 0 && lessonsN === 0) break;
-                    continue;
-                  }
-
-                  if (lessonsN > 0) {
-                    slotCount++;
-                    slotAccelMins += nextLesson.accelMins;
-                    q.shift();
-                    continue;
-                  }
-
-                  // Limite inteligente para evitar estouro desproporcional
-                  if (slotAccelMins >= goalMin * 0.85 && ((slotAccelMins + nextLesson.accelMins - goalMin) / goalMin) > 0.20) {
-                    break;
-                  }
-
-                  if (slotAccelMins < goalMin) {
-                    slotCount++;
-                    slotAccelMins += nextLesson.accelMins;
-                    q.shift();
-                    progressMadeToday = true;
-                  } else {
-                    break;
-                  }
-                }
+                const suggestion = calculateLessonsForGoal(q, 0, spd, goalMin, q.length, lessonsN);
+                const slotCount = Math.min(q.length, Math.max(1, suggestion.count || 1));
+                q.splice(0, slotCount);
+                progressMadeToday = true;
 
                 if (q.length === 0 && endDaysOffset[effectiveSubId] === undefined) {
                   endDaysOffset[effectiveSubId] = dayOffset;
@@ -3039,7 +3346,8 @@ let pendingSaves = 0;
 
 // Proteção ativa contra fechamento/F5 da aba durante um salvamento em andamento
 window.addEventListener('beforeunload', (e) => {
-  if (pendingSaves > 0) {
+  const st = useStore.getState();
+  if (pendingSaves > 0 || st.isSavingToCloud || st.savePending) {
     e.preventDefault();
     e.returnValue = "Seus dados ainda estão sendo enviados para a Nuvem de forma 100% online. Fechar agora cancelará o envio.";
     return e.returnValue;
@@ -3047,18 +3355,37 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 useStore.subscribe((state, prevState) => {
-  if (state.isLoadingFromCloud || !state.user) return;
+  if (state.isLoadingFromCloud) return;
 
-  const sofreuAlteracao = PERSISTED_KEYS.some(key => state[key] !== prevState[key]);
-  
-  if (sofreuAlteracao) {
-    clearTimeout(useStore._debounceTimer);
-    useStore._debounceTimer = setTimeout(() => {
-      pendingSaves++;
-      state.saveToCloud().finally(() => {
-        pendingSaves = Math.max(0, pendingSaves - 1);
-      });
-    }, 1500);
-  }
+  const changedKeys = PERSISTED_KEYS.filter(key => state[key] !== prevState[key]);
+  if (changedKeys.length === 0) return;
+
+  const nowIso = new Date().toISOString();
+  const nextTimestamps = { ...(useStore._keyTimestamps || {}) };
+  changedKeys.forEach((key) => {
+    nextTimestamps[key] = nowIso;
+  });
+  useStore._keyTimestamps = nextTimestamps;
+
+  // A1: Snapshot local com debounce curto (~500 ms) mesmo offline ou sem login
+  clearTimeout(useStore._localDebounceTimer);
+  useStore._localDebounceTimer = setTimeout(() => {
+    const latestState = useStore.getState();
+    writeLocalSnapshot(latestState, {
+      dirty: true,
+      savedAt: new Date().toISOString(),
+      keyTimestamps: useStore._keyTimestamps || {}
+    });
+  }, 500);
+
+  if (!state.user) return;
+
+  clearTimeout(useStore._debounceTimer);
+  useStore._debounceTimer = setTimeout(() => {
+    pendingSaves++;
+    useStore.getState().saveToCloud().finally(() => {
+      pendingSaves = Math.max(0, pendingSaves - 1);
+    });
+  }, 1500);
 });
 

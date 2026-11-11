@@ -22,6 +22,7 @@ export default function Ciclo() {
     advanceDay,
     getSubjectProgress,
     getRelativeDateInfo,
+    getCycleIndexForDate,
     getLocalDateStr,
     reviews,
     setClassConfirmModal,
@@ -106,13 +107,14 @@ export default function Ciclo() {
   useEffect(() => {
     if (cycleScheduleType === 'weekly') {
       const today = new Date();
-      const currentRealDOW = today.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
-      const currentWeekIndex = (cycleWeekStart === 'monday') ? (currentRealDOW + 6) % 7 : currentRealDOW;
+      const currentWeekIndex = getCycleIndexForDate
+        ? getCycleIndexForDate(today, today)
+        : ((cycleWeekStart === 'monday') ? (today.getDay() + 6) % 7 : today.getDay());
       if (currentDayIndex !== currentWeekIndex) {
         setCurrentDayIndex(currentWeekIndex);
       }
     }
-  }, [cycleScheduleType, cycleWeekStart, currentDayIndex, setCurrentDayIndex, todayKey]);
+  }, [cycleScheduleType, cycleWeekStart, currentDayIndex, setCurrentDayIndex, getCycleIndexForDate, todayKey]);
 
   const visibleDays = (() => {
     if (cycleScheduleType === 'weekly') {
@@ -193,14 +195,19 @@ export default function Ciclo() {
     return () => clearTimeout(timer);
   }, [currentDayIndex]);
 
-  // Ao trocar de semana, rola para o primeiro dia exibido
+  // Ao trocar de semana, rola para hoje (quando weekOffset === 0) ou para o primeiro dia exibido
   useEffect(() => {
-    if (weekOffset === 0) return;
+    if (weekOffset === 0) {
+      const timer = setTimeout(() => {
+        scrollToDay(currentDayIndex, true);
+      }, 80);
+      return () => clearTimeout(timer);
+    }
     const timer = setTimeout(() => {
       if (scrollContainerRef.current) scrollContainerRef.current.scrollTo({ left: 0, behavior: 'smooth' });
     }, 80);
     return () => clearTimeout(timer);
-  }, [weekOffset]);
+  }, [weekOffset, currentDayIndex]);
 
   const { setTriggerConfetti, ConfettiCanvas } = useConfetti();
   const prevCompletedLength = useRef(completedToday.length);
@@ -700,7 +707,7 @@ export default function Ciclo() {
                                 <>
                                   <CheckCircle className="w-6 h-6 text-emerald-500 mb-1" />
                                   <span className="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
-                                    Estudo Concluído
+                                    Dia estudado
                                   </span>
                                   <span className="text-[10px] text-slate-500 dark:text-slate-400">
                                     {formatMinutesToFriendly(pastMinutes)} registrados neste dia

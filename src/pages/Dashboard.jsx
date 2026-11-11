@@ -119,6 +119,8 @@ export default function Dashboard() {
     dailyMissions = [], claimDailyMissionReward,
     unlockedAvatars = [], selectAvatar,
     streakData = { currentStreak: 0 },
+    getEffectiveStreak,
+    todayKey,
     reviewStats = { totalDone: 0, correct: 0, streak: 0 },
     xpHistory = [],
     isSyncing,
@@ -202,8 +204,11 @@ export default function Dashboard() {
     .filter(h => h && last7DayKeys.has(h.date))
     .reduce((sum, h) => sum + (h.xp || 0), 0);
 
+  const effectiveStreak = getEffectiveStreak ? getEffectiveStreak() : (streakData.currentStreak || 0);
+  void todayKey;
+
   const kpis = [
-    { label: 'Ofensiva', value: `${streakData.currentStreak}d`, sub: 'dias consecutivos', icon: Flame, color: 'text-orange-500', glow: 'hover:shadow-orange-500/10 hover:border-orange-500/30' },
+    { label: 'Ofensiva', value: `${effectiveStreak}d`, sub: 'dias consecutivos', icon: Flame, color: 'text-orange-500', glow: 'hover:shadow-orange-500/10 hover:border-orange-500/30' },
     { label: 'Revisões', value: reviewStats.totalDone, sub: 'total realizadas', icon: BookOpen, color: 'text-purple-500', glow: 'hover:shadow-purple-500/10 hover:border-purple-500/30' },
     { label: 'XP Semana', value: xpThisWeek.toLocaleString(), sub: 'pontos esta semana', icon: Zap, color: 'text-blue-500', glow: 'hover:shadow-blue-500/10 hover:border-blue-500/30' },
     { label: 'Acertos', value: `${acertoRate}%`, sub: 'taxa de correção', icon: TrendingUp, color: 'text-emerald-500', glow: 'hover:shadow-emerald-500/10 hover:border-emerald-500/30' },
@@ -267,7 +272,7 @@ export default function Dashboard() {
                 <Target className="w-3.5 h-3.5" /> ID: {enrollmentId}
               </div>
               <div className="flex items-center gap-1.5 text-orange-500 font-black text-xs bg-orange-50 dark:bg-orange-900/20 px-3 py-1 rounded-full border border-orange-200 dark:border-orange-900/50 animate-pulse">
-                <Flame className="w-3.5 h-3.5 fill-current" /> OFENSIVA: {streakData.currentStreak} DIAS
+                <Flame className="w-3.5 h-3.5 fill-current" /> OFENSIVA: {effectiveStreak} DIAS
               </div>
             </div>
 
