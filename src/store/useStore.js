@@ -1940,7 +1940,7 @@ export const useStore = create(
 
       // --- AÇÕES LÓGICAS ---
 
-      addXP: (amount, message = "") => {
+      addXP: (amount, message = "", dateStrOverride = null) => {
         get().playSound('xp');
         let finalAmount = amount;
         let boostUsed = false;
@@ -1951,7 +1951,7 @@ export const useStore = create(
           boostUsed = true;
         }
 
-        const todayStr = get().getLocalDateStr();
+        const todayStr = dateStrOverride || get().getLocalDateStr();
         set((state) => {
           const stateActiveBoosts = state.activeBoosts || { xpBoostActions: 0, streakShieldActive: false };
           const prevHistory = Array.isArray(state.xpHistory) ? state.xpHistory : [];
@@ -2175,28 +2175,49 @@ export const useStore = create(
         return 0;
       },
 
-      registerStudyActivity: () => {
-        const { getLocalDateStr, streakData, setStreakData, setCoins } = get();
+      registerStudyActivity: (activityDateStr = null) => {
+        const { getLocalDateStr, streakData, setStreakData, setCoins, studyHistory } = get();
         const today = getLocalDateStr();
+        const targetDate = (activityDateStr && /^\d{4}-\d{2}-\d{2}$/.test(activityDateStr) && activityDateStr <= today)
+          ? activityDateStr
+          : today;
         const lastCheckDate = streakData?.lastCheckDate || null;
-        if (lastCheckDate === today) return;
-
-        let newStreak = streakData?.currentStreak || 0;
-        let newHasHadBreak = Boolean(streakData?.hasHadBreak);
 
         const yesterday = new Date();
         yesterday.setDate(yesterday.getDate() - 1);
         const yesterdayStr = getLocalDateStr(yesterday);
 
-        if (lastCheckDate === yesterdayStr) {
+        if (lastCheckDate && lastCheckDate >= targetDate) {
+          // Se o usuário já estudou hoje mas registrou ontem retroativamente e havia estudado anteontem, recupera a continuidade da sequência
+          if (targetDate === yesterdayStr && lastCheckDate === today && (streakData?.currentStreak || 0) <= 1) {
+            const [yy, ym, yd] = yesterdayStr.split('-').map(Number);
+            const dayBeforeYest = new Date(yy, ym - 1, yd);
+            dayBeforeYest.setDate(dayBeforeYest.getDate() - 1);
+            const dayBeforeYestStr = getLocalDateStr(dayBeforeYest);
+            if ((studyHistory?.[dayBeforeYestStr] || 0) > 0) {
+              setStreakData({ ...streakData, currentStreak: (streakData?.currentStreak || 1) + 1 });
+            }
+          }
+          return;
+        }
+
+        let newStreak = streakData?.currentStreak || 0;
+        let newHasHadBreak = Boolean(streakData?.hasHadBreak);
+
+        const [ty, tm, td] = targetDate.split('-').map(Number);
+        const prevDay = new Date(ty, tm - 1, td);
+        prevDay.setDate(prevDay.getDate() - 1);
+        const prevDayStr = getLocalDateStr(prevDay);
+
+        if (lastCheckDate === prevDayStr) {
           newStreak += 1;
         } else if (!lastCheckDate) {
           // Primeiro estudo da conta: inicia ofensiva sem marcar quebra (evita medalha Fênix indevida no dia 7)
           newStreak = 1;
         } else {
-          // Havia lastCheckDate anterior a ontem -> houve quebra real
+          // Havia lastCheckDate anterior ao dia anterior -> houve quebra real
           const activeBoosts = get().activeBoosts || { xpBoostActions: 0, streakShieldActive: false };
-          if (activeBoosts.streakShieldActive) {
+          if (activeBoosts.streakShieldActive && targetDate === today) {
             set(state => ({
               activeBoosts: {
                 ...(state.activeBoosts || {}),
@@ -2211,7 +2232,7 @@ export const useStore = create(
           }
         }
 
-        setStreakData({ lastCheckDate: today, currentStreak: newStreak, hasHadBreak: newHasHadBreak });
+        setStreakData({ lastCheckDate: targetDate, currentStreak: newStreak, hasHadBreak: newHasHadBreak });
         if (newStreak === 7) {
           setCoins(c => c + 100);
           if (newHasHadBreak) {
@@ -2242,10 +2263,21 @@ export const useStore = create(
         get().registerStudyActivity();
       },
 
-      watchClass: (subjectId, slotIndex, amountWatched = 1, speed = null) => {
-        const { subjects, getActiveTopic, addXP, setUserStats, setWeeklySprint, setReviews, setCoins, setCompletedToday, getLocalDateStr } = get();
+      watchClass: (subjectId, slotIndex, amountWatched = 1, speed = null, studyDateStr = null) => {
+        const { subjects, getActiveTopic, addXP, setUserStats, setWeeklySprint, setReviews, setCoins, setCompletedToday, getLocalDateStr, getStartOfWeek, getTodayDate } = get();
         const activeTopic = getActiveTopic(subjectId);
         if (!activeTopic) return;
+
+        const todayObj = getTodayDate();
+        const todayStr = getLocalDateStr(todayObj);
+        const targetDateStr = (studyDateStr && /^\d{4}-\d{2}-\d{2}$/.test(studyDateStr) && studyDateStr <= todayStr)
+          ? studyDateStr
+          : todayStr;
+        const isRetroactive = targetDateStr < todayStr;
+        const [ty, tm, td] = targetDateStr.split('-').map(Number);
+        const targetDateObj = new Date(ty, tm - 1, td);
+        const currentWeekStartStr = getLocalDateStr(getStartOfWeek(todayObj));
+        const isInCurrentWeek = targetDateStr >= currentWeekStartStr;
 
         const effectiveSpeed = (speed !== null && speed !== undefined && !isNaN(speed)) 
           ? Number(speed) 
@@ -2278,23 +2310,31 @@ export const useStore = create(
               addedMinutes = Math.round((60 * actualWatched) / effectiveSpeed);
             }
             
-            addXP(100 * actualWatched, "Progresso em disciplina");
+            const targetBr = `${String(td).padStart(2, '0')}/${String(tm).padStart(2, '0')}`;
+            addXP(
+              100 * actualWatched,
+              isRetroactive ? `Progresso registrado em ${targetBr}` : "Progresso em disciplina",
+              targetDateStr
+            );
             setUserStats(prev => ({ ...prev, totalStudyMinutes: (prev.totalStudyMinutes || 0) + addedMinutes }));
-            setWeeklySprint(prev => ({ ...prev, currentMinutes: (prev.currentMinutes || 0) + addedMinutes }));
+            if (isInCurrentWeek) {
+              setWeeklySprint(prev => ({ ...prev, currentMinutes: (prev.currentMinutes || 0) + addedMinutes }));
+            }
             
-            const todayStr = getLocalDateStr(get().getTodayDate());
             set(state => ({
               studyHistory: {
                 ...state.studyHistory,
-                [todayStr]: (state.studyHistory?.[todayStr] || 0) + addedMinutes
+                [targetDateStr]: (state.studyHistory?.[targetDateStr] || 0) + addedMinutes
               }
             }));
-            get().updateDailyMissionProgress('minutes', addedMinutes);
+            if (!isRetroactive) {
+              get().updateDailyMissionProgress('minutes', addedMinutes);
+            }
 
-            // Adicionar CADA aula concluída à fila de revisão
-            const tomorrow = get().getTodayDate(); 
-            tomorrow.setDate(tomorrow.getDate() + 1);
-            const tomorrowStr = getLocalDateStr(tomorrow);
+            // Adicionar CADA aula concluída à fila de revisão a partir da data do estudo (+1 dia)
+            const nextReviewDate = new Date(targetDateObj);
+            nextReviewDate.setDate(nextReviewDate.getDate() + 1);
+            const nextReviewDateStr = getLocalDateStr(nextReviewDate);
             
             const newReviews = [];
             const topicLessons = topics[topicIndex].lessons || [];
@@ -2308,7 +2348,7 @@ export const useStore = create(
                 id: 'rev_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substr(2, 5),
                 subjectId: subjectId,
                 topicName: rName,
-                nextDateStr: tomorrowStr, 
+                nextDateStr: nextReviewDateStr, 
                 interval: 0,
                 stability: 0,
                 difficulty: 0,
@@ -2327,11 +2367,17 @@ export const useStore = create(
         set({ subjects: newSubjects });
         if (actualWatched > 0) {
           setCoins(prev => prev + (10 * actualWatched));
-          get().updateMissionProgress('study', actualWatched);
-          get().updateDailyMissionProgress('study', actualWatched);
-          get().registerStudyActivity();
+          if (isInCurrentWeek) {
+            get().updateMissionProgress('study', actualWatched);
+          }
+          if (!isRetroactive) {
+            get().updateDailyMissionProgress('study', actualWatched);
+          }
+          get().registerStudyActivity(targetDateStr);
         }
-        setCompletedToday(prev => !prev.includes(slotIndex) ? [...prev, slotIndex] : prev);
+        if (!isRetroactive && slotIndex !== null && slotIndex !== undefined) {
+          setCompletedToday(prev => !prev.includes(slotIndex) ? [...prev, slotIndex] : prev);
+        }
         get().boostPetWithStudy('class');
       },
 

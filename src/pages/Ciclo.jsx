@@ -20,6 +20,7 @@ export default function Ciclo() {
     cycleSlotCounts,
     currentDayIndex,
     advanceDay,
+    getActiveTopic,
     getSubjectProgress,
     getRelativeDateInfo,
     getCycleIndexForDate,
@@ -690,8 +691,9 @@ export default function Ciclo() {
                       if (isPast) {
                         const pastMinutes = studyHistory?.[dateInfo.fullDateStr] || 0;
                         const wasStudied = pastMinutes > 0;
+                        const pastActiveTopic = getActiveTopic ? getActiveTopic(subjectId) : null;
                         return (
-                          <div key={slotIndex} className="bg-white/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden flex flex-col shadow-xs opacity-75">
+                          <div key={slotIndex} className="bg-white/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden flex flex-col shadow-xs opacity-85">
                             <div className={`px-2.5 py-1.5 sm:px-3 sm:py-2 flex justify-between items-center border-b border-black/5 ${subject.color}`}>
                               <span className="font-black text-[10px] sm:text-xs uppercase tracking-wider truncate max-w-[70%]" title={subject.name}>
                                 {subject.name}
@@ -723,6 +725,35 @@ export default function Ciclo() {
                                     A fila não avançou e começou em <strong className="text-blue-500 font-bold">Hoje</strong>.
                                   </span>
                                 </>
+                              )}
+                              {pastActiveTopic && pastActiveTopic.completed < pastActiveTopic.total && (
+                                <button
+                                  type="button"
+                                  onClick={() => {
+                                    const remLessons = (pastActiveTopic.lessons || []).slice(pastActiveTopic.completed, pastActiveTopic.total);
+                                    const spdPast = Number(subject.speed) || 1;
+                                    const customPastCount = (!isDoubled && !isReplaced) ? Math.floor(Number(daySlotCounts?.[slotIndex]) || 0) : 0;
+                                    const pastLessonsN = customPastCount > 0 ? customPastCount : Math.floor(Number(subject.lessonsPerBlock) || 0);
+                                    const pastGoalMin = customPastCount > 0 ? 0 : (Number(subject.timeGoalMinutes || subjectTimeGoal?.[subjectId]) || 0);
+                                    const pastSug = (pastGoalMin > 0 || pastLessonsN > 0)
+                                      ? calculateLessonsForGoal(pastActiveTopic.lessons || [], pastActiveTopic.completed, spdPast, pastGoalMin, pastActiveTopic.total, pastLessonsN).count
+                                      : 1;
+                                    setClassConfirmModal({
+                                      subjectId,
+                                      slotIndex,
+                                      topicName: pastActiveTopic.name,
+                                      maxClasses: pastActiveTopic.total - pastActiveTopic.completed,
+                                      lessonDuration: remLessons[0]?.duration || '',
+                                      allLessonsDurations: remLessons.map(l => l.duration || '60:00'),
+                                      suggestedClasses: Math.max(1, pastSug || 1),
+                                      timeGoalMinutes: pastGoalMin || null,
+                                      initialStudyDate: dateInfo.fullDateStr
+                                    });
+                                  }}
+                                  className="mt-2 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-100 hover:bg-blue-600 text-slate-600 hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-blue-600 dark:hover:text-white border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+                                >
+                                  Registrar em {dateInfo.dateStr}
+                                </button>
                               )}
                             </div>
                           </div>

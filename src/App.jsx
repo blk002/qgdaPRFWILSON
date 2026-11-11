@@ -685,7 +685,7 @@ export default function App() {
 
       {/* 2. Modal de Confirmação de Aula (Componente Externo) */}
       <ClassCompletionModal 
-        key={classConfirmModal?.subjectId || 'none'}
+        key={classConfirmModal ? `${classConfirmModal.subjectId}_${classConfirmModal.initialStudyDate || 'today'}` : 'none'}
         isOpen={Boolean(classConfirmModal)}
         topicName={classConfirmModal?.topicName}
         maxClasses={classConfirmModal?.maxClasses}
@@ -694,9 +694,11 @@ export default function App() {
         allLessonsDurations={classConfirmModal?.allLessonsDurations}
         suggestedClasses={classConfirmModal?.suggestedClasses || null}
         timeGoalMinutes={classConfirmModal?.timeGoalMinutes || null}
+        initialStudyDate={classConfirmModal?.initialStudyDate || null}
+        todayDateStr={getLocalDateStr ? getLocalDateStr() : ''}
         onClose={() => setClassConfirmModal(null)}
-        onConfirm={(amount, speed) => {
-          watchClass(classConfirmModal.subjectId, classConfirmModal.slotIndex, amount, speed);
+        onConfirm={(amount, speed, studyDate) => {
+          watchClass(classConfirmModal.subjectId, classConfirmModal.slotIndex, amount, speed, studyDate);
           setClassConfirmModal(null);
         }}
       />

@@ -1,7 +1,22 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, FastForward, Clock, Zap, Target } from 'lucide-react';
+import { Play, FastForward, Clock, Zap, Target, Calendar } from 'lucide-react';
 import { parseDurationToSeconds, calculateSpeedComparison, formatSecondsToFriendly, calculateLessonsForGoal } from '../lib/durationHelpers';
+
+const shiftDateStr = (baseStr, offsetDays) => {
+  const base = baseStr && /^\d{4}-\d{2}-\d{2}$/.test(baseStr)
+    ? (() => { const [y, m, d] = baseStr.split('-').map(Number); return new Date(y, m - 1, d); })()
+    : new Date();
+  base.setDate(base.getDate() + offsetDays);
+  const offset = base.getTimezoneOffset();
+  return new Date(base.getTime() - offset * 60 * 1000).toISOString().split('T')[0];
+};
+
+const formatShortBrDate = (dateStr) => {
+  if (!dateStr || !/^\d{4}-\d{2}-\d{2}$/.test(dateStr)) return '';
+  const [, m, d] = dateStr.split('-');
+  return `${d}/${m}`;
+};
 
 export default function ClassCompletionModal({ 
   isOpen, 
@@ -13,22 +28,31 @@ export default function ClassCompletionModal({
   lessonDuration = '',
   allLessonsDurations = [],
   suggestedClasses = null,
-  timeGoalMinutes = null
+  timeGoalMinutes = null,
+  initialStudyDate = null,
+  todayDateStr = ''
 }) {
+  const todayStr = todayDateStr || shiftDateStr('', 0);
+  const yesterdayStr = shiftDateStr(todayStr, -1);
+  const resolvedInitialDate = (initialStudyDate && initialStudyDate <= todayStr) ? initialStudyDate : todayStr;
+
   const initialCount = suggestedClasses ? Math.min(suggestedClasses, maxClasses) : 1;
   const [numClasses, setNumClasses] = useState(initialCount);
   const [speed, setSpeed] = useState(Number(subjectSpeed) || 1);
-  const [prevProps, setPrevProps] = useState({ subjectSpeed, suggestedClasses, maxClasses });
+  const [studyDate, setStudyDate] = useState(resolvedInitialDate);
+  const [prevProps, setPrevProps] = useState({ subjectSpeed, suggestedClasses, maxClasses, resolvedInitialDate });
 
   // Padrão oficial React 19: ajusta o estado durante a renderização quando props mudam, sem causar cascading render
   if (
     prevProps.subjectSpeed !== subjectSpeed ||
     prevProps.suggestedClasses !== suggestedClasses ||
-    prevProps.maxClasses !== maxClasses
+    prevProps.maxClasses !== maxClasses ||
+    prevProps.resolvedInitialDate !== resolvedInitialDate
   ) {
-    setPrevProps({ subjectSpeed, suggestedClasses, maxClasses });
+    setPrevProps({ subjectSpeed, suggestedClasses, maxClasses, resolvedInitialDate });
     setSpeed(Number(subjectSpeed) || 1);
     setNumClasses(suggestedClasses ? Math.min(suggestedClasses, maxClasses) : 1);
+    setStudyDate(resolvedInitialDate);
   }
 
   const handleSpeedChange = (newSpeed) => {
@@ -64,10 +88,12 @@ export default function ClassCompletionModal({
   const comparison = calculateSpeedComparison(totalOriginalSec, speed);
   const goalSec = timeGoalMinutes ? timeGoalMinutes * 60 : 0;
   const overGoal = goalSec > 0 && comparison.acceleratedSeconds > goalSec;
+  const isRetroactive = studyDate < todayStr;
+  const shortSelectedDate = formatShortBrDate(studyDate);
 
   return createPortal(
     <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[110] p-4 fade-in font-sans">
-      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-sm w-full p-6 sm:p-8 text-center border border-slate-200 dark:border-slate-800 relative overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-sm w-full p-6 sm:p-8 text-center border border-slate-200 dark:border-slate-800 relative max-h-[92vh] overflow-y-auto">
         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-emerald-500 to-blue-500 opacity-50"></div>
         
         <div className="w-14 h-14 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-full mx-auto mb-3 flex items-center justify-center shadow-inner">
@@ -231,13 +257,65 @@ export default function ClassCompletionModal({
           </div>
         </div>
 
+        {/* Data do Estudo (Hoje, Ontem ou Data Retroativa) */}
+        <div className="bg-slate-50 dark:bg-slate-950 p-3.5 rounded-2xl border border-slate-100 dark:border-slate-800 mb-4 text-left">
+          <div className="flex items-center justify-between mb-2">
+            <span className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5">
+              <Calendar className="w-3.5 h-3.5 text-blue-500" /> Quando você estudou?
+            </span>
+            <span className="text-[10px] font-black text-blue-600 dark:text-blue-400">
+              {studyDate === todayStr ? 'Hoje' : studyDate === yesterdayStr ? 'Ontem' : shortSelectedDate}
+            </span>
+          </div>
+          <div className="grid grid-cols-3 gap-1.5">
+            <button
+              type="button"
+              onClick={() => setStudyDate(todayStr)}
+              className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition-all ${
+                studyDate === todayStr
+                  ? 'bg-blue-600 text-white shadow-sm ring-1 ring-blue-400'
+                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-400'
+              }`}
+            >
+              Hoje ({formatShortBrDate(todayStr)})
+            </button>
+            <button
+              type="button"
+              onClick={() => setStudyDate(yesterdayStr)}
+              className={`py-1.5 px-2 rounded-lg text-[10px] font-black transition-all ${
+                studyDate === yesterdayStr
+                  ? 'bg-amber-600 text-white shadow-sm ring-1 ring-amber-400'
+                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:border-slate-400'
+              }`}
+            >
+              Ontem ({formatShortBrDate(yesterdayStr)})
+            </button>
+            <input
+              type="date"
+              max={todayStr}
+              value={studyDate}
+              onChange={(e) => {
+                const val = e.target.value;
+                if (val && val <= todayStr) setStudyDate(val);
+              }}
+              aria-label="Escolher outra data"
+              className="py-1 px-1.5 rounded-lg text-[10px] font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 outline-none focus:border-blue-500"
+            />
+          </div>
+          {isRetroactive && (
+            <p className="mt-2 text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900/50 rounded-lg px-2.5 py-1.5 leading-snug">
+              Registro em <strong>{shortSelectedDate}</strong>: os minutos e a revisão FSRS serão contados a partir dessa data, e o bloco de hoje continuará livre para as próximas aulas.
+            </p>
+          )}
+        </div>
+
         <div className="flex flex-col gap-2.5">
           <button 
-            onClick={() => onConfirm(currentNum, speed)}
+            onClick={() => onConfirm(currentNum, speed, studyDate)}
             disabled={!numClasses}
             className="w-full py-3.5 bg-blue-600 text-white font-black rounded-xl hover:bg-blue-700 shadow-lg shadow-blue-500/20 transition-all transform active:scale-95 disabled:opacity-50 flex items-center justify-center gap-2 text-xs uppercase tracking-wider"
           >
-            CONFIRMAR {currentNum} {currentNum === 1 ? 'AULA' : 'AULAS'} ({comparison.acceleratedFriendly})
+            CONFIRMAR {currentNum} {currentNum === 1 ? 'AULA' : 'AULAS'} ({comparison.acceleratedFriendly}){isRetroactive ? ` • ${shortSelectedDate}` : ''}
           </button>
           <button 
             onClick={onClose}
