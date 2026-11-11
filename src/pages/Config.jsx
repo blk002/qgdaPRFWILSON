@@ -853,6 +853,7 @@ export default function Config({
                   }
                 };
                 reader.readAsText(file);
+                e.target.value = '';
               }}
             />
           </label>

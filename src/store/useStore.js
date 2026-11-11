@@ -347,6 +347,24 @@ const writeLocalSnapshot = (state, { dirty = true, savedAt = new Date().toISOStr
   }
 };
 
+const appendLocalBackup = (data, reason = 'auto') => {
+  if (!hasMeaningfulUserData(data)) return;
+  try {
+    const backupsJson = localStorage.getItem('prf_qg_backups');
+    let backups = backupsJson ? JSON.parse(backupsJson) : [];
+    if (!Array.isArray(backups)) backups = [];
+    backups.unshift({
+      timestamp: Date.now(),
+      reason,
+      data
+    });
+    backups = backups.slice(0, 5);
+    localStorage.setItem('prf_qg_backups', JSON.stringify(backups));
+  } catch (err) {
+    console.error("Erro ao criar backup local:", err);
+  }
+};
+
 const hasMeaningfulUserData = (data) => {
   if (!data || typeof data !== 'object') return false;
   const hasSubjects = data.subjects && Object.keys(data.subjects).length > 0;
@@ -776,6 +794,7 @@ export const useStore = create(
           return;
         }
 
+        clearTimeout(useStore._localDebounceTimer);
         clearTimeout(useStore._debounceTimer);
         clearTimeout(useStore._retryTimer);
 
@@ -907,20 +926,7 @@ export const useStore = create(
           });
 
           // Backup local automático (só adiciona se tiver dados reais, preservando últimos 5 backups íntegros)
-          if (hasMeaningfulUserData(dataToSave)) {
-            try {
-              const backupsJson = localStorage.getItem('prf_qg_backups');
-              let backups = backupsJson ? JSON.parse(backupsJson) : [];
-              backups.unshift({
-                timestamp: Date.now(),
-                data: dataToSave
-              });
-              backups = backups.slice(0, 5);
-              localStorage.setItem('prf_qg_backups', JSON.stringify(backups));
-            } catch (err) {
-              console.error("Erro ao criar backup local:", err);
-            }
-          }
+          appendLocalBackup(dataToSave, 'cloud_sync');
 
           toast.success("Nuvem atualizada! ☁️", { duration: 800 });
         } catch (error) {
@@ -2574,6 +2580,16 @@ export const useStore = create(
 
         if (all) {
           return await get().executeTotalWipe();
+        }
+
+        // Snapshot de segurança pré-reset no localStorage caso o usuário resete algo por engano
+        const preResetState = get();
+        if (hasMeaningfulUserData(preResetState)) {
+          const preResetSnapshot = {};
+          PERSISTED_KEYS.forEach(key => {
+            if (preResetState[key] !== undefined) preResetSnapshot[key] = preResetState[key];
+          });
+          appendLocalBackup(preResetSnapshot, 'pre_selective_reset');
         }
 
         const clean = getCleanInitialState();

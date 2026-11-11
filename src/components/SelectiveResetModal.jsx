@@ -9,7 +9,6 @@ import { toast } from 'sonner';
 import { useStore } from '../store/useStore';
 
 const RESET_ITEM_KEYS = [
-  'subjects',
   'watchedLessons',
   'calendarSchedule',
   'raioXCaveira',
@@ -17,7 +16,8 @@ const RESET_ITEM_KEYS = [
   'dueloCTB',
   'career',
   'mascot',
-  'coinsRewards'
+  'coinsRewards',
+  'subjects'
 ];
 
 const buildSelectionMap = (checked) =>
@@ -41,6 +41,7 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
 
   const [confirmStep, setConfirmStep] = useState(false);
   const [confirmText, setConfirmText] = useState('');
+  const [confirmSubjectsDelete, setConfirmSubjectsDelete] = useState(false);
   const [isExecuting, setIsExecuting] = useState(false);
 
   if (!isOpen) return null;
@@ -94,11 +95,16 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
     }
     setConfirmStep(true);
     setConfirmText('');
+    setConfirmSubjectsDelete(false);
   };
 
   const handleExecute = async () => {
     if (selected.all && confirmText.trim().toUpperCase() !== 'RESET') {
       toast.error('Digite a palavra RESET para confirmar a exclusão total.');
+      return;
+    }
+    if (!selected.all && selected.subjects && !confirmSubjectsDelete) {
+      toast.error('Confirme a caixa de exclusão das disciplinas cadastradas ou volte e desmarque essa opção.');
       return;
     }
 
@@ -126,18 +132,9 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
 
   const resetOptions = [
     {
-      key: 'subjects',
-      title: 'Disciplinas & Conteúdo Programático',
-      desc: 'Apaga todas as matérias cadastradas, assuntos, aulas e ciclo de estudos.',
-      badge: `${subjectsCount} matéria${subjectsCount !== 1 ? 's' : ''}`,
-      icon: BookOpen,
-      iconColor: 'text-blue-400',
-      iconBg: 'bg-blue-500/10 border-blue-500/20'
-    },
-    {
       key: 'watchedLessons',
       title: 'Aulas Assistidas (Zerar Progresso)',
-      desc: 'Desmarca todas as aulas concluídas e blocos finalizados hoje, mantendo suas matérias, assuntos e aulas.',
+      desc: 'Desmarca todas as aulas concluídas e blocos finalizados hoje, MANTENDO suas matérias, assuntos e aulas cadastradas.',
       badge: `${watchedCount} aula${watchedCount !== 1 ? 's' : ''} assistida${watchedCount !== 1 ? 's' : ''}`,
       icon: CheckCircle2,
       iconColor: 'text-sky-400',
@@ -146,7 +143,7 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
     {
       key: 'calendarSchedule',
       title: 'Matérias do Calendário & Ciclo',
-      desc: 'Remove todas as matérias colocadas no ciclo semanal, regras futuras e edições do calendário, sem apagar as disciplinas.',
+      desc: 'Remove todas as matérias colocadas no ciclo semanal, regras futuras e edições do calendário, MANTENDO suas disciplinas cadastradas.',
       badge: calendarBadge,
       icon: CalendarX,
       iconColor: 'text-indigo-400',
@@ -205,6 +202,15 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
       icon: Coins,
       iconColor: 'text-yellow-400',
       iconBg: 'bg-yellow-500/10 border-yellow-500/20'
+    },
+    {
+      key: 'subjects',
+      title: 'APAGAR TODAS as Disciplinas Cadastradas',
+      desc: 'CUIDADO: Exclui permanentemente todas as matérias, assuntos e aulas da aba "Minhas Disciplinas" (além de ciclo e calendário). Para zerar apenas aulas ou calendário sem perder matérias, use as 2 primeiras opções.',
+      badge: `DESTRUTIVO • ${subjectsCount} matéria${subjectsCount !== 1 ? 's' : ''}`,
+      icon: BookOpen,
+      iconColor: 'text-red-400',
+      iconBg: 'bg-red-500/10 border-red-500/30'
     }
   ];
 
@@ -406,6 +412,20 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
                   />
                 </div>
               )}
+
+              {!selected.all && selected.subjects && (
+                <label className="flex items-start gap-3 p-3.5 rounded-xl bg-red-950/50 border border-red-700/70 cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={confirmSubjectsDelete}
+                    onChange={(e) => setConfirmSubjectsDelete(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 accent-red-500 shrink-0"
+                  />
+                  <span className="text-xs text-red-200 leading-snug">
+                    <strong>Confirmo que quero apagar todas as {subjectsCount} matérias cadastradas</strong> em &quot;Minhas Disciplinas&quot;. (Se queria zerar apenas aulas assistidas ou calendário, clique em <em>Voltar à Seleção</em> e desmarque a última opção.)
+                  </span>
+                </label>
+              )}
             </div>
           )}
         </div>
@@ -444,7 +464,11 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
               <button
                 type="button"
                 onClick={handleExecute}
-                disabled={isExecuting || (selected.all && confirmText.trim().toUpperCase() !== 'RESET')}
+                disabled={
+                  isExecuting ||
+                  (selected.all && confirmText.trim().toUpperCase() !== 'RESET') ||
+                  (!selected.all && selected.subjects && !confirmSubjectsDelete)
+                }
                 className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-red-600/30 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isExecuting ? (
