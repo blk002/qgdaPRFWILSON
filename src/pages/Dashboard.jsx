@@ -128,8 +128,10 @@ export default function Dashboard() {
   } = useStore();
 
   useEffect(() => {
-    useStore.getState().checkAndResetDailyMissions();
-  }, []);
+    if (!isSyncing) {
+      useStore.getState().checkAndResetDailyMissions();
+    }
+  }, [isSyncing]);
 
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(userStats?.displayName || '');

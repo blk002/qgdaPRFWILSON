@@ -357,7 +357,7 @@ const hasMeaningfulUserData = (data) => {
   return Boolean(hasSubjects || hasReviews || hasCycle || hasHistory || hasXp);
 };
 
-// Faz merge chave a chave entre nuvem e estado local sem descartar alterações locais
+// Faz merge chave a chave entre nuvem e estado local sem descartar alterações locais genuínas
 const mergeCloudAndLocalData = (remoteRaw, localState, localKeyTimestamps = {}, remoteUpdatedAt = null, lastSyncedAt = null) => {
   const merged = { ...(remoteRaw || {}) };
   const remoteKeyTs = (remoteRaw && typeof remoteRaw._keyTimestamps === 'object') ? remoteRaw._keyTimestamps : {};
@@ -378,19 +378,21 @@ const mergeCloudAndLocalData = (remoteRaw, localState, localKeyTimestamps = {}, 
       : (remoteUpdatedAt ? new Date(remoteUpdatedAt).getTime() : 0);
     const baseTs = lastSyncedAt ? new Date(lastSyncedAt).getTime() : 0;
 
-    // Se a chave local foi modificada após o último sync (ou não há como decidir), preserva o local a menos que a chave remota tenha timestamp comprovadamente mais novo
-    const localModifiedSinceSync = lTs > 0 && lTs > baseTs;
+    // Nunca sobrescreve dado remoto com uma chave que não foi modificada localmente (lTs === 0)
+    if (lTs === 0) {
+      merged[key] = remoteVal;
+      return;
+    }
+
+    const localModifiedSinceSync = baseTs > 0 ? (lTs > baseTs) : (rTs === 0 || lTs >= rTs);
     if (localModifiedSinceSync) {
-      if (rTs > lTs && remoteKeyTs?.[key]) {
+      if (remoteKeyTs?.[key] && rTs > lTs) {
         merged[key] = remoteVal;
       } else {
         merged[key] = localVal;
       }
-    } else if (rTs > 0 && lTs === 0 && baseTs > 0 && rTs > baseTs) {
-      merged[key] = remoteVal;
     } else {
-      // Na dúvida entre dois estados divergentes sem timestamp por chave na nuvem, preserva o local
-      merged[key] = localVal;
+      merged[key] = remoteVal;
     }
   });
 
@@ -421,6 +423,7 @@ export const useStore = create(
       caveiraQuestions: getInitialLocalCaveiraQuestions(),
       isSyncing: true,
       isLoadingFromCloud: false,
+      hasCompletedInitialCloudSync: false,
       isSavingToCloud: false,
       savePending: false,
       hasUnsyncedChanges: Boolean(readLocalSnapshot()?.dirty),
@@ -436,7 +439,15 @@ export const useStore = create(
       // --- SUPABASE / CLOUD ---
       session: null,
       user: null,
-      setSession: (session) => set({ session, user: session?.user ?? null }),
+      setSession: (session) => set((state) => {
+        const nextUser = session?.user ?? null;
+        const userChanged = state.user?.id !== nextUser?.id;
+        return {
+          session,
+          user: nextUser,
+          ...(userChanged ? { hasCompletedInitialCloudSync: false } : {})
+        };
+      }),
       
       signOut: async () => {
         await supabase.auth.signOut();
@@ -453,23 +464,64 @@ export const useStore = create(
         if (!user) return false;
         if (isLoadingFromCloud && retryCount === 0) return false;
 
+        // Cancela timers pendentes de pré-carga para impedir gravação do estado inicial vazio
+        clearTimeout(useStore._localDebounceTimer);
+        clearTimeout(useStore._debounceTimer);
+        clearTimeout(useStore._retryTimer);
+
         if (retryCount === 0) {
           console.log('☁️ [Nuvem] Iniciando carregamento de dados seguros...');
           set({ isSyncing: true, isLoadingFromCloud: true });
         }
 
+        const findRecoverableLocalBackup = (sameUserId) => {
+          const snap = readLocalSnapshot();
+          if (snap && (!snap.userId || snap.userId === sameUserId) && hasMeaningfulUserData(snap.data)) {
+            return {
+              data: snap.data,
+              label: snap.savedAt ? `snapshot local (${new Date(snap.savedAt).toLocaleString()})` : 'snapshot local'
+            };
+          }
+          try {
+            const backupsJson = localStorage.getItem('prf_qg_backups');
+            const backups = backupsJson ? JSON.parse(backupsJson) : [];
+            const validBackup = (backups || []).find(b => b?.data && hasMeaningfulUserData(b.data));
+            if (validBackup) {
+              return {
+                data: validBackup.data,
+                label: `backup local (${new Date(validBackup.timestamp).toLocaleString()})`
+              };
+            }
+          } catch (_) {}
+          return null;
+        };
+
         const applyHydratedCloudRecord = (rawFullData, remoteUpdatedAt) => {
           const currentCaveira = get().caveiraQuestions || [];
           let cleanData = normalizeHydratedState(rawFullData, currentCaveira);
 
-          // A1: Compara snapshot local com a nuvem — se o local tiver alterações não enviadas e for mais novo, faz merge preservando o local e reenfileira o envio
+          // Recuperação automática caso a nuvem tenha sido sobrescrita com dados vazios mas exista backup local íntegro
+          let recoveredFromBackup = null;
+          if (!hasMeaningfulUserData(cleanData)) {
+            recoveredFromBackup = findRecoverableLocalBackup(user.id);
+            if (recoveredFromBackup) {
+              console.warn(`⚠️ [Recuperação] Nuvem vazia detectada, restaurando do ${recoveredFromBackup.label}!`);
+              cleanData = normalizeHydratedState(recoveredFromBackup.data, currentCaveira);
+            }
+          }
+
+          // A1: Compara snapshot local com a nuvem — só mescla se o snapshot for do mesmo usuário, tiver alterações com timestamp real e não for estado inicial vazio
           const localSnap = readLocalSnapshot();
           const isSameUserOrAnon = !localSnap?.userId || localSnap.userId === user.id;
+          const localHasRealKeyChanges = localSnap?.keyTimestamps && Object.keys(localSnap.keyTimestamps).length > 0;
           const localIsNewerAndDirty = Boolean(
+            !recoveredFromBackup &&
             localSnap &&
             isSameUserOrAnon &&
             localSnap.dirty &&
+            localHasRealKeyChanges &&
             localSnap.savedAt &&
+            (hasMeaningfulUserData(localSnap.data) || !hasMeaningfulUserData(cleanData)) &&
             (!remoteUpdatedAt || new Date(localSnap.savedAt) > new Date(remoteUpdatedAt))
           );
 
@@ -485,12 +537,29 @@ export const useStore = create(
             cleanData = normalizeHydratedState(mergedRaw, currentCaveira);
           }
 
+          useStore._lastKnownCloudWasMeaningful = hasMeaningfulUserData(rawFullData);
+          if (rawFullData?._keyTimestamps && !localIsNewerAndDirty) {
+            useStore._keyTimestamps = { ...rawFullData._keyTimestamps };
+          } else if (localIsNewerAndDirty && localSnap?.keyTimestamps) {
+            useStore._keyTimestamps = { ...(rawFullData?._keyTimestamps || {}), ...localSnap.keyTimestamps };
+          }
+
           try { localStorage.setItem('prf_caveira_questions', JSON.stringify(cleanData.caveiraQuestions)); } catch (_) {}
 
           set({
             ...cleanData,
             lastSyncedAt: remoteUpdatedAt,
-            hasUnsyncedChanges: localIsNewerAndDirty
+            hasUnsyncedChanges: Boolean(localIsNewerAndDirty || recoveredFromBackup),
+            hasCompletedInitialCloudSync: true,
+            ...(recoveredFromBackup ? {
+              globalModal: {
+                title: 'Backup Local Recuperado!',
+                message: `Detectamos que o perfil na nuvem veio vazio, mas encontramos seus dados salvos no ${recoveredFromBackup.label} e os restauramos na tela. Clique abaixo para regravá-los na nuvem agora!`,
+                onConfirm: () => {
+                  get().saveToCloud({ allowEmptyOverwrite: true });
+                }
+              }
+            } : {})
           });
           get().syncDayRollover();
           get().checkAndResetWeekly();
@@ -506,6 +575,12 @@ export const useStore = create(
               keyTimestamps: localSnap.keyTimestamps
             });
             setTimeout(() => { get().saveToCloud(); }, 150);
+          } else if (recoveredFromBackup) {
+            writeLocalSnapshot(get(), {
+              dirty: true,
+              savedAt: new Date().toISOString(),
+              keyTimestamps: useStore._keyTimestamps || {}
+            });
           } else {
             writeLocalSnapshot(get(), {
               dirty: false,
@@ -575,9 +650,10 @@ export const useStore = create(
             try {
               const backupsJson = localStorage.getItem('prf_qg_backups');
               const backups = backupsJson ? JSON.parse(backupsJson) : [];
-              if (backups?.[0]?.data && hasMeaningfulUserData(backups[0].data)) {
-                candidateLocalData = backups[0].data;
-                candidateSourceLabel = `backup local (${new Date(backups[0].timestamp).toLocaleString()})`;
+              const validBackup = (backups || []).find(b => b?.data && hasMeaningfulUserData(b.data));
+              if (validBackup) {
+                candidateLocalData = validBackup.data;
+                candidateSourceLabel = `backup local (${new Date(validBackup.timestamp).toLocaleString()})`;
               }
             } catch (_) {}
           }
@@ -590,12 +666,13 @@ export const useStore = create(
               lastSyncedAt: null,
               isSyncing: false,
               isLoadingFromCloud: false,
+              hasCompletedInitialCloudSync: true,
               hasUnsyncedChanges: true,
               globalModal: {
                 title: 'Dados Locais Encontrados',
                 message: `Sua conta na nuvem ainda não possui dados salvos, mas encontramos seu progresso no ${candidateSourceLabel}. Deseja restaurar e sincronizar esses dados na nuvem agora?`,
                 onConfirm: () => {
-                  get().saveToCloud();
+                  get().saveToCloud({ allowEmptyOverwrite: true });
                 }
               }
             });
@@ -612,14 +689,15 @@ export const useStore = create(
           set({
             ...freshState,
             caveiraQuestions: get().caveiraQuestions || [],
-            lastSyncedAt: null
+            lastSyncedAt: null,
+            hasCompletedInitialCloudSync: true
           });
           get().syncDayRollover();
           get().checkAndResetWeekly();
           get().checkAndAdvanceSeason();
           get().checkAndResetDailyMissions();
           set({ isSyncing: false, isLoadingFromCloud: false });
-          await get().saveToCloud();
+          await get().saveToCloud({ allowEmptyOverwrite: true });
           return true;
         } catch (error) {
           if (retryCount < 2) {
@@ -633,20 +711,33 @@ export const useStore = create(
             const localSnap = readLocalSnapshot();
             const backupsJson = localStorage.getItem('prf_qg_backups');
             const backups = backupsJson ? JSON.parse(backupsJson) : [];
-            const latestBackup = backups && backups.length > 0 ? backups[0] : null;
+            const latestBackup = (backups || []).find(b => b?.data && hasMeaningfulUserData(b.data)) || backups?.[0] || null;
 
             const snapTs = localSnap?.savedAt ? new Date(localSnap.savedAt).getTime() : 0;
             const backupTs = latestBackup?.timestamp ? Number(latestBackup.timestamp) : 0;
 
-            const chosenRaw = (snapTs >= backupTs && localSnap?.data) ? localSnap.data : latestBackup?.data;
-            const chosenDateStr = (snapTs >= backupTs && localSnap?.savedAt)
-              ? new Date(localSnap.savedAt).toLocaleString()
-              : (latestBackup ? new Date(latestBackup.timestamp).toLocaleString() : null);
+            const snapMeaningful = hasMeaningfulUserData(localSnap?.data);
+            const backupMeaningful = hasMeaningfulUserData(latestBackup?.data);
+
+            let chosenRaw = null;
+            let chosenDateStr = null;
+            if (snapMeaningful && (!backupMeaningful || snapTs >= backupTs)) {
+              chosenRaw = localSnap.data;
+              chosenDateStr = localSnap.savedAt ? new Date(localSnap.savedAt).toLocaleString() : null;
+            } else if (backupMeaningful) {
+              chosenRaw = latestBackup.data;
+              chosenDateStr = latestBackup.timestamp ? new Date(latestBackup.timestamp).toLocaleString() : null;
+            } else if (localSnap?.data || latestBackup?.data) {
+              chosenRaw = (snapTs >= backupTs && localSnap?.data) ? localSnap.data : latestBackup?.data;
+              chosenDateStr = (snapTs >= backupTs && localSnap?.savedAt)
+                ? new Date(localSnap.savedAt).toLocaleString()
+                : (latestBackup ? new Date(latestBackup.timestamp).toLocaleString() : null);
+            }
 
             if (chosenRaw) {
               console.log(`💡 [Estado Offline] Carregando dados locais de ${chosenDateStr}`);
               const cleanData = normalizeHydratedState(chosenRaw, get().caveiraQuestions || []);
-              set({ ...cleanData });
+              set({ ...cleanData, hasCompletedInitialCloudSync: true });
               get().syncDayRollover();
               get().checkAndResetWeekly();
               get().checkAndAdvanceSeason();
@@ -669,9 +760,14 @@ export const useStore = create(
         return false;
       },
 
-      saveToCloud: async () => {
-        const { user, isLoadingFromCloud, isSavingToCloud, lastSyncedAt, ...state } = get();
+      saveToCloud: async (options = {}) => {
+        const { allowEmptyOverwrite = false } = options || {};
+        const { user, isLoadingFromCloud, isSavingToCloud, hasCompletedInitialCloudSync, lastSyncedAt, ...state } = get();
         if (!user || isLoadingFromCloud) return;
+        if (!hasCompletedInitialCloudSync && !allowEmptyOverwrite) {
+          console.warn('🛑 [Nuvem] Auto-save bloqueado antes da sincronização inicial concluir.');
+          return;
+        }
 
         // A2: Se um save já está em andamento, não descarta: marca savePending para rodar logo após o término
         if (isSavingToCloud) {
@@ -682,8 +778,6 @@ export const useStore = create(
 
         clearTimeout(useStore._debounceTimer);
         clearTimeout(useStore._retryTimer);
-        set({ isSavingToCloud: true });
-        console.log('📤 [Nuvem] Despachando dados para o servidor...');
 
         const buildPayload = (srcState) => {
           const payload = {};
@@ -693,6 +787,14 @@ export const useStore = create(
         };
 
         let dataToSave = buildPayload(state);
+        if (!allowEmptyOverwrite && useStore._lastKnownCloudWasMeaningful && !hasMeaningfulUserData(dataToSave)) {
+          console.error('🛑 [Proteção de Dados] Bloqueada gravação automática vazia sobre nuvem com dados!');
+          toast.error('Proteção ativada: evitamos sobrescrever seus dados na nuvem com um estado vazio.');
+          return;
+        }
+
+        set({ isSavingToCloud: true });
+        console.log('📤 [Nuvem] Despachando dados para o servidor...');
         const newUpdatedAt = new Date().toISOString();
         let finalSyncedAt = newUpdatedAt;
         const controller = typeof AbortController !== 'undefined' ? new AbortController() : null;
@@ -722,6 +824,9 @@ export const useStore = create(
 
             const { data: updateData, error: updateError } = await updateQuery.select('updated_at');
             if (updateError) throw updateError;
+            if (updateData && updateData.length > 0 && updateData[0]?.updated_at) {
+              finalSyncedAt = updateData[0].updated_at;
+            }
 
             // Se 0 linhas foram afetadas: ou o perfil ainda não existe, ou houve conflito de concorrência
             if (!updateData || updateData.length === 0) {
@@ -740,12 +845,14 @@ export const useStore = create(
                 // Perfil ainda não existe: faz o insert inicial
                 let insertQuery = supabase
                   .from('profiles')
-                  .insert({ id: user.id, full_data: dataToSave, updated_at: newUpdatedAt });
+                  .insert({ id: user.id, full_data: dataToSave, updated_at: newUpdatedAt })
+                  .select('updated_at');
                 if (controller && typeof insertQuery.abortSignal === 'function') {
                   insertQuery = insertQuery.abortSignal(controller.signal);
                 }
-                const { error: insertError } = await insertQuery;
+                const { data: insData, error: insertError } = await insertQuery;
                 if (insertError) throw insertError;
+                if (insData?.[0]?.updated_at) finalSyncedAt = insData[0].updated_at;
               } else {
                 // Conflito real: outro dispositivo atualizou updated_at. Faz merge por chave sem descartar alterações locais!
                 const remoteRow = existingRows[0];
@@ -774,8 +881,9 @@ export const useStore = create(
                 if (controller && typeof conflictUpdateQuery.abortSignal === 'function') {
                   conflictUpdateQuery = conflictUpdateQuery.abortSignal(controller.signal);
                 }
-                const { error: conflictErr } = await conflictUpdateQuery;
+                const { data: conflictData, error: conflictErr } = await conflictUpdateQuery.select('updated_at');
                 if (conflictErr) throw conflictErr;
+                if (conflictData?.[0]?.updated_at) finalSyncedAt = conflictData[0].updated_at;
 
                 set({ ...normalizedMerged });
                 toast.info('🔄 Sincronizado com outro dispositivo preservando suas alterações locais.', { id: 'sync-merge-toast' });
@@ -788,6 +896,9 @@ export const useStore = create(
           // Atualiza a baseline de sincronização após gravação bem-sucedida
           useStore._retryCount = 0;
           useStore._unsyncedToastShown = false;
+          if (hasMeaningfulUserData(dataToSave)) {
+            useStore._lastKnownCloudWasMeaningful = true;
+          }
           set({ lastSyncedAt: finalSyncedAt, hasUnsyncedChanges: false });
           writeLocalSnapshot(get(), {
             dirty: false,
@@ -795,18 +906,20 @@ export const useStore = create(
             keyTimestamps: useStore._keyTimestamps || {}
           });
 
-          // Backup local automático (últimos 3 backups)
-          try {
-            const backupsJson = localStorage.getItem('prf_qg_backups');
-            let backups = backupsJson ? JSON.parse(backupsJson) : [];
-            backups.unshift({
-              timestamp: Date.now(),
-              data: dataToSave
-            });
-            backups = backups.slice(0, 3);
-            localStorage.setItem('prf_qg_backups', JSON.stringify(backups));
-          } catch (err) {
-            console.error("Erro ao criar backup local:", err);
+          // Backup local automático (só adiciona se tiver dados reais, preservando últimos 5 backups íntegros)
+          if (hasMeaningfulUserData(dataToSave)) {
+            try {
+              const backupsJson = localStorage.getItem('prf_qg_backups');
+              let backups = backupsJson ? JSON.parse(backupsJson) : [];
+              backups.unshift({
+                timestamp: Date.now(),
+                data: dataToSave
+              });
+              backups = backups.slice(0, 5);
+              localStorage.setItem('prf_qg_backups', JSON.stringify(backups));
+            } catch (err) {
+              console.error("Erro ao criar backup local:", err);
+            }
           }
 
           toast.success("Nuvem atualizada! ☁️", { duration: 800 });
@@ -820,7 +933,10 @@ export const useStore = create(
               .select('updated_at')
               .eq('id', user.id)
               .limit(1);
-            if (verifyData?.[0]?.updated_at === finalSyncedAt) {
+            const verifyTs = verifyData?.[0]?.updated_at ? new Date(verifyData[0].updated_at).getTime() : 0;
+            const sentTs = newUpdatedAt ? new Date(newUpdatedAt).getTime() : 0;
+            if (verifyTs > 0 && sentTs > 0 && verifyTs === sentTs) {
+              finalSyncedAt = verifyData[0].updated_at;
               recoveredFromTimeout = true;
               useStore._retryCount = 0;
               useStore._unsyncedToastShown = false;
@@ -2439,7 +2555,7 @@ export const useStore = create(
         
         // Sincroniza o reset com a nuvem imediatamente
         const { saveToCloud } = get();
-        await saveToCloud();
+        await saveToCloud({ allowEmptyOverwrite: true });
       },
 
       executeSelectiveReset: async (options = {}) => {
@@ -2561,7 +2677,7 @@ export const useStore = create(
 
         // Sincroniza com a nuvem (Supabase)
         const { saveToCloud } = get();
-        await saveToCloud();
+        await saveToCloud({ allowEmptyOverwrite: true });
 
         return summary;
       },
@@ -3401,7 +3517,8 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 useStore.subscribe((state, prevState) => {
-  if (state.isLoadingFromCloud) return;
+  // Não grava snapshot nem agenda upload antes da sincronização inicial com a nuvem concluir
+  if (state.isLoadingFromCloud || state.isSyncing || (state.user && !state.hasCompletedInitialCloudSync)) return;
 
   const changedKeys = PERSISTED_KEYS.filter(key => state[key] !== prevState[key]);
   if (changedKeys.length === 0) return;
