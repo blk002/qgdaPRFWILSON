@@ -12,7 +12,9 @@ export default function Ciclo() {
     getPendingReviews,
     subjects,
     getThermometer,
-    completedToday,
+    completedToday: rawCompletedToday,
+    completedTodayDate,
+    todayKey,
     setCompletedToday,
     cycle,
     cycleSlotCounts,
@@ -34,6 +36,9 @@ export default function Ciclo() {
     calendarOverrideCounts,
     futureScheduleRules
   } = useStore();
+
+  // Blocos concluídos só valem se foram marcados hoje (todayKey muda na virada do dia e re-renderiza a tela)
+  const completedToday = completedTodayDate === getLocalDateStr() ? (rawCompletedToday || []) : [];
 
   const pendingReviews = getPendingReviews().slice(0, 4);
 
@@ -107,7 +112,7 @@ export default function Ciclo() {
         setCurrentDayIndex(currentWeekIndex);
       }
     }
-  }, [cycleScheduleType, cycleWeekStart, currentDayIndex, setCurrentDayIndex]);
+  }, [cycleScheduleType, cycleWeekStart, currentDayIndex, setCurrentDayIndex, todayKey]);
 
   const visibleDays = (() => {
     if (cycleScheduleType === 'weekly') {
@@ -301,15 +306,17 @@ export default function Ciclo() {
             <div className="bg-white/20 p-3 rounded-full dark:bg-slate-900"><Trophy className="text-yellow-300 w-8 h-8" /></div>
             <div>
               <h2 className="text-xl md:text-2xl font-black">Meta Diária Batida!</h2>
-              <p className="text-emerald-100 text-sm font-medium">Missão cumprida com excelência. Avance a fila tática quando estiver pronto para o próximo dia.</p>
+              <p className="text-emerald-100 text-sm font-medium">{cycleScheduleType === 'weekly' ? 'Missão cumprida com excelência. Amanhã o ciclo avança automaticamente para o próximo dia.' : 'Missão cumprida com excelência. Avance a fila tática quando estiver pronto para o próximo dia.'}</p>
             </div>
           </div>
-          <button 
-            onClick={advanceDay} 
-            className="bg-white text-emerald-700 px-6 py-3 rounded-lg font-black shadow-sm hover:bg-emerald-50 transition-colors w-full md:w-auto uppercase tracking-wider text-sm flex items-center justify-center gap-2 dark:bg-slate-900"
-          >
-            Avançar Ciclo <ChevronRight className="w-4 h-4"/>
-          </button>
+          {cycleScheduleType !== 'weekly' && (
+            <button 
+              onClick={advanceDay} 
+              className="bg-white text-emerald-700 px-6 py-3 rounded-lg font-black shadow-sm hover:bg-emerald-50 transition-colors w-full md:w-auto uppercase tracking-wider text-sm flex items-center justify-center gap-2 dark:bg-slate-900"
+            >
+              Avançar Ciclo <ChevronRight className="w-4 h-4"/>
+            </button>
+          )}
         </div>
       )}
 

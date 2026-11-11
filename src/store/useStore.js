@@ -115,6 +115,7 @@ export const getCleanInitialState = () => ({
   cycle: [[], [], [], [], [], [], []],
   currentDayIndex: 0,
   completedToday: [],
+  completedTodayDate: null,
   targetExamDate: '2026-08-15',
   coins: 250,
   userStats: { xp: 0, medals: [], totalStudyMinutes: 0, avatar: '/assets/gamification/avatar_male.png' },
@@ -213,10 +214,10 @@ const getInitialLocalCaveiraQuestions = () => {
 // export/import e gatilho de auto-save). Mantê-la única evita divergências
 // como a do export de backup, que silenciosamente perdia dados.
 export const PERSISTED_KEYS = [
-  'subjects', 'cycle', 'currentDayIndex', 'completedToday', 'targetExamDate',
+  'subjects', 'cycle', 'currentDayIndex', 'completedToday', 'completedTodayDate', 'targetExamDate',
   'coins', 'userStats', 'streakData', 'weeklySprint', 'reviews',
   'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus',
-  'isDarkMode', 'activeTab', 'calendarDate', 'reviewCalendarDate',
+  'isDarkMode', 'activeTab', 'reviewCalendarDate',
   'seasonalData', 'weeklyMissions', 'studyHistory',
   'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate', 'pushEnabled', 'pushTime',
   'enableSounds', 'activeBoosts', 'dailyReviewStats', 'syntaxLevel',
@@ -224,10 +225,18 @@ export const PERSISTED_KEYS = [
   'cycleScheduleType', 'cycleWeekStart', 'cycleDayNames', 'cycleSlotCounts', 'calendarOverrides', 'calendarOverrideCounts', 'futureScheduleRules', 'xpHistory', 'petData', 'caveiraQuestions'
 ];
 
+// Data local (YYYY-MM-DD) usada para detectar a virada de dia.
+const localTodayStr = () => {
+  const d = new Date();
+  return new Date(d.getTime() - d.getTimezoneOffset() * 60 * 1000).toISOString().split('T')[0];
+};
+
 export const useStore = create(
     (set, get) => ({
       // --- ESTADOS INICIAIS (NUVEM) ---
       ...getCleanInitialState(),
+      // Chave volátil (não persistida) que muda na virada do dia real e força re-render das telas.
+      todayKey: localTodayStr(),
       caveiraQuestions: getInitialLocalCaveiraQuestions(),
       isSyncing: true,
       isLoadingFromCloud: false,
@@ -280,8 +289,12 @@ export const useStore = create(
             console.log("✅ [Nuvem] Dados sincronizados com sucesso.");
             const remoteUpdatedAt = data[0].updated_at || null;
             const { isSyncing: _, lastSyncedAt: __, ...cleanData } = data[0].full_data;
-            if (cleanData.calendarDate) cleanData.calendarDate = new Date(cleanData.calendarDate);
+            // calendarDate não é mais persistido: o Calendário sempre abre no mês atual
+            delete cleanData.calendarDate;
             if (cleanData.reviewCalendarDate) cleanData.reviewCalendarDate = new Date(cleanData.reviewCalendarDate);
+            // Retrocompatibilidade: dados antigos não têm a data de referência do completedToday
+            if (cleanData.completedTodayDate === undefined) cleanData.completedTodayDate = null;
+            if (!Array.isArray(cleanData.completedToday)) cleanData.completedToday = [];
             
             if (!cleanData.studyHistory) {
               cleanData.studyHistory = {};
@@ -377,6 +390,7 @@ export const useStore = create(
             try { localStorage.setItem('prf_caveira_questions', JSON.stringify(cleanData.caveiraQuestions)); } catch (_) {}
             
             set({ ...cleanData, lastSyncedAt: remoteUpdatedAt });
+            get().syncDayRollover();
             get().checkAndResetWeekly();
             get().checkAndAdvanceSeason();
             get().checkAndResetDailyMissions();
@@ -398,6 +412,7 @@ export const useStore = create(
             caveiraQuestions: [],
             lastSyncedAt: null
           });
+          get().syncDayRollover();
           get().checkAndResetWeekly();
           get().checkAndAdvanceSeason();
           get().checkAndResetDailyMissions();
@@ -422,8 +437,10 @@ export const useStore = create(
                 console.log(`💡 [Backup Local] Carregando backup criado em ${backupDate}`);
                 
                 const cleanData = latestBackup.data;
-                if (cleanData.calendarDate) cleanData.calendarDate = new Date(cleanData.calendarDate);
+                delete cleanData.calendarDate;
                 if (cleanData.reviewCalendarDate) cleanData.reviewCalendarDate = new Date(cleanData.reviewCalendarDate);
+                if (cleanData.completedTodayDate === undefined) cleanData.completedTodayDate = null;
+                if (!Array.isArray(cleanData.completedToday)) cleanData.completedToday = [];
                 if (!cleanData.petData) {
                   cleanData.petData = getCleanInitialState().petData;
                 }
@@ -440,6 +457,7 @@ export const useStore = create(
                 cleanData.caveiraQuestions = Array.from(mergedMap.values());
                 
                 set({ ...cleanData });
+                get().syncDayRollover();
                 get().checkAndResetWeekly();
                 get().checkAndAdvanceSeason();
                 get().checkAndResetDailyMissions();
@@ -786,7 +804,29 @@ export const useStore = create(
       setTargetExamDate: (targetExamDate) => set({ targetExamDate }),
       setActiveTab: (activeTab) => set({ activeTab }),
       setCurrentDayIndex: (currentDayIndex) => set({ currentDayIndex }),
-      setCompletedToday: (completedToday) => set((state) => ({ completedToday: typeof completedToday === 'function' ? completedToday(state.completedToday) : completedToday })),
+      setCompletedToday: (completedToday) => set((state) => {
+        const today = state.getLocalDateStr();
+        // Se a data guardada não é hoje, o valor anterior é de outro dia e nunca deve ser considerado.
+        const base = state.completedTodayDate === today ? (state.completedToday || []) : [];
+        return {
+          completedToday: typeof completedToday === 'function' ? completedToday(base) : completedToday,
+          completedTodayDate: today
+        };
+      }),
+      // Detecta a virada do dia real: zera os blocos concluídos de ontem e atualiza a chave de "hoje".
+      syncDayRollover: () => {
+        const state = get();
+        const today = state.getLocalDateStr();
+        const patch = {};
+        if (state.todayKey !== today) patch.todayKey = today;
+        if (state.completedTodayDate !== today) {
+          patch.completedToday = [];
+          patch.completedTodayDate = today;
+        }
+        if (Object.keys(patch).length === 0) return false;
+        set(patch);
+        return true;
+      },
       setCalendarDate: (calendarDate) => set({ calendarDate }),
       setReviewCalendarDate: (reviewCalendarDate) => set({ reviewCalendarDate }),
       setSeasonalData: (seasonalData) => set((state) => ({ seasonalData: typeof seasonalData === 'function' ? seasonalData(state.seasonalData) : seasonalData })),
@@ -1974,10 +2014,14 @@ export const useStore = create(
           }
         }
 
-        const cycleLen = (get().cycleScheduleType || 'weekly') === 'weekly' ? 7 : Math.max(1, cycle.length);
-        const nextIndex = (currentDayIndex + 1) % cycleLen;
-        setCurrentDayIndex(nextIndex);
-        setCompletedToday([]);
+        // Em modo semanal o "dia do ciclo" é sempre o dia real da semana (Ciclo.jsx o resincroniza),
+        // então avançar não mexe no índice nem nos blocos concluídos: só streak/moedas acima.
+        if ((get().cycleScheduleType || 'weekly') !== 'weekly') {
+          const cycleLen = Math.max(1, cycle.length);
+          const nextIndex = (currentDayIndex + 1) % cycleLen;
+          setCurrentDayIndex(nextIndex);
+          setCompletedToday([]);
+        }
 
         // Lógica de verificação semanal e temporada
         get().checkAndResetWeekly();
@@ -2435,7 +2479,9 @@ export const useStore = create(
       },
 
       getSubjectEstimates: () => {
-        const { subjects, cycle, cycleSlotCounts, currentDayIndex, completedToday, subjectTimeGoal, calendarOverrides, calendarOverrideCounts, futureScheduleRules, cycleScheduleType = 'weekly', cycleWeekStart = 'sunday' } = get();
+        const { subjects, cycle, cycleSlotCounts, currentDayIndex, completedToday: rawCompletedToday, completedTodayDate, subjectTimeGoal, calendarOverrides, calendarOverrideCounts, futureScheduleRules, cycleScheduleType = 'weekly', cycleWeekStart = 'sunday' } = get();
+        // completedToday de outro dia nunca é válido
+        const completedToday = completedTodayDate === get().getLocalDateStr() ? (rawCompletedToday || []) : [];
         const estimates = [];
         const remainingClasses = {};
         const remainingMinutesDict = {};

@@ -1,5 +1,6 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, useCallback } from 'react';
 import { createPortal } from 'react-dom';
+import { useNavigate } from 'react-router-dom';
 import { 
   Calendar as CalendarIcon, 
   ChevronLeft, 
@@ -30,7 +31,12 @@ function formatMinutesToFriendly(minutes) {
   return `${remainingMins}m`;
 }
 
+const mesesNomesShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
+// Data de prova padrão antiga (valor inicial do app): se ainda for ela e já passou, o usuário nunca definiu a prova.
+const LEGACY_DEFAULT_EXAM_DATE = '2026-08-15';
+
 export default function Calendario() {
+  const navigate = useNavigate();
   const { 
     calendarDate, 
     setCalendarDate, 
@@ -42,7 +48,11 @@ export default function Calendario() {
     cycleScheduleType = 'weekly',
     cycleWeekStart = 'sunday',
     currentDayIndex = 0, 
-    completedToday = [], 
+    completedToday: rawCompletedToday = [], 
+    completedTodayDate = null,
+    todayKey,
+    targetExamDate,
+    getLocalDateStr,
     getEstimatedCompletionDate, 
     getSubjectEstimates,
     subjectTimeGoal = {},
@@ -76,28 +86,51 @@ export default function Calendario() {
   const [tempAction, setTempAction] = useState('keep_fixed');
   const [tempRepId, setTempRepId] = useState('');
 
+  // Ao abrir a aba, o calendário sempre começa no mês atual (o mês visitado por último não é mais persistido)
+  useEffect(() => {
+    setCalendarDate(new Date());
+  }, [setCalendarDate]);
+
   const rawCalDate = calendarDate ? new Date(calendarDate) : new Date();
   const calDate = isNaN(rawCalDate.getTime()) ? new Date() : rawCalDate;
 
-  const subjectEstimates = getSubjectEstimates ? getSubjectEstimates() : [];
-  const estimatedDate = getEstimatedCompletionDate ? getEstimatedCompletionDate() : { short: '', full: '', isLate: false, daysDiff: 0, examDateFormatted: '' };
+  // Blocos concluídos só valem se foram marcados hoje
+  const completedToday = useMemo(
+    () => (completedTodayDate && completedTodayDate === getLocalDateStr() ? (rawCompletedToday || []) : []),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rawCompletedToday, completedTodayDate, getLocalDateStr, todayKey]
+  );
+
+  // Previsões pesadas (até 1500 dias de simulação): só recalculam quando os dados de agenda mudam, não a cada render/modal
+  const { subjectEstimates, estimatedDate } = useMemo(() => ({
+    subjectEstimates: getSubjectEstimates ? getSubjectEstimates() : [],
+    estimatedDate: getEstimatedCompletionDate ? getEstimatedCompletionDate() : { short: '', full: '', isLate: false, daysDiff: 0, examDateFormatted: '' }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }), [
+    getSubjectEstimates, getEstimatedCompletionDate, subjects, cycle, cycleSlotCounts, currentDayIndex,
+    completedToday, subjectTimeGoal, calendarOverrides, calendarOverrideCounts, futureScheduleRules,
+    cycleScheduleType, cycleWeekStart, targetExamDate, todayKey
+  ]);
+
+  // Data da prova nunca definida pelo usuário (vazia ou padrão antigo já vencido): não exibe "Risco de Reprovação"
+  const examDateNotSet = !targetExamDate || (targetExamDate === LEGACY_DEFAULT_EXAM_DATE && targetExamDate < (getLocalDateStr ? getLocalDateStr() : ''));
   const year = calDate.getFullYear();
   const month = calDate.getMonth();
   const daysInMonth = new Date(year, month + 1, 0).getDate();
   const firstDayIndex = new Date(year, month, 1).getDay();
   const mesesNomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
-  const mesesNomesShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
   const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
   const diasSemanaFull = ['Domingo', 'Segunda-feira', 'Terça-feira', 'Quarta-feira', 'Quinta-feira', 'Sexta-feira', 'Sábado'];
   
   const blanks = Array(firstDayIndex).fill(null);
   const days = Array.from({ length: daysInMonth }, (_, i) => i + 1);
   
-  const today = new Date();
-  const todayDateObj = new Date(today.getFullYear(), today.getMonth(), today.getDate());
+  // "Hoje" recalculado quando o dia real muda (todayKey é atualizado pelo store na virada do dia)
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  const todayDateObj = useMemo(() => { const t = new Date(); return new Date(t.getFullYear(), t.getMonth(), t.getDate()); }, [todayKey]);
 
   // Função principal: retorna as matérias e quantidades de aulas por bloco programadas para qualquer data do calendário
-  const getDayScheduleForDate = (cellDateObj, dateKey) => {
+  const getDayScheduleForDate = useCallback((cellDateObj, dateKey) => {
     // 1. Personalização manual explícita para este dia específico (prioridade absoluta)
     if (calendarOverrides && Array.isArray(calendarOverrides[dateKey])) {
       return {
@@ -137,11 +170,12 @@ export default function Calendario() {
     }
 
     return { daySubjects, daySlotCounts: slotCounts };
-  };
+  }, [calendarOverrides, calendarOverrideCounts, cycle, cycleSlotCounts, cycleScheduleType, cycleWeekStart, currentDayIndex, futureScheduleRules, todayDateObj]);
 
   const getDaySubjectsForDate = (cellDateObj, dateKey) => getDayScheduleForDate(cellDateObj, dateKey).daySubjects;
 
-  // 3. Simulação dos 730 dias para sincronização e previsão de término das disciplinas
+  // 3. Simulação dos 730 dias para sincronização e previsão de término das disciplinas (memoizada)
+  const { futureSchedule, calCompletionDates, remainingLessonsQueue } = useMemo(() => {
   const futureSchedule = {}; // dateKey -> array of { id, count, isLast, isTransitioned }
   const calCompletionDates = {}; // subjectId -> { dayOffset, dateObj, dateStr }
   const remainingLessonsQueue = {};
@@ -274,6 +308,9 @@ export default function Calendario() {
 
     futureSchedule[simDateKey] = scheduledThisDay;
   }
+
+  return { futureSchedule, calCompletionDates, remainingLessonsQueue };
+  }, [subjects, cycle, calendarOverrides, futureScheduleRules, completedToday, subjectTimeGoal, getDayScheduleForDate, todayDateObj]);
 
   // Botão tático para fixar e limpar quaisquer extensões fantasmas (+3ª) ou regras antigas
   const handleFixCalendar = () => {
@@ -437,7 +474,7 @@ export default function Calendario() {
       <div className="flex-1 w-full bg-white rounded-xl shadow-sm border border-slate-200 p-4 md:p-6 overflow-hidden dark:bg-slate-900 dark:border-slate-800">
         
         {/* Banner de Previsão de Término */}
-        <div className={`text-white p-4 md:p-5 rounded-xl shadow-md mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-colors ${estimatedDate.isLate ? 'bg-red-600 animate-pulse border border-red-800' : 'bg-gradient-to-r from-blue-600 to-blue-800'}`}>
+        <div className={`text-white p-4 md:p-5 rounded-xl shadow-md mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-colors ${(estimatedDate.isLate && !examDateNotSet) ? 'bg-red-600 animate-pulse border border-red-800' : 'bg-gradient-to-r from-blue-600 to-blue-800'}`}>
           <div className="flex items-center gap-3">
             <div className="bg-white/20 p-2 rounded-full shrink-0 dark:bg-slate-900">
               <Trophy className="w-5 h-5 md:w-6 md:h-6 text-yellow-300" />
@@ -452,9 +489,16 @@ export default function Calendario() {
           
           <div className="flex flex-col items-end">
             <div className="bg-black/20 px-3 py-1.5 rounded-lg text-xs md:text-sm text-white font-bold flex items-center gap-1.5">
-              <Clock className="w-4 h-4"/> Prova: {estimatedDate.examDateFormatted}
+              <Clock className="w-4 h-4"/> {examDateNotSet ? 'Prova: não definida' : `Prova: ${estimatedDate.examDateFormatted}`}
             </div>
-            {estimatedDate.isLate && (
+            {examDateNotSet ? (
+              <button
+                onClick={() => navigate('/config')}
+                className="text-xs font-black text-yellow-300 mt-2 uppercase text-right underline underline-offset-2 hover:text-yellow-200 cursor-pointer"
+              >
+                Defina a data da prova
+              </button>
+            ) : estimatedDate.isLate && (
               <span className="text-xs font-black text-yellow-300 mt-2 uppercase text-right">
                 Risco de Reprovação: Atrasado {estimatedDate.daysDiff} dias. Aumente seu ritmo!
               </span>
@@ -476,7 +520,8 @@ export default function Calendario() {
               <Pin className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> Grade Semanal Fixa
             </button>
           </div>
-          <div className="flex gap-1 sm:gap-2">
+          <div className="flex gap-1 sm:gap-2 items-center">
+            <button onClick={() => setCalendarDate(new Date())} className="px-3 py-1.5 sm:py-2 bg-slate-50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full border border-slate-200 dark:bg-slate-950 dark:border-slate-800 cursor-pointer text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300" title="Voltar ao mês atual">Hoje</button>
             <button onClick={() => setCalendarDate(new Date(year, month - 1, 1))} className="p-1.5 sm:p-2 bg-slate-50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full border border-slate-200 dark:bg-slate-950 dark:border-slate-800 cursor-pointer"><ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" /></button>
             <button onClick={() => setCalendarDate(new Date(year, month + 1, 1))} className="p-1.5 sm:p-2 bg-slate-50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full border border-slate-200 dark:bg-slate-950 dark:border-slate-800 cursor-pointer"><ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" /></button>
           </div>

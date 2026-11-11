@@ -162,6 +162,35 @@ export default function App() {
     return () => clearInterval(interval);
   }, [pushSettings?.enabled, pushTime, getLocalDateStr]);
 
+  // --- VIRADA DE DIA COM O APP ABERTO ---
+  // Verifica a cada 60s e quando a aba volta a ficar visível se o dia real mudou.
+  // Ao mudar: zera os blocos concluídos de ontem, reseta semana/missões e atualiza o todayKey (re-render das telas).
+  useEffect(() => {
+    let lastSeenDate = useStore.getState().getLocalDateStr();
+
+    const checkDayRollover = () => {
+      const state = useStore.getState();
+      const currentDate = state.getLocalDateStr();
+      if (currentDate !== lastSeenDate) {
+        lastSeenDate = currentDate;
+        state.syncDayRollover();
+        state.checkAndResetWeekly();
+        state.checkAndResetDailyMissions();
+      }
+    };
+
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible') checkDayRollover();
+    };
+
+    const interval = setInterval(checkDayRollover, 60000);
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener('visibilitychange', handleVisibility);
+    };
+  }, []);
+
   // --- AUTH & INITIALIZATION ---
   // PONTO ÚNICO DE INICIALIZAÇÃO: onAuthStateChange dispara INITIAL_SESSION automaticamente
   // Isso elimina a race condition causada pela dupla chamada de loadFromCloud
