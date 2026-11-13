@@ -1045,7 +1045,8 @@ export const useStore = create(
         calendarOverrideCounts: {
           ...(state.calendarOverrideCounts || {}),
           [dateStr]: Array.isArray(slotCounts) ? [...slotCounts] : []
-        }
+        },
+        ...(dateStr === state.getLocalDateStr() ? { cycleCarryoverOffset: 0 } : {})
       })),
       removeDayOverride: (dateStr) => set(state => {
         const next = { ...(state.calendarOverrides || {}) };
