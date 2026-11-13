@@ -2479,7 +2479,7 @@ export const useStore = create(
       },
 
       watchClass: (subjectId, slotIndex, amountWatched = 1, speed = null, studyDateStr = null) => {
-        const { subjects, getActiveTopic, addXP, setUserStats, setWeeklySprint, setReviews, setCoins, setCompletedToday, getLocalDateStr, getStartOfWeek, getTodayDate } = get();
+        const { subjects, getActiveTopic, addXP, setUserStats, setWeeklySprint, setCoins, setCompletedToday, getLocalDateStr, getStartOfWeek, getTodayDate } = get();
         const activeTopic = getActiveTopic(subjectId);
         if (!activeTopic) return;
 
@@ -2489,8 +2489,7 @@ export const useStore = create(
           ? studyDateStr
           : todayStr;
         const isRetroactive = targetDateStr < todayStr;
-        const [ty, tm, td] = targetDateStr.split('-').map(Number);
-        const targetDateObj = new Date(ty, tm - 1, td);
+        const [, tm, td] = targetDateStr.split('-').map(Number);
         const currentWeekStartStr = getLocalDateStr(getStartOfWeek(todayObj));
         const isInCurrentWeek = targetDateStr >= currentWeekStartStr;
 
@@ -2557,33 +2556,7 @@ export const useStore = create(
             if (!isRetroactive) {
               get().updateDailyMissionProgress('minutes', addedMinutes);
             }
-
-            // Adicionar CADA aula concluída à fila de revisão a partir da data do estudo (+1 dia)
-            const nextReviewDate = new Date(targetDateObj);
-            nextReviewDate.setDate(nextReviewDate.getDate() + 1);
-            const nextReviewDateStr = getLocalDateStr(nextReviewDate);
-            
-            const newReviews = [];
-            const topicLessons = topics[topicIndex].lessons || [];
-            for (let i = currentCompleted + 1; i <= newCompleted; i++) {
-              // Usa o nome real da aula se estiver cadastrado, senão gera nome genérico
-              const lessonEntry = topicLessons[i - 1]; // lessons são 0-indexed
-              let rName = lessonEntry?.name
-                ? lessonEntry.name
-                : (total > 1 ? `${topics[topicIndex].name} (Aula ${i})` : topics[topicIndex].name);
-              newReviews.push({
-                id: 'rev_' + Date.now() + '_' + i + '_' + Math.random().toString(36).substr(2, 5),
-                subjectId: subjectId,
-                topicName: rName,
-                nextDateStr: nextReviewDateStr, 
-                interval: 0,
-                stability: 0,
-                difficulty: 0,
-                lastReviewDate: null,
-                lastPerformance: undefined
-              });
-            }
-            setReviews(rPrev => [...rPrev, ...newReviews]);
+            // FSRS exclusivo para questões do Caveira: aulas assistidas não geram cards em reviews.
           }
 
           topics[topicIndex] = { ...topics[topicIndex], completed: newCompleted };

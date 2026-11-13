@@ -1017,7 +1017,7 @@ export default function Ciclo() {
                                       <span className="truncate">
                                         {blockCount > 1 
                                           ? `Queimar Bloco (${blockCount} Aulas • ${formatSecondsToFriendly(blockAccelSec)})` 
-                                          : 'Queimar Teoria (+1 FSRS)'}
+                                          : 'Queimar Teoria (+1 Aula)'}
                                       </span>
                                     </button>
                                   );
