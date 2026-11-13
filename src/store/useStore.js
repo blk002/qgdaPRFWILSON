@@ -3248,7 +3248,11 @@ export const useStore = create(
           while (!allDone && dayOffset < maxSimulationDays) {
             const targetSimDate = new Date(todayDateObj);
             targetSimDate.setDate(targetSimDate.getDate() + dayOffset);
-            const simDateKey = `${targetSimDate.getFullYear()}-${String(targetSimDate.getMonth() + 1).padStart(2, '0')}-${String(targetSimDate.getDate()).padStart(2, '0')}`;
+            const simCarryoverOffset = (dayOffset === 0 && cycleScheduleType === 'weekly') ? (get().cycleCarryoverOffset || 0) : 0;
+            const effectiveSimDate = simCarryoverOffset > 0
+              ? new Date(targetSimDate.getFullYear(), targetSimDate.getMonth(), targetSimDate.getDate() - simCarryoverOffset)
+              : targetSimDate;
+            const simDateKey = `${effectiveSimDate.getFullYear()}-${String(effectiveSimDate.getMonth() + 1).padStart(2, '0')}-${String(effectiveSimDate.getDate()).padStart(2, '0')}`;
 
             let daySubjects = [];
             let daySlotCounts = [];
@@ -3257,9 +3261,7 @@ export const useStore = create(
               daySlotCounts = Array.isArray(calendarOverrideCounts?.[simDateKey]) ? [...calendarOverrideCounts[simDateKey]] : [];
             } else {
               const cycleIndex = get().getCycleIndexForDate(targetSimDate, todayDateObj);
-              const rawDayOfWeek = targetSimDate.getDay();
-              const carryoverShift = (dayOffset === 0 && cycleScheduleType === 'weekly' && (get().cycleCarryoverOffset || 0) > 0) ? (get().cycleCarryoverOffset % 7) : 0;
-              const targetDayOfWeek = (rawDayOfWeek - carryoverShift + 7) % 7;
+              const targetDayOfWeek = effectiveSimDate.getDay();
               const matchingRules = (futureScheduleRules || [])
                 .filter(r => {
                   if (!r || r.v !== 2 || !r.fromDate || r.fromDate > simDateKey) return false;

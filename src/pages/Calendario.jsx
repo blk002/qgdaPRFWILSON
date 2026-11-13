@@ -134,11 +134,20 @@ export default function Calendario() {
 
   // Função principal: retorna as matérias e quantidades de aulas por bloco programadas para qualquer data do calendário
   const getDayScheduleForDate = useCallback((cellDateObj, dateKey) => {
-    // 1. Personalização manual explícita para este dia específico (prioridade absoluta)
-    if (calendarOverrides && Array.isArray(calendarOverrides[dateKey])) {
+    const isTodayCell = cellDateObj.getTime() === todayDateObj.getTime();
+    const shouldShiftCarryover = cycleScheduleType === 'weekly' && isTodayCell && cycleCarryoverOffset > 0;
+    const effectiveDateObj = shouldShiftCarryover
+      ? new Date(cellDateObj.getFullYear(), cellDateObj.getMonth(), cellDateObj.getDate() - cycleCarryoverOffset)
+      : cellDateObj;
+    const effectiveDateKey = shouldShiftCarryover
+      ? `${effectiveDateObj.getFullYear()}-${String(effectiveDateObj.getMonth() + 1).padStart(2, '0')}-${String(effectiveDateObj.getDate()).padStart(2, '0')}`
+      : dateKey;
+
+    // 1. Personalização manual explícita para este dia específico (ou do dia de origem em reposição)
+    if (calendarOverrides && Array.isArray(calendarOverrides[effectiveDateKey])) {
       return {
-        daySubjects: [...calendarOverrides[dateKey]],
-        daySlotCounts: Array.isArray(calendarOverrideCounts?.[dateKey]) ? [...calendarOverrideCounts[dateKey]] : []
+        daySubjects: [...calendarOverrides[effectiveDateKey]],
+        daySlotCounts: Array.isArray(calendarOverrideCounts?.[effectiveDateKey]) ? [...calendarOverrideCounts[effectiveDateKey]] : []
       };
     }
 
@@ -147,12 +156,7 @@ export default function Calendario() {
 
     // 2. Ciclo Semanal Fixo ou Sequencial + Regras Futuras
     if (cycle && cycle.length > 0) {
-      const rawDayOfWeek = cellDateObj.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
-      const isTodayCell = cellDateObj.getTime() === todayDateObj.getTime();
-      const carryoverShift = (cycleScheduleType === 'weekly' && isTodayCell && cycleCarryoverOffset > 0)
-        ? (cycleCarryoverOffset % 7)
-        : 0;
-      const targetDayOfWeek = (rawDayOfWeek - carryoverShift + 7) % 7;
+      const targetDayOfWeek = effectiveDateObj.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
       const cycleIndex = getCycleIndexForDate
         ? getCycleIndexForDate(cellDateObj, todayDateObj)
         : ((cycleScheduleType === 'weekly')
@@ -161,7 +165,7 @@ export default function Calendario() {
 
       const matchingRules = (futureScheduleRules || [])
         .filter(r => {
-          if (!r || r.v !== 2 || !r.fromDate || r.fromDate > dateKey) return false;
+          if (!r || r.v !== 2 || !r.fromDate || r.fromDate > effectiveDateKey) return false;
           if (cycleScheduleType === 'weekly' && r.dayOfWeek !== undefined) {
             return r.dayOfWeek === targetDayOfWeek;
           }

@@ -79,22 +79,24 @@ export default function Ciclo() {
     let daySubjects = Array.isArray(cycle?.[effectiveCycleIdx]) ? [...cycle[effectiveCycleIdx]] : [];
     let daySlotCounts = Array.isArray(cycleSlotCounts?.[effectiveCycleIdx]) ? [...cycleSlotCounts[effectiveCycleIdx]] : [];
 
-    if (calendarOverrides && Array.isArray(calendarOverrides[dateInfo.fullDateStr])) {
+    const parts = String(dateInfo.fullDateStr).split('-').map(Number);
+    const baseDateObj = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date();
+    const effectiveDateObj = shouldShiftCarryover
+      ? new Date(baseDateObj.getFullYear(), baseDateObj.getMonth(), baseDateObj.getDate() - cycleCarryoverOffset)
+      : baseDateObj;
+    const effectiveDateStr = shouldShiftCarryover ? getLocalDateStr(effectiveDateObj) : dateInfo.fullDateStr;
+
+    if (calendarOverrides && Array.isArray(calendarOverrides[effectiveDateStr])) {
       return {
-        daySubjects: [...calendarOverrides[dateInfo.fullDateStr]],
-        daySlotCounts: Array.isArray(calendarOverrideCounts?.[dateInfo.fullDateStr]) ? [...calendarOverrideCounts[dateInfo.fullDateStr]] : []
+        daySubjects: [...calendarOverrides[effectiveDateStr]],
+        daySlotCounts: Array.isArray(calendarOverrideCounts?.[effectiveDateStr]) ? [...calendarOverrideCounts[effectiveDateStr]] : []
       };
     }
 
-    const parts = String(dateInfo.fullDateStr).split('-').map(Number);
-    const dayDateObj = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date();
-    const rawDayOfWeek = dayDateObj.getDay();
-    const dayOfWeek = shouldShiftCarryover
-      ? (rawDayOfWeek - (cycleCarryoverOffset % 7) + 7) % 7
-      : rawDayOfWeek;
+    const dayOfWeek = effectiveDateObj.getDay();
     const matchingRules = (futureScheduleRules || [])
       .filter(r => {
-        if (!r || r.v !== 2 || !r.fromDate || r.fromDate > dateInfo.fullDateStr) return false;
+        if (!r || r.v !== 2 || !r.fromDate || r.fromDate > effectiveDateStr) return false;
         if (cycleScheduleType === 'weekly' && r.dayOfWeek !== undefined) {
           return r.dayOfWeek === dayOfWeek;
         }
