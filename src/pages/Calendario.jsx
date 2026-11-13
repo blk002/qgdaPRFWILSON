@@ -148,8 +148,8 @@ export default function Calendario() {
     // 2. Ciclo Semanal Fixo ou Sequencial + Regras Futuras
     if (cycle && cycle.length > 0) {
       const rawDayOfWeek = cellDateObj.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
-      const isTodayOrFuture = cellDateObj >= todayDateObj;
-      const carryoverShift = (cycleScheduleType === 'weekly' && isTodayOrFuture && cycleCarryoverOffset > 0)
+      const isTodayCell = cellDateObj.getTime() === todayDateObj.getTime();
+      const carryoverShift = (cycleScheduleType === 'weekly' && isTodayCell && cycleCarryoverOffset > 0)
         ? (cycleCarryoverOffset % 7)
         : 0;
       const targetDayOfWeek = (rawDayOfWeek - carryoverShift + 7) % 7;

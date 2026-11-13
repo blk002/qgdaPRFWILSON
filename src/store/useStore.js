@@ -1323,7 +1323,9 @@ export const useStore = create(
             let nextOffset = cycleCarryoverOffset;
             while (cursor < todayObj) {
               const dStr = formatLocal(cursor);
-              if (hadScheduledStudyOnDate(cursor, dStr, nextOffset) && (studyHistory?.[dStr] || 0) <= 0) {
+              if ((studyHistory?.[dStr] || 0) > 0) {
+                nextOffset = 0;
+              } else if (hadScheduledStudyOnDate(cursor, dStr, nextOffset)) {
                 nextOffset = (nextOffset + 1) % 7;
               }
               cursor.setDate(cursor.getDate() + 1);
@@ -3096,7 +3098,7 @@ export const useStore = create(
         if (cycleScheduleType === 'weekly') {
           const targetDOW = targetDate.getDay();
           const rawIdx = (cycleWeekStart === 'monday') ? (targetDOW + 6) % 7 : targetDOW;
-          if (cycleCarryoverOffset > 0 && t1 >= t0) {
+          if (cycleCarryoverOffset > 0 && t1.getTime() === t0.getTime()) {
             return ((rawIdx - cycleCarryoverOffset) % 7 + 7) % 7;
           }
           return rawIdx;
@@ -3256,7 +3258,7 @@ export const useStore = create(
             } else {
               const cycleIndex = get().getCycleIndexForDate(targetSimDate, todayDateObj);
               const rawDayOfWeek = targetSimDate.getDay();
-              const carryoverShift = (cycleScheduleType === 'weekly' && (get().cycleCarryoverOffset || 0) > 0) ? (get().cycleCarryoverOffset % 7) : 0;
+              const carryoverShift = (dayOffset === 0 && cycleScheduleType === 'weekly' && (get().cycleCarryoverOffset || 0) > 0) ? (get().cycleCarryoverOffset % 7) : 0;
               const targetDayOfWeek = (rawDayOfWeek - carryoverShift + 7) % 7;
               const matchingRules = (futureScheduleRules || [])
                 .filter(r => {

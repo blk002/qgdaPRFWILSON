@@ -72,7 +72,7 @@ export default function Ciclo() {
   // Resolve as matérias e quantidades de aulas por bloco efetivas de um dia do ciclo
   const getEffectiveDaySchedule = (dayIndex, week = 0) => {
     const dateInfo = getDateInfo(dayIndex, week);
-    const shouldShiftCarryover = cycleScheduleType === 'weekly' && !dateInfo.isPast && (cycleCarryoverOffset || 0) > 0;
+    const shouldShiftCarryover = cycleScheduleType === 'weekly' && dateInfo.isToday && (cycleCarryoverOffset || 0) > 0;
     const effectiveCycleIdx = shouldShiftCarryover
       ? ((dayIndex - cycleCarryoverOffset) % 7 + 7) % 7
       : dayIndex;
