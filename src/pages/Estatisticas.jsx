@@ -75,9 +75,13 @@ export default function Estatisticas() {
       let subReviewedCount = 0;
 
       (sub.topics || []).forEach(topic => {
+        const topicUpper = String(topic?.name || '').trim().toUpperCase();
+        if (!topicUpper) return;
         const topicReviews = subReviews.filter(r => {
-          const cleanName = r.topicName.replace(/\s*\(Aula\s+\d+\)\s*$/, '').trim().toUpperCase();
-          return cleanName === topic.name.trim().toUpperCase() || r.topicName.trim().toUpperCase().startsWith(topic.name.trim().toUpperCase());
+          const rTopicUpper = String(r?.topicName || '').trim().toUpperCase();
+          if (!rTopicUpper) return false;
+          const cleanName = rTopicUpper.replace(/\s*\(AULA\s+\d+\)\s*$/, '').trim();
+          return cleanName === topicUpper || rTopicUpper.startsWith(`${topicUpper} (AULA `);
         });
 
         if (topicReviews.length === 0) return;

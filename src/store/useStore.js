@@ -167,6 +167,8 @@ export const getCleanInitialState = () => ({
   cycleWeekStart: 'sunday',
   cycleDayNames: [],
   cycleSlotCounts: [[], [], [], [], [], [], []],
+  cycleCarryoverOffset: 0,
+  lastCarryoverCheckDate: null,
   calendarOverrides: {},
   calendarOverrideCounts: {},
   futureScheduleRules: [],
@@ -223,7 +225,7 @@ export const PERSISTED_KEYS = [
   'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate', 'pushEnabled', 'pushTime',
   'enableSounds', 'activeBoosts', 'dailyReviewStats', 'syntaxLevel',
   'activeTheme', 'unlockedThemes', 'dailyGoalMinutes', 'subjectGoals', 'subjectTimeGoal', 'pushSettings',
-  'cycleScheduleType', 'cycleWeekStart', 'cycleDayNames', 'cycleSlotCounts', 'calendarOverrides', 'calendarOverrideCounts', 'futureScheduleRules', 'xpHistory', 'petData', 'caveiraQuestions'
+  'cycleScheduleType', 'cycleWeekStart', 'cycleDayNames', 'cycleSlotCounts', 'cycleCarryoverOffset', 'lastCarryoverCheckDate', 'calendarOverrides', 'calendarOverrideCounts', 'futureScheduleRules', 'xpHistory', 'petData', 'caveiraQuestions'
 ];
 
 // Data local (YYYY-MM-DD) usada para detectar a virada de dia.
@@ -380,6 +382,7 @@ const mergeCloudAndLocalData = (remoteRaw, localState, localKeyTimestamps = {}, 
   const merged = { ...(remoteRaw || {}) };
   const remoteKeyTs = (remoteRaw && typeof remoteRaw._keyTimestamps === 'object') ? remoteRaw._keyTimestamps : {};
 
+  const mergedTimestamps = { ...remoteKeyTs };
   PERSISTED_KEYS.forEach(key => {
     if (key === 'caveiraQuestions') return;
     const localVal = localState[key];
@@ -387,6 +390,7 @@ const mergeCloudAndLocalData = (remoteRaw, localState, localKeyTimestamps = {}, 
     if (localVal === undefined) return;
     if (remoteVal === undefined) {
       merged[key] = localVal;
+      if (localKeyTimestamps?.[key]) mergedTimestamps[key] = localKeyTimestamps[key];
       return;
     }
 
@@ -408,6 +412,7 @@ const mergeCloudAndLocalData = (remoteRaw, localState, localKeyTimestamps = {}, 
         merged[key] = remoteVal;
       } else {
         merged[key] = localVal;
+        if (localKeyTimestamps?.[key]) mergedTimestamps[key] = localKeyTimestamps[key];
       }
     } else {
       merged[key] = remoteVal;
@@ -419,7 +424,7 @@ const mergeCloudAndLocalData = (remoteRaw, localState, localKeyTimestamps = {}, 
   (remoteRaw?.caveiraQuestions || []).forEach(q => { if (q && q.id) mergedCaveira.set(q.id, q); });
   (localState?.caveiraQuestions || []).forEach(q => { if (q && q.id) mergedCaveira.set(q.id, { ...(mergedCaveira.get(q.id) || {}), ...q }); });
   merged.caveiraQuestions = Array.from(mergedCaveira.values());
-  merged._keyTimestamps = { ...remoteKeyTs, ...(localKeyTimestamps || {}) };
+  merged._keyTimestamps = mergedTimestamps;
 
   return merged;
 };
@@ -1209,9 +1214,11 @@ export const useStore = create(
 
           if (g > 1) {
             // Sucesso (com penalidade Hard w[15] e bônus Easy w[16])
+            // Se t === 0 (revisão adiantada ou no mesmo dia), garante ganho mínimo discreto em vez de 0
+            const effectiveR = t === 0 ? Math.min(retrievability, 0.92) : retrievability;
             const hardPenalty = g === 2 ? w[15] : 1;
             const easyBonus = g === 4 ? w[16] : 1;
-            const s_growth = 1 + Math.exp(w[8]) * (11 - d) * Math.pow(s, -w[9]) * (Math.exp(w[10] * (1 - retrievability)) - 1) * hardPenalty * easyBonus;
+            const s_growth = 1 + Math.exp(w[8]) * (11 - d) * Math.pow(s, -w[9]) * (Math.exp(w[10] * (1 - effectiveR)) - 1) * hardPenalty * easyBonus;
             s = s * s_growth;
           } else {
             // Falha (Again)
@@ -1247,6 +1254,8 @@ export const useStore = create(
           completedTodayDate: today
         };
       }),
+      resetCycleCarryover: () => set({ cycleCarryoverOffset: 0 }),
+
       // Detecta a virada do dia real: zera os blocos concluídos de ontem e atualiza a chave de "hoje".
       syncDayRollover: () => {
         const state = get();
@@ -1257,6 +1266,77 @@ export const useStore = create(
           patch.completedToday = [];
           patch.completedTodayDate = today;
         }
+
+        // Carryover automático no modo semanal: se um dia programado não foi estudado, empurra a grade para frente.
+        if (state.cycleScheduleType === 'weekly') {
+          const {
+            lastCarryoverCheckDate,
+            cycleCarryoverOffset = 0,
+            studyHistory = {},
+            calendarOverrides = {},
+            futureScheduleRules = [],
+            cycle = [],
+            cycleWeekStart = 'sunday'
+          } = state;
+
+          const formatLocal = (d) => `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+          const [ty, tm, td] = today.split('-').map(Number);
+          const todayObj = new Date(ty, tm - 1, td);
+          const yesterdayObj = new Date(ty, tm - 1, td - 1);
+          const yesterdayStr = formatLocal(yesterdayObj);
+
+          const hadScheduledStudyOnDate = (dateObj, dateStr, currentOffset) => {
+            if (calendarOverrides && Array.isArray(calendarOverrides[dateStr])) {
+              return calendarOverrides[dateStr].length > 0;
+            }
+            const dow = dateObj.getDay();
+            const rawIdx = cycleWeekStart === 'monday' ? (dow + 6) % 7 : dow;
+            const effIdx = ((rawIdx - currentOffset) % 7 + 7) % 7;
+            const effDow = (dow - (currentOffset % 7) + 7) % 7;
+            const matchingRules = (futureScheduleRules || [])
+              .filter(r => {
+                if (!r || r.v !== 2 || !r.fromDate || r.fromDate > dateStr) return false;
+                if (r.dayOfWeek !== undefined) return r.dayOfWeek === effDow;
+                return r.cycleIndex === effIdx;
+              })
+              .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
+            if (matchingRules.length > 0 && Array.isArray(matchingRules[0].daySlots)) {
+              return matchingRules[0].daySlots.length > 0;
+            }
+            return Array.isArray(cycle?.[effIdx]) && cycle[effIdx].length > 0;
+          };
+
+          if (!lastCarryoverCheckDate) {
+            const hasPriorStudy = Object.entries(studyHistory || {}).some(([d, m]) => d < today && Number(m) > 0);
+            if (hasPriorStudy && hadScheduledStudyOnDate(yesterdayObj, yesterdayStr, cycleCarryoverOffset)) {
+              if ((studyHistory?.[yesterdayStr] || 0) <= 0) {
+                patch.cycleCarryoverOffset = (cycleCarryoverOffset + 1) % 7;
+              }
+            }
+            patch.lastCarryoverCheckDate = today;
+          } else if (lastCarryoverCheckDate < today) {
+            const [ly, lm, ld] = String(lastCarryoverCheckDate).split('-').map(Number);
+            let cursor = new Date(ly, lm - 1, ld);
+            const minStart = new Date(ty, tm - 1, td - 14);
+            if (cursor < minStart) cursor = minStart;
+
+            let nextOffset = cycleCarryoverOffset;
+            while (cursor < todayObj) {
+              const dStr = formatLocal(cursor);
+              if (hadScheduledStudyOnDate(cursor, dStr, nextOffset) && (studyHistory?.[dStr] || 0) <= 0) {
+                nextOffset = (nextOffset + 1) % 7;
+              }
+              cursor.setDate(cursor.getDate() + 1);
+            }
+            if (nextOffset !== cycleCarryoverOffset) {
+              patch.cycleCarryoverOffset = nextOffset;
+            }
+            patch.lastCarryoverCheckDate = today;
+          }
+        } else if (state.lastCarryoverCheckDate !== today) {
+          patch.lastCarryoverCheckDate = today;
+        }
+
         if (Object.keys(patch).length === 0) return false;
         set(patch);
         return true;
@@ -2184,11 +2264,21 @@ export const useStore = create(
               ...state.studyHistory,
               [todayStr]: (state.studyHistory?.[todayStr] || 0) + 2
             },
+            userStats: {
+              ...state.userStats,
+              totalStudyMinutes: (state.userStats?.totalStudyMinutes || 0) + 2
+            },
+            weeklySprint: {
+              ...state.weeklySprint,
+              currentMinutes: (state.weeklySprint?.currentMinutes || 0) + 2
+            },
             dailyReviewStats: newDailyReviewStats
           };
 
           return newState;
         });
+
+        get().registerStudyActivity?.(todayStr);
 
         // Verifica medalha Muralha (5 dias consecutivos com 100% de acerto nas revisões executadas)
         const dailyReviewStatsAfter = get().dailyReviewStats || {};
@@ -2443,12 +2533,24 @@ export const useStore = create(
               setWeeklySprint(prev => ({ ...prev, currentMinutes: (prev.currentMinutes || 0) + addedMinutes }));
             }
             
-            set(state => ({
-              studyHistory: {
-                ...state.studyHistory,
-                [targetDateStr]: (state.studyHistory?.[targetDateStr] || 0) + addedMinutes
-              }
-            }));
+            set(state => {
+              const prevDayMinutes = state.studyHistory?.[targetDateStr] || 0;
+              const shouldReduceCarryover =
+                isRetroactive &&
+                prevDayMinutes <= 0 &&
+                addedMinutes > 0 &&
+                state.cycleScheduleType === 'weekly' &&
+                (state.cycleCarryoverOffset || 0) > 0;
+              return {
+                studyHistory: {
+                  ...state.studyHistory,
+                  [targetDateStr]: prevDayMinutes + addedMinutes
+                },
+                ...(shouldReduceCarryover
+                  ? { cycleCarryoverOffset: Math.max(0, (state.cycleCarryoverOffset || 0) - 1) }
+                  : {})
+              };
+            });
             if (!isRetroactive) {
               get().updateDailyMissionProgress('minutes', addedMinutes);
             }
@@ -2559,7 +2661,8 @@ export const useStore = create(
           }
         }));
         
-        // Sincroniza o reset com a nuvem imediatamente
+        // Sincroniza o reset com a nuvem e limpa chave separada de questões
+        try { localStorage.removeItem('prf_caveira_questions'); } catch (_) {}
         const { saveToCloud } = get();
         await saveToCloud({ allowEmptyOverwrite: true });
       },
@@ -2689,6 +2792,12 @@ export const useStore = create(
             changes.reviews = currentReviews.filter(r => !(r.origin?.includes('FPS') || String(r.id || '').startsWith('rev_fps_') || String(r.id || '').startsWith('rev_caveira_duelo_')));
           }
           summary.push('Duelo CTB / CONTRAN');
+        }
+
+        if (!raioXCaveira && changes.caveiraQuestions !== undefined) {
+          try {
+            localStorage.setItem('prf_caveira_questions', JSON.stringify(changes.caveiraQuestions));
+          } catch (_) {}
         }
 
         // 5. Apagar dados da carreira e começar do zero
@@ -2885,17 +2994,17 @@ export const useStore = create(
       },
 
       checkAndResetDailyMissions: () => {
-        const { getLocalDateStr, lastDailyResetDate, getPendingReviews } = get();
+        const { getLocalDateStr, lastDailyResetDate } = get();
         const todayStr = getLocalDateStr();
         
         if (lastDailyResetDate !== todayStr) {
           // --- MULTA DE PROCRASTINAÇÃO ---
           // Se não é a primeira execução da vida (lastDailyResetDate existe)
-          // E o usuário tem mais de 5 revisões pendentes (backlog acumulado)
+          // E o usuário tem mais de 5 revisões estritamente atrasadas (anteriores a hoje)
           if (lastDailyResetDate) {
-            const pendingCount = getPendingReviews().length;
-            if (pendingCount > 5) {
-              const penalty = (pendingCount - 5) * 2; // -2 moedas por cada revisão atrasada além de 5
+            const overdueCount = (get().reviews || []).filter(r => r.nextDateStr && r.nextDateStr < todayStr).length;
+            if (overdueCount > 5) {
+              const penalty = (overdueCount - 5) * 2; // -2 moedas por cada revisão atrasada além de 5
               set(state => ({ coins: Math.max(0, state.coins - penalty) }));
             }
           }
@@ -2979,22 +3088,26 @@ export const useStore = create(
       },
 
       getCycleIndexForDate: (targetDateInput, baseTodayInput = null) => {
-        const { cycle = [], currentDayIndex = 0, cycleScheduleType = 'weekly', cycleWeekStart = 'sunday' } = get();
+        const { cycle = [], currentDayIndex = 0, cycleScheduleType = 'weekly', cycleWeekStart = 'sunday', cycleCarryoverOffset = 0 } = get();
         const targetDate = targetDateInput instanceof Date ? targetDateInput : new Date(targetDateInput || Date.now());
-        if (cycleScheduleType === 'weekly') {
-          const targetDOW = targetDate.getDay();
-          return (cycleWeekStart === 'monday') ? (targetDOW + 6) % 7 : targetDOW;
-        }
-        const cycleLen = Math.max(1, cycle.length);
         const rawToday = baseTodayInput instanceof Date ? baseTodayInput : get().getTodayDate();
         const t0 = new Date(rawToday.getFullYear(), rawToday.getMonth(), rawToday.getDate());
         const t1 = new Date(targetDate.getFullYear(), targetDate.getMonth(), targetDate.getDate());
+        if (cycleScheduleType === 'weekly') {
+          const targetDOW = targetDate.getDay();
+          const rawIdx = (cycleWeekStart === 'monday') ? (targetDOW + 6) % 7 : targetDOW;
+          if (cycleCarryoverOffset > 0 && t1 >= t0) {
+            return ((rawIdx - cycleCarryoverOffset) % 7 + 7) % 7;
+          }
+          return rawIdx;
+        }
+        const cycleLen = Math.max(1, cycle.length);
         const diffDays = Math.round((t1.getTime() - t0.getTime()) / (1000 * 60 * 60 * 24));
         return ((currentDayIndex + diffDays) % cycleLen + cycleLen) % cycleLen;
       },
 
       getRelativeDateInfo: (idx) => {
-        const { currentDayIndex, cycle, cycleScheduleType } = get();
+        const { currentDayIndex, cycle, cycleScheduleType, cycleWeekStart = 'sunday' } = get();
         const today = new Date();
         const diasSemana = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
         const nomesCompletosSemana = [
@@ -3008,7 +3121,8 @@ export const useStore = create(
         ];
 
         if (cycleScheduleType === 'weekly') {
-          const currentWeekIndex = get().getCycleIndexForDate(today, today);
+          const todayDOW = today.getDay();
+          const currentWeekIndex = (cycleWeekStart === 'monday') ? (todayDOW + 6) % 7 : todayDOW;
           const dayDiff = idx - currentWeekIndex;
           
           const targetDate = new Date(today);
@@ -3141,7 +3255,9 @@ export const useStore = create(
               daySlotCounts = Array.isArray(calendarOverrideCounts?.[simDateKey]) ? [...calendarOverrideCounts[simDateKey]] : [];
             } else {
               const cycleIndex = get().getCycleIndexForDate(targetSimDate, todayDateObj);
-              const targetDayOfWeek = targetSimDate.getDay();
+              const rawDayOfWeek = targetSimDate.getDay();
+              const carryoverShift = (cycleScheduleType === 'weekly' && (get().cycleCarryoverOffset || 0) > 0) ? (get().cycleCarryoverOffset % 7) : 0;
+              const targetDayOfWeek = (rawDayOfWeek - carryoverShift + 7) % 7;
               const matchingRules = (futureScheduleRules || [])
                 .filter(r => {
                   if (!r || r.v !== 2 || !r.fromDate || r.fromDate > simDateKey) return false;
@@ -3250,7 +3366,8 @@ export const useStore = create(
                  remainingMinutes: remainingMinutesDict[sub.id],
                  remainingAcceleratedMinutes: remainingAccelMinutesDict[sub.id],
                  dateStr: `${dia}/${mesesNomesShort[completionDate.getMonth()]}/${ano}`,
-                 dateObj: completionDate
+                 dateObj: completionDate,
+                 isScheduledInCycle: endDaysOffset[sub.id] !== undefined
                });
             }
           }
@@ -3270,7 +3387,9 @@ export const useStore = create(
         const unfinished = subjectEstimates.filter(e => e.remaining > 0);
         if (unfinished.length === 0) return { short: "Concluído", full: "Edital Concluído", isLate: false };
 
-        const lastSubject = unfinished[unfinished.length - 1];
+        const scheduledUnfinished = unfinished.filter(e => e.isScheduledInCycle !== false);
+        const targetList = scheduledUnfinished.length > 0 ? scheduledUnfinished : unfinished;
+        const lastSubject = targetList[targetList.length - 1];
         const completionDate = lastSubject.dateObj;
         const parsedExam = new Date(`${targetExamDate || '2026-08-15'}T00:00:00`);
         const examDateObj = isNaN(parsedExam.getTime()) ? new Date('2026-08-15T00:00:00') : parsedExam;
@@ -3582,8 +3701,8 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 useStore.subscribe((state, prevState) => {
-  // Não grava snapshot nem agenda upload antes da sincronização inicial com a nuvem concluir
-  if (state.isLoadingFromCloud || state.isSyncing || (state.user && !state.hasCompletedInitialCloudSync)) return;
+  // Não grava snapshot nem agenda upload enquanto o carregamento inicial da nuvem está em curso
+  if (state.isLoadingFromCloud || state.isSyncing) return;
 
   const changedKeys = PERSISTED_KEYS.filter(key => state[key] !== prevState[key]);
   if (changedKeys.length === 0) return;
@@ -3595,7 +3714,7 @@ useStore.subscribe((state, prevState) => {
   });
   useStore._keyTimestamps = nextTimestamps;
 
-  // A1: Snapshot local com debounce curto (~500 ms) mesmo offline ou sem login
+  // A1: Snapshot local com debounce curto (~500 ms) mesmo offline, sem login ou se a nuvem falhou
   clearTimeout(useStore._localDebounceTimer);
   useStore._localDebounceTimer = setTimeout(() => {
     const latestState = useStore.getState();
@@ -3606,7 +3725,8 @@ useStore.subscribe((state, prevState) => {
     });
   }, 500);
 
-  if (!state.user) return;
+  // Só envia para a nuvem depois que a sincronização inicial concluiu com segurança
+  if (!state.user || !state.hasCompletedInitialCloudSync) return;
 
   clearTimeout(useStore._debounceTimer);
   useStore._debounceTimer = setTimeout(() => {

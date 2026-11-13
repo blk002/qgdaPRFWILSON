@@ -197,13 +197,7 @@ export const calculateLessonsForGoal = (lessons = [], startIndex = 0, speed = 1,
     return { count: take, totalAccelSec: accel, totalOrigSec: orig, fits: true, lessonsList: picked };
   }
 
-  if (!goalMinutes || goalMinutes <= 0) {
-    return { count: 1, totalAccelSec: 0, totalOrigSec: 0, fits: true, lessonsList: [] };
-  }
-
   const spd = Math.max(0.5, Number(speed) || 1);
-  const goalSec = goalMinutes * 60;
-  
   const maxAvailable = totalClassesCount !== null 
     ? Math.max(0, totalClassesCount - startIndex) 
     : (Array.isArray(lessons) ? Math.max(0, lessons.length - startIndex) : 0);
@@ -211,6 +205,29 @@ export const calculateLessonsForGoal = (lessons = [], startIndex = 0, speed = 1,
   if (maxAvailable <= 0) {
     return { count: 0, totalAccelSec: 0, totalOrigSec: 0, fits: false, lessonsList: [] };
   }
+
+  if (!goalMinutes || goalMinutes <= 0) {
+    const lesson = lessons?.[startIndex];
+    const durStr = typeof lesson === 'object' ? (lesson?.duration || '') : String(lesson || '');
+    const origSec = parseDurationToSeconds(durStr);
+    const effectiveOrig = origSec > 0 ? origSec : 3600;
+    const accelSec = Math.round(effectiveOrig / spd);
+    return {
+      count: 1,
+      totalAccelSec: accelSec,
+      totalOrigSec: effectiveOrig,
+      fits: true,
+      lessonsList: [{
+        index: startIndex,
+        name: lesson?.name || `Aula ${startIndex + 1}`,
+        origSec: effectiveOrig,
+        accelSec,
+        durStr: durStr || '60:00'
+      }]
+    };
+  }
+
+  const goalSec = goalMinutes * 60;
 
   let totalAccelSec = 0;
   let totalOrigSec = 0;

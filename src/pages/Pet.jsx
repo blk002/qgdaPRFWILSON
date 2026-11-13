@@ -63,8 +63,9 @@ export default function Pet() {
   // Informações de nível do pet
   const currentLevelInfo = PET_LEVELS.find(l => l.level === (petData?.level || 1)) || PET_LEVELS[0];
   const nextLevelInfo = PET_LEVELS.find(l => l.level === (petData?.level || 1) + 1);
+  const levelSpan = nextLevelInfo ? Math.max(1, nextLevelInfo.minXp - currentLevelInfo.minXp) : 1;
   const progressToNextLevel = nextLevelInfo 
-    ? Math.min(100, Math.round(((petData?.xp || 0) / nextLevelInfo.minXp) * 100))
+    ? Math.max(0, Math.min(100, Math.round((((petData?.xp || 0) - currentLevelInfo.minXp) / levelSpan) * 100)))
     : 100;
 
   const handleSaveName = () => {

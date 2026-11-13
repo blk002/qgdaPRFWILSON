@@ -7,6 +7,7 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatSecondsToFriendly, parseDurationToSeconds } from '../lib/durationHelpers';
+import { useStore } from '../store/useStore';
 
 /**
  * Codifica objeto em Base64 seguro para UTF-8 (compatível com acentos em português)
@@ -364,7 +365,38 @@ ${code}
     if (!parsedImportedSubjects) return;
 
     if (importMode === 'replace') {
-      setSubjects(parsedImportedSubjects);
+      const validIds = new Set(Object.keys(parsedImportedSubjects));
+      const st = useStore.getState();
+      const newCycle = (st.cycle || []).map(day => (day || []).filter(sId => validIds.has(sId)));
+      const newCycleSlotCounts = (st.cycleSlotCounts || []).map((counts, dIdx) => {
+        const day = st.cycle?.[dIdx] || [];
+        return (counts || []).filter((_, sIdx) => validIds.has(day[sIdx]));
+      });
+      const newOverrides = {};
+      const newOverrideCounts = {};
+      Object.entries(st.calendarOverrides || {}).forEach(([dateKey, arr]) => {
+        const filtered = (arr || []).filter(sId => validIds.has(sId));
+        if (filtered.length > 0 || (arr || []).length === 0) {
+          newOverrides[dateKey] = filtered;
+          if (st.calendarOverrideCounts?.[dateKey]) {
+            newOverrideCounts[dateKey] = st.calendarOverrideCounts[dateKey].filter((_, sIdx) => validIds.has((arr || [])[sIdx]));
+          }
+        }
+      });
+      const newRules = (st.futureScheduleRules || []).map(rule => ({
+        ...rule,
+        subjects: (rule.subjects || []).filter(sId => validIds.has(sId)),
+        slotCounts: (rule.slotCounts || []).filter((_, sIdx) => validIds.has((rule.subjects || [])[sIdx]))
+      }));
+      useStore.setState({
+        subjects: parsedImportedSubjects,
+        cycle: newCycle,
+        cycleSlotCounts: newCycleSlotCounts,
+        calendarOverrides: newOverrides,
+        calendarOverrideCounts: newOverrideCounts,
+        futureScheduleRules: newRules,
+        completedToday: []
+      });
       toast.success(`Grade de estudos substituída com sucesso! (${importStats?.subjectsCount} disciplinas)`);
       onClose();
     } else {

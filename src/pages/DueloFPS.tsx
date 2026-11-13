@@ -161,7 +161,7 @@ export default function DueloFPS() {
             timestamp: nowIso,
             date: nowIso,
             confidence: playerChoice === null ? 'duvida' : 'sabia',
-            errorReason: reason === 'TIMEOUT' ? 'Atenção' : 'Conteúdo',
+            errorReason: reason === 'TIMEOUT' ? 'atencao' : 'conteudo',
             explanation: `${question.explanation} [Base Legal: ${question.legalBasis}]`,
             teacherComment: question.explanation,
             source: 'Duelo FPS (Alvo Legal)',
@@ -410,6 +410,11 @@ export default function DueloFPS() {
   // Teclas de atalho para atirar
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      const target = e.target as HTMLElement | null;
+      if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) {
+        return;
+      }
+
       const key = e.key.toLowerCase();
 
       if (key === 'h') {
@@ -421,6 +426,8 @@ export default function DueloFPS() {
         toggleFullscreen();
         return;
       }
+
+      if (activeTab !== 'arena') return;
 
       if (gameState === 'playing') {
         if (key === 'c' || key === '1') {
@@ -435,7 +442,7 @@ export default function DueloFPS() {
 
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [gameState, startNewGame, toggleFullscreen]);
+  }, [gameState, activeTab, startNewGame, toggleFullscreen]);
 
   const filteredVadeMecum = useMemo(() => {
     const list: Array<{
@@ -861,7 +868,7 @@ export default function DueloFPS() {
                   <button
                     type="button"
                     onClick={() => {
-                      window.location.hash = '#/raiox';
+                      window.location.hash = '#/caveira';
                     }}
                     className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition-all cursor-pointer flex items-center gap-1.5 shadow-md shadow-blue-600/20"
                   >

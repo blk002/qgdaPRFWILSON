@@ -28,8 +28,10 @@ export default function Simulados() {
     const avgB2 = simulados.reduce((acc, sim) => acc + (sim.b2Liquida || 0), 0) / totalSimulados / 30;
     const avgB3 = simulados.reduce((acc, sim) => acc + (sim.b3Liquida || 0), 0) / totalSimulados / 35;
     
-    if (avgB1 > avgB2 && avgB3 > avgB2) weakPoint = "Bloco II (Trânsito)";
-    else if (avgB1 > avgB3 && avgB2 > avgB3) weakPoint = "Bloco III (Direito)";
+    const minAvg = Math.min(avgB1, avgB2, avgB3);
+    if (avgB2 === minAvg && avgB3 === minAvg && avgB2 < avgB1) weakPoint = "Bloco II / III";
+    else if (avgB2 === minAvg && avgB2 < avgB1) weakPoint = "Bloco II (Trânsito)";
+    else if (avgB3 === minAvg && avgB3 < avgB1) weakPoint = "Bloco III (Direito)";
     else weakPoint = "Bloco I (Básicas)";
   }
 

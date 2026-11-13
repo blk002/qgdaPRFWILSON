@@ -77,7 +77,14 @@ export default function TacticalCountdownBanner() {
   const handleSaveModal = (e) => {
     e?.preventDefault();
     if (!draftDate) return;
-    const targetISO = new Date(draftDate).toISOString();
+    let targetISO = '';
+    try {
+      const parsed = new Date(draftDate);
+      if (isNaN(parsed.getTime())) return;
+      targetISO = parsed.toISOString();
+    } catch (_) {
+      return;
+    }
     saveConfig({
       ...config,
       title: draftTitle.trim() || 'OPERAÇÃO PRF • CONTAGEM REGRESSIVA',

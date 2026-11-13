@@ -269,7 +269,11 @@ export default function App() {
 
   // --- MONITOR DE PROMOÇÃO ---
   useEffect(() => {
-    if (isSyncing) return;
+    const hasCompletedInitialCloudSync = useStore.getState().hasCompletedInitialCloudSync;
+    if (isSyncing || (session && !hasCompletedInitialCloudSync)) {
+      lastPatenteId.current = null;
+      return;
+    }
     const currentP = useStore.getState().getCurrentPatente();
     if (!currentP) return;
 
@@ -288,7 +292,7 @@ export default function App() {
       }
       lastPatenteId.current = currentP.id;
     }
-  }, [userStats?.xp, isSyncing]);
+  }, [userStats?.xp, isSyncing, session]);
 
   if (!session) {
     return <Login />;
@@ -589,7 +593,14 @@ export default function App() {
                     type="number" 
                     min="1"
                     value={reviewInputs.total}
-                    onChange={(e) => setReviewInputs(prev => ({ ...prev, total: parseInt(e.target.value) || 0 }))}
+                    onChange={(e) => {
+                      const nextTotal = Math.max(0, parseInt(e.target.value) || 0);
+                      setReviewInputs(prev => ({
+                        ...prev,
+                        total: nextTotal,
+                        correct: Math.min(prev.correct, nextTotal)
+                      }));
+                    }}
                     className="w-full bg-slate-50 dark:bg-slate-950 border-2 border-slate-100 dark:border-slate-800 rounded-xl px-4 py-3 font-black text-slate-800 dark:text-white focus:border-blue-500 outline-none transition-all"
                   />
                 </div>
@@ -600,7 +611,10 @@ export default function App() {
                     min="0"
                     max={reviewInputs.total}
                     value={reviewInputs.correct}
-                    onChange={(e) => setReviewInputs(prev => ({ ...prev, correct: parseInt(e.target.value) || 0 }))}
+                    onChange={(e) => {
+                      const val = Math.max(0, parseInt(e.target.value) || 0);
+                      setReviewInputs(prev => ({ ...prev, correct: Math.min(val, prev.total) }));
+                    }}
                     className="w-full bg-slate-50 dark:bg-slate-950 border-2 border-slate-100 dark:border-slate-800 rounded-xl px-4 py-3 font-black text-slate-800 dark:text-white focus:border-blue-500 outline-none transition-all"
                   />
                 </div>
@@ -672,7 +686,10 @@ export default function App() {
                 Finalizar Auditoria
               </button>
               <button 
-                onClick={() => setReviewModal(null)} 
+                onClick={() => {
+                  setReviewModal(null);
+                  setReviewInputs({ total: 10, correct: 0 });
+                }} 
                 className="w-full py-2 text-slate-400 font-bold hover:text-slate-600 transition-colors uppercase text-[10px]"
               >
                 Cancelar

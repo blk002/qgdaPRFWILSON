@@ -22,7 +22,8 @@ function normalizeSession(rawSession) {
     date: today,
     total: Number(rawSession.total) || 0,
     hits: Number(rawSession.hits) || 0,
-    errors: Number(rawSession.errors) || 0
+    errors: Number(rawSession.errors) || 0,
+    ...(rawSession.wasExplicitlyReset ? { wasExplicitlyReset: true } : {})
   };
 }
 

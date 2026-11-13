@@ -28,14 +28,12 @@ export default function Config({
 
   const {
     cycle,
-    setCycle,
     subjects,
     setSubjects,
     setSubjectSpeed,
     targetExamDate,
     setTargetExamDate,
     setGlobalModal,
-    setReviews,
     executeTotalWipe,
     userStats,
     enableSounds,
@@ -320,9 +318,49 @@ export default function Config({
                       title: "Excluir Disciplina",
                       message: `Você tem certeza que deseja excluir a matéria "${sub.name}" permanentemente do seu planejamento?`,
                       onConfirm: () => {
-                        setSubjects(prev => { const c = {...prev}; delete c[sub.id]; return c; });
-                        setCycle(prev => prev.map(day => day.filter(sId => sId !== sub.id)));
-                        setReviews(prev => prev.filter(r => r.subjectId !== sub.id)); 
+                        const st = useStore.getState();
+                        const newSubjects = { ...st.subjects };
+                        delete newSubjects[sub.id];
+                        Object.keys(newSubjects).forEach(k => {
+                          if (newSubjects[k]?.replacementSubjectId === sub.id) {
+                            newSubjects[k] = { ...newSubjects[k], replacementSubjectId: '' };
+                          }
+                        });
+
+                        const newCycle = (st.cycle || []).map(day => (day || []).filter(sId => sId !== sub.id));
+                        const newCycleSlotCounts = (st.cycleSlotCounts || []).map((counts, dIdx) => {
+                          const day = st.cycle?.[dIdx] || [];
+                          return (counts || []).filter((_, sIdx) => day[sIdx] !== sub.id);
+                        });
+
+                        const newOverrides = {};
+                        const newOverrideCounts = {};
+                        Object.entries(st.calendarOverrides || {}).forEach(([dateKey, arr]) => {
+                          const filtered = (arr || []).filter(sId => sId !== sub.id);
+                          if (filtered.length > 0 || (arr || []).length === 0) {
+                            newOverrides[dateKey] = filtered;
+                            if (st.calendarOverrideCounts?.[dateKey]) {
+                              newOverrideCounts[dateKey] = st.calendarOverrideCounts[dateKey].filter((_, sIdx) => (arr || [])[sIdx] !== sub.id);
+                            }
+                          }
+                        });
+
+                        const newRules = (st.futureScheduleRules || []).map(rule => {
+                          const filtered = (rule.subjects || []).filter(sId => sId !== sub.id);
+                          const filteredCounts = (rule.slotCounts || []).filter((_, sIdx) => (rule.subjects || [])[sIdx] !== sub.id);
+                          return { ...rule, subjects: filtered, slotCounts: filteredCounts };
+                        });
+
+                        useStore.setState({
+                          subjects: newSubjects,
+                          cycle: newCycle,
+                          cycleSlotCounts: newCycleSlotCounts,
+                          calendarOverrides: newOverrides,
+                          calendarOverrideCounts: newOverrideCounts,
+                          futureScheduleRules: newRules,
+                          reviews: (st.reviews || []).filter(r => r.subjectId !== sub.id),
+                          completedToday: []
+                        });
                       }
                     });
                   }} className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-red-600 rounded dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800"><Trash2 className="w-4 h-4" /></button>
@@ -846,6 +884,9 @@ export default function Config({
                     if (merged.reviewCalendarDate) merged.reviewCalendarDate = new Date(merged.reviewCalendarDate);
 
                     useStore.setState(merged);
+                    try {
+                      localStorage.setItem('prf_caveira_questions', JSON.stringify(merged.caveiraQuestions || []));
+                    } catch (_) {}
                     await useStore.getState().saveToCloud();
                     toast.success("Backup restaurado com sucesso!");
                   } catch {
@@ -1512,7 +1553,13 @@ export default function Config({
                                   onClick={() => setDraftSubject(prev => {
                                     const newTopics = [...prev.topics];
                                     const newLessons = (newTopics[idx].lessons || []).filter((_, i) => i !== lIdx);
-                                    newTopics[idx] = { ...newTopics[idx], lessons: newLessons, total: newLessons.length };
+                                    const newTotal = newLessons.length;
+                                    newTopics[idx] = {
+                                      ...newTopics[idx],
+                                      lessons: newLessons,
+                                      total: newTotal,
+                                      completed: Math.min(newTopics[idx].completed || 0, newTotal)
+                                    };
                                     return { ...prev, topics: newTopics };
                                   })}
                                   className="p-0.5 text-slate-600 hover:text-red-400 transition-colors shrink-0"
@@ -1559,7 +1606,12 @@ export default function Config({
                             min={0}
                             onChange={(e) => setDraftSubject(prev => {
                               const newTopics = [...prev.topics];
-                              newTopics[idx] = { ...newTopics[idx], total: parseInt(e.target.value) || 0 };
+                              const newTotal = Math.max(0, parseInt(e.target.value) || 0);
+                              newTopics[idx] = {
+                                ...newTopics[idx],
+                                total: newTotal,
+                                completed: Math.min(newTopics[idx].completed || 0, newTotal)
+                              };
                               return { ...prev, topics: newTopics };
                             })}
                             className="w-12 bg-[#020617] border border-slate-800 rounded px-1 py-1 text-center text-xs font-black text-white"

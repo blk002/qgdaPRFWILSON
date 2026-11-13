@@ -23,7 +23,6 @@ export default function Ciclo() {
     getActiveTopic,
     getSubjectProgress,
     getRelativeDateInfo,
-    getCycleIndexForDate,
     getLocalDateStr,
     reviews,
     setClassConfirmModal,
@@ -32,6 +31,8 @@ export default function Ciclo() {
     subjectTimeGoal,
     cycleScheduleType,
     cycleWeekStart,
+    cycleCarryoverOffset = 0,
+    resetCycleCarryover,
     setCurrentDayIndex,
     studyHistory,
     calendarOverrides,
@@ -71,8 +72,12 @@ export default function Ciclo() {
   // Resolve as matérias e quantidades de aulas por bloco efetivas de um dia do ciclo
   const getEffectiveDaySchedule = (dayIndex, week = 0) => {
     const dateInfo = getDateInfo(dayIndex, week);
-    let daySubjects = Array.isArray(cycle?.[dayIndex]) ? [...cycle[dayIndex]] : [];
-    let daySlotCounts = Array.isArray(cycleSlotCounts?.[dayIndex]) ? [...cycleSlotCounts[dayIndex]] : [];
+    const shouldShiftCarryover = cycleScheduleType === 'weekly' && !dateInfo.isPast && (cycleCarryoverOffset || 0) > 0;
+    const effectiveCycleIdx = shouldShiftCarryover
+      ? ((dayIndex - cycleCarryoverOffset) % 7 + 7) % 7
+      : dayIndex;
+    let daySubjects = Array.isArray(cycle?.[effectiveCycleIdx]) ? [...cycle[effectiveCycleIdx]] : [];
+    let daySlotCounts = Array.isArray(cycleSlotCounts?.[effectiveCycleIdx]) ? [...cycleSlotCounts[effectiveCycleIdx]] : [];
 
     if (calendarOverrides && Array.isArray(calendarOverrides[dateInfo.fullDateStr])) {
       return {
@@ -83,14 +88,17 @@ export default function Ciclo() {
 
     const parts = String(dateInfo.fullDateStr).split('-').map(Number);
     const dayDateObj = parts.length === 3 ? new Date(parts[0], parts[1] - 1, parts[2]) : new Date();
-    const dayOfWeek = dayDateObj.getDay();
+    const rawDayOfWeek = dayDateObj.getDay();
+    const dayOfWeek = shouldShiftCarryover
+      ? (rawDayOfWeek - (cycleCarryoverOffset % 7) + 7) % 7
+      : rawDayOfWeek;
     const matchingRules = (futureScheduleRules || [])
       .filter(r => {
         if (!r || r.v !== 2 || !r.fromDate || r.fromDate > dateInfo.fullDateStr) return false;
         if (cycleScheduleType === 'weekly' && r.dayOfWeek !== undefined) {
           return r.dayOfWeek === dayOfWeek;
         }
-        return r.dayOfWeek === dayOfWeek || r.cycleIndex === dayIndex;
+        return r.dayOfWeek === dayOfWeek || r.cycleIndex === effectiveCycleIdx;
       })
       .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
 
@@ -108,14 +116,13 @@ export default function Ciclo() {
   useEffect(() => {
     if (cycleScheduleType === 'weekly') {
       const today = new Date();
-      const currentWeekIndex = getCycleIndexForDate
-        ? getCycleIndexForDate(today, today)
-        : ((cycleWeekStart === 'monday') ? (today.getDay() + 6) % 7 : today.getDay());
+      const todayDOW = today.getDay();
+      const currentWeekIndex = (cycleWeekStart === 'monday') ? (todayDOW + 6) % 7 : todayDOW;
       if (currentDayIndex !== currentWeekIndex) {
         setCurrentDayIndex(currentWeekIndex);
       }
     }
-  }, [cycleScheduleType, cycleWeekStart, currentDayIndex, setCurrentDayIndex, getCycleIndexForDate, todayKey]);
+  }, [cycleScheduleType, cycleWeekStart, currentDayIndex, setCurrentDayIndex, todayKey]);
 
   const visibleDays = (() => {
     if (cycleScheduleType === 'weekly') {
@@ -492,6 +499,12 @@ export default function Ciclo() {
         <div className="flex gap-2.5 sm:gap-4 items-stretch w-full min-w-max">
           {(() => {
             const simulatedIncrements = {};
+            const isSubDoneWithSim = (sub, simMap) => {
+              const topics = sub?.topics || [];
+              if (topics.length === 0 || !topics.some(t => (t.total || 0) > 0)) return false;
+              const remTotal = topics.reduce((acc, t) => acc + Math.max(0, (t.total || 0) - (t.completed || 0)), 0);
+              return (simMap?.[sub.id] || 0) >= remTotal;
+            };
             return visibleDays.map(({ daySubjects: rawDaySubjects, daySlotCounts: rawSlotCounts, dayIndex, week, dateInfo }) => {
               let daySubjects = [...(rawDaySubjects || [])];
               let daySlotCounts = [...(rawSlotCounts || [])];
@@ -516,22 +529,20 @@ export default function Ciclo() {
                   if (!subject) continue;
                   const isSlotCompleted = isToday && completedToday.includes(i);
                   if (isSlotCompleted) continue;
-                  // Transição inteligente se a matéria original já foi concluída
-                  const isOrigDone = (subject.topics || []).length > 0 &&
-                    (subject.topics || []).some(t => (t.total || 0) > 0) &&
-                    (subject.topics || []).every(t => (t.completed || 0) >= (t.total || 0));
+                  // Transição inteligente se a matéria original já foi concluída (incluindo aulas simuladas)
+                  const isOrigDone = isSubDoneWithSim(subject, tempSim);
                   let wasSlotTransitioned = false;
                   if (isOrigDone) {
                     const action = subject.onCompleteAction || "keep_fixed";
                     if (action === "replace" && subject.replacementSubjectId && subjects[subject.replacementSubjectId]) {
                       const rep = subjects[subject.replacementSubjectId];
-                      if ((rep.topics || []).some(t => (t.completed || 0) < (t.total || 0))) {
+                      if (!isSubDoneWithSim(rep, tempSim)) {
                         subjectId = subject.replacementSubjectId;
                         subject = rep;
                         wasSlotTransitioned = true;
                       }
                     } else if (action === "double_remaining") {
-                      const fallbackId = daySubjects.find(sId => sId !== originalSubId && (subjects[sId]?.topics || []).some(t => (t.completed || 0) < (t.total || 0)));
+                      const fallbackId = daySubjects.find(sId => sId !== originalSubId && subjects[sId] && !isSubDoneWithSim(subjects[sId], tempSim));
                       if (fallbackId && subjects[fallbackId]) {
                         subjectId = fallbackId;
                         subject = subjects[fallbackId];
@@ -598,6 +609,23 @@ export default function Ciclo() {
                     <span className={`font-black text-xl sm:text-2xl md:text-3xl tracking-tight ${isToday ? 'text-slate-800 dark:text-white' : 'text-slate-700 dark:text-slate-300'}`}>
                       {cycleScheduleType === 'weekly' ? (dateInfo.weekDayName || `DIA ${dayIndex + 1}`) : `DIA ${dayIndex + 1}`}
                     </span>
+                    {isToday && cycleScheduleType === 'weekly' && cycleCarryoverOffset > 0 && (
+                      <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1">
+                        <span
+                          title={`Grade deslocada ${cycleCarryoverOffset} dia(s) para repor dia não estudado`}
+                          className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800"
+                        >
+                          ↩ Reposição (+{cycleCarryoverOffset}d)
+                        </span>
+                        <button
+                          type="button"
+                          onClick={resetCycleCarryover}
+                          className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-white/80 hover:bg-white text-slate-700 border border-slate-300 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 dark:border-slate-600 transition-colors cursor-pointer"
+                        >
+                          Voltar à grade normal
+                        </button>
+                      </div>
+                    )}
                     {isPast ? (
                       <div className="flex flex-col items-center gap-1 mt-1">
                         {dayTotalSeconds > 0 ? (
@@ -664,22 +692,20 @@ export default function Ciclo() {
                       let subjectId = originalSubId;
                       let subject = subjects[subjectId];
                       if (!subject) return null;
-                      const isOriginalDone = (subject.topics || []).length > 0 &&
-                        (subject.topics || []).some(t => (t.total || 0) > 0) &&
-                        (subject.topics || []).every(t => (t.completed || 0) >= (t.total || 0));
+                      const isOriginalDone = isSubDoneWithSim(subject, simulatedIncrements);
                       let isDoubled = false;
                       let isReplaced = false;
                       if (isOriginalDone) {
                         const action = subject.onCompleteAction || "keep_fixed";
                         if (action === "replace" && subject.replacementSubjectId && subjects[subject.replacementSubjectId]) {
                           const rep = subjects[subject.replacementSubjectId];
-                          if ((rep.topics || []).some(t => (t.completed || 0) < (t.total || 0))) {
+                          if (!isSubDoneWithSim(rep, simulatedIncrements)) {
                             subjectId = subject.replacementSubjectId;
                             subject = rep;
                             isReplaced = true;
                           }
                         } else if (action === "double_remaining") {
-                          const fallbackId = daySubjects.find(sId => sId !== originalSubId && (subjects[sId]?.topics || []).some(t => (t.completed || 0) < (t.total || 0)));
+                          const fallbackId = daySubjects.find(sId => sId !== originalSubId && subjects[sId] && !isSubDoneWithSim(subjects[sId], simulatedIncrements));
                           if (fallbackId && subjects[fallbackId]) {
                             subjectId = fallbackId;
                             subject = subjects[fallbackId];
@@ -1002,7 +1028,7 @@ export default function Ciclo() {
                               <div className="bg-emerald-100 dark:bg-emerald-950/50 p-1.5 rounded-full mb-1.5"><BrainCircuit className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /></div>
                               <span className="text-[8px] sm:text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-2">100% no FSRS (Só Questões)</span>
                               
-                              <button onClick={() => setReplaceSubjectModal({ dayIndex, slotIndex, oldSubjectId: subjectId })} className="w-full py-1.5 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white rounded-lg text-[9px] sm:text-[11px] font-black transition-all flex items-center justify-center gap-1 border border-blue-100 hover:border-blue-600">
+                              <button onClick={() => setReplaceSubjectModal({ dayIndex, slotIndex, oldSubjectId: originalSubId })} className="w-full py-1.5 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white rounded-lg text-[9px] sm:text-[11px] font-black transition-all flex items-center justify-center gap-1 border border-blue-100 hover:border-blue-600">
                                 <Shuffle className="w-3 h-3" /> <span className="truncate">Reestruturar Vaga</span>
                               </button>
                               

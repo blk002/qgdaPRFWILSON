@@ -48,6 +48,7 @@ export default function Calendario() {
     setCycleSlotCounts,
     cycleScheduleType = 'weekly',
     cycleWeekStart = 'sunday',
+    cycleCarryoverOffset = 0,
     currentDayIndex = 0, 
     completedToday: rawCompletedToday = [], 
     completedTodayDate = null,
@@ -146,7 +147,12 @@ export default function Calendario() {
 
     // 2. Ciclo Semanal Fixo ou Sequencial + Regras Futuras
     if (cycle && cycle.length > 0) {
-      const targetDayOfWeek = cellDateObj.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
+      const rawDayOfWeek = cellDateObj.getDay(); // 0 = Dom, 1 = Seg, ..., 6 = Sáb
+      const isTodayOrFuture = cellDateObj >= todayDateObj;
+      const carryoverShift = (cycleScheduleType === 'weekly' && isTodayOrFuture && cycleCarryoverOffset > 0)
+        ? (cycleCarryoverOffset % 7)
+        : 0;
+      const targetDayOfWeek = (rawDayOfWeek - carryoverShift + 7) % 7;
       const cycleIndex = getCycleIndexForDate
         ? getCycleIndexForDate(cellDateObj, todayDateObj)
         : ((cycleScheduleType === 'weekly')
@@ -173,7 +179,7 @@ export default function Calendario() {
     }
 
     return { daySubjects, daySlotCounts: slotCounts };
-  }, [calendarOverrides, calendarOverrideCounts, cycle, cycleSlotCounts, cycleScheduleType, cycleWeekStart, currentDayIndex, futureScheduleRules, getCycleIndexForDate, todayDateObj]);
+  }, [calendarOverrides, calendarOverrideCounts, cycle, cycleSlotCounts, cycleScheduleType, cycleWeekStart, cycleCarryoverOffset, currentDayIndex, futureScheduleRules, getCycleIndexForDate, todayDateObj]);
 
   const getDaySubjectsForDate = (cellDateObj, dateKey) => getDayScheduleForDate(cellDateObj, dateKey).daySubjects;
 

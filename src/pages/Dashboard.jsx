@@ -501,11 +501,11 @@ export default function Dashboard() {
                   <div className="flex-1 bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
                     <div 
                       className="bg-gradient-to-r from-blue-500 to-emerald-400 h-full rounded-full transition-all" 
-                      style={{ width: `${Math.round(((petData?.hunger || 100) + (petData?.energy || 100) + (petData?.hygiene || 100) + (petData?.fun || 100)) / 4)}%` }} 
+                      style={{ width: `${Math.round(((petData?.hunger ?? 100) + (petData?.energy ?? 100) + (petData?.hygiene ?? 100) + (petData?.fun ?? 100)) / 4)}%` }} 
                     />
                   </div>
                   <span className="text-[9px] font-black text-slate-400 shrink-0">
-                    {Math.round(((petData?.hunger || 100) + (petData?.energy || 100) + (petData?.hygiene || 100) + (petData?.fun || 100)) / 4)}%
+                    {Math.round(((petData?.hunger ?? 100) + (petData?.energy ?? 100) + (petData?.hygiene ?? 100) + (petData?.fun ?? 100)) / 4)}%
                   </span>
                 </div>
               </div>

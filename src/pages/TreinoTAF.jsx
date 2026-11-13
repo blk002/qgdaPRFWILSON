@@ -53,6 +53,7 @@ const calcCorrida = (val, isM) => {
 };
 
 const calcShuttle = (val, isM) => {
+  if (!val || val <= 0) return 0;
   if (isM) {
     if (val >= 14) return 0; if (val >= 13.5) return 2; if (val >= 13) return 2.5;
     if (val >= 12.5) return 3; if (val >= 12) return 3.5; if (val >= 11.5) return 4;

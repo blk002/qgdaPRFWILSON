@@ -83,9 +83,9 @@ export default function PouMascot({
     }, 1200);
   };
 
-  const isHungry = (petData?.hunger || 100) < 35;
-  const isDirty = (petData?.hygiene || 100) < 45;
-  const isSad = (petData?.fun || 100) < 35;
+  const isHungry = (petData?.hunger ?? 100) < 35;
+  const isDirty = (petData?.hygiene ?? 100) < 45;
+  const isSad = (petData?.fun ?? 100) < 35;
   const activePupilOffset = isSleeping ? { x: 0, y: 0 } : pupilOffset;
 
   return (
