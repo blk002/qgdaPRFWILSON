@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.12 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.13 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -538,16 +538,38 @@
     try {
       el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
     } catch (_) {}
-    const checkboxChild = el.querySelector('input[type="checkbox"], [role="checkbox"], .q-checkbox__inner');
-    const target = checkboxChild || el;
-    const rect = target.getBoundingClientRect();
+    const rect = el.getBoundingClientRect();
     const clientX = rect.left + Math.min(rect.width / 2, 16);
     const clientY = rect.top + rect.height / 2;
     const evtInit = { bubbles: true, cancelable: true, view: window, clientX, clientY };
-    try { target.dispatchEvent(new PointerEvent('pointerdown', evtInit)); } catch (_) {}
-    try { target.dispatchEvent(new MouseEvent('mousedown', evtInit)); } catch (_) {}
-    try { target.dispatchEvent(new MouseEvent('mouseup', evtInit)); } catch (_) {}
-    target.click();
+    try { el.dispatchEvent(new PointerEvent('pointerdown', evtInit)); } catch (_) {}
+    try { el.dispatchEvent(new MouseEvent('mousedown', evtInit)); } catch (_) {}
+    try { el.dispatchEvent(new MouseEvent('mouseup', evtInit)); } catch (_) {}
+    el.click();
+  }
+
+  function clickOptionRow(rowEl) {
+    if (!rowEl) return;
+    const checkboxChild = rowEl.querySelector('input[type="checkbox"], [role="checkbox"], .q-checkbox__inner');
+    const target = checkboxChild || rowEl;
+    if (checkboxChild) {
+      const isChecked = Boolean(
+        checkboxChild.checked === true ||
+        checkboxChild.getAttribute('aria-checked') === 'true' ||
+        checkboxChild.classList.contains('q-checkbox__inner--truthy') ||
+        rowEl.getAttribute('aria-selected') === 'true'
+      );
+      if (isChecked) return;
+    }
+    clickElementRealistically(target);
+  }
+
+  function normalizeStemText(str) {
+    return normalizeFilterText(str)
+      .split(/\s+/)
+      .filter(Boolean)
+      .map(w => (w.length >= 4 && w.endsWith('s') ? w.slice(0, -1) : w))
+      .join(' ');
   }
 
   function getSubjectSearchTerms(subject) {
@@ -576,20 +598,32 @@
   function getTopicSearchTerms(topic) {
     const norm = normalizeFilterText(topic);
     if (!norm) return [];
-    const terms = [norm];
+    const terms = [];
+    const pushUnique = (t) => {
+      const s = String(t || '').trim();
+      if (s && !terms.includes(s)) terms.push(s);
+    };
+
     const cleaned = norm
-      .replace(/\b(bases da|bases do|nocoes de|introducao a|introducao ao|parte \d+|aula \d+|modulo \d+)\b/g, ' ')
+      .replace(/\b(de nivelamento|nivelamento|bases da|bases do|nocoes de|introducao a|introducao ao|parte \d+|aula \d+|modulo \d+)\b/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
-    if (cleaned && cleaned !== norm) terms.push(cleaned);
-    const words = cleaned.split(' ').filter(w => w.length >= 4);
-    if (words.length >= 2) {
-      terms.push(`${words[0]} ${words[1]}`);
+
+    pushUnique(norm);
+    pushUnique(cleaned);
+
+    // Gera variante plural simples caso o assunto do QG esteja no singular (ex.: "conceito iniciais" -> "conceitos iniciais")
+    const cleanedWords = cleaned.split(' ').filter(Boolean);
+    if (cleanedWords.length >= 2) {
+      pushUnique(`${cleanedWords[0]} ${cleanedWords[1]}`);
+      if (!cleanedWords[0].endsWith('s') && cleanedWords[0].length >= 4) {
+        pushUnique(`${cleanedWords[0]}s ${cleanedWords[1]}`);
+      }
     }
-    words.sort((a, b) => b.length - a.length);
-    if (words[0] && !terms.includes(words[0])) {
-      terms.push(words[0]);
-    }
+
+    const sigWords = cleanedWords.filter(w => w.length >= 4);
+    sigWords.sort((a, b) => b.length - a.length);
+    sigWords.forEach(w => pushUnique(w));
     return terms;
   }
 
@@ -642,8 +676,8 @@
     }) || null;
   }
 
-  function findDropdownOptionElements(filterInput) {
-    if (!filterInput) return [];
+  function getMenuContainer(filterInput) {
+    if (!filterInput) return null;
     let container = filterInput.closest('.q-menu, [role="listbox"], .v-menu__content, .dropdown-menu');
     if (!container) {
       let cur = filterInput.parentElement;
@@ -656,6 +690,18 @@
         cur = cur.parentElement;
       }
     }
+    return container;
+  }
+
+  function hasNoSearchResultsInMenu(filterInput) {
+    const container = getMenuContainer(filterInput) || filterInput?.parentElement?.parentElement;
+    if (!container) return false;
+    const txt = normalizeFilterText(container.innerText || container.textContent);
+    return txt.includes('pesquisa sem resultados') || txt.includes('nenhum resultado');
+  }
+
+  function findDropdownOptionElements(filterInput) {
+    const container = getMenuContainer(filterInput);
     if (!container) return [];
 
     const inputRect = filterInput.getBoundingClientRect();
@@ -683,39 +729,80 @@
 
   function scoreOptionMatch(optionText, searchTerms) {
     const normOpt = normalizeFilterText(optionText);
+    const stemOpt = normalizeStemText(optionText);
     if (!normOpt) return 0;
     let best = 0;
     for (let i = 0; i < searchTerms.length; i++) {
       const term = searchTerms[i];
+      const stemTerm = normalizeStemText(term);
       if (!term) continue;
-      if (normOpt === term) return 1000 - i;
-      if (normOpt.startsWith(term)) best = Math.max(best, 800 - i);
-      else if (normOpt.includes(term)) best = Math.max(best, 600 - i);
+      if (normOpt === term || (stemTerm && stemOpt === stemTerm)) return 1000 - i;
+      if (normOpt.startsWith(term) || (stemTerm && stemOpt.startsWith(stemTerm))) best = Math.max(best, 800 - i);
+      else if (normOpt.includes(term) || (stemTerm && stemOpt.includes(stemTerm))) best = Math.max(best, 600 - i);
       else {
-        const words = term.split(' ').filter(w => w.length >= 3);
-        const hits = words.filter(w => normOpt.includes(w)).length;
+        const words = (stemTerm || term).split(' ').filter(w => w.length >= 3);
+        const hits = words.filter(w => stemOpt.includes(w) || normOpt.includes(w)).length;
         if (hits > 0) {
-          best = Math.max(best, Math.round((hits / Math.max(1, words.length)) * 400) - i);
+          best = Math.max(best, Math.round((hits / Math.max(1, words.length)) * 450) - i);
         }
       }
     }
     return best;
   }
 
-  async function closeOpenDropdown(trigger) {
+  async function closeOpenDropdown(trigger, filterInput) {
     if (!findMenuFilterInput()) return;
+
+    if (filterInput && hasNoSearchResultsInMenu(filterInput)) {
+      setNativeInputValue(filterInput, '');
+      await sleepMs(160);
+    }
+
+    const activeInput = findMenuFilterInput() || filterInput;
+    if (activeInput) {
+      activeInput.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+    }
     document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
     await sleepMs(150);
     if (!findMenuFilterInput()) return;
-    const filtrosHeading = Array.from(document.querySelectorAll('h1, h2, h3, h4, div, span, p'))
-      .find(el => !el.closest('#qg-caveira-hud') && isElementVisible(el) && normalizeFilterText(el.innerText || el.textContent) === 'filtros');
-    if (filtrosHeading) {
-      clickElementRealistically(filtrosHeading);
+
+    const menuContainer = getMenuContainer(findMenuFilterInput() || filterInput);
+    const neutralHeading = Array.from(document.querySelectorAll('h1, h2, h3, h4, div, span, p'))
+      .find(el => {
+        if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
+        if (menuContainer && menuContainer.contains(el)) return false;
+        const txt = normalizeFilterText(el.innerText || el.textContent);
+        return txt === 'banco de questoes' || txt === 'carreiras' || txt === 'filtros';
+      });
+    if (neutralHeading) {
+      clickElementRealistically(neutralHeading);
       await sleepMs(150);
     }
-    if (findMenuFilterInput() && trigger) {
+
+    if (findMenuFilterInput()) {
+      const pointEl = document.elementFromPoint(15, 150);
+      if (
+        pointEl &&
+        !pointEl.closest('#qg-caveira-hud') &&
+        (!menuContainer || !menuContainer.contains(pointEl)) &&
+        !pointEl.closest('a, button')
+      ) {
+        clickElementRealistically(pointEl);
+        await sleepMs(150);
+      }
+    }
+
+    if (findMenuFilterInput()) {
+      const bodyEvt = { bubbles: true, cancelable: true, view: window, clientX: 15, clientY: 150 };
+      try { document.body.dispatchEvent(new MouseEvent('mousedown', bodyEvt)); } catch (_) {}
+      try { document.body.dispatchEvent(new MouseEvent('mouseup', bodyEvt)); } catch (_) {}
+      document.body.click();
+      await sleepMs(180);
+    }
+
+    if (findMenuFilterInput() && trigger && (!menuContainer || !trigger.contains(menuContainer))) {
       clickElementRealistically(trigger);
-      await sleepMs(150);
+      await sleepMs(180);
     }
   }
 
@@ -742,6 +829,10 @@
         await sleepMs(300);
       }
 
+      if (filterInput && hasNoSearchResultsInMenu(filterInput)) {
+        continue;
+      }
+
       const options = findDropdownOptionElements(filterInput);
       let bestScore = 0;
       for (const opt of options) {
@@ -754,12 +845,26 @@
       if (matched && bestScore >= 200) break;
     }
 
+    if ((!matched || (filterInput && hasNoSearchResultsInMenu(filterInput))) && filterInput) {
+      setNativeInputValue(filterInput, '');
+      await sleepMs(220);
+      const allOptions = findDropdownOptionElements(filterInput);
+      let bestFallbackScore = 0;
+      for (const opt of allOptions) {
+        const sc = scoreOptionMatch(opt.innerText || opt.textContent, searchTerms);
+        if (sc > bestFallbackScore) {
+          bestFallbackScore = sc;
+          matched = opt;
+        }
+      }
+    }
+
     if (matched) {
-      clickElementRealistically(matched);
+      clickOptionRow(matched);
       await sleepMs(220);
     }
 
-    await closeOpenDropdown(trigger);
+    await closeOpenDropdown(trigger, filterInput);
     await sleepMs(200);
     return Boolean(matched);
   }
@@ -818,15 +923,19 @@
         await sleepMs(300);
       }
 
-      // 4. Se houver botão explícito "Filtrar" / "Aplicar filtros", aciona
+      // 4. Se houver botão explícito de busca/filtragem, aciona e rola suavemente para as questões
       const applyBtn = Array.from(document.querySelectorAll('button, [role="button"]')).find(el => {
         if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
         const txt = normalizeFilterText(el.innerText || el.textContent);
-        return txt === 'filtrar' || txt === 'aplicar filtros' || txt === 'buscar questoes' || txt === 'filtrar questoes';
+        return txt === 'filtrar' || txt === 'aplicar' || txt === 'aplicar filtros' || txt === 'buscar' || txt === 'buscar questoes' || txt === 'filtrar questoes' || txt === 'pesquisar';
       });
       if (applyBtn) {
         clickElementRealistically(applyBtn);
+        await sleepMs(250);
       }
+      try {
+        window.scrollBy({ top: 260, behavior: 'smooth' });
+      } catch (_) {}
 
       const summary = [subject, topic].filter(Boolean).join(' • ');
       if (subjectOk && topicOk) {
