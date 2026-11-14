@@ -62,7 +62,56 @@ const BROAD_PREFIX_REGEX = /^(?:organiza[cç][aã]o\s+(?:da|do|de)|conceitos?\s+
 
 const PURE_ARTICLE_LINE_REGEX = /^(?:revoga[cç][aã]o\s+(?:do|da|dos|das)\s+|leitura\s+(?:do|da|dos|das)\s+|coment[aá]rios?\s+(?:ao|sobre|do|dos)\s+|an[aá]lise\s+(?:do|dos)\s+)?art(?:igo)?s?\.?\s*(\d+)/i;
 
+const PROSE_NOTE_PREFIX_REGEX = /^(?:obs(?:erva[cç][aã]o)?|aten[cç][aã]o|cuidado|dica|bizu|ex(?:emplo)?|stf|stj|s[uú]mula|importante)\s*[:\-–]/i;
+
 const EXPLICIT_LAW_MENTION_REGEX = /\b(?:eca|ctb|lep|lia|jecrim|orcrim|sinarm|sisnad|lbi|henry borel|maria da penha|estatuto|constituicao|codigo)\b|\blei\s+(?:n[oº°.]?\s*)?\d|\b\d{1,2}\.\d{3}\b/i;
+
+const COURSE_SPECIAL_LAW_PATTERNS = [
+  { id: 'eca', test: (norm) => /\beca\b/.test(norm) || norm.includes('crianca e do adolescente') || norm.includes('crianca e o adolescente') || norm.includes('estatuto da crianca') || norm.includes('8.069') || norm.includes('8069') },
+  { id: 'henry_borel', test: (norm) => norm.includes('henry borel') || norm.includes('14.344') || norm.includes('14344') },
+  { id: 'escuta_especializada', test: (norm) => norm.includes('escuta especializada') || norm.includes('depoimento especial') || norm.includes('13.431') || norm.includes('13431') },
+  { id: 'drogas', test: (norm) => /\bdrogas?\b|\bsisnad\b|entorpecente/.test(norm) || norm.includes('11.343') || norm.includes('11343') },
+  { id: 'desarmamento', test: (norm) => norm.includes('desarmamento') || /\barmas?\b/.test(norm) || norm.includes('sinarm') || norm.includes('10.826') || norm.includes('10826') },
+  { id: 'abuso_autoridade', test: (norm) => norm.includes('abuso de autoridade') || norm.includes('13.869') || norm.includes('13869') },
+  { id: 'tortura', test: (norm) => norm.includes('tortura') || norm.includes('9.455') || norm.includes('9455') },
+  { id: 'hediondos', test: (norm) => norm.includes('hediondo') || norm.includes('8.072') || norm.includes('8072') },
+  { id: 'orcrim', test: (norm) => norm.includes('organizacao criminosa') || norm.includes('organizacoes criminosas') || /\borcrim\b/.test(norm) || norm.includes('12.850') || norm.includes('12850') },
+  { id: 'maria_da_penha', test: (norm) => norm.includes('maria da penha') || (norm.includes('violencia domestica') && /\bmulher(?:es)?\b/.test(norm)) || norm.includes('feminicidio') || norm.includes('11.340') || norm.includes('11340') },
+  { id: 'crimes_ambientais', test: (norm) => norm.includes('meio ambiente') || norm.includes('ambienta') || norm.includes('9.605') || norm.includes('9605') },
+  { id: 'interceptacao', test: (norm) => norm.includes('interceptacao') || norm.includes('9.296') || norm.includes('9296') },
+  { id: 'jecrim', test: (norm) => norm.includes('juizado') || /\bjecrim\b/.test(norm) || norm.includes('9.099') || norm.includes('9099') },
+  { id: 'lavagem', test: (norm) => norm.includes('lavagem') || norm.includes('9.613') || norm.includes('9613') },
+  { id: 'racismo', test: (norm) => norm.includes('racismo') || norm.includes('7.716') || norm.includes('7716') },
+  { id: 'lep', test: (norm) => /\blep\b/.test(norm) || norm.includes('execucao penal') || norm.includes('7.210') || norm.includes('7210') },
+  { id: 'prisao_temporaria', test: (norm) => norm.includes('prisao temporaria') || norm.includes('7.960') || norm.includes('7960') },
+  { id: 'idoso', test: (norm) => norm.includes('idoso') || norm.includes('pessoa idosa') || norm.includes('10.741') || norm.includes('10741') },
+  { id: 'anticrime', test: (norm) => norm.includes('pacote anticrime') || /\banticrime\b/.test(norm) || norm.includes('13.964') || norm.includes('13964') },
+  { id: 'igualdade_racial', test: (norm) => norm.includes('igualdade racial') || norm.includes('12.288') || norm.includes('12288') },
+  { id: 'pcd', test: (norm) => norm.includes('pessoa com deficiencia') || /\blbi\b/.test(norm) || norm.includes('13.146') || norm.includes('13146') },
+  { id: 'ctb', test: (norm) => /\bctb\b/.test(norm) || norm.includes('codigo de transito') || norm.includes('9.503') || norm.includes('9503') },
+  { id: 'lia', test: (norm) => /\blia\b/.test(norm) || norm.includes('improbidade administrativa') || norm.includes('8.429') || norm.includes('8429') }
+];
+
+function getCourseContextLawIds(rawText) {
+  const norm = normalizeCourseLookupKey(rawText);
+  if (!norm) return [];
+  const ids = [];
+  for (const rule of COURSE_SPECIAL_LAW_PATTERNS) {
+    if (rule.test(norm) && !ids.includes(rule.id)) {
+      ids.push(rule.id);
+    }
+  }
+  const lawRegex = /\blei\s+(?:n[oº°.]?\s*)?(\d{1,2}\.?\d{3})\b/gi;
+  let match;
+  while ((match = lawRegex.exec(norm)) !== null) {
+    const digits = match[1].replace(/\D/g, '');
+    if (digits.length >= 4 && digits.length <= 5) {
+      const key = `lei_${digits}`;
+      if (!ids.includes(key)) ids.push(key);
+    }
+  }
+  return ids;
+}
 
 export function buildBroadContextSet(contextNames = []) {
   const broad = new Set();
@@ -73,6 +122,7 @@ export function buildBroadContextSet(contextNames = []) {
       .replace(/\s*[-–—]\s*(?:parte|aula|bloco|modulo)\s*\d+\s*$/i, '')
       .trim();
     for (const candidate of [raw, stripped]) {
+      if (getCourseContextLawIds(candidate).length > 0) continue;
       const norm = normalizeCourseLookupKey(candidate);
       if (norm) broad.add(norm);
       let cur = candidate;
@@ -80,7 +130,9 @@ export function buildBroadContextSet(contextNames = []) {
         const next = cur.replace(BROAD_PREFIX_REGEX, '').trim();
         const nextNorm = normalizeCourseLookupKey(next);
         if (nextNorm && nextNorm !== normalizeCourseLookupKey(cur)) {
-          broad.add(nextNorm);
+          if (getCourseContextLawIds(next).length === 0) {
+            broad.add(nextNorm);
+          }
           cur = next;
         } else {
           break;
@@ -112,6 +164,8 @@ export function parseCourseIndexSubtopics(rawText, contextNames = []) {
   }
 
   const broadContext = buildBroadContextSet(contextNames);
+  const contextText = (Array.isArray(contextNames) ? contextNames : [contextNames]).filter(Boolean).join(' ');
+  const mainLawIds = new Set(getCourseContextLawIds(contextText));
   const results = [];
   const seenNorm = new Set();
 
@@ -132,6 +186,18 @@ export function parseCourseIndexSubtopics(rawText, contextNames = []) {
     const hadIntroPrefix = /^(?:[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?\s*)?introdu[cç][aã]o\b/i.test(rawLine);
     let cleaned = normalizeCourseIndexLineText(rawLine);
     if (!cleaned) continue;
+
+    if (PROSE_NOTE_PREFIX_REGEX.test(cleaned)) continue;
+    if (cleaned.length > 85 || (/\.\s*$/.test(cleaned) && cleaned.split(/\s+/).length > 8)) {
+      continue;
+    }
+
+    if (mainLawIds.size > 0) {
+      const lineLawIds = getCourseContextLawIds(cleaned);
+      if (lineLawIds.some(id => !mainLawIds.has(id))) {
+        continue;
+      }
+    }
 
     let norm = normalizeCourseLookupKey(cleaned);
     if (

@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.20 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.21 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -653,6 +653,7 @@
 
   const SPECIAL_LAW_RULES = [
     {
+      id: 'eca',
       test: (norm) =>
         /\beca\b/.test(norm) ||
         norm.includes('crianca e do adolescente') ||
@@ -661,78 +662,85 @@
         norm.includes('8.069') ||
         norm.includes('8069'),
       terms: [
-        'estatuto da crianca e do adolescente',
-        'lei 8.069',
-        'estatuto da crianca',
-        'crianca e do adolescente',
-        'crianca e o adolescente',
-        'eca',
         '8.069',
+        'estatuto da crianca',
+        'estatuto da crianca e do adolescente',
+        'eca',
+        'crianca e do adolescente',
         '8069'
       ]
     },
     {
+      id: 'henry_borel',
       test: (norm) =>
         norm.includes('henry borel') ||
         norm.includes('14.344') ||
         norm.includes('14344'),
-      terms: ['lei henry borel', 'henry borel', 'lei 14.344', '14.344', '14344']
+      terms: ['14.344', 'henry borel', 'lei henry borel', '14344']
     },
     {
+      id: 'escuta_especializada',
       test: (norm) =>
         norm.includes('escuta especializada') ||
         norm.includes('depoimento especial') ||
         norm.includes('13.431') ||
         norm.includes('13431'),
-      terms: ['escuta especializada', 'depoimento especial', 'lei 13.431', '13.431', '13431']
+      terms: ['13.431', 'escuta especializada', 'depoimento especial', '13431']
     },
     {
+      id: 'drogas',
       test: (norm) =>
         /\bdrogas?\b|\bsisnad\b|entorpecente/.test(norm) ||
         norm.includes('11.343') ||
         norm.includes('11343'),
-      terms: ['lei de drogas', 'lei 11.343', 'drogas', '11.343', '11343', 'sisnad']
+      terms: ['11.343', 'lei de drogas', 'drogas', 'sisnad', '11343']
     },
     {
+      id: 'desarmamento',
       test: (norm) =>
         norm.includes('desarmamento') ||
         /\barmas?\b/.test(norm) ||
         norm.includes('sinarm') ||
         norm.includes('10.826') ||
         norm.includes('10826'),
-      terms: ['estatuto do desarmamento', 'lei 10.826', 'desarmamento', 'arma de fogo', '10.826', '10826']
+      terms: ['10.826', 'estatuto do desarmamento', 'desarmamento', 'arma de fogo', '10826']
     },
     {
+      id: 'abuso_autoridade',
       test: (norm) =>
         norm.includes('abuso de autoridade') ||
         norm.includes('13.869') ||
         norm.includes('13869'),
-      terms: ['abuso de autoridade', 'lei 13.869', '13.869', '13869']
+      terms: ['13.869', 'abuso de autoridade', '13869']
     },
     {
+      id: 'tortura',
       test: (norm) =>
         norm.includes('tortura') ||
         norm.includes('9.455') ||
         norm.includes('9455'),
-      terms: ['tortura', 'lei de tortura', 'crimes de tortura', 'lei 9.455', '9.455', '9455']
+      terms: ['9.455', 'tortura', 'lei de tortura', 'crimes de tortura', '9455']
     },
     {
+      id: 'hediondos',
       test: (norm) =>
         norm.includes('hediondo') ||
         norm.includes('8.072') ||
         norm.includes('8072'),
-      terms: ['crimes hediondos', 'hediondos', 'lei 8.072', '8.072', '8072']
+      terms: ['8.072', 'crimes hediondos', 'hediondos', '8072']
     },
     {
+      id: 'orcrim',
       test: (norm) =>
         norm.includes('organizacao criminosa') ||
         norm.includes('organizacoes criminosas') ||
         /\borcrim\b/.test(norm) ||
         norm.includes('12.850') ||
         norm.includes('12850'),
-      terms: ['organizacoes criminosas', 'organizacao criminosa', 'lei 12.850', '12.850', '12850']
+      terms: ['12.850', 'organizacoes criminosas', 'organizacao criminosa', '12850']
     },
     {
+      id: 'maria_da_penha',
       test: (norm) =>
         norm.includes('maria da penha') ||
         (norm.includes('violencia domestica') && /\bmulher(?:es)?\b/.test(norm)) ||
@@ -740,112 +748,124 @@
         norm.includes('11.340') ||
         norm.includes('11340'),
       terms: [
-        'lei maria da penha',
-        'maria da penha',
-        'lei 11.340',
-        'violencia domestica e familiar contra a mulher',
         '11.340',
+        'maria da penha',
+        'lei maria da penha',
+        'violencia domestica e familiar contra a mulher',
         '11340'
       ]
     },
     {
+      id: 'crimes_ambientais',
       test: (norm) =>
         norm.includes('meio ambiente') ||
         norm.includes('ambienta') ||
         norm.includes('9.605') ||
         norm.includes('9605'),
-      terms: ['crimes ambientais', 'lei ambiental', 'meio ambiente', 'lei 9.605', '9.605', '9605']
+      terms: ['9.605', 'crimes ambientais', 'lei ambiental', 'meio ambiente', '9605']
     },
     {
+      id: 'interceptacao',
       test: (norm) =>
         norm.includes('interceptacao') ||
         norm.includes('9.296') ||
         norm.includes('9296'),
-      terms: ['interceptacao telefonica', 'lei 9.296', '9.296', '9296']
+      terms: ['9.296', 'interceptacao telefonica', '9296']
     },
     {
+      id: 'jecrim',
       test: (norm) =>
         norm.includes('juizado') ||
         /\bjecrim\b/.test(norm) ||
         norm.includes('9.099') ||
         norm.includes('9099'),
-      terms: ['juizados especiais', 'juizado especial', 'jecrim', 'lei 9.099', '9.099', '9099']
+      terms: ['9.099', 'juizados especiais', 'juizado especial', 'jecrim', '9099']
     },
     {
+      id: 'lavagem',
       test: (norm) =>
         norm.includes('lavagem') ||
         norm.includes('9.613') ||
         norm.includes('9613'),
-      terms: ['lavagem de dinheiro', 'lavagem de capitais', 'lei 9.613', '9.613', '9613']
+      terms: ['9.613', 'lavagem de dinheiro', 'lavagem de capitais', '9613']
     },
     {
+      id: 'racismo',
       test: (norm) =>
         norm.includes('racismo') ||
         norm.includes('7.716') ||
         norm.includes('7716'),
-      terms: ['racismo', 'crimes de racismo', 'lei 7.716', '7.716', '7716']
+      terms: ['7.716', 'racismo', 'crimes de racismo', '7716']
     },
     {
+      id: 'lep',
       test: (norm) =>
         /\blep\b/.test(norm) ||
         norm.includes('execucao penal') ||
         norm.includes('7.210') ||
         norm.includes('7210'),
-      terms: ['lei de execucao penal', 'execucao penal', 'lep', 'lei 7.210', '7.210', '7210']
+      terms: ['7.210', 'execucao penal', 'lei de execucao penal', 'lep', '7210']
     },
     {
+      id: 'prisao_temporaria',
       test: (norm) =>
         norm.includes('prisao temporaria') ||
         norm.includes('7.960') ||
         norm.includes('7960'),
-      terms: ['prisao temporaria', 'lei 7.960', '7.960', '7960']
+      terms: ['7.960', 'prisao temporaria', '7960']
     },
     {
+      id: 'idoso',
       test: (norm) =>
         norm.includes('idoso') ||
         norm.includes('pessoa idosa') ||
         norm.includes('10.741') ||
         norm.includes('10741'),
-      terms: ['estatuto do idoso', 'estatuto da pessoa idosa', 'lei 10.741', '10.741', '10741']
+      terms: ['10.741', 'estatuto do idoso', 'estatuto da pessoa idosa', '10741']
     },
     {
+      id: 'anticrime',
       test: (norm) =>
         norm.includes('pacote anticrime') ||
         /\banticrime\b/.test(norm) ||
         norm.includes('13.964') ||
         norm.includes('13964'),
-      terms: ['pacote anticrime', 'lei 13.964', '13.964', '13964']
+      terms: ['13.964', 'pacote anticrime', '13964']
     },
     {
+      id: 'igualdade_racial',
       test: (norm) =>
         norm.includes('igualdade racial') ||
         norm.includes('12.288') ||
         norm.includes('12288'),
-      terms: ['estatuto da igualdade racial', 'igualdade racial', 'lei 12.288', '12.288', '12288']
+      terms: ['12.288', 'estatuto da igualdade racial', 'igualdade racial', '12288']
     },
     {
+      id: 'pcd',
       test: (norm) =>
         norm.includes('pessoa com deficiencia') ||
         /\blbi\b/.test(norm) ||
         norm.includes('13.146') ||
         norm.includes('13146'),
-      terms: ['estatuto da pessoa com deficiencia', 'pessoa com deficiencia', 'lei 13.146', '13.146', '13146']
+      terms: ['13.146', 'estatuto da pessoa com deficiencia', 'pessoa com deficiencia', '13146']
     },
     {
+      id: 'ctb',
       test: (norm) =>
         /\bctb\b/.test(norm) ||
         norm.includes('codigo de transito') ||
         norm.includes('9.503') ||
         norm.includes('9503'),
-      terms: ['codigo de transito brasileiro', 'ctb', 'lei 9.503', '9.503', '9503']
+      terms: ['9.503', 'codigo de transito brasileiro', 'ctb', '9503']
     },
     {
+      id: 'lia',
       test: (norm) =>
         /\blia\b/.test(norm) ||
         norm.includes('improbidade administrativa') ||
         norm.includes('8.429') ||
         norm.includes('8429'),
-      terms: ['improbidade administrativa', 'lei de improbidade administrativa', 'lei 8.429', '8.429', '8429']
+      terms: ['8.429', 'improbidade administrativa', 'lei de improbidade administrativa', '8429']
     }
   ];
 
@@ -979,6 +999,30 @@
         return token;
       })
       .join(' ');
+  }
+
+  function getMatchingSpecialLawIds(rawText) {
+    const norm = normalizeFilterText(rawText)
+      .replace(/[-–—:|/]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!norm) return [];
+    const ids = [];
+    for (const rule of SPECIAL_LAW_RULES) {
+      if (rule.id && rule.test(norm) && !ids.includes(rule.id)) {
+        ids.push(rule.id);
+      }
+    }
+    const lawRegex = /\blei\s+(?:n[oº°.]?\s*)?(\d{1,2}\.?\d{3})\b/gi;
+    let match;
+    while ((match = lawRegex.exec(norm)) !== null) {
+      const digits = match[1].replace(/\D/g, '');
+      if (digits.length >= 4 && digits.length <= 5) {
+        const key = `lei_${digits}`;
+        if (!ids.includes(key)) ids.push(key);
+      }
+    }
+    return ids;
   }
 
   function getSpecialLawSearchTerms(rawText) {
@@ -1298,13 +1342,29 @@
     return text.includes(term);
   }
 
-  function scoreOptionMatch(optionText, searchTerms) {
+  function scoreOptionMatch(optionText, searchTerms, opts = {}) {
     const normOpt = normalizeFilterText(optionText);
     const stemOpt = normalizeStemText(optionText);
     if (!normOpt) return 0;
 
-    const validTerms = Array.isArray(searchTerms) ? searchTerms.filter(Boolean) : [];
+    const validTerms = Array.isArray(searchTerms)
+      ? searchTerms.map(t => normalizeFilterText(t)).filter(Boolean)
+      : [];
     if (validTerms.length === 0) return 0;
+
+    // Guarda de Lei Específica: evita que palavras genéricas ("autoridade", "crimes") marquem outra lei
+    const optLawIds = getMatchingSpecialLawIds(normOpt);
+    if (optLawIds.length > 0) {
+      if (opts.allowedLawIds instanceof Set && opts.allowedLawIds.size > 0) {
+        if (!optLawIds.some(id => opts.allowedLawIds.has(id))) {
+          return 0;
+        }
+      }
+      const searchLawIds = getMatchingSpecialLawIds(validTerms.join(' '));
+      if (!optLawIds.some(id => searchLawIds.includes(id))) {
+        return 0;
+      }
+    }
 
     // Rejeita qualificadores conflitantes (ex.: "Legislação Estadual" quando busca "Legislação Especial")
     const optStemWords = new Set(normalizeStemText(normOpt.replace(/[^a-z0-9]+/g, ' ')).split(' ').filter(Boolean));
@@ -1465,6 +1525,8 @@
     return broad;
   }
 
+  const PROSE_NOTE_PREFIX_REGEX = /^(?:obs(?:erva[cç][aã]o)?|aten[cç][aã]o|cuidado|dica|bizu|ex(?:emplo)?|stf|stj|s[uú]mula|importante)\s*[:\-–]/i;
+
   function parseCourseIndexSubtopics(rawText, contextNames = []) {
     const input = String(rawText || '').trim();
     if (!input) return [];
@@ -1483,6 +1545,8 @@
     }
 
     const broadContext = buildBroadParentNorms(contextNames);
+    const contextText = (Array.isArray(contextNames) ? contextNames : [contextNames]).filter(Boolean).join(' ');
+    const mainLawIds = new Set(getMatchingSpecialLawIds(contextText));
     const results = [];
     const seenNorm = new Set();
 
@@ -1513,6 +1577,18 @@
         .replace(/\s+/g, ' ')
         .trim();
       if (!cleaned) continue;
+
+      if (PROSE_NOTE_PREFIX_REGEX.test(cleaned)) continue;
+      if (cleaned.length > 85 || (/\.\s*$/.test(cleaned) && cleaned.split(/\s+/).length > 8)) {
+        continue;
+      }
+
+      if (mainLawIds.size > 0) {
+        const lineLawIds = getMatchingSpecialLawIds(cleaned);
+        if (lineLawIds.some(id => !mainLawIds.has(id))) {
+          continue;
+        }
+      }
 
       let norm = normalizeCourseIndexKey(cleaned);
       if (
@@ -1638,17 +1714,17 @@
 
     for (const term of searchTerms) {
       if (filterInput) {
-        filterInput.focus();
-        setNativeInputValue(filterInput, term);
-        await sleepMs(280);
+        const accented = restoreCommonPortugueseAccents(term);
+        const primaryQuery = (accented && accented !== term) ? accented : term;
 
-        if (hasNoSearchResultsInMenu(filterInput)) {
-          const accented = restoreCommonPortugueseAccents(term);
-          if (accented && accented !== term) {
-            filterInput.focus();
-            setNativeInputValue(filterInput, accented);
-            await sleepMs(280);
-          }
+        filterInput.focus();
+        setNativeInputValue(filterInput, primaryQuery);
+        await sleepMs(420);
+
+        if (hasNoSearchResultsInMenu(filterInput) && primaryQuery !== term) {
+          filterInput.focus();
+          setNativeInputValue(filterInput, term);
+          await sleepMs(420);
         }
       }
 
@@ -1665,7 +1741,7 @@
         if (forbiddenNorms && forbiddenNorms.has(optNorm)) continue;
         if (excludeNorms && excludeNorms.has(optNorm)) continue;
 
-        const sc = scoreOptionMatch(opt.innerText || opt.textContent, [term, ...searchTerms]);
+        const sc = scoreOptionMatch(opt.innerText || opt.textContent, [term, ...searchTerms], opts);
         if (sc > bestScore) {
           bestScore = sc;
           matched = opt;
@@ -1677,7 +1753,7 @@
 
     if ((!matched || (filterInput && hasNoSearchResultsInMenu(filterInput))) && filterInput && allowEmptyFallback) {
       setNativeInputValue(filterInput, '');
-      await sleepMs(220);
+      await sleepMs(320);
       const allOptions = findDropdownOptionElements(filterInput);
       let bestFallbackScore = 0;
       for (const opt of allOptions) {
@@ -1686,7 +1762,7 @@
         if (forbiddenNorms && forbiddenNorms.has(optNorm)) continue;
         if (excludeNorms && excludeNorms.has(optNorm)) continue;
 
-        const sc = scoreOptionMatch(opt.innerText || opt.textContent, searchTerms);
+        const sc = scoreOptionMatch(opt.innerText || opt.textContent, searchTerms, opts);
         if (sc > bestFallbackScore) {
           bestFallbackScore = sc;
           matched = opt;
@@ -1724,6 +1800,21 @@
     return Boolean(matched);
   }
 
+  function isSpecialLegislationSubjectName(subjectName) {
+    const norm = normalizeFilterText(subjectName);
+    if (!norm) return false;
+    return (
+      norm === 'legislacao especial' ||
+      norm === 'legislacao penal especial' ||
+      norm === 'leis especiais' ||
+      norm === 'leis penais especiais' ||
+      norm === 'legislacao extravagante' ||
+      norm === 'direito penal especial' ||
+      norm === 'penal especial' ||
+      (norm.includes('legislacao') && (norm.includes('especial') || norm.includes('extravagante')))
+    );
+  }
+
   async function selectCaveiraLessonsInDropdown(lessonsList, fallbackTopic, subtopicsList = [], subjectName = '') {
     const validLessons = (Array.isArray(lessonsList) ? lessonsList : []).filter(Boolean);
     const validSubtopics = (Array.isArray(subtopicsList) ? subtopicsList : []).filter(Boolean);
@@ -1746,12 +1837,19 @@
     let matchedCount = 0;
     const selectedOptionNorms = new Set();
 
+    const mainContextText = [fallbackTopic, ...validLessons].filter(Boolean).join(' ');
+    const mainLawIds = getMatchingSpecialLawIds(mainContextText);
+    const mainLawTerms = getSpecialLawSearchTerms(mainContextText);
+    const allowedLawIds = mainLawIds.length > 0 ? new Set(mainLawIds) : null;
+
     const trySelectWithTerms = async (terms, matchOpts = {}) => {
       if (!terms || terms.length === 0) return false;
-      const matched = await matchOptionInOpenDropdown(filterInput, terms, {
+      const effectiveOpts = {
         ...matchOpts,
+        ...(allowedLawIds ? { allowedLawIds } : {}),
         excludeNorms: selectedOptionNorms
-      });
+      };
+      const matched = await matchOptionInOpenDropdown(filterInput, terms, effectiveOpts);
       if (!matched) return false;
       const matchedNorm = normalizeCourseIndexKey(matched.innerText || matched.textContent);
       if (matchedNorm && selectedOptionNorms.has(matchedNorm)) return false;
@@ -1766,52 +1864,75 @@
       return true;
     };
 
-    // 1. Prioridade máxima: se houver subassuntos do Índice da aula, marca apenas as subpastas filhas específicas
+    // 1A. Prioridade máxima: se o card/aula já define uma Lei Principal (ex.: ECA), marca essa lei imediatamente
+    if (mainLawTerms.length > 0) {
+      await trySelectWithTerms(mainLawTerms, {
+        minScore: 220,
+        allowEmptyFallback: true,
+        allowedLawIds
+      });
+
+      if (matchedCount > 0 && isSpecialLegislationSubjectName(subjectName)) {
+        await closeOpenDropdown(trigger, filterInput);
+        await sleepMs(200);
+        return true;
+      }
+    }
+
+    // 1. Subassuntos do Índice/Bizus da aula: marca apenas subpastas específicas compatíveis
     if (validSubtopics.length > 0) {
       const forbiddenParentNorms = buildBroadParentNorms([subjectName, fallbackTopic, ...validLessons]);
       for (const subtopic of validSubtopics) {
         if (isDestroyed) break;
+
+        if (allowedLawIds) {
+          const subLawIds = getMatchingSpecialLawIds(subtopic);
+          if (subLawIds.some(id => !allowedLawIds.has(id))) {
+            continue;
+          }
+        }
+
         const expanded = expandSubtopicToSearchGroups(subtopic);
         if (!expanded || !expanded.primary || expanded.primary.length === 0) continue;
 
         const directHit = await trySelectWithTerms(expanded.primary, {
           forbiddenNorms: forbiddenParentNorms,
           minScore: 420,
-          allowEmptyFallback: false
+          allowEmptyFallback: false,
+          allowedLawIds
         });
 
         if (!directHit && Array.isArray(expanded.splitFallbacks) && expanded.splitFallbacks.length > 0) {
           for (const splitTerms of expanded.splitFallbacks) {
             if (isDestroyed) break;
+            if (allowedLawIds) {
+              const splitLawIds = getMatchingSpecialLawIds(splitTerms.join(' '));
+              if (splitLawIds.some(id => !allowedLawIds.has(id))) {
+                continue;
+              }
+            }
             await trySelectWithTerms(splitTerms, {
               forbiddenNorms: forbiddenParentNorms,
               minScore: 420,
-              allowEmptyFallback: false
+              allowEmptyFallback: false,
+              allowedLawIds
             });
           }
         }
       }
     }
 
-    // 1B. Garante que a lei especial principal da aula/índice (ex.: ECA) seja marcada mesmo se outros subtópicos pontuaram antes
-    const allContextText = [fallbackTopic, ...validLessons, ...validSubtopics].filter(Boolean).join(' ');
-    const mainContextText = [fallbackTopic, ...validLessons].filter(Boolean).join(' ');
-    const mainLawTerms = getSpecialLawSearchTerms(mainContextText);
-    const allContextLawTerms = getSpecialLawSearchTerms(allContextText);
-
-    if (mainLawTerms.length > 0) {
-      const hasMainLawSelected = Array.from(selectedOptionNorms).some(
-        selNorm => scoreOptionMatch(selNorm, mainLawTerms) >= 400
-      );
-      if (!hasMainLawSelected) {
-        await trySelectWithTerms(mainLawTerms, { minScore: 220, allowEmptyFallback: true });
-      }
-    } else if (allContextLawTerms.length > 0) {
-      const hasContextLawSelected = Array.from(selectedOptionNorms).some(
-        selNorm => scoreOptionMatch(selNorm, allContextLawTerms) >= 400
-      );
-      if (!hasContextLawSelected) {
-        await trySelectWithTerms(allContextLawTerms, { minScore: 220, allowEmptyFallback: true });
+    // 1B. Caso não houvesse lei principal no título/tópico, verifica se o contexto geral revelou uma única lei específica
+    if (mainLawTerms.length === 0) {
+      const allContextText = [fallbackTopic, ...validLessons, ...validSubtopics].filter(Boolean).join(' ');
+      const allContextLawTerms = getSpecialLawSearchTerms(allContextText);
+      if (allContextLawTerms.length > 0) {
+        const hasContextLawSelected = Array.from(selectedOptionNorms).some(
+          selNorm => scoreOptionMatch(selNorm, allContextLawTerms) >= 400
+        );
+        if (!hasContextLawSelected) {
+          await trySelectWithTerms(allContextLawTerms, { minScore: 220, allowEmptyFallback: true });
+        }
       }
     }
 
@@ -1821,13 +1942,13 @@
         if (isDestroyed) break;
         const lessonTerms = getLessonSearchTerms(lessonTitle);
         if (lessonTerms.length === 0) continue;
-        await trySelectWithTerms(lessonTerms, { minScore: 200, allowEmptyFallback: true });
+        await trySelectWithTerms(lessonTerms, { minScore: 200, allowEmptyFallback: true, allowedLawIds });
       }
     }
 
     if (matchedCount === 0 && hasFallback) {
       const fallbackTerms = getTopicSearchTerms(fallbackTopic);
-      await trySelectWithTerms(fallbackTerms, { minScore: 200, allowEmptyFallback: true });
+      await trySelectWithTerms(fallbackTerms, { minScore: 200, allowEmptyFallback: true, allowedLawIds });
     }
 
     await closeOpenDropdown(trigger, filterInput);
@@ -2104,14 +2225,16 @@
     if (!subject && !displayTarget) return;
 
     const rawIndexText = String(filterObj.rawIndexText || '').trim();
-    let effectiveSubtopics = Array.isArray(filterObj.subtopics)
+    const rawSubtopicsInput = Array.isArray(filterObj.subtopics)
       ? filterObj.subtopics.map(s => String(s || '').trim()).filter(Boolean)
       : [];
 
-    if (effectiveSubtopics.length === 0 && rawIndexText) {
-      effectiveSubtopics = parseCourseIndexSubtopics(rawIndexText, [subject, fallbackTopic, ...effectiveLessons]);
-    }
-    if (effectiveSubtopics.length === 0) {
+    const sourceTextForParse = rawIndexText || rawSubtopicsInput.join('\n');
+    let effectiveSubtopics = sourceTextForParse
+      ? parseCourseIndexSubtopics(sourceTextForParse, [subject, fallbackTopic, ...effectiveLessons])
+      : [];
+
+    if (effectiveSubtopics.length === 0 && !rawIndexText) {
       const cached = await resolveSubtopicsFromCourseCache(effectiveLessons, fallbackTopic, subject);
       if (cached.subtopics.length > 0) {
         effectiveSubtopics = cached.subtopics;
@@ -3064,6 +3187,27 @@
     return docTitle.length >= 4 && !ignored.has(normalizeCourseIndexKey(docTitle)) ? docTitle : '';
   }
 
+  function isCourseTabActive(el) {
+    if (!el) return false;
+    const cls = String(el.className || '');
+    return Boolean(
+      el.getAttribute('aria-selected') === 'true' ||
+      el.getAttribute('data-state') === 'active' ||
+      el.classList.contains('q-tab--active') ||
+      /\bactive\b/i.test(cls)
+    );
+  }
+
+  function findCourseTabElement(tabNameNorm) {
+    return Array.from(document.querySelectorAll('button, [role="tab"], .q-tab, a, div, span')).find(el => {
+      if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
+      const r = el.getBoundingClientRect();
+      if (r.width < 32 || r.width > 200 || r.height < 20 || r.height > 58) return false;
+      const txt = normalizeFilterText(el.innerText || el.textContent);
+      return txt === tabNameNorm;
+    }) || null;
+  }
+
   function extractCourseIndexRawTextFromDom() {
     const tsRegex = /\[\d{1,2}:\d{2}(?::\d{2})?\]/g;
     const containers = [];
@@ -3098,20 +3242,88 @@
     return tsLines.join('\n');
   }
 
+  function extractCourseBizusRawTextFromDom() {
+    const bizusTab = findCourseTabElement('bizus');
+    if (!bizusTab || !isCourseTabActive(bizusTab)) return '';
+
+    const tabRect = bizusTab.getBoundingClientRect();
+    let panelEl = null;
+
+    const ariaControls = bizusTab.getAttribute('aria-controls');
+    if (ariaControls) {
+      const target = document.getElementById(ariaControls);
+      if (target && isElementVisible(target)) panelEl = target;
+    }
+
+    if (!panelEl) {
+      const panels = Array.from(document.querySelectorAll('.q-tab-panel, [role="tabpanel"], section, div'))
+        .filter(el => {
+          if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
+          if (el.contains(bizusTab)) return false;
+          const r = el.getBoundingClientRect();
+          if (r.top < tabRect.bottom - 6) return false;
+          if (r.width < 220 || r.height < 60) return false;
+          const txt = (el.innerText || el.textContent || '').trim();
+          return txt.length >= 15 && txt.length <= 8000;
+        })
+        .sort((a, b) => {
+          const ra = a.getBoundingClientRect();
+          const rb = b.getBoundingClientRect();
+          return Math.abs(ra.top - tabRect.bottom) - Math.abs(rb.top - tabRect.bottom) || (ra.width * ra.height) - (rb.width * rb.height);
+        });
+      panelEl = panels[0] || null;
+    }
+
+    if (!panelEl) return '';
+
+    // Extrai preferencialmente títulos e marcadores curtos de tópicos dentro da aba Bizus
+    const structuredNodes = Array.from(panelEl.querySelectorAll('h1, h2, h3, h4, h5, h6, strong, b, li'))
+      .filter(el => isElementVisible(el));
+    const lines = [];
+    const seen = new Set();
+
+    const pushCandidate = (rawLine) => {
+      const line = String(rawLine || '').replace(/\s+/g, ' ').trim();
+      if (!line || line.length < 4 || line.length > 85) return;
+      const key = normalizeCourseIndexKey(line);
+      if (!key || key === 'bizus' || key === 'indice' || key === 'charlie' || key === 'arquivos' || key === 'comentarios') return;
+      if (!seen.has(key)) {
+        seen.add(key);
+        lines.push(line);
+      }
+    };
+
+    for (const node of structuredNodes) {
+      const nodeText = node.innerText || node.textContent || '';
+      nodeText.split(/\r?\n/).forEach(pushCandidate);
+    }
+
+    if (lines.length === 0) {
+      const rawTxt = panelEl.innerText || panelEl.textContent || '';
+      rawTxt.split(/\r?\n/).forEach(pushCandidate);
+    }
+
+    return lines.slice(0, 20).join('\n');
+  }
+
   function scanCourseVideoIndex() {
     if (isDestroyed || !isCoursePage()) return;
 
+    let captureSource = 'indice';
     let rawIndexText = extractCourseIndexRawTextFromDom();
     if (!rawIndexText) {
+      const bizusText = extractCourseBizusRawTextFromDom();
+      if (bizusText) {
+        rawIndexText = bizusText;
+        captureSource = 'bizus';
+      }
+    }
+
+    if (!rawIndexText) {
       const currentUrl = window.location.href;
-      if (!peekedCourseUrls.has(currentUrl)) {
-        const indexTab = Array.from(document.querySelectorAll('button, [role="tab"], .q-tab, a, div, span')).find(el => {
-          if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
-          const r = el.getBoundingClientRect();
-          if (r.width < 32 || r.width > 200 || r.height < 20 || r.height > 58) return false;
-          const txt = normalizeFilterText(el.innerText || el.textContent);
-          return txt === 'indice';
-        });
+      const bizusTab = findCourseTabElement('bizus');
+      if (!peekedCourseUrls.has(currentUrl) && (!bizusTab || !isCourseTabActive(bizusTab))) {
+        const indexTab = findCourseTabElement('indice');
         if (indexTab) {
           peekedCourseUrls.add(currentUrl);
           clickElementRealistically(indexTab);
@@ -3128,16 +3340,18 @@
     currentCourseIndexStatus = {
       count: subtopics.length,
       lessonTitle,
+      source: captureSource,
       preview: `${lessonTitle ? lessonTitle + ': ' : ''}${subtopics.slice(0, 6).join(' • ')}`
     };
 
     const currentQEl = document.getElementById('qg-current-q-id');
     if (currentQEl) {
-      currentQEl.textContent = `📑 Índice capturado (${subtopics.length} subassuntos)`;
+      const label = captureSource === 'bizus' ? 'Bizus capturado' : 'Índice capturado';
+      currentQEl.textContent = `📑 ${label} (${subtopics.length} subassuntos)`;
       currentQEl.title = currentCourseIndexStatus.preview;
     }
 
-    const signature = `${window.location.href}|${lessonTitle}|${rawIndexText}`;
+    const signature = `${captureSource}|${window.location.href}|${lessonTitle}|${rawIndexText}`;
     if (signature === lastCapturedCourseSignature || !isExtensionContextValid()) return;
     lastCapturedCourseSignature = signature;
 
@@ -3150,6 +3364,7 @@
       url: window.location.href,
       videoId,
       lessonTitle,
+      source: captureSource,
       rawIndexText,
       subtopics,
       capturedAt: Date.now()
@@ -3164,7 +3379,17 @@
         const nextByLesson = { ...(prev.byLesson || {}) };
         const lessonKey = normalizeCourseIndexKey(lessonTitle);
         if (lessonKey) {
-          nextByLesson[lessonKey] = entry;
+          const existing = nextByLesson[lessonKey];
+          if (existing && existing.source === 'indice' && captureSource === 'bizus') {
+            nextByLesson[lessonKey] = {
+              ...existing,
+              bizusRawText: rawIndexText,
+              bizusSubtopics: subtopics,
+              capturedAt: Date.now()
+            };
+          } else {
+            nextByLesson[lessonKey] = entry;
+          }
         }
         // Mantém no máximo 40 aulas mais recentes em cache
         const ordered = Object.entries(nextByLesson)
@@ -3173,7 +3398,7 @@
         const compactedByLesson = Object.fromEntries(ordered);
         chrome.storage.local.set({
           [COURSE_INDEX_CACHE_KEY]: {
-            latest: entry,
+            latest: (lessonKey && compactedByLesson[lessonKey]) || entry,
             byLesson: compactedByLesson
           }
         });
