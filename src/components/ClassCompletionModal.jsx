@@ -304,7 +304,7 @@ export default function ClassCompletionModal({
           </div>
           {isRetroactive && (
             <p className="mt-2 text-[10px] font-medium text-amber-700 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/30 border border-amber-200/70 dark:border-amber-900/50 rounded-lg px-2.5 py-1.5 leading-snug">
-              Registro em <strong>{shortSelectedDate}</strong>: os minutos e a revisão FSRS serão contados a partir dessa data, e o bloco de hoje continuará livre para as próximas aulas.
+              Registro em <strong>{shortSelectedDate}</strong>: os minutos de estudo serão contados a partir dessa data, e o bloco de hoje continuará livre para as próximas aulas.
             </p>
           )}
         </div>

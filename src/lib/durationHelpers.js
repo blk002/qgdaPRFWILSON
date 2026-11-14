@@ -111,17 +111,14 @@ export const getSubjectVideoStats = (subject, overrideSpeed = null) => {
   let totalLessons = 0;
 
   (subject.topics || []).forEach(topic => {
-    if (topic.lessons && topic.lessons.length > 0) {
-      topic.lessons.forEach(lesson => {
-        totalLessons += 1;
-        const sec = parseDurationToSeconds(lesson.duration || '00:00');
-        // Se a duração for 00:00, fallback de 60 min por aula
-        totalSeconds += sec > 0 ? sec : 3600;
-      });
-    } else if (topic.total > 0) {
-      // Se não tiver lessons cadastradas, usa topic.total * 60 min
-      totalLessons += topic.total;
-      totalSeconds += topic.total * 3600;
+    const lessonsArr = Array.isArray(topic.lessons) ? topic.lessons : [];
+    const count = Math.max(Number(topic.total) || 0, lessonsArr.length);
+    for (let i = 0; i < count; i++) {
+      totalLessons += 1;
+      const lesson = lessonsArr[i];
+      const sec = lesson ? parseDurationToSeconds(lesson.duration || '00:00') : 0;
+      // Se a duração for 00:00 ou não cadastrada, fallback de 60 min por aula
+      totalSeconds += sec > 0 ? sec : 3600;
     }
   });
 

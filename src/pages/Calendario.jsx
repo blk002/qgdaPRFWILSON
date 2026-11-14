@@ -112,7 +112,7 @@ export default function Calendario() {
   }), [
     getSubjectEstimates, getEstimatedCompletionDate, subjects, cycle, cycleSlotCounts, currentDayIndex,
     completedToday, subjectTimeGoal, calendarOverrides, calendarOverrideCounts, futureScheduleRules,
-    cycleScheduleType, cycleWeekStart, targetExamDate, todayKey
+    cycleScheduleType, cycleWeekStart, cycleCarryoverOffset, targetExamDate, todayKey
   ]);
 
   // Data da prova nunca definida pelo usuário (vazia ou padrão antigo já vencido): não exibe "Risco de Reprovação"
@@ -134,6 +134,14 @@ export default function Calendario() {
 
   // Função principal: retorna as matérias e quantidades de aulas por bloco programadas para qualquer data do calendário
   const getDayScheduleForDate = useCallback((cellDateObj, dateKey) => {
+    // 1a. Personalização manual explícita gravada para esta própria data tem prioridade máxima
+    if (calendarOverrides && Array.isArray(calendarOverrides[dateKey])) {
+      return {
+        daySubjects: [...calendarOverrides[dateKey]],
+        daySlotCounts: Array.isArray(calendarOverrideCounts?.[dateKey]) ? [...calendarOverrideCounts[dateKey]] : []
+      };
+    }
+
     const isTodayCell = cellDateObj.getTime() === todayDateObj.getTime();
     const shouldShiftCarryover = cycleScheduleType === 'weekly' && isTodayCell && cycleCarryoverOffset > 0;
     const effectiveDateObj = shouldShiftCarryover
@@ -143,8 +151,8 @@ export default function Calendario() {
       ? `${effectiveDateObj.getFullYear()}-${String(effectiveDateObj.getMonth() + 1).padStart(2, '0')}-${String(effectiveDateObj.getDate()).padStart(2, '0')}`
       : dateKey;
 
-    // 1. Personalização manual explícita para este dia específico (ou do dia de origem em reposição)
-    if (calendarOverrides && Array.isArray(calendarOverrides[effectiveDateKey])) {
+    // 1b. Personalização manual do dia de origem quando em reposição automática
+    if (shouldShiftCarryover && calendarOverrides && Array.isArray(calendarOverrides[effectiveDateKey])) {
       return {
         daySubjects: [...calendarOverrides[effectiveDateKey]],
         daySlotCounts: Array.isArray(calendarOverrideCounts?.[effectiveDateKey]) ? [...calendarOverrideCounts[effectiveDateKey]] : []
@@ -311,11 +319,9 @@ export default function Calendario() {
     if (diff < 0) return; // Dias passados não abrem o gerenciador
 
     const dayOfWeek = cellDateObj.getDay();
-    const weekIndex = getCycleIndexForDate
-      ? getCycleIndexForDate(cellDateObj, todayDateObj)
-      : ((cycleScheduleType === 'weekly')
-        ? ((cycleWeekStart === 'monday') ? (dayOfWeek + 6) % 7 : dayOfWeek)
-        : ((currentDayIndex + diff) % Math.max(1, cycle.length) + Math.max(1, cycle.length)) % Math.max(1, cycle.length));
+    const weekIndex = cycleScheduleType === 'weekly'
+      ? ((cycleWeekStart === 'monday') ? (dayOfWeek + 6) % 7 : dayOfWeek)
+      : ((currentDayIndex + diff) % Math.max(1, cycle.length) + Math.max(1, cycle.length)) % Math.max(1, cycle.length);
 
     const baseSubs = (cycle && Array.isArray(cycle[weekIndex])) ? [...cycle[weekIndex]] : [];
     const { daySubjects: scheduledSubs, daySlotCounts: scheduledCounts } = getDayScheduleForDate(cellDateObj, dateKey);
@@ -383,7 +389,12 @@ export default function Calendario() {
           }
         }
       });
-      useStore.setState({ calendarOverrides: nextOverrides, calendarOverrideCounts: nextOverrideCounts });
+      const todayStr = getLocalDateStr ? getLocalDateStr() : '';
+      useStore.setState({
+        calendarOverrides: nextOverrides,
+        calendarOverrideCounts: nextOverrideCounts,
+        ...(dateKey === todayStr ? { cycleCarryoverOffset: 0, lastCarryoverCheckDate: todayStr } : {})
+      });
       toast.success(`Programação definida de ${dateKey} para o futuro! Os dias anteriores não foram alterados.`);
     } else {
       // 3. Atualiza o ciclo semanal base para todas as semanas neste dia e limpa regras antigas conflitantes
@@ -401,8 +412,10 @@ export default function Calendario() {
         const cleanedRules = (futureScheduleRules || []).filter(
           r => r && r.v === 2 && r.dayOfWeek !== dayOfWeek && r.cycleIndex !== weekIndex
         );
+        const todayStr = getLocalDateStr ? getLocalDateStr() : '';
         useStore.setState({
-          futureScheduleRules: cleanedRules
+          futureScheduleRules: cleanedRules,
+          ...(dateKey === todayStr ? { cycleCarryoverOffset: 0, lastCarryoverCheckDate: todayStr } : {})
         });
 
         toast.success(`Ciclo semanal base atualizado com sucesso!`);

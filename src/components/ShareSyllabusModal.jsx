@@ -383,11 +383,15 @@ ${code}
           }
         }
       });
-      const newRules = (st.futureScheduleRules || []).map(rule => ({
-        ...rule,
-        subjects: (rule.subjects || []).filter(sId => validIds.has(sId)),
-        slotCounts: (rule.slotCounts || []).filter((_, sIdx) => validIds.has((rule.subjects || [])[sIdx]))
-      }));
+      const newRules = (st.futureScheduleRules || []).map(rule => {
+        const slots = rule.daySlots || rule.subjects || [];
+        return {
+          ...rule,
+          daySlots: slots.filter(sId => validIds.has(sId)),
+          slotCounts: (rule.slotCounts || []).filter((_, sIdx) => validIds.has(slots[sIdx]))
+        };
+      });
+      const todayStr = useStore.getState().getLocalDateStr?.() || null;
       useStore.setState({
         subjects: parsedImportedSubjects,
         cycle: newCycle,
@@ -395,7 +399,9 @@ ${code}
         calendarOverrides: newOverrides,
         calendarOverrideCounts: newOverrideCounts,
         futureScheduleRules: newRules,
-        completedToday: []
+        completedToday: [],
+        cycleCarryoverOffset: 0,
+        lastCarryoverCheckDate: todayStr
       });
       toast.success(`Grade de estudos substituída com sucesso! (${importStats?.subjectsCount} disciplinas)`);
       onClose();

@@ -299,15 +299,11 @@ const normalizeHydratedState = (raw, currentCaveira = []) => {
   }
   if (!cleanData.calendarOverrideCounts) cleanData.calendarOverrideCounts = {};
 
-  // Mescla caveiraQuestions preservando lote limpo v3
-  const isCloudCleanedV3 = localStorage.getItem('prf_caveira_cloud_v3_cleaned') === 'true';
-  const incomingCaveira = isCloudCleanedV3 ? (cleanData.caveiraQuestions || []) : [];
-  if (!isCloudCleanedV3) {
-    try { localStorage.setItem('prf_caveira_cloud_v3_cleaned', 'true'); } catch (_) {}
-  }
+  // Mescla caveiraQuestions preservando dados da nuvem e locais
+  const incomingCaveira = Array.isArray(cleanData.caveiraQuestions) ? cleanData.caveiraQuestions : [];
   const mergedMap = new Map();
-  incomingCaveira.forEach(q => { if (q && q.id) mergedMap.set(q.id, q); });
-  (currentCaveira || []).forEach(q => { if (q && q.id) mergedMap.set(q.id, { ...(mergedMap.get(q.id) || {}), ...q }); });
+  (currentCaveira || []).forEach(q => { if (q && q.id) mergedMap.set(q.id, q); });
+  incomingCaveira.forEach(q => { if (q && q.id) mergedMap.set(q.id, { ...(mergedMap.get(q.id) || {}), ...q }); });
   cleanData.caveiraQuestions = Array.from(mergedMap.values());
 
   return cleanData;
@@ -584,12 +580,12 @@ export const useStore = create(
               }
             } : {})
           });
+          set({ isSyncing: false, isLoadingFromCloud: false });
           get().syncDayRollover();
           get().checkAndResetWeekly();
           get().checkAndAdvanceSeason();
           get().checkAndResetDailyMissions();
           get().syncAndRepairCaveiraReviews?.();
-          set({ isSyncing: false, isLoadingFromCloud: false });
 
           if (localIsNewerAndDirty) {
             writeLocalSnapshot(get(), {
@@ -703,6 +699,7 @@ export const useStore = create(
             get().checkAndResetWeekly();
             get().checkAndAdvanceSeason();
             get().checkAndResetDailyMissions();
+            get().syncAndRepairCaveiraReviews?.();
             return true;
           }
 
@@ -713,13 +710,15 @@ export const useStore = create(
             ...freshState,
             caveiraQuestions: get().caveiraQuestions || [],
             lastSyncedAt: null,
+            isSyncing: false,
+            isLoadingFromCloud: false,
             hasCompletedInitialCloudSync: true
           });
           get().syncDayRollover();
           get().checkAndResetWeekly();
           get().checkAndAdvanceSeason();
           get().checkAndResetDailyMissions();
-          set({ isSyncing: false, isLoadingFromCloud: false });
+          get().syncAndRepairCaveiraReviews?.();
           await get().saveToCloud({ allowEmptyOverwrite: true });
           return true;
         } catch (error) {
@@ -760,12 +759,12 @@ export const useStore = create(
             if (chosenRaw) {
               console.log(`💡 [Estado Offline] Carregando dados locais de ${chosenDateStr}`);
               const cleanData = normalizeHydratedState(chosenRaw, get().caveiraQuestions || []);
-              set({ ...cleanData, hasCompletedInitialCloudSync: true });
+              set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false, hasCompletedInitialCloudSync: true });
               get().syncDayRollover();
               get().checkAndResetWeekly();
               get().checkAndAdvanceSeason();
               get().checkAndResetDailyMissions();
-              set({ isSyncing: false, isLoadingFromCloud: false });
+              get().syncAndRepairCaveiraReviews?.();
 
               toast.info(`⚠️ Usando dados salvos localmente (${chosenDateStr}) devido a erro de conexão.`);
               return true;
@@ -1005,7 +1004,15 @@ export const useStore = create(
       getPendingReviews: () => {
         const { reviews, getLocalDateStr } = get();
         const today = getLocalDateStr();
-        return reviews.filter(r => r.nextDateStr <= today);
+        return (reviews || []).filter(r => {
+          const isCaveira = Boolean(
+            r.isCaveiraQuestion ||
+            r.questionData ||
+            String(r.id || '').startsWith('rev_caveira_') ||
+            String(r.topicName || '').startsWith('[Caveira')
+          );
+          return isCaveira && r.nextDateStr <= today;
+        });
       },
 
       // --- SETTERS BÁSICOS ---
@@ -1046,7 +1053,9 @@ export const useStore = create(
           ...(state.calendarOverrideCounts || {}),
           [dateStr]: Array.isArray(slotCounts) ? [...slotCounts] : []
         },
-        ...(dateStr === state.getLocalDateStr() ? { cycleCarryoverOffset: 0 } : {})
+        ...(dateStr === state.getLocalDateStr()
+          ? { cycleCarryoverOffset: 0, lastCarryoverCheckDate: dateStr }
+          : {})
       })),
       removeDayOverride: (dateStr) => set(state => {
         const next = { ...(state.calendarOverrides || {}) };
@@ -1081,9 +1090,11 @@ export const useStore = create(
           nextCycleSlotCounts[targetIdx] = Array.isArray(slotCounts) ? [...slotCounts] : [];
         }
 
+        const todayStr = state.getLocalDateStr();
         return {
           cycle: nextCycle,
           cycleSlotCounts: nextCycleSlotCounts,
+          ...(fromDate <= todayStr ? { cycleCarryoverOffset: 0, lastCarryoverCheckDate: todayStr } : {}),
           futureScheduleRules: [
             ...(state.futureScheduleRules || []).filter(r => {
               if (!r || r.v !== 2 || !r.fromDate) return false;
@@ -1255,7 +1266,7 @@ export const useStore = create(
           completedTodayDate: today
         };
       }),
-      resetCycleCarryover: () => set({ cycleCarryoverOffset: 0 }),
+      resetCycleCarryover: () => set({ cycleCarryoverOffset: 0, lastCarryoverCheckDate: get().getLocalDateStr() }),
 
       // Detecta a virada do dia real: zera os blocos concluídos de ontem e atualiza a chave de "hoje".
       syncDayRollover: () => {
@@ -1290,13 +1301,21 @@ export const useStore = create(
             if (calendarOverrides && Array.isArray(calendarOverrides[dateStr])) {
               return calendarOverrides[dateStr].length > 0;
             }
+            const [dy, dm, dd] = String(dateStr).split('-').map(Number);
+            const effDateObj = (currentOffset > 0 && dy && dm && dd)
+              ? new Date(dy, dm - 1, dd - currentOffset)
+              : dateObj;
+            const effDateStr = currentOffset > 0 ? formatLocal(effDateObj) : dateStr;
+            if (currentOffset > 0 && calendarOverrides && Array.isArray(calendarOverrides[effDateStr])) {
+              return calendarOverrides[effDateStr].length > 0;
+            }
             const dow = dateObj.getDay();
             const rawIdx = cycleWeekStart === 'monday' ? (dow + 6) % 7 : dow;
             const effIdx = ((rawIdx - currentOffset) % 7 + 7) % 7;
-            const effDow = (dow - (currentOffset % 7) + 7) % 7;
+            const effDow = effDateObj.getDay();
             const matchingRules = (futureScheduleRules || [])
               .filter(r => {
-                if (!r || r.v !== 2 || !r.fromDate || r.fromDate > dateStr) return false;
+                if (!r || r.v !== 2 || !r.fromDate || r.fromDate > effDateStr) return false;
                 if (r.dayOfWeek !== undefined) return r.dayOfWeek === effDow;
                 return r.cycleIndex === effIdx;
               })
@@ -1308,12 +1327,14 @@ export const useStore = create(
           };
 
           if (!lastCarryoverCheckDate) {
+            let nextOffset = cycleCarryoverOffset;
             const hasPriorStudy = Object.entries(studyHistory || {}).some(([d, m]) => d < today && Number(m) > 0);
             if (hasPriorStudy && hadScheduledStudyOnDate(yesterdayObj, yesterdayStr, cycleCarryoverOffset)) {
               if ((studyHistory?.[yesterdayStr] || 0) <= 0) {
-                patch.cycleCarryoverOffset = (cycleCarryoverOffset + 1) % 7;
+                nextOffset = (cycleCarryoverOffset + 1) % 7;
               }
             }
+            patch.cycleCarryoverOffset = nextOffset;
             patch.lastCarryoverCheckDate = today;
           } else if (lastCarryoverCheckDate < today) {
             const [ly, lm, ld] = String(lastCarryoverCheckDate).split('-').map(Number);
@@ -1331,12 +1352,11 @@ export const useStore = create(
               }
               cursor.setDate(cursor.getDate() + 1);
             }
-            if (nextOffset !== cycleCarryoverOffset) {
-              patch.cycleCarryoverOffset = nextOffset;
-            }
+            patch.cycleCarryoverOffset = nextOffset;
             patch.lastCarryoverCheckDate = today;
           }
         } else if (state.lastCarryoverCheckDate !== today) {
+          patch.cycleCarryoverOffset = 0;
           patch.lastCarryoverCheckDate = today;
         }
 
@@ -1690,7 +1710,7 @@ export const useStore = create(
         set({ caveiraQuestions: updatedList });
         try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updatedList)); } catch (_) {}
 
-        if (!question.hit) {
+        if (!question.hit || question.confidence === 'chute' || question.confidence === 'duvida' || question.fsrsRequested) {
           get().createFsrsCardFromCaveira(updatedList.find(q => q.id === question.id) || question, true);
         }
         return true;
@@ -1884,6 +1904,10 @@ export const useStore = create(
 
         const todayStr = getLocalDateStr();
 
+        const reasonLine = question.hit
+          ? `Motivo da revisão: ${question.confidence === 'chute' ? 'Acertou no Chute 🎲' : question.confidence === 'duvida' ? 'Acertou com Dúvida 🤔' : 'Revisão Manual 📌'}`
+          : `Motivo do erro: ${question.errorReason || 'Conteúdo'}`;
+
         const newReview = {
           id: 'rev_caveira_' + question.id,
           caveiraQuestionId: question.id,
@@ -1893,7 +1917,7 @@ export const useStore = create(
           questionData: qDataPayload,
           subjectId,
           topicName: `[Caveira ${question.id}] ${topicLabel}`,
-          notes: `Enunciado: ${question.content || ''}\nGabarito: ${question.correctChoice} (Você marcou: ${question.userChoice})\nMotivo do erro: ${question.errorReason || 'Conteúdo'}${noteLine}`,
+          notes: `Enunciado: ${question.content || ''}\nGabarito: ${question.correctChoice} (Você marcou: ${question.userChoice})\n${reasonLine}${noteLine}`,
           nextDateStr: todayStr,
           interval: 0,
           stability: 0,
@@ -1916,7 +1940,7 @@ export const useStore = create(
         const { reviews = [], caveiraQuestions = [], subjects = {}, getLocalDateStr, resolveCaveiraSubject } = get();
         const qMap = new Map();
         caveiraQuestions.forEach(q => {
-          if (q && q.id) qMap.set(q.id, q);
+          if (q && q.id) qMap.set(String(q.id).trim().toUpperCase(), q);
         });
 
         const seenCaveiraIds = new Set();
@@ -1933,26 +1957,29 @@ export const useStore = create(
             String(rev.topicName || '').startsWith('[Caveira')
           );
 
+          // FSRS é exclusivo para questões do Caveira: descarta cartões legados de aulas do ciclo
           if (!isCaveira) {
-            repairedReviews.push(rev);
+            reviewsChanged = true;
             continue;
           }
 
-          // Extrai o ID Q\d+ do card
+          // Extrai o ID da questão (ex.: Q\d+ ou fps-...)
           const idMatch =
             String(rev.caveiraQuestionId || '').match(/Q\d+/i) ||
             String(rev.id || '').match(/Q\d+/i) ||
             String(rev.topicName || '').match(/Q\d+/i);
-          const qId = idMatch ? idMatch[0].toUpperCase() : (rev.caveiraQuestionId || rev.id);
+          const rawQId = idMatch ? idMatch[0].toUpperCase() : String(rev.caveiraQuestionId || rev.id || '').replace(/^rev_caveira_/, '');
+          const normKey = String(rawQId).trim().toUpperCase();
 
           // Remove cartões duplicados da mesma questão Caveira
-          if (seenCaveiraIds.has(qId)) {
+          if (seenCaveiraIds.has(normKey)) {
             reviewsChanged = true;
             continue;
           }
-          seenCaveiraIds.add(qId);
+          seenCaveiraIds.add(normKey);
 
-          const matchedQ = qMap.get(qId);
+          const matchedQ = qMap.get(normKey);
+          const qId = matchedQ?.id || rawQId;
 
           // Extrai dados de fallback das notas/título caso a questão seja antiga
           let parsedContent = '';
@@ -2071,9 +2098,10 @@ export const useStore = create(
           }
 
           const needsFsrs = !q.hit || q.confidence === 'chute' || q.confidence === 'duvida' || q.fsrsRequested || q.fsrsCreated;
+          const normQKey = String(q.id).trim().toUpperCase();
 
-          if (needsFsrs && !seenCaveiraIds.has(q.id)) {
-            seenCaveiraIds.add(q.id);
+          if (needsFsrs && !seenCaveiraIds.has(normQKey)) {
+            seenCaveiraIds.add(normQKey);
             reviewsChanged = true;
             questionsChanged = true;
 
@@ -2122,7 +2150,7 @@ export const useStore = create(
             });
             return { ...q, alternatives: sanitizedQAlts, fsrsCreated: true };
           }
-          if (needsFsrs && !q.fsrsCreated && seenCaveiraIds.has(q.id)) {
+          if (needsFsrs && !q.fsrsCreated && seenCaveiraIds.has(normQKey)) {
             questionsChanged = true;
             return { ...q, alternatives: sanitizedQAlts, fsrsCreated: true };
           }
@@ -2312,15 +2340,27 @@ export const useStore = create(
       handleReplaceSubject: (dayIndex, slotIndex, oldSubjectId, newSubjectId) => {
         if (!newSubjectId) return;
         const dateInfo = get().getRelativeDateInfo?.(dayIndex);
-        const fullDateStr = dateInfo?.fullDateStr;
+        const rawFullDateStr = dateInfo?.fullDateStr;
         set(state => {
           const isWeekly = (state.cycleScheduleType || 'weekly') === 'weekly';
+          const hasExplicitTodayOverride = Boolean(rawFullDateStr && Array.isArray(state.calendarOverrides?.[rawFullDateStr]));
+          const carryover = (isWeekly && dateInfo?.isToday && !hasExplicitTodayOverride) ? (state.cycleCarryoverOffset || 0) : 0;
+          const targetDayIndex = carryover > 0 ? ((dayIndex - carryover) % 7 + 7) % 7 : dayIndex;
+          let fullDateStr = rawFullDateStr;
+          if (carryover > 0 && rawFullDateStr) {
+            const p = String(rawFullDateStr).split('-').map(Number);
+            if (p.length === 3) {
+              const effD = new Date(p[0], p[1] - 1, p[2] - carryover);
+              fullDateStr = `${effD.getFullYear()}-${String(effD.getMonth() + 1).padStart(2, '0')}-${String(effD.getDate()).padStart(2, '0')}`;
+            }
+          }
+
           const baseCycle = isWeekly
             ? Array.from({ length: 7 }, (_, i) => Array.isArray(state.cycle?.[i]) ? [...state.cycle[i]] : [])
             : [...(state.cycle || [])];
 
           const newCycle = baseCycle.map((daySlots, dIdx) => {
-            if (dIdx !== dayIndex || !Array.isArray(daySlots)) return daySlots;
+            if (dIdx !== targetDayIndex || !Array.isArray(daySlots)) return daySlots;
             return daySlots.map((subId, sIdx) =>
               sIdx === slotIndex && subId === oldSubjectId ? newSubjectId : subId
             );
@@ -2342,7 +2382,7 @@ export const useStore = create(
               .filter(r => {
                 if (!r || r.v !== 2 || !r.fromDate || r.fromDate > fullDateStr) return false;
                 if (isWeekly && r.dayOfWeek !== undefined) return r.dayOfWeek === dayOfWeek;
-                return r.dayOfWeek === dayOfWeek || r.cycleIndex === dayIndex;
+                return r.dayOfWeek === dayOfWeek || r.cycleIndex === targetDayIndex;
               })
               .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
 
@@ -2466,7 +2506,7 @@ export const useStore = create(
         setWeeklySprint(prev => ({ ...prev, currentMinutes: (prev.currentMinutes || 0) + minutes }));
         
         // XP reward for using pomodoro (2 XP per minute)
-        addXP(minutes * 2, "Sessão Pomodoro Concluída");
+        addXP(minutes * 2, "Sessão Pomodoro Concluída", targetDateStr);
         
         set(state => ({
           studyHistory: {
@@ -2475,7 +2515,7 @@ export const useStore = create(
           }
         }));
         get().updateDailyMissionProgress('minutes', minutes);
-        get().registerStudyActivity();
+        get().registerStudyActivity(targetDateStr);
       },
 
       watchClass: (subjectId, slotIndex, amountWatched = 1, speed = null, studyDateStr = null) => {
@@ -2639,6 +2679,7 @@ export const useStore = create(
         
         // Sincroniza o reset com a nuvem e limpa chave separada de questões
         try { localStorage.removeItem('prf_caveira_questions'); } catch (_) {}
+        try { window.postMessage({ source: 'QG_WEB_APP', type: 'CLEAR_SESSION' }, '*'); } catch (_) {}
         const { saveToCloud } = get();
         await saveToCloud({ allowEmptyOverwrite: true });
       },
@@ -2690,6 +2731,8 @@ export const useStore = create(
           changes.calendarOverrideCounts = {};
           changes.futureScheduleRules = [];
           changes.studyHistory = {};
+          changes.cycleCarryoverOffset = 0;
+          changes.lastCarryoverCheckDate = get().getLocalDateStr();
           summary.push('Disciplinas & Ciclo');
         }
 
@@ -2712,6 +2755,8 @@ export const useStore = create(
           changes.subjects = resetSubjects;
           changes.completedToday = [];
           changes.completedTodayDate = null;
+          changes.cycleCarryoverOffset = 0;
+          changes.lastCarryoverCheckDate = get().getLocalDateStr();
           summary.push('Aulas Assistidas');
         }
 
@@ -2727,6 +2772,8 @@ export const useStore = create(
           changes.calendarOverrides = {};
           changes.calendarOverrideCounts = {};
           changes.futureScheduleRules = [];
+          changes.cycleCarryoverOffset = 0;
+          changes.lastCarryoverCheckDate = get().getLocalDateStr();
           summary.push('Calendário & Ciclo');
         }
 
@@ -2765,7 +2812,16 @@ export const useStore = create(
           }
           if (!fsrs) {
             const currentReviews = changes.reviews !== undefined ? changes.reviews : (get().reviews || []);
-            changes.reviews = currentReviews.filter(r => !(r.origin?.includes('FPS') || String(r.id || '').startsWith('rev_fps_') || String(r.id || '').startsWith('rev_caveira_duelo_')));
+            changes.reviews = currentReviews.filter(r => !(
+              r.origin?.includes('FPS') ||
+              r.questionData?.origin?.includes('FPS') ||
+              r.questionData?.source?.includes('Duelo') ||
+              String(r.id || '').startsWith('rev_fps_') ||
+              String(r.id || '').startsWith('rev_caveira_duelo_') ||
+              String(r.id || '').startsWith('rev_caveira_fps-') ||
+              String(r.caveiraQuestionId || '').startsWith('fps-') ||
+              String(r.caveiraQuestionId || '').startsWith('duelo_')
+            ));
           }
           summary.push('Duelo CTB / CONTRAN');
         }
@@ -2850,7 +2906,8 @@ export const useStore = create(
         
         const cleanState = getCleanInitialState();
 
-        // 1. Limpa memória imediatamente
+        // 1. Limpa memória e extensão imediatamente
+        try { window.postMessage({ source: 'QG_WEB_APP', type: 'CLEAR_SESSION' }, '*'); } catch (_) {}
         set(cleanState);
 
         // 2. Força sobrescrita na nuvem (Supabase) como fonte da verdade
@@ -3222,15 +3279,22 @@ export const useStore = create(
           while (!allDone && dayOffset < maxSimulationDays) {
             const targetSimDate = new Date(todayDateObj);
             targetSimDate.setDate(targetSimDate.getDate() + dayOffset);
-            const simCarryoverOffset = (dayOffset === 0 && cycleScheduleType === 'weekly') ? (get().cycleCarryoverOffset || 0) : 0;
+            const rawSimDateKey = `${targetSimDate.getFullYear()}-${String(targetSimDate.getMonth() + 1).padStart(2, '0')}-${String(targetSimDate.getDate()).padStart(2, '0')}`;
+            const hasExplicitTodayOverride = Boolean(calendarOverrides && Array.isArray(calendarOverrides[rawSimDateKey]));
+            const simCarryoverOffset = (dayOffset === 0 && !hasExplicitTodayOverride && cycleScheduleType === 'weekly') ? (get().cycleCarryoverOffset || 0) : 0;
             const effectiveSimDate = simCarryoverOffset > 0
               ? new Date(targetSimDate.getFullYear(), targetSimDate.getMonth(), targetSimDate.getDate() - simCarryoverOffset)
               : targetSimDate;
-            const simDateKey = `${effectiveSimDate.getFullYear()}-${String(effectiveSimDate.getMonth() + 1).padStart(2, '0')}-${String(effectiveSimDate.getDate()).padStart(2, '0')}`;
+            const simDateKey = simCarryoverOffset > 0
+              ? `${effectiveSimDate.getFullYear()}-${String(effectiveSimDate.getMonth() + 1).padStart(2, '0')}-${String(effectiveSimDate.getDate()).padStart(2, '0')}`
+              : rawSimDateKey;
 
             let daySubjects = [];
             let daySlotCounts = [];
-            if (calendarOverrides && Array.isArray(calendarOverrides[simDateKey])) {
+            if (hasExplicitTodayOverride) {
+              daySubjects = [...calendarOverrides[rawSimDateKey]];
+              daySlotCounts = Array.isArray(calendarOverrideCounts?.[rawSimDateKey]) ? [...calendarOverrideCounts[rawSimDateKey]] : [];
+            } else if (calendarOverrides && Array.isArray(calendarOverrides[simDateKey])) {
               daySubjects = [...calendarOverrides[simDateKey]];
               daySlotCounts = Array.isArray(calendarOverrideCounts?.[simDateKey]) ? [...calendarOverrideCounts[simDateKey]] : [];
             } else {

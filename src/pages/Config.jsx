@@ -346,9 +346,10 @@ export default function Config({
                         });
 
                         const newRules = (st.futureScheduleRules || []).map(rule => {
-                          const filtered = (rule.subjects || []).filter(sId => sId !== sub.id);
-                          const filteredCounts = (rule.slotCounts || []).filter((_, sIdx) => (rule.subjects || [])[sIdx] !== sub.id);
-                          return { ...rule, subjects: filtered, slotCounts: filteredCounts };
+                          const slots = rule.daySlots || rule.subjects || [];
+                          const filtered = slots.filter(sId => sId !== sub.id);
+                          const filteredCounts = (rule.slotCounts || []).filter((_, sIdx) => slots[sIdx] !== sub.id);
+                          return { ...rule, daySlots: filtered, slotCounts: filteredCounts };
                         });
 
                         useStore.setState({
@@ -358,9 +359,16 @@ export default function Config({
                           calendarOverrides: newOverrides,
                           calendarOverrideCounts: newOverrideCounts,
                           futureScheduleRules: newRules,
-                          reviews: (st.reviews || []).filter(r => r.subjectId !== sub.id),
+                          reviews: (st.reviews || []).filter(r =>
+                            r.subjectId !== sub.id ||
+                            r.isCaveiraQuestion ||
+                            Boolean(r.questionData) ||
+                            String(r.id || '').startsWith('rev_caveira_') ||
+                            String(r.topicName || '').startsWith('[Caveira')
+                          ),
                           completedToday: []
                         });
+                        useStore.getState().syncAndRepairCaveiraReviews?.();
                       }
                     });
                   }} className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-red-600 rounded dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800"><Trash2 className="w-4 h-4" /></button>
@@ -884,6 +892,8 @@ export default function Config({
                     if (merged.reviewCalendarDate) merged.reviewCalendarDate = new Date(merged.reviewCalendarDate);
 
                     useStore.setState(merged);
+                    useStore.getState().syncDayRollover?.();
+                    useStore.getState().syncAndRepairCaveiraReviews?.();
                     try {
                       localStorage.setItem('prf_caveira_questions', JSON.stringify(merged.caveiraQuestions || []));
                     } catch (_) {}

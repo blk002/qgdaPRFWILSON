@@ -760,7 +760,7 @@ export default function Estatisticas() {
         ) : (
           <div className="text-center py-10 border border-dashed border-slate-800 rounded-2xl bg-slate-950/20">
             <p className="text-xs text-slate-500 font-bold uppercase tracking-wider">Sem revisões ou questões geradas no FSRS ainda.</p>
-            <p className="text-[10px] text-slate-600 font-semibold mt-1">Conclua aulas no painel "Ciclo" clicando em "Queimar Teoria" para inicializar seus dados de memorização.</p>
+            <p className="text-[10px] text-slate-600 font-semibold mt-1">Responda ou importe questões no painel "Raio-X Caveira" para inicializar seus dados de memorização FSRS.</p>
           </div>
         )}
       </div>

@@ -24,7 +24,6 @@ export default function Ciclo() {
     getSubjectProgress,
     getRelativeDateInfo,
     getLocalDateStr,
-    reviews,
     setClassConfirmModal,
     setReplaceSubjectModal,
     saveTopicNotes,
@@ -71,7 +70,28 @@ export default function Ciclo() {
 
   // Resolve as matérias e quantidades de aulas por bloco efetivas de um dia do ciclo
   const getEffectiveDaySchedule = (dayIndex, week = 0) => {
+    const sanitizeSchedule = (rawSubjects, rawCounts) => {
+      const validSubjects = [];
+      const validCounts = [];
+      (rawSubjects || []).forEach((sId, idx) => {
+        if (subjects && subjects[sId]) {
+          validSubjects.push(sId);
+          validCounts.push(rawCounts?.[idx] ?? 0);
+        }
+      });
+      return { daySubjects: validSubjects, daySlotCounts: validCounts };
+    };
+
     const dateInfo = getDateInfo(dayIndex, week);
+
+    // Prioriza override explícito gravado para a própria data (ex.: hoje editado manualmente no Calendário)
+    if (calendarOverrides && Array.isArray(calendarOverrides[dateInfo.fullDateStr])) {
+      return sanitizeSchedule(
+        calendarOverrides[dateInfo.fullDateStr],
+        calendarOverrideCounts?.[dateInfo.fullDateStr]
+      );
+    }
+
     const shouldShiftCarryover = cycleScheduleType === 'weekly' && dateInfo.isToday && (cycleCarryoverOffset || 0) > 0;
     const effectiveCycleIdx = shouldShiftCarryover
       ? ((dayIndex - cycleCarryoverOffset) % 7 + 7) % 7
@@ -86,11 +106,11 @@ export default function Ciclo() {
       : baseDateObj;
     const effectiveDateStr = shouldShiftCarryover ? getLocalDateStr(effectiveDateObj) : dateInfo.fullDateStr;
 
-    if (calendarOverrides && Array.isArray(calendarOverrides[effectiveDateStr])) {
-      return {
-        daySubjects: [...calendarOverrides[effectiveDateStr]],
-        daySlotCounts: Array.isArray(calendarOverrideCounts?.[effectiveDateStr]) ? [...calendarOverrideCounts[effectiveDateStr]] : []
-      };
+    if (shouldShiftCarryover && calendarOverrides && Array.isArray(calendarOverrides[effectiveDateStr])) {
+      return sanitizeSchedule(
+        calendarOverrides[effectiveDateStr],
+        calendarOverrideCounts?.[effectiveDateStr]
+      );
     }
 
     const dayOfWeek = effectiveDateObj.getDay();
@@ -109,7 +129,7 @@ export default function Ciclo() {
       daySlotCounts = Array.isArray(matchingRules[0].slotCounts) ? [...matchingRules[0].slotCounts] : [];
     }
 
-    return { daySubjects, daySlotCounts };
+    return sanitizeSchedule(daySubjects, daySlotCounts);
   };
 
   const getEffectiveDaySubjects = (dayIndex, week = 0) => getEffectiveDaySchedule(dayIndex, week).daySubjects;
@@ -340,7 +360,7 @@ export default function Ciclo() {
       <div className="bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-800 mb-8 overflow-hidden">
         <div className="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
           <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
-            <Flame className="w-4 h-4 text-orange-500" /> Progresso de Conversão (Teoria ➔ FSRS)
+            <Flame className="w-4 h-4 text-orange-500" /> Progresso de Execução (Blocos de Hoje)
           </h3>
           <div className="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-3 py-1 rounded-full text-[10px] font-black uppercase flex items-center gap-1.5">
             <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
@@ -982,53 +1002,36 @@ export default function Ciclo() {
                                 </div>
 
                               {isToday && (
-                                (() => {
-                                  // --- TRAVA DE ILUSÃO DE PROGRESSO ---
-                                  const hasRetentionDebt = reviews.some(r => r.subjectId === subjectId && r.lastPerformance !== undefined && r.lastPerformance < 0.70);
-                                  
-                                  if (hasRetentionDebt) {
-                                    return (
-                                      <div className="mt-2 text-center bg-red-50 dark:bg-red-950/30 border border-red-200 dark:border-red-900/50 rounded-lg p-2">
-                                        <AlertTriangle className="w-4 h-4 text-red-500 mx-auto mb-1" />
-                                        <span className="text-[8px] sm:text-[10px] font-black text-red-700 dark:text-red-400 block uppercase">Avanço Bloqueado</span>
-                                        <p className="text-[8px] text-red-600 dark:text-red-400/80 mt-1 font-medium leading-tight">Você possui falhas críticas no FSRS desta matéria. Restaure a retenção antes de ver conteúdo novo.</p>
-                                      </div>
-                                    );
-                                  }
-
-                                   return (
-                                    <button 
-                                      onClick={() => {
-                                        const remainingLessons = (activeTopic.lessons || []).slice(currentCompleted, activeTopic.total);
-                                        setClassConfirmModal({ 
-                                          subjectId, 
-                                          slotIndex, 
-                                          topicName: activeTopic.name, 
-                                          maxClasses: activeTopic.total - activeTopic.completed,
-                                          lessonDuration: activeLessonDuration,
-                                          allLessonsDurations: remainingLessons.map(l => l.duration || '60:00'),
-                                          suggestedClasses: blockCount,
-                                          timeGoalMinutes: goalMin || null
-                                        });
-                                      }} 
-                                      className="mt-1 flex items-center justify-center gap-1 w-full py-2 bg-slate-900 dark:bg-slate-800 hover:bg-orange-600 dark:hover:bg-orange-600 text-white rounded-lg text-[9px] sm:text-xs font-black transition-all shadow-md border border-slate-200 dark:border-slate-600 hover:border-orange-500 dark:hover:border-orange-500 hover:scale-[1.02] active:scale-95 group"
-                                    >
-                                      <PlayCircle className="w-3.5 h-3.5 group-hover:scale-110 transition-transform text-orange-400 group-hover:text-white shrink-0" />
-                                      <span className="truncate">
-                                        {blockCount > 1 
-                                          ? `Queimar Bloco (${blockCount} Aulas • ${formatSecondsToFriendly(blockAccelSec)})` 
-                                          : 'Queimar Teoria (+1 Aula)'}
-                                      </span>
-                                    </button>
-                                  );
-                                })()
+                                <button 
+                                  onClick={() => {
+                                    const remainingLessons = (activeTopic.lessons || []).slice(currentCompleted, activeTopic.total);
+                                    setClassConfirmModal({ 
+                                      subjectId, 
+                                      slotIndex, 
+                                      topicName: activeTopic.name, 
+                                      maxClasses: activeTopic.total - activeTopic.completed,
+                                      lessonDuration: activeLessonDuration,
+                                      allLessonsDurations: remainingLessons.map(l => l.duration || '60:00'),
+                                      suggestedClasses: blockCount,
+                                      timeGoalMinutes: goalMin || null
+                                    });
+                                  }} 
+                                  className="mt-1 flex items-center justify-center gap-1 w-full py-2 bg-slate-900 dark:bg-slate-800 hover:bg-orange-600 dark:hover:bg-orange-600 text-white rounded-lg text-[9px] sm:text-xs font-black transition-all shadow-md border border-slate-200 dark:border-slate-600 hover:border-orange-500 dark:hover:border-orange-500 hover:scale-[1.02] active:scale-95 group"
+                                >
+                                  <PlayCircle className="w-3.5 h-3.5 group-hover:scale-110 transition-transform text-orange-400 group-hover:text-white shrink-0" />
+                                  <span className="truncate">
+                                    {blockCount > 1 
+                                      ? `Queimar Bloco (${blockCount} Aulas • ${formatSecondsToFriendly(blockAccelSec)})` 
+                                      : 'Queimar Teoria (+1 Aula)'}
+                                  </span>
+                                </button>
                               )}
 
                             </>
                           ) : (
                             <div className="text-center py-2 flex flex-col items-center">
                               <div className="bg-emerald-100 dark:bg-emerald-950/50 p-1.5 rounded-full mb-1.5"><BrainCircuit className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /></div>
-                              <span className="text-[8px] sm:text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-2">100% no FSRS (Só Questões)</span>
+                              <span className="text-[8px] sm:text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-2">100% da Teoria Concluída</span>
                               
                               <button onClick={() => setReplaceSubjectModal({ dayIndex, slotIndex, oldSubjectId: originalSubId })} className="w-full py-1.5 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white rounded-lg text-[9px] sm:text-[11px] font-black transition-all flex items-center justify-center gap-1 border border-blue-100 hover:border-blue-600">
                                 <Shuffle className="w-3 h-3" /> <span className="truncate">Reestruturar Vaga</span>

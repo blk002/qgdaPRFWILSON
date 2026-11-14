@@ -126,11 +126,9 @@ export default function Revisoes() {
     });
 
   const caveiraDueCount = allDueToday.filter(rev => isCaveiraCard(rev)).length;
-  const cicloDueCount = allDueToday.length - caveiraDueCount;
 
   const typeFilteredDueToday = allDueToday.filter(rev => {
     if (reviewTypeFilter === 'CAVEIRA') return isCaveiraCard(rev);
-    if (reviewTypeFilter === 'CICLO') return !isCaveiraCard(rev);
     return true;
   });
 
@@ -182,7 +180,6 @@ export default function Revisoes() {
     const dateStr = getLocalDateStr(d);
     const dayRevs = reviews.filter(r => r.nextDateStr === dateStr);
     const caveiraCount = dayRevs.filter(r => isCaveiraCard(r)).length;
-    const cicloCount = dayRevs.length - caveiraCount;
     const dayName = diasSemana[d.getDay()];
     const dayNum = String(d.getDate()).padStart(2, '0');
     const monthNum = String(d.getMonth() + 1).padStart(2, '0');
@@ -192,8 +189,7 @@ export default function Revisoes() {
       label: offset === 1 ? 'Amanhã' : `${dayName} (${dayNum}/${monthNum})`,
       shortDate: `${dayNum}/${monthNum}`,
       total: dayRevs.length,
-      caveiraCount,
-      cicloCount
+      caveiraCount
     };
   });
   const maxForecastCount = Math.max(5, ...next7DaysForecast.map(f => f.total));
@@ -276,12 +272,11 @@ export default function Revisoes() {
             </span>
           </div>
 
-          {/* Filtro por Tipo de Revisão: Todas | Questões Caveira | Aulas do Ciclo */}
+          {/* Filtro por Tipo de Revisão: Todas | Questões Caveira */}
           <div className="flex flex-wrap gap-2 mb-3">
             {[
               { id: 'ALL', label: 'Todas as Revisões', count: allDueToday.length, activeClass: 'bg-slate-800 text-white border-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:border-white' },
-              { id: 'CAVEIRA', label: '💀 Questões Caveira', count: caveiraDueCount, activeClass: 'bg-purple-600 text-white border-purple-500 ring-2 ring-purple-500/30' },
-              { id: 'CICLO', label: '📚 Aulas do Ciclo', count: cicloDueCount, activeClass: 'bg-red-600 text-white border-red-500 ring-2 ring-red-500/30' }
+              { id: 'CAVEIRA', label: '💀 Questões Caveira', count: caveiraDueCount, activeClass: 'bg-purple-600 text-white border-purple-500 ring-2 ring-purple-500/30' }
             ].map(tab => {
               const isSelected = reviewTypeFilter === tab.id;
               return (
@@ -517,8 +512,6 @@ export default function Revisoes() {
 
                   <div className="text-[9px] font-bold text-slate-400 mt-1.5 flex items-center gap-1">
                     <span title="Questões Caveira">💀{day.caveiraCount}</span>
-                    <span>•</span>
-                    <span title="Aulas do Ciclo">📚{day.cicloCount}</span>
                   </div>
 
                   <button

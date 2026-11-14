@@ -318,9 +318,7 @@
         if (activeQuestionData) {
           const conf = btn.dataset.confidence;
           activeQuestionData.confidence = conf;
-          if (conf === 'chute' || conf === 'duvida') {
-            activeQuestionData.fsrsRequested = true;
-          }
+          activeQuestionData.fsrsRequested = (conf === 'chute' || conf === 'duvida');
           saveQuestion(activeQuestionData, true);
           const badge = document.getElementById('qg-prompt-status-badge');
           if (badge && activeQuestionData.hit && (conf === 'chute' || conf === 'duvida')) {
@@ -848,7 +846,9 @@
       correctChoice = userChoice;
     } else if (!correctChoice) {
       // Se errou e não achou a letra verde explícita no DOM, busca nas alternativas qual tem ícone de check ou classe correta
-      const checkIconAlt = altScope.querySelector('.material-icons:contains("check"), [class*="check"]')?.closest('.alternative');
+      const checkIconEl = Array.from(altScope.querySelectorAll('.material-icons, [class*="check"]'))
+        .find(el => (el.classList && Array.from(el.classList).some(c => c.includes('check'))) || (el.textContent || '').trim().toLowerCase() === 'check');
+      const checkIconAlt = checkIconEl?.closest('.alternative');
       const checkLetter = (checkIconAlt?.querySelector('.alternative-letter')?.textContent || '').trim().toUpperCase();
       if (checkLetter && checkLetter.length <= 2) {
         correctChoice = checkLetter;
@@ -861,7 +861,8 @@
     function cleanAlternativeText(rawText, letter) {
       if (!rawText || typeof rawText !== 'string') return '';
       let clean = rawText.trim();
-      const letterPrefixRegex = new RegExp(`^\\(?\\s*${letter || '[A-E]'}\\s*[\\).\\-–—:]?\\s+`, 'i');
+      const safeLetter = (letter && /^[A-Za-z0-9]$/.test(String(letter).trim())) ? String(letter).trim() : '[A-E]';
+      const letterPrefixRegex = new RegExp(`^\\(?\\s*${safeLetter}\\s*[\\).\\-–—:]?\\s+`, 'i');
       clean = clean.replace(letterPrefixRegex, '').trim();
       const isOnlyPercentage = /^\d+(?:[.,]\d+)?\s*%\s*$/.test(clean);
       if (!isOnlyPercentage) {
