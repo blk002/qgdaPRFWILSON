@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.6 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.7 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -15,7 +15,9 @@
   const SESSION_KEY = 'qg_caveira_session';
   const SCHEMA_KEY = 'qg_caveira_schema_v3';
   const GOAL_KEY = 'qg_caveira_daily_goal';
+  const ACTIVE_USER_KEY = 'qg_active_user_id';
   let cachedDailyGoal = 50;
+  let cachedActiveUserId = null;
 
   let isDestroyed = false;
   let isStorageLoaded = false;
@@ -135,8 +137,9 @@
   function loadInitialState() {
     if (!isExtensionContextValid()) return;
     try {
-      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, GOAL_KEY], (res) => {
+      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, GOAL_KEY, ACTIVE_USER_KEY], (res) => {
         if (chrome.runtime.lastError || isDestroyed) return;
+        cachedActiveUserId = res?.[ACTIVE_USER_KEY] || null;
         if (res && res[GOAL_KEY]) {
           cachedDailyGoal = Number(res[GOAL_KEY]) || 50;
         }
@@ -215,6 +218,9 @@
           if (changes[SESSION_KEY]) {
             sessionStats = normalizeSession(changes[SESSION_KEY].newValue);
             updateHudStats();
+          }
+          if (changes[ACTIVE_USER_KEY]) {
+            cachedActiveUserId = changes[ACTIVE_USER_KEY].newValue || null;
           }
           if (changes[GOAL_KEY]) {
             cachedDailyGoal = Number(changes[GOAL_KEY].newValue) || 50;
@@ -1015,12 +1021,14 @@
     }
 
     const nowIso = new Date().toISOString();
+    const resolvedOwnerId = cachedActiveUserId || question.ownerUserId || null;
     const existingIdx = questionsCache.findIndex(q => q && q.id === question.id);
     if (existingIdx >= 0) {
       const prev = questionsCache[existingIdx];
       questionsCache[existingIdx] = {
         ...prev,
         ...question,
+        ...(resolvedOwnerId ? { ownerUserId: resolvedOwnerId } : {}),
         teacherComment: question.teacherComment || prev.teacherComment || '',
         userNote: question.userNote !== undefined ? question.userNote : (prev.userNote || ''),
         alternatives: (Array.isArray(question.alternatives) && question.alternatives.length > 0)
@@ -1031,6 +1039,7 @@
     } else {
       questionsCache.unshift({
         ...question,
+        ...(resolvedOwnerId ? { ownerUserId: resolvedOwnerId } : {}),
         updatedAt: question.updatedAt || nowIso
       });
     }

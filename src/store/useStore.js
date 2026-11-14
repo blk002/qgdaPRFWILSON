@@ -199,10 +199,13 @@ export const getCleanInitialState = () => ({
   caveiraQuestions: [],
 });
 
+const CAVEIRA_OWNER_KEY = 'prf_caveira_owner_id';
+
 const getInitialLocalCaveiraQuestions = () => {
   try {
     if (localStorage.getItem('prf_caveira_schema') !== 'v3_strict_clean') {
       localStorage.removeItem('prf_caveira_questions');
+      localStorage.removeItem(CAVEIRA_OWNER_KEY);
       localStorage.setItem('prf_caveira_schema', 'v3_strict_clean');
       return [];
     }
@@ -345,7 +348,7 @@ const writeLocalSnapshot = (state, { dirty = true, savedAt = new Date().toISOStr
   }
 };
 
-const appendLocalBackup = (data, reason = 'auto') => {
+const appendLocalBackup = (data, reason = 'auto', userId = null) => {
   if (!hasMeaningfulUserData(data)) return;
   try {
     const backupsJson = localStorage.getItem('prf_qg_backups');
@@ -354,6 +357,7 @@ const appendLocalBackup = (data, reason = 'auto') => {
     backups.unshift({
       timestamp: Date.now(),
       reason,
+      userId: userId || useStore.getState?.().user?.id || null,
       data
     });
     backups = backups.slice(0, 5);
@@ -461,20 +465,28 @@ export const useStore = create(
       setSession: (session) => set((state) => {
         const nextUser = session?.user ?? null;
         const userChanged = state.user?.id !== nextUser?.id;
+        let storedOwner = null;
+        try { storedOwner = localStorage.getItem(CAVEIRA_OWNER_KEY); } catch (_) {}
+        const switchedToDifferentOwner = Boolean(
+          nextUser?.id && ((state.user?.id && state.user.id !== nextUser.id) || (storedOwner && storedOwner !== nextUser.id))
+        );
         return {
           session,
           user: nextUser,
-          ...(userChanged ? { hasCompletedInitialCloudSync: false } : {})
+          ...(userChanged ? { hasCompletedInitialCloudSync: false } : {}),
+          ...(switchedToDifferentOwner ? { caveiraQuestions: [], reviews: [] } : {})
         };
       }),
       
       signOut: async () => {
         await supabase.auth.signOut();
-        set({ session: null, user: null });
+        set({ session: null, user: null, caveiraQuestions: [], reviews: [], hasCompletedInitialCloudSync: false });
         localStorage.removeItem('prf-qg-storage');
         localStorage.removeItem('prf_qg_backups');
         localStorage.removeItem('prf_caveira_questions');
+        localStorage.removeItem(CAVEIRA_OWNER_KEY);
         localStorage.removeItem(LOCAL_STATE_STORAGE_KEY);
+        try { window.postMessage({ source: 'QG_WEB_APP', type: 'USER_SIGNED_OUT' }, '*'); } catch (_) {}
         window.location.reload();
       },
 
@@ -482,6 +494,16 @@ export const useStore = create(
         const { user, isLoadingFromCloud } = get();
         if (!user) return false;
         if (isLoadingFromCloud && retryCount === 0) return false;
+
+        // Isolamento por usuário: descarta cache local de Caveira se pertencia a outra conta
+        let storedCaveiraOwner = null;
+        try { storedCaveiraOwner = localStorage.getItem(CAVEIRA_OWNER_KEY); } catch (_) {}
+        const isForeignCaveiraCache = Boolean(storedCaveiraOwner && storedCaveiraOwner !== user.id);
+        if (isForeignCaveiraCache) {
+          try { localStorage.removeItem('prf_caveira_questions'); } catch (_) {}
+          set({ caveiraQuestions: [] });
+        }
+        try { localStorage.setItem(CAVEIRA_OWNER_KEY, user.id); } catch (_) {}
 
         // Cancela timers pendentes de pré-carga para impedir gravação do estado inicial vazio
         clearTimeout(useStore._localDebounceTimer);
@@ -504,7 +526,7 @@ export const useStore = create(
           try {
             const backupsJson = localStorage.getItem('prf_qg_backups');
             const backups = backupsJson ? JSON.parse(backupsJson) : [];
-            const validBackup = (backups || []).find(b => b?.data && hasMeaningfulUserData(b.data));
+            const validBackup = (backups || []).find(b => b?.data && (!b.userId || b.userId === sameUserId) && hasMeaningfulUserData(b.data));
             if (validBackup) {
               return {
                 data: validBackup.data,
@@ -516,7 +538,7 @@ export const useStore = create(
         };
 
         const applyHydratedCloudRecord = (rawFullData, remoteUpdatedAt) => {
-          const currentCaveira = get().caveiraQuestions || [];
+          const currentCaveira = isForeignCaveiraCache ? [] : (get().caveiraQuestions || []);
           let cleanData = normalizeHydratedState(rawFullData, currentCaveira);
 
           // Recuperação automática caso a nuvem tenha sido sobrescrita com dados vazios mas exista backup local íntegro
@@ -608,7 +630,7 @@ export const useStore = create(
             });
           }
 
-          try { window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA' }, '*'); } catch (_) {}
+          try { window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id } }, '*'); } catch (_) {}
           return true;
         };
 
@@ -669,7 +691,7 @@ export const useStore = create(
             try {
               const backupsJson = localStorage.getItem('prf_qg_backups');
               const backups = backupsJson ? JSON.parse(backupsJson) : [];
-              const validBackup = (backups || []).find(b => b?.data && hasMeaningfulUserData(b.data));
+              const validBackup = (backups || []).find(b => b?.data && (!b.userId || b.userId === user.id) && hasMeaningfulUserData(b.data));
               if (validBackup) {
                 candidateLocalData = validBackup.data;
                 candidateSourceLabel = `backup local (${new Date(validBackup.timestamp).toLocaleString()})`;
@@ -679,7 +701,12 @@ export const useStore = create(
 
           if (candidateLocalData) {
             console.warn(`⚠️ [Nuvem] Perfil remoto vazio, mas há dados no ${candidateSourceLabel}. Preservando dados locais.`);
-            const restored = normalizeHydratedState(candidateLocalData, get().caveiraQuestions || []);
+            const safeCaveira = isForeignCaveiraCache ? [] : (get().caveiraQuestions || []);
+            const restored = normalizeHydratedState(candidateLocalData, safeCaveira);
+            try {
+              localStorage.setItem('prf_caveira_questions', JSON.stringify(restored.caveiraQuestions || []));
+              localStorage.setItem(CAVEIRA_OWNER_KEY, user.id);
+            } catch (_) {}
             set({
               ...restored,
               lastSyncedAt: null,
@@ -700,15 +727,21 @@ export const useStore = create(
             get().checkAndAdvanceSeason();
             get().checkAndResetDailyMissions();
             get().syncAndRepairCaveiraReviews?.();
+            try { window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id } }, '*'); } catch (_) {}
             return true;
           }
 
           // Conta genuinamente nova e sem dados locais prévios
           console.log('ℹ️ [Nuvem] Nova conta confirmada! Inicializando perfil limpo para uso.');
           const freshState = getCleanInitialState();
+          const initialFreshCaveira = isForeignCaveiraCache ? [] : (get().caveiraQuestions || []);
+          try {
+            localStorage.setItem('prf_caveira_questions', JSON.stringify(initialFreshCaveira));
+            localStorage.setItem(CAVEIRA_OWNER_KEY, user.id);
+          } catch (_) {}
           set({
             ...freshState,
-            caveiraQuestions: get().caveiraQuestions || [],
+            caveiraQuestions: initialFreshCaveira,
             lastSyncedAt: null,
             isSyncing: false,
             isLoadingFromCloud: false,
@@ -720,6 +753,7 @@ export const useStore = create(
           get().checkAndResetDailyMissions();
           get().syncAndRepairCaveiraReviews?.();
           await get().saveToCloud({ allowEmptyOverwrite: true });
+          try { window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id } }, '*'); } catch (_) {}
           return true;
         } catch (error) {
           if (retryCount < 2) {
@@ -731,40 +765,44 @@ export const useStore = create(
           // Tentar carregar do snapshot local mais recente ou do backup local
           try {
             const localSnap = readLocalSnapshot();
+            const safeSnap = (!localSnap?.userId || localSnap.userId === user.id) ? localSnap : null;
             const backupsJson = localStorage.getItem('prf_qg_backups');
             const backups = backupsJson ? JSON.parse(backupsJson) : [];
-            const latestBackup = (backups || []).find(b => b?.data && hasMeaningfulUserData(b.data)) || backups?.[0] || null;
+            const userBackups = (backups || []).filter(b => !b?.userId || b.userId === user.id);
+            const latestBackup = userBackups.find(b => b?.data && hasMeaningfulUserData(b.data)) || userBackups?.[0] || null;
 
-            const snapTs = localSnap?.savedAt ? new Date(localSnap.savedAt).getTime() : 0;
+            const snapTs = safeSnap?.savedAt ? new Date(safeSnap.savedAt).getTime() : 0;
             const backupTs = latestBackup?.timestamp ? Number(latestBackup.timestamp) : 0;
 
-            const snapMeaningful = hasMeaningfulUserData(localSnap?.data);
+            const snapMeaningful = hasMeaningfulUserData(safeSnap?.data);
             const backupMeaningful = hasMeaningfulUserData(latestBackup?.data);
 
             let chosenRaw = null;
             let chosenDateStr = null;
             if (snapMeaningful && (!backupMeaningful || snapTs >= backupTs)) {
-              chosenRaw = localSnap.data;
-              chosenDateStr = localSnap.savedAt ? new Date(localSnap.savedAt).toLocaleString() : null;
+              chosenRaw = safeSnap.data;
+              chosenDateStr = safeSnap.savedAt ? new Date(safeSnap.savedAt).toLocaleString() : null;
             } else if (backupMeaningful) {
               chosenRaw = latestBackup.data;
               chosenDateStr = latestBackup.timestamp ? new Date(latestBackup.timestamp).toLocaleString() : null;
-            } else if (localSnap?.data || latestBackup?.data) {
-              chosenRaw = (snapTs >= backupTs && localSnap?.data) ? localSnap.data : latestBackup?.data;
-              chosenDateStr = (snapTs >= backupTs && localSnap?.savedAt)
-                ? new Date(localSnap.savedAt).toLocaleString()
+            } else if (safeSnap?.data || latestBackup?.data) {
+              chosenRaw = (snapTs >= backupTs && safeSnap?.data) ? safeSnap.data : latestBackup?.data;
+              chosenDateStr = (snapTs >= backupTs && safeSnap?.savedAt)
+                ? new Date(safeSnap.savedAt).toLocaleString()
                 : (latestBackup ? new Date(latestBackup.timestamp).toLocaleString() : null);
             }
 
             if (chosenRaw) {
               console.log(`💡 [Estado Offline] Carregando dados locais de ${chosenDateStr}`);
-              const cleanData = normalizeHydratedState(chosenRaw, get().caveiraQuestions || []);
+              const safeCaveira = isForeignCaveiraCache ? [] : (get().caveiraQuestions || []);
+              const cleanData = normalizeHydratedState(chosenRaw, safeCaveira);
               set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false, hasCompletedInitialCloudSync: true });
               get().syncDayRollover();
               get().checkAndResetWeekly();
               get().checkAndAdvanceSeason();
               get().checkAndResetDailyMissions();
               get().syncAndRepairCaveiraReviews?.();
+              try { window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id } }, '*'); } catch (_) {}
 
               toast.info(`⚠️ Usando dados salvos localmente (${chosenDateStr}) devido a erro de conexão.`);
               return true;

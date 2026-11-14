@@ -9,19 +9,22 @@
 
   const STORAGE_KEY = 'qg_caveira_questions';
   const SESSION_KEY = 'qg_caveira_session';
+  const ACTIVE_USER_KEY = 'qg_active_user_id';
+  const USER_BUCKETS_KEY = 'qg_caveira_user_buckets';
   let isBridgeDestroyed = false;
-  const initTimers = [];
+  let cachedActiveUserId = null;
   let lastSyncPayloadJson = '';
   let lastSyncPayloadTime = 0;
 
-  function postSyncUpdate(questions) {
-    if (isBridgeDestroyed || !Array.isArray(questions)) return;
+  function postSyncUpdate(questions, userId) {
+    if (isBridgeDestroyed || !Array.isArray(questions) || !userId) return;
+    const scopedQuestions = questions.filter(q => q && (!q.ownerUserId || q.ownerUserId === userId));
     const now = Date.now();
     let payloadJson = '';
     try {
-      payloadJson = JSON.stringify(questions);
+      payloadJson = JSON.stringify({ userId, scopedQuestions });
     } catch (_) {
-      payloadJson = `${questions.length}`;
+      payloadJson = `${userId}:${scopedQuestions.length}`;
     }
     if (payloadJson === lastSyncPayloadJson && now - lastSyncPayloadTime < 800) {
       return;
@@ -31,7 +34,7 @@
     window.postMessage({
       source: 'QG_CAVEIRA_EXTENSION',
       type: 'SYNC_UPDATE',
-      payload: { questions }
+      payload: { questions: scopedQuestions, userId }
     }, '*');
   }
 
@@ -90,55 +93,201 @@
     }).catch(() => {});
   }
 
-  function sendStoredData() {
+  function switchUserBucket(nextUserId, callback) {
     if (!isExtensionContextValid()) return;
     try {
-      // Pede ao background para varrer abas abertas do Caveira e retornar a lista atualizada
+      chrome.storage.local.get([ACTIVE_USER_KEY, STORAGE_KEY, SESSION_KEY, USER_BUCKETS_KEY], (res) => {
+        if (chrome.runtime.lastError || isBridgeDestroyed) return;
+        const prevUserId = res?.[ACTIVE_USER_KEY] || null;
+        const currentQuestions = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
+        const currentSession = normalizeSession(res?.[SESSION_KEY]);
+        const buckets = (res?.[USER_BUCKETS_KEY] && typeof res[USER_BUCKETS_KEY] === 'object')
+          ? { ...res[USER_BUCKETS_KEY] }
+          : {};
+
+        if (!nextUserId) {
+          if (prevUserId) {
+            buckets[prevUserId] = {
+              questions: currentQuestions.map(q => ({ ...q, ownerUserId: q.ownerUserId || prevUserId })),
+              session: currentSession
+            };
+          }
+          const emptySession = normalizeSession(null);
+          cachedActiveUserId = null;
+          chrome.storage.local.set({
+            [STORAGE_KEY]: [],
+            [SESSION_KEY]: emptySession,
+            [ACTIVE_USER_KEY]: null,
+            [USER_BUCKETS_KEY]: buckets
+          }, () => {
+            if (chrome.runtime && chrome.runtime.sendMessage) {
+              chrome.runtime.sendMessage({ type: 'UPDATE_BADGE_ONLY', payload: { session: emptySession } }).catch(() => {});
+            }
+            if (callback) callback({ userId: null, questions: [], session: emptySession });
+          });
+          return;
+        }
+
+        if (prevUserId === nextUserId) {
+          cachedActiveUserId = nextUserId;
+          let changed = false;
+          const cleanQuestions = currentQuestions.filter(q => {
+            if (!q) return false;
+            if (q.ownerUserId && q.ownerUserId !== nextUserId) {
+              changed = true;
+              return false;
+            }
+            return true;
+          }).map(q => {
+            if (!q.ownerUserId) {
+              changed = true;
+              return { ...q, ownerUserId: nextUserId };
+            }
+            return q;
+          });
+          if (changed) {
+            chrome.storage.local.set({ [STORAGE_KEY]: cleanQuestions }, () => {
+              if (callback) callback({ userId: nextUserId, questions: cleanQuestions, session: currentSession });
+            });
+          } else if (callback) {
+            callback({ userId: nextUserId, questions: cleanQuestions, session: currentSession });
+          }
+          return;
+        }
+
+        if (prevUserId && prevUserId !== nextUserId) {
+          buckets[prevUserId] = {
+            questions: currentQuestions.map(q => ({ ...q, ownerUserId: q.ownerUserId || prevUserId })),
+            session: currentSession
+          };
+          const targetBucket = buckets[nextUserId] || {};
+          const nextQuestions = (Array.isArray(targetBucket.questions) ? targetBucket.questions : [])
+            .map(q => ({ ...q, ownerUserId: nextUserId }));
+          const nextSession = normalizeSession(targetBucket.session);
+          cachedActiveUserId = nextUserId;
+          chrome.storage.local.set({
+            [STORAGE_KEY]: nextQuestions,
+            [SESSION_KEY]: nextSession,
+            [ACTIVE_USER_KEY]: nextUserId,
+            [USER_BUCKETS_KEY]: buckets
+          }, () => {
+            if (chrome.runtime && chrome.runtime.sendMessage) {
+              chrome.runtime.sendMessage({ type: 'UPDATE_BADGE_ONLY', payload: { session: nextSession } }).catch(() => {});
+            }
+            if (callback) callback({ userId: nextUserId, questions: nextQuestions, session: nextSession });
+          });
+          return;
+        }
+
+        // !prevUserId: primeiro vínculo após sessão deslogada ou instalação nova
+        const foreignQuestions = currentQuestions.filter(q => q && q.ownerUserId && q.ownerUserId !== nextUserId);
+        foreignQuestions.forEach(q => {
+          const owner = q.ownerUserId;
+          const prevOwnerBucket = buckets[owner] || { questions: [], session: normalizeSession(null) };
+          const ownerMap = new Map();
+          (prevOwnerBucket.questions || []).forEach(item => { if (item?.id) ownerMap.set(item.id, item); });
+          if (q.id) ownerMap.set(q.id, q);
+          buckets[owner] = { ...prevOwnerBucket, questions: Array.from(ownerMap.values()) };
+        });
+
+        const ownOrOrphan = currentQuestions
+          .filter(q => q && (!q.ownerUserId || q.ownerUserId === nextUserId))
+          .map(q => ({ ...q, ownerUserId: nextUserId }));
+
+        const existingBucket = buckets[nextUserId] || {};
+        const mergedMap = new Map();
+        (Array.isArray(existingBucket.questions) ? existingBucket.questions : []).forEach(q => {
+          if (q?.id) mergedMap.set(q.id, { ...q, ownerUserId: nextUserId });
+        });
+        ownOrOrphan.forEach(q => {
+          if (q?.id) mergedMap.set(q.id, { ...(mergedMap.get(q.id) || {}), ...q, ownerUserId: nextUserId });
+        });
+
+        const finalQuestions = Array.from(mergedMap.values());
+        const finalSession = existingBucket.session
+          ? normalizeSession(existingBucket.session)
+          : (foreignQuestions.length === 0 ? currentSession : normalizeSession(null));
+
+        cachedActiveUserId = nextUserId;
+        chrome.storage.local.set({
+          [STORAGE_KEY]: finalQuestions,
+          [SESSION_KEY]: finalSession,
+          [ACTIVE_USER_KEY]: nextUserId,
+          [USER_BUCKETS_KEY]: buckets
+        }, () => {
+          if (chrome.runtime && chrome.runtime.sendMessage) {
+            chrome.runtime.sendMessage({ type: 'UPDATE_BADGE_ONLY', payload: { session: finalSession } }).catch(() => {});
+          }
+          if (callback) callback({ userId: nextUserId, questions: finalQuestions, session: finalSession });
+        });
+      });
+    } catch (_) {}
+  }
+
+  function deliverDataForActiveUser(activeUserId) {
+    if (!isExtensionContextValid() || !activeUserId) return;
+    const postFilteredResponse = (rawQuestions, rawSession) => {
+      if (isBridgeDestroyed) return;
+      const scoped = (Array.isArray(rawQuestions) ? rawQuestions : []).filter(
+        q => q && (!q.ownerUserId || q.ownerUserId === activeUserId)
+      );
+      window.postMessage({
+        source: 'QG_CAVEIRA_EXTENSION',
+        type: 'CAVEIRA_DATA_RESPONSE',
+        payload: {
+          userId: activeUserId,
+          questions: scoped,
+          session: normalizeSession(rawSession)
+        }
+      }, '*');
+    };
+
+    try {
       if (chrome.runtime && chrome.runtime.sendMessage) {
         chrome.runtime.sendMessage({ type: 'GET_CAVEIRA_QUESTIONS' }, (response) => {
           if (!chrome.runtime.lastError && response && Array.isArray(response.questions)) {
-            window.postMessage({
-              source: 'QG_CAVEIRA_EXTENSION',
-              type: 'CAVEIRA_DATA_RESPONSE',
-              payload: {
-                questions: response.questions,
-                session: normalizeSession(response.session)
-              }
-            }, '*');
+            postFilteredResponse(response.questions, response.session);
           } else {
-            // Fallback direto ao storage local se a mensagem falhar
             chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
               if (chrome.runtime.lastError) return;
-              const questions = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
-              const session = normalizeSession(res?.[SESSION_KEY]);
-              window.postMessage({
-                source: 'QG_CAVEIRA_EXTENSION',
-                type: 'CAVEIRA_DATA_RESPONSE',
-                payload: { questions, session }
-              }, '*');
+              postFilteredResponse(res?.[STORAGE_KEY], res?.[SESSION_KEY]);
             });
           }
         });
       } else {
         chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
           if (chrome.runtime.lastError) return;
-          const questions = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
-          const session = normalizeSession(res?.[SESSION_KEY]);
-          window.postMessage({
-            source: 'QG_CAVEIRA_EXTENSION',
-            type: 'CAVEIRA_DATA_RESPONSE',
-            payload: { questions, session }
-          }, '*');
+          postFilteredResponse(res?.[STORAGE_KEY], res?.[SESSION_KEY]);
         });
       }
     } catch (_) {}
   }
 
-  // Dispara em múltiplos intervalos no carregamento (para garantir entrega após login/hidratação da nuvem)
-  sendStoredData();
-  initTimers.push(setTimeout(sendStoredData, 800));
-  initTimers.push(setTimeout(sendStoredData, 2000));
-  initTimers.push(setTimeout(sendStoredData, 4000));
+  function sendStoredData(requestedUserId = null) {
+    if (!isExtensionContextValid()) return;
+    if (requestedUserId) {
+      switchUserBucket(requestedUserId, ({ userId }) => {
+        if (userId) deliverDataForActiveUser(userId);
+      });
+      return;
+    }
+
+    if (cachedActiveUserId) {
+      deliverDataForActiveUser(cachedActiveUserId);
+      return;
+    }
+
+    try {
+      chrome.storage.local.get([ACTIVE_USER_KEY], (res) => {
+        if (chrome.runtime.lastError || isBridgeDestroyed) return;
+        const storedUserId = res?.[ACTIVE_USER_KEY] || null;
+        if (storedUserId) {
+          cachedActiveUserId = storedUserId;
+          deliverDataForActiveUser(storedUserId);
+        }
+      });
+    } catch (_) {}
+  }
 
   function handleFocus() {
     if (isBridgeDestroyed) return;
@@ -155,8 +304,19 @@
   function handleWindowMessage(event) {
     if (isBridgeDestroyed || !isExtensionContextValid()) return;
     if (event.data && event.data.source === 'QG_WEB_APP') {
+      if (event.data.type === 'SET_ACTIVE_USER') {
+        const nextUserId = event.data.payload?.userId || null;
+        switchUserBucket(nextUserId, ({ userId }) => {
+          if (userId) deliverDataForActiveUser(userId);
+        });
+      }
+
+      if (event.data.type === 'USER_SIGNED_OUT') {
+        switchUserBucket(null);
+      }
+
       if (event.data.type === 'FETCH_CAVEIRA_DATA') {
-        sendStoredData();
+        sendStoredData(event.data.payload?.userId || null);
       }
 
       if (event.data.type === 'UPDATE_CAVEIRA_QUESTION' && event.data.payload?.id && event.data.payload?.updates) {
@@ -220,8 +380,6 @@
 
   function teardownBridge() {
     isBridgeDestroyed = true;
-    initTimers.forEach(t => clearTimeout(t));
-    initTimers.length = 0;
     window.removeEventListener('focus', handleFocus);
     document.removeEventListener('visibilitychange', handleVisibilityChange);
     window.removeEventListener('message', handleWindowMessage);
@@ -233,9 +391,14 @@
     try {
       chrome.storage.onChanged.addListener((changes, area) => {
         if (isBridgeDestroyed || !isExtensionContextValid()) return;
-        if (area === 'local' && changes[STORAGE_KEY]) {
-          const newQuestions = changes[STORAGE_KEY].newValue || [];
-          postSyncUpdate(newQuestions);
+        if (area === 'local') {
+          if (changes[ACTIVE_USER_KEY]) {
+            cachedActiveUserId = changes[ACTIVE_USER_KEY].newValue || null;
+          }
+          if (changes[STORAGE_KEY] && cachedActiveUserId) {
+            const newQuestions = changes[STORAGE_KEY].newValue || [];
+            postSyncUpdate(newQuestions, cachedActiveUserId);
+          }
         }
       });
     } catch (_) {}
@@ -245,8 +408,8 @@
     try {
       chrome.runtime.onMessage.addListener((msg) => {
         if (isBridgeDestroyed || !isExtensionContextValid()) return;
-        if (msg && msg.type === 'PUSH_CAVEIRA_SYNC' && msg.payload) {
-          postSyncUpdate(msg.payload.questions || []);
+        if (msg && msg.type === 'PUSH_CAVEIRA_SYNC' && msg.payload && cachedActiveUserId) {
+          postSyncUpdate(msg.payload.questions || [], cachedActiveUserId);
         }
       });
     } catch (_) {}

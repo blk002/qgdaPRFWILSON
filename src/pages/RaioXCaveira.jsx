@@ -196,7 +196,10 @@ export default function RaioXCaveira() {
     };
 
     window.addEventListener('message', handleMessage);
-    window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA' }, '*');
+    const activeUserId = useStore.getState().user?.id;
+    if (activeUserId && useStore.getState().hasCompletedInitialCloudSync) {
+      window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA', payload: { userId: activeUserId } }, '*');
+    }
 
     return () => window.removeEventListener('message', handleMessage);
   }, []);
@@ -558,7 +561,9 @@ export default function RaioXCaveira() {
   }, [blockScopedQuestions, selectedLegalDevice, selectedSubject, selectedTopic, filterType, searchQuery]);
 
   const handleRequestSync = () => {
-    window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA' }, '*');
+    const activeUserId = useStore.getState().user?.id;
+    if (!activeUserId) return;
+    window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA', payload: { userId: activeUserId } }, '*');
     toast.info('Sincronizando questões com a extensão...');
   };
 

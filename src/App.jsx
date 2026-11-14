@@ -232,18 +232,31 @@ export default function App() {
   useEffect(() => {
     const handleExtensionMessage = (event) => {
       if (event.data && event.data.source === 'QG_CAVEIRA_EXTENSION') {
+        const currentUser = useStore.getState().user;
+        const cloudReady = useStore.getState().hasCompletedInitialCloudSync;
+        if (!currentUser?.id || !cloudReady) return;
+        const msgUserId = event.data.payload?.userId;
+        if (msgUserId && msgUserId !== currentUser.id) return;
+
         if (event.data.type === 'SYNC_UPDATE' && event.data.payload) {
           const { newQuestion, questions } = event.data.payload;
           if (newQuestion) {
+            if (newQuestion.ownerUserId && newQuestion.ownerUserId !== currentUser.id) return;
             useStore.getState().addCaveiraQuestion(newQuestion);
           } else if (Array.isArray(questions) && questions.length > 0) {
-            useStore.getState().importCaveiraQuestions(questions, true);
+            const scoped = questions.filter(q => q && (!q.ownerUserId || q.ownerUserId === currentUser.id));
+            if (scoped.length > 0) {
+              useStore.getState().importCaveiraQuestions(scoped, true);
+            }
           }
         }
         if (event.data.type === 'CAVEIRA_DATA_RESPONSE' && event.data.payload) {
           const { questions } = event.data.payload;
           if (Array.isArray(questions) && questions.length > 0) {
-            useStore.getState().importCaveiraQuestions(questions, true);
+            const scoped = questions.filter(q => q && (!q.ownerUserId || q.ownerUserId === currentUser.id));
+            if (scoped.length > 0) {
+              useStore.getState().importCaveiraQuestions(scoped, true);
+            }
           }
         }
       }
@@ -251,7 +264,10 @@ export default function App() {
 
     const requestExtensionSync = () => {
       try {
-        window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA' }, '*');
+        const currentUser = useStore.getState().user;
+        const cloudReady = useStore.getState().hasCompletedInitialCloudSync;
+        if (!currentUser?.id || !cloudReady) return;
+        window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: currentUser.id } }, '*');
       } catch (_) {}
     };
 
