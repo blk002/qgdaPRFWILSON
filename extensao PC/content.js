@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.19 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.20 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -647,7 +647,8 @@
     ['eleitoral'],
     ['tributario', 'tributaria'],
     ['previdenciario', 'previdenciaria'],
-    ['trabalhista']
+    ['trabalhista'],
+    ['mulher', 'mulheres', 'maria', 'penha', '11340', 'feminicidio']
   ];
 
   const SPECIAL_LAW_RULES = [
@@ -661,6 +662,8 @@
         norm.includes('8069'),
       terms: [
         'estatuto da crianca e do adolescente',
+        'lei 8.069',
+        'estatuto da crianca',
         'crianca e do adolescente',
         'crianca e o adolescente',
         'eca',
@@ -670,10 +673,25 @@
     },
     {
       test: (norm) =>
+        norm.includes('henry borel') ||
+        norm.includes('14.344') ||
+        norm.includes('14344'),
+      terms: ['lei henry borel', 'henry borel', 'lei 14.344', '14.344', '14344']
+    },
+    {
+      test: (norm) =>
+        norm.includes('escuta especializada') ||
+        norm.includes('depoimento especial') ||
+        norm.includes('13.431') ||
+        norm.includes('13431'),
+      terms: ['escuta especializada', 'depoimento especial', 'lei 13.431', '13.431', '13431']
+    },
+    {
+      test: (norm) =>
         /\bdrogas?\b|\bsisnad\b|entorpecente/.test(norm) ||
         norm.includes('11.343') ||
         norm.includes('11343'),
-      terms: ['lei de drogas', 'drogas', '11.343', '11343', 'sisnad']
+      terms: ['lei de drogas', 'lei 11.343', 'drogas', '11.343', '11343', 'sisnad']
     },
     {
       test: (norm) =>
@@ -682,28 +700,28 @@
         norm.includes('sinarm') ||
         norm.includes('10.826') ||
         norm.includes('10826'),
-      terms: ['estatuto do desarmamento', 'desarmamento', 'arma de fogo', '10.826', '10826']
+      terms: ['estatuto do desarmamento', 'lei 10.826', 'desarmamento', 'arma de fogo', '10.826', '10826']
     },
     {
       test: (norm) =>
         norm.includes('abuso de autoridade') ||
         norm.includes('13.869') ||
         norm.includes('13869'),
-      terms: ['abuso de autoridade', '13.869', '13869']
+      terms: ['abuso de autoridade', 'lei 13.869', '13.869', '13869']
     },
     {
       test: (norm) =>
         norm.includes('tortura') ||
         norm.includes('9.455') ||
         norm.includes('9455'),
-      terms: ['tortura', 'lei de tortura', 'crimes de tortura', '9.455', '9455']
+      terms: ['tortura', 'lei de tortura', 'crimes de tortura', 'lei 9.455', '9.455', '9455']
     },
     {
       test: (norm) =>
         norm.includes('hediondo') ||
         norm.includes('8.072') ||
         norm.includes('8072'),
-      terms: ['crimes hediondos', 'hediondos', '8.072', '8072']
+      terms: ['crimes hediondos', 'hediondos', 'lei 8.072', '8.072', '8072']
     },
     {
       test: (norm) =>
@@ -712,15 +730,23 @@
         /\borcrim\b/.test(norm) ||
         norm.includes('12.850') ||
         norm.includes('12850'),
-      terms: ['organizacoes criminosas', 'organizacao criminosa', '12.850', '12850']
+      terms: ['organizacoes criminosas', 'organizacao criminosa', 'lei 12.850', '12.850', '12850']
     },
     {
       test: (norm) =>
         norm.includes('maria da penha') ||
-        norm.includes('violencia domestica') ||
+        (norm.includes('violencia domestica') && /\bmulher(?:es)?\b/.test(norm)) ||
+        norm.includes('feminicidio') ||
         norm.includes('11.340') ||
         norm.includes('11340'),
-      terms: ['lei maria da penha', 'maria da penha', 'violencia domestica', '11.340', '11340']
+      terms: [
+        'lei maria da penha',
+        'maria da penha',
+        'lei 11.340',
+        'violencia domestica e familiar contra a mulher',
+        '11.340',
+        '11340'
+      ]
     },
     {
       test: (norm) =>
@@ -728,14 +754,14 @@
         norm.includes('ambienta') ||
         norm.includes('9.605') ||
         norm.includes('9605'),
-      terms: ['crimes ambientais', 'lei ambiental', 'meio ambiente', '9.605', '9605']
+      terms: ['crimes ambientais', 'lei ambiental', 'meio ambiente', 'lei 9.605', '9.605', '9605']
     },
     {
       test: (norm) =>
         norm.includes('interceptacao') ||
         norm.includes('9.296') ||
         norm.includes('9296'),
-      terms: ['interceptacao telefonica', '9.296', '9296']
+      terms: ['interceptacao telefonica', 'lei 9.296', '9.296', '9296']
     },
     {
       test: (norm) =>
@@ -743,21 +769,21 @@
         /\bjecrim\b/.test(norm) ||
         norm.includes('9.099') ||
         norm.includes('9099'),
-      terms: ['juizados especiais', 'juizado especial', 'jecrim', '9.099', '9099']
+      terms: ['juizados especiais', 'juizado especial', 'jecrim', 'lei 9.099', '9.099', '9099']
     },
     {
       test: (norm) =>
         norm.includes('lavagem') ||
         norm.includes('9.613') ||
         norm.includes('9613'),
-      terms: ['lavagem de dinheiro', 'lavagem de capitais', '9.613', '9613']
+      terms: ['lavagem de dinheiro', 'lavagem de capitais', 'lei 9.613', '9.613', '9613']
     },
     {
       test: (norm) =>
         norm.includes('racismo') ||
         norm.includes('7.716') ||
         norm.includes('7716'),
-      terms: ['racismo', 'crimes de racismo', '7.716', '7716']
+      terms: ['racismo', 'crimes de racismo', 'lei 7.716', '7.716', '7716']
     },
     {
       test: (norm) =>
@@ -765,14 +791,14 @@
         norm.includes('execucao penal') ||
         norm.includes('7.210') ||
         norm.includes('7210'),
-      terms: ['lei de execucao penal', 'execucao penal', 'lep', '7.210', '7210']
+      terms: ['lei de execucao penal', 'execucao penal', 'lep', 'lei 7.210', '7.210', '7210']
     },
     {
       test: (norm) =>
         norm.includes('prisao temporaria') ||
         norm.includes('7.960') ||
         norm.includes('7960'),
-      terms: ['prisao temporaria', '7.960', '7960']
+      terms: ['prisao temporaria', 'lei 7.960', '7.960', '7960']
     },
     {
       test: (norm) =>
@@ -780,7 +806,30 @@
         norm.includes('pessoa idosa') ||
         norm.includes('10.741') ||
         norm.includes('10741'),
-      terms: ['estatuto do idoso', 'estatuto da pessoa idosa', '10.741', '10741']
+      terms: ['estatuto do idoso', 'estatuto da pessoa idosa', 'lei 10.741', '10.741', '10741']
+    },
+    {
+      test: (norm) =>
+        norm.includes('pacote anticrime') ||
+        /\banticrime\b/.test(norm) ||
+        norm.includes('13.964') ||
+        norm.includes('13964'),
+      terms: ['pacote anticrime', 'lei 13.964', '13.964', '13964']
+    },
+    {
+      test: (norm) =>
+        norm.includes('igualdade racial') ||
+        norm.includes('12.288') ||
+        norm.includes('12288'),
+      terms: ['estatuto da igualdade racial', 'igualdade racial', 'lei 12.288', '12.288', '12288']
+    },
+    {
+      test: (norm) =>
+        norm.includes('pessoa com deficiencia') ||
+        /\blbi\b/.test(norm) ||
+        norm.includes('13.146') ||
+        norm.includes('13146'),
+      terms: ['estatuto da pessoa com deficiencia', 'pessoa com deficiencia', 'lei 13.146', '13.146', '13146']
     },
     {
       test: (norm) =>
@@ -788,7 +837,7 @@
         norm.includes('codigo de transito') ||
         norm.includes('9.503') ||
         norm.includes('9503'),
-      terms: ['codigo de transito brasileiro', 'ctb', '9.503', '9503']
+      terms: ['codigo de transito brasileiro', 'ctb', 'lei 9.503', '9.503', '9503']
     },
     {
       test: (norm) =>
@@ -796,7 +845,7 @@
         norm.includes('improbidade administrativa') ||
         norm.includes('8.429') ||
         norm.includes('8429'),
-      terms: ['improbidade administrativa', 'lei de improbidade administrativa', '8.429', '8429']
+      terms: ['improbidade administrativa', 'lei de improbidade administrativa', 'lei 8.429', '8.429', '8429']
     }
   ];
 
@@ -934,18 +983,36 @@
 
   function getSpecialLawSearchTerms(rawText) {
     const norm = normalizeFilterText(rawText)
-      .replace(/[-–—:|]+/g, ' ')
+      .replace(/[-–—:|/]+/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
     if (!norm) return [];
     const results = [];
+    const pushTerm = (t) => {
+      if (t && !results.includes(t)) results.push(t);
+    };
+
     for (const rule of SPECIAL_LAW_RULES) {
       if (rule.test(norm)) {
         for (const t of rule.terms) {
-          if (t && !results.includes(t)) results.push(t);
+          pushTerm(t);
         }
       }
     }
+
+    // Extrai números de leis explícitos no texto (ex.: "Lei nº 14.344/2022" -> "lei 14.344", "14.344", "14344")
+    const lawRegex = /\blei\s+(?:n[oº°.]?\s*)?(\d{1,2}\.?\d{3})\b/gi;
+    let match;
+    while ((match = lawRegex.exec(norm)) !== null) {
+      const digits = match[1].replace(/\D/g, '');
+      if (digits.length >= 4 && digits.length <= 5) {
+        const dotted = digits.replace(/^(\d+)(\d{3})$/, '$1.$2');
+        pushTerm(`lei ${dotted}`);
+        pushTerm(dotted);
+        pushTerm(digits);
+      }
+    }
+
     return results;
   }
 
@@ -1366,6 +1433,8 @@
       .trim();
   }
 
+  const PURE_ARTICLE_LINE_REGEX = /^(?:revoga[cç][aã]o\s+(?:do|da|dos|das)\s+|leitura\s+(?:do|da|dos|das)\s+|coment[aá]rios?\s+(?:ao|sobre|do|dos)\s+|an[aá]lise\s+(?:do|dos)\s+)?art(?:igo)?s?\.?\s*(\d+)/i;
+
   function buildBroadParentNorms(contextNames = []) {
     const broad = new Set();
     for (const name of (Array.isArray(contextNames) ? contextNames : [contextNames])) {
@@ -1375,6 +1444,7 @@
         .replace(/\s*[-–—]\s*(?:parte|aula|bloco|modulo)\s*\d+\s*$/i, '')
         .trim();
       for (const candidate of [raw, stripped]) {
+        if (getSpecialLawSearchTerms(candidate).length > 0) continue;
         const norm = normalizeCourseIndexKey(candidate);
         if (norm) broad.add(norm);
         let cur = candidate;
@@ -1382,7 +1452,9 @@
           const next = cur.replace(BROAD_PARENT_PREFIX_REGEX, '').trim();
           const nextNorm = normalizeCourseIndexKey(next);
           if (nextNorm && nextNorm !== normalizeCourseIndexKey(cur)) {
-            broad.add(nextNorm);
+            if (getSpecialLawSearchTerms(next).length === 0) {
+              broad.add(nextNorm);
+            }
             cur = next;
           } else {
             break;
@@ -1453,6 +1525,16 @@
         continue;
       }
 
+      const artMatch = cleaned.match(PURE_ARTICLE_LINE_REGEX);
+      if (artMatch) {
+        const artNum = artMatch[1];
+        const isLandmarkArticle = ['5', '37', '144'].includes(artNum);
+        const hasSpecialLawMention = getSpecialLawSearchTerms(cleaned).length > 0;
+        if (!isLandmarkArticle && !hasSpecialLawMention) {
+          continue;
+        }
+      }
+
       const strippedCore = cleaned.replace(LEADING_INDEX_FILLER_REGEX, '').trim();
       const strippedNorm = normalizeCourseIndexKey(strippedCore);
       if (strippedCore && strippedNorm.length >= 4) {
@@ -1483,10 +1565,10 @@
       .replace(/\badm\b/g, 'administracao')
       .replace(/\s+/g, ' ')
       .trim();
-    if (!clean) return [];
+    if (!clean) return { primary: [], splitFallbacks: [] };
 
-    const groups = [];
     const primary = [clean];
+    const extraSplits = [];
 
     if (clean.includes('administracao publica direta e indireta')) {
       primary.push('administracao direta e indireta');
@@ -1507,10 +1589,27 @@
       primary.push('ministerios');
     }
 
-    groups.push(Array.from(new Set(primary)));
+    const lawTerms = getSpecialLawSearchTerms(clean);
+    if (lawTerms.length > 0) {
+      if (/\beca\b/.test(clean)) {
+        primary.push(clean.replace(/\beca\b/g, 'estatuto da crianca e do adolescente'));
+        if (/\bcrimes?\b/.test(clean)) {
+          primary.push('crimes contra a crianca e o adolescente');
+        }
+      } else if (/\bctb\b/.test(clean)) {
+        primary.push(clean.replace(/\bctb\b/g, 'codigo de transito brasileiro'));
+      } else if (/\blep\b/.test(clean)) {
+        primary.push(clean.replace(/\blep\b/g, 'lei de execucao penal'));
+      } else if (/\blia\b/.test(clean)) {
+        primary.push(clean.replace(/\blia\b/g, 'improbidade administrativa'));
+      }
+      lawTerms.forEach(t => {
+        primary.push(t);
+        extraSplits.push([t]);
+      });
+    }
 
     // Se o subtópico combina 2 conceitos-chave de edital, gera buscas específicas adicionais caso apareçam separados no Caveira
-    const extraSplits = [];
     if (clean.includes('direta') && clean.includes('indireta')) {
       extraSplits.push(['administracao direta'], ['administracao indireta']);
     }
@@ -1525,7 +1624,7 @@
       extraSplits.push(['terceiro setor', 'paraestatais']);
     }
 
-    return { primary: groups[0], splitFallbacks: extraSplits };
+    return { primary: Array.from(new Set(primary)), splitFallbacks: extraSplits };
   }
 
   async function matchOptionInOpenDropdown(filterInput, searchTerms, opts = {}) {
@@ -1691,6 +1790,28 @@
             });
           }
         }
+      }
+    }
+
+    // 1B. Garante que a lei especial principal da aula/índice (ex.: ECA) seja marcada mesmo se outros subtópicos pontuaram antes
+    const allContextText = [fallbackTopic, ...validLessons, ...validSubtopics].filter(Boolean).join(' ');
+    const mainContextText = [fallbackTopic, ...validLessons].filter(Boolean).join(' ');
+    const mainLawTerms = getSpecialLawSearchTerms(mainContextText);
+    const allContextLawTerms = getSpecialLawSearchTerms(allContextText);
+
+    if (mainLawTerms.length > 0) {
+      const hasMainLawSelected = Array.from(selectedOptionNorms).some(
+        selNorm => scoreOptionMatch(selNorm, mainLawTerms) >= 400
+      );
+      if (!hasMainLawSelected) {
+        await trySelectWithTerms(mainLawTerms, { minScore: 220, allowEmptyFallback: true });
+      }
+    } else if (allContextLawTerms.length > 0) {
+      const hasContextLawSelected = Array.from(selectedOptionNorms).some(
+        selNorm => scoreOptionMatch(selNorm, allContextLawTerms) >= 400
+      );
+      if (!hasContextLawSelected) {
+        await trySelectWithTerms(allContextLawTerms, { minScore: 220, allowEmptyFallback: true });
       }
     }
 

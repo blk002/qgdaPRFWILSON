@@ -60,6 +60,10 @@ const LEADING_FILLER_REGEX = /^(?:conceitos?\s+(?:de|da|do|dos|das|sobre)|no[cç
 
 const BROAD_PREFIX_REGEX = /^(?:organiza[cç][aã]o\s+(?:da|do|de)|conceitos?\s+(?:de|da|do|dos|das|sobre)|no[cç][oõ]es?\s+(?:de|da|do|dos|das|gerais\s+de)|introdu[cç][aã]o\s+(?:[aà]|ao|aos|[aà]s|de|sobre)|estrutura\s+(?:da|do|de|dos|das))\s+/i;
 
+const PURE_ARTICLE_LINE_REGEX = /^(?:revoga[cç][aã]o\s+(?:do|da|dos|das)\s+|leitura\s+(?:do|da|dos|das)\s+|coment[aá]rios?\s+(?:ao|sobre|do|dos)\s+|an[aá]lise\s+(?:do|dos)\s+)?art(?:igo)?s?\.?\s*(\d+)/i;
+
+const EXPLICIT_LAW_MENTION_REGEX = /\b(?:eca|ctb|lep|lia|jecrim|orcrim|sinarm|sisnad|lbi|henry borel|maria da penha|estatuto|constituicao|codigo)\b|\blei\s+(?:n[oº°.]?\s*)?\d|\b\d{1,2}\.\d{3}\b/i;
+
 export function buildBroadContextSet(contextNames = []) {
   const broad = new Set();
   for (const name of (Array.isArray(contextNames) ? contextNames : [contextNames])) {
@@ -138,6 +142,16 @@ export function parseCourseIndexSubtopics(rawText, contextNames = []) {
       broadContext.has(norm)
     ) {
       continue;
+    }
+
+    const artMatch = cleaned.match(PURE_ARTICLE_LINE_REGEX);
+    if (artMatch) {
+      const artNum = artMatch[1];
+      const isLandmarkArticle = ['5', '37', '144'].includes(artNum);
+      const normPlain = normalizeCourseLookupKey(cleaned);
+      if (!isLandmarkArticle && !EXPLICIT_LAW_MENTION_REGEX.test(normPlain)) {
+        continue;
+      }
     }
 
     // Remove prefixos genéricos preservando o núcleo técnico (ex.: "Conceitos de Concentração..." -> "Concentração...")
