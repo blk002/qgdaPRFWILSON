@@ -30,8 +30,13 @@ import {
   Search, Library, Clock, Calendar as CalendarIcon, Repeat, Dumbbell, 
   Target as TargetIcon, BarChart2, Store, Settings, Award, BrainCircuit, 
   X, Check, ArrowRight, ShieldCheck, Trophy, Sun, Moon, Coins, 
-  AlertTriangle, Info, LogOut, Shield, RefreshCw, Dog, Skull, Crosshair 
+  AlertTriangle, Info, LogOut, Shield, RefreshCw, Dog, Skull, Crosshair, ListFilter 
 } from 'lucide-react';
+import {
+  parseCourseIndexSubtopics,
+  findMatchingCourseIndexEntry,
+  normalizeCourseLookupKey
+} from './lib/courseIndexParser';
 import { PATENTES } from './hooks/useGamification';
 import { APP_VERSION } from './version';
 
@@ -80,9 +85,69 @@ export default function App() {
   
   const [promotionModal, setPromotionModal] = useState(null);
   const [dismissedPrePromptModalRef, setDismissedPrePromptModalRef] = useState(null);
+  const [courseIndexCache, setCourseIndexCache] = useState({ latest: null, byLesson: {} });
+  const [manualLessonIndexMap, setManualLessonIndexMap] = useState(() => {
+    try {
+      const saved = localStorage.getItem('qg_lesson_index_map_v1');
+      return saved ? JSON.parse(saved) : {};
+    } catch (_) {
+      return {};
+    }
+  });
+  const [prePromptIndexText, setPrePromptIndexText] = useState('');
+  const [showPrePromptIndexBox, setShowPrePromptIndexBox] = useState(false);
+  const [prevPrePromptModalRef, setPrevPrePromptModalRef] = useState(null);
   const lastPatenteId = useRef(null);
 
-  const triggerCaveiraPractice = (subjectName = '', lessonNames = [], topicName = '') => {
+  const saveManualLessonIndex = (rawText, lessonKeyName) => {
+    const key = normalizeCourseLookupKey(lessonKeyName);
+    if (!key) return;
+    setManualLessonIndexMap(prev => {
+      const next = { ...(prev || {}) };
+      if (!String(rawText || '').trim()) {
+        delete next[key];
+      } else {
+        next[key] = {
+          lessonTitle: lessonKeyName,
+          rawIndexText: String(rawText),
+          updatedAt: Date.now()
+        };
+      }
+      try {
+        localStorage.setItem('qg_lesson_index_map_v1', JSON.stringify(next));
+      } catch (_) {}
+      return next;
+    });
+  };
+
+  const matchedModalIndexEntry = useMemo(() => {
+    if (!classConfirmModal) return null;
+    return findMatchingCourseIndexEntry({
+      manualIndexMap: manualLessonIndexMap,
+      extensionCache: courseIndexCache,
+      lessonNames: classConfirmModal.lessonNames || classConfirmModal.allRemainingLessonNames || [],
+      topicName: classConfirmModal.topicName || ''
+    });
+  }, [classConfirmModal, manualLessonIndexMap, courseIndexCache]);
+
+  if (prevPrePromptModalRef !== classConfirmModal) {
+    setPrevPrePromptModalRef(classConfirmModal);
+    const autoText = matchedModalIndexEntry?.rawIndexText || '';
+    setPrePromptIndexText(autoText);
+    setShowPrePromptIndexBox(false);
+  }
+
+  const prePromptSubtopics = useMemo(() => {
+    if (!classConfirmModal) return [];
+    const subjectName = subjects[classConfirmModal.subjectId]?.name || '';
+    return parseCourseIndexSubtopics(prePromptIndexText, [
+      subjectName,
+      classConfirmModal.topicName,
+      ...(classConfirmModal.lessonNames || [])
+    ]);
+  }, [classConfirmModal, prePromptIndexText, subjects]);
+
+  const triggerCaveiraPractice = (subjectName = '', lessonNames = [], topicName = '', subtopics = [], rawIndexText = '') => {
     const isGenericLesson = (name) => {
       const clean = String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
       return !clean || /^testes?\s+propostos?$/.test(clean) || /^exercicios?(\s+de\s+fixacao)?$/.test(clean) || /^simulado$/.test(clean) || /^revisao$/.test(clean);
@@ -91,8 +156,13 @@ export default function App() {
       .map(l => String(l || '').replace(/\s*[-–]\s*aula\s*\d+\s*$/i, '').trim())
       .filter(l => l && !isGenericLesson(l));
     const primaryLessons = cleanedLessons.length > 0 ? cleanedLessons : (topicName ? [topicName] : []);
-    const displayFilterLabel = primaryLessons.join(' • ');
-    const copyText = primaryLessons[0] || topicName || subjectName;
+    const cleanSubtopics = (Array.isArray(subtopics) ? subtopics : [])
+      .map(s => String(s || '').trim())
+      .filter(Boolean);
+    const displayFilterLabel = cleanSubtopics.length > 0
+      ? cleanSubtopics.slice(0, 3).join(' • ') + (cleanSubtopics.length > 3 ? ` (+${cleanSubtopics.length - 3})` : '')
+      : primaryLessons.join(' • ');
+    const copyText = cleanSubtopics[0] || primaryLessons[0] || topicName || subjectName;
 
     const hasExt = document.documentElement.getAttribute('data-qg-caveira-extension-installed') === 'true';
     if (navigator.clipboard && copyText) {
@@ -106,12 +176,18 @@ export default function App() {
           subject: subjectName,
           lessons: primaryLessons,
           topic: displayFilterLabel,
-          fallbackTopic: topicName
+          fallbackTopic: topicName,
+          subtopics: cleanSubtopics,
+          rawIndexText: String(rawIndexText || '')
         }
       }, '*');
-      toast.success(`Abrindo Caveira com filtro: ${displayFilterLabel || subjectName}`);
+      toast.success(
+        cleanSubtopics.length > 0
+          ? `Abrindo Caveira com ${cleanSubtopics.length} subassuntos do Índice`
+          : `Abrindo Caveira com filtro: ${displayFilterLabel || subjectName}`
+      );
     } else {
-      window.open('https://projetocaveira.com.br/', '_blank', 'noopener');
+      window.open('https://app.caveira.com/', '_blank', 'noopener');
       toast.info('Extensão não detectada nesta aba. Conteúdo copiado para a área de transferência!');
     }
   };
@@ -267,6 +343,10 @@ export default function App() {
   useEffect(() => {
     const handleExtensionMessage = (event) => {
       if (event.data && event.data.source === 'QG_CAVEIRA_EXTENSION') {
+        if (event.data.type === 'COURSE_INDEX_SYNC' && event.data.payload) {
+          setCourseIndexCache(event.data.payload);
+          return;
+        }
         const currentUser = useStore.getState().user;
         const cloudReady = useStore.getState().hasCompletedInitialCloudSync;
         if (!currentUser?.id || !cloudReady) return;
@@ -756,7 +836,7 @@ export default function App() {
       {/* 2a. Diálogo Pré-Confirmação: Fazer Questões Antes de Queimar Aula */}
       {classConfirmModal && dismissedPrePromptModalRef !== classConfirmModal && createPortal(
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[120] p-4 fade-in font-sans">
-          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center border border-slate-200 dark:border-slate-800 relative overflow-hidden">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center border border-slate-200 dark:border-slate-800 relative max-h-[92vh] overflow-y-auto">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 via-blue-500 to-emerald-500"></div>
 
             <div className="w-14 h-14 bg-orange-100 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 rounded-full mx-auto mb-3 flex items-center justify-center shadow-inner">
@@ -773,9 +853,81 @@ export default function App() {
               </span>
             )}
 
-            <p className="text-xs font-bold text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
+            <p className="text-xs font-bold text-slate-600 dark:text-slate-300 leading-relaxed mb-3">
               Conteúdo da(s) aula(s): <span className="text-slate-900 dark:text-white font-black">{classConfirmModal.lessonNames?.length ? classConfirmModal.lessonNames.join(' • ') : classConfirmModal.topicName}</span>. Deseja abrir o Projeto Caveira na aba de questões com esse conteúdo já filtrado?
             </p>
+
+            {/* Subassuntos do Índice da Aula (Automático + Colar Manualmente) */}
+            <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 mb-4 text-left">
+              <div className="flex items-center justify-between gap-2 mb-1.5">
+                <span className="text-[10px] font-black text-slate-600 dark:text-slate-300 uppercase flex items-center gap-1.5">
+                  <ListFilter className="w-3.5 h-3.5 text-orange-500" />
+                  {prePromptSubtopics.length > 0
+                    ? `Índice: ${prePromptSubtopics.length} subassuntos`
+                    : 'Índice da Aula (Opcional)'}
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setShowPrePromptIndexBox(v => !v)}
+                  className="text-[9px] font-black text-blue-600 dark:text-blue-400 hover:underline uppercase"
+                >
+                  {showPrePromptIndexBox ? 'Ocultar' : (prePromptIndexText ? 'Editar Índice' : 'Colar Índice')}
+                </button>
+              </div>
+
+              {prePromptSubtopics.length > 0 ? (
+                <div className="flex flex-wrap gap-1 mb-1.5">
+                  {prePromptSubtopics.slice(0, 8).map((sub, i) => (
+                    <span
+                      key={i}
+                      className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-700 dark:text-orange-300 border border-orange-500/20"
+                    >
+                      {sub}
+                    </span>
+                  ))}
+                  {prePromptSubtopics.length > 8 && (
+                    <span className="text-[9px] font-bold text-slate-400 px-1 py-0.5">
+                      +{prePromptSubtopics.length - 8}
+                    </span>
+                  )}
+                </div>
+              ) : (
+                <p className="text-[10px] text-slate-500 dark:text-slate-400 leading-snug mb-1">
+                  Aulas genéricas ("Parte 01"): cole o Índice da aula ou abra o player do Caveira para filtrar pelos subassuntos específicos.
+                </p>
+              )}
+
+              {courseIndexCache?.latest?.rawIndexText && courseIndexCache.latest.rawIndexText !== prePromptIndexText && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const captured = courseIndexCache.latest.rawIndexText;
+                    setPrePromptIndexText(captured);
+                    const lessonKeyTarget = classConfirmModal.lessonNames?.[0] || classConfirmModal.topicName;
+                    if (lessonKeyTarget) saveManualLessonIndex(captured, lessonKeyTarget);
+                  }}
+                  className="mt-1 text-[9px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-2 py-1 hover:bg-emerald-500/20 transition-colors w-full text-left truncate"
+                  title={courseIndexCache.latest.lessonTitle || ''}
+                >
+                  ⚡ Usar índice aberto no Caveira ({courseIndexCache.latest.lessonTitle || `${courseIndexCache.latest.subtopics?.length || 0} tópicos`})
+                </button>
+              )}
+
+              {showPrePromptIndexBox && (
+                <textarea
+                  rows={3}
+                  value={prePromptIndexText}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setPrePromptIndexText(val);
+                    const lessonKeyTarget = classConfirmModal.lessonNames?.[0] || classConfirmModal.topicName;
+                    if (lessonKeyTarget) saveManualLessonIndex(val, lessonKeyTarget);
+                  }}
+                  placeholder="Cole aqui o texto da aba Índice ([00:01:42] Conceitos...)"
+                  className="mt-2 w-full text-[10px] font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2 text-slate-700 dark:text-slate-200 focus:border-orange-500 outline-none resize-y"
+                />
+              )}
+            </div>
 
             <div className="flex flex-col gap-2">
               <button
@@ -783,13 +935,17 @@ export default function App() {
                   const subjectName = subjects[classConfirmModal.subjectId]?.name || '';
                   const lessonNames = classConfirmModal.lessonNames || [];
                   const topicName = classConfirmModal.topicName || '';
-                  triggerCaveiraPractice(subjectName, lessonNames, topicName);
+                  triggerCaveiraPractice(subjectName, lessonNames, topicName, prePromptSubtopics, prePromptIndexText);
                   setClassConfirmModal(null);
                 }}
                 className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2"
               >
                 <Skull className="w-4 h-4" />
-                <span>Sim, ir para Questões no Caveira</span>
+                <span>
+                  {prePromptSubtopics.length > 0
+                    ? `Filtrar ${prePromptSubtopics.length} Subassuntos no Caveira`
+                    : 'Sim, ir para Questões no Caveira'}
+                </span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 
@@ -826,13 +982,18 @@ export default function App() {
         timeGoalMinutes={classConfirmModal?.timeGoalMinutes || null}
         initialStudyDate={classConfirmModal?.initialStudyDate || null}
         todayDateStr={getLocalDateStr ? getLocalDateStr() : ''}
-        onPracticeQuestions={(selectedCount) => {
+        lessonNames={classConfirmModal?.lessonNames || []}
+        allRemainingLessonNames={classConfirmModal?.allRemainingLessonNames || []}
+        initialIndexText={prePromptIndexText || matchedModalIndexEntry?.rawIndexText || ''}
+        latestCapturedCourseIndex={courseIndexCache?.latest || null}
+        onSaveLessonIndex={saveManualLessonIndex}
+        onPracticeQuestions={(selectedCount, subtopics = [], rawIndexText = '') => {
           const subjectName = subjects[classConfirmModal?.subjectId]?.name || '';
           const allRem = classConfirmModal?.allRemainingLessonNames || [];
           const count = Math.max(1, Number(selectedCount) || 1);
           const chosenLessons = allRem.length > 0 ? allRem.slice(0, count) : (classConfirmModal?.lessonNames || []);
           const topicName = classConfirmModal?.topicName || '';
-          triggerCaveiraPractice(subjectName, chosenLessons, topicName);
+          triggerCaveiraPractice(subjectName, chosenLessons, topicName, subtopics, rawIndexText);
         }}
         onClose={() => setClassConfirmModal(null)}
         onConfirm={(amount, speed, studyDate) => {

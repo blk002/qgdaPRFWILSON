@@ -14,6 +14,7 @@
   const USER_BUCKETS_KEY = 'qg_caveira_user_buckets';
   const GOAL_KEY = 'qg_caveira_daily_goal';
   const PENDING_FILTER_KEY = 'qg_pending_caveira_filter';
+  const COURSE_INDEX_CACHE_KEY = 'qg_caveira_course_index_cache';
   const MAX_BUCKET_QUESTIONS = 1500;
   let isBridgeDestroyed = false;
   let cachedActiveUserId = null;
@@ -84,6 +85,33 @@
   // Marca que a extensão está instalada no navegador
   document.documentElement.setAttribute('data-qg-caveira-extension-installed', 'true');
   window.postMessage({ source: 'QG_CAVEIRA_EXTENSION', type: 'EXTENSION_DETECTED' }, '*');
+
+  function deliverCourseIndexCache(explicitCache = null) {
+    if (isBridgeDestroyed || !isExtensionContextValid()) return;
+    if (explicitCache && typeof explicitCache === 'object') {
+      window.postMessage({
+        source: 'QG_CAVEIRA_EXTENSION',
+        type: 'COURSE_INDEX_SYNC',
+        payload: explicitCache
+      }, '*');
+      return;
+    }
+    try {
+      chrome.storage.local.get([COURSE_INDEX_CACHE_KEY], (res) => {
+        if (chrome.runtime.lastError || isBridgeDestroyed) return;
+        const cache = res?.[COURSE_INDEX_CACHE_KEY];
+        if (cache && typeof cache === 'object') {
+          window.postMessage({
+            source: 'QG_CAVEIRA_EXTENSION',
+            type: 'COURSE_INDEX_SYNC',
+            payload: cache
+          }, '*');
+        }
+      });
+    } catch (_) {}
+  }
+
+  deliverCourseIndexCache();
 
   function isExtensionContextValid() {
     try {
@@ -309,6 +337,7 @@
 
   function sendStoredData(requestedUserId = null) {
     if (!isExtensionContextValid()) return;
+    deliverCourseIndexCache();
     if (requestedUserId) {
       switchUserBucket(requestedUserId, ({ userId }) => {
         if (userId) deliverDataForActiveUser(userId);
@@ -369,7 +398,9 @@
         const topic = event.data.payload?.topic || '';
         const lessons = Array.isArray(event.data.payload?.lessons) ? event.data.payload.lessons : [];
         const fallbackTopic = event.data.payload?.fallbackTopic || '';
-        const filterData = { subject, topic, lessons, fallbackTopic, createdAt: Date.now() };
+        const subtopics = Array.isArray(event.data.payload?.subtopics) ? event.data.payload.subtopics : [];
+        const rawIndexText = String(event.data.payload?.rawIndexText || '');
+        const filterData = { subject, topic, lessons, fallbackTopic, subtopics, rawIndexText, createdAt: Date.now() };
         try {
           chrome.storage.local.set({ [PENDING_FILTER_KEY]: filterData }, () => {
             if (chrome.runtime && chrome.runtime.sendMessage) {
@@ -461,6 +492,9 @@
           if (changes[STORAGE_KEY] && cachedActiveUserId) {
             const newQuestions = changes[STORAGE_KEY].newValue || [];
             postSyncUpdate(newQuestions, cachedActiveUserId);
+          }
+          if (changes[COURSE_INDEX_CACHE_KEY]) {
+            deliverCourseIndexCache(changes[COURSE_INDEX_CACHE_KEY].newValue || { latest: null, byLesson: {} });
           }
         }
       });

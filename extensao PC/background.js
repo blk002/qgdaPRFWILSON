@@ -184,18 +184,26 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     (async () => {
       try {
         const tabs = chrome.tabs ? await chrome.tabs.query({ url: CAVEIRA_URL_PATTERNS }) : [];
-        if (tabs && tabs.length > 0 && tabs[0].id) {
-          const targetTab = tabs[0];
-          await chrome.tabs.update(targetTab.id, { active: true });
-          if (targetTab.windowId && chrome.windows) {
-            chrome.windows.update(targetTab.windowId, { focused: true }).catch(() => {});
+        const nonCourseTabs = (tabs || []).filter(t => t && t.id && !String(t.url || '').includes('/courses'));
+        const preferredTab = nonCourseTabs.find(t => /quest/i.test(t.url || '')) || nonCourseTabs[0] || null;
+
+        if (preferredTab && preferredTab.id) {
+          await chrome.tabs.update(preferredTab.id, { active: true });
+          if (preferredTab.windowId && chrome.windows) {
+            chrome.windows.update(preferredTab.windowId, { focused: true }).catch(() => {});
           }
-          chrome.tabs.sendMessage(targetTab.id, {
+          chrome.tabs.sendMessage(preferredTab.id, {
             type: 'APPLY_CAVEIRA_FILTER',
             payload: message.payload || {}
           }).catch(() => {});
         } else if (chrome.tabs) {
-          await chrome.tabs.create({ url: 'https://projetocaveira.com.br/' });
+          let targetOrigin = 'https://app.caveira.com';
+          if (tabs && tabs.length > 0 && tabs[0].url) {
+            try {
+              targetOrigin = new URL(tabs[0].url).origin;
+            } catch (_) {}
+          }
+          await chrome.tabs.create({ url: `${targetOrigin}/` });
         }
         sendResponse({ success: true });
       } catch (_) {

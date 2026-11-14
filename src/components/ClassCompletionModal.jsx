@@ -1,7 +1,8 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, FastForward, Clock, Zap, Target, Calendar, Crosshair } from 'lucide-react';
+import { Play, FastForward, Clock, Zap, Target, Calendar, Crosshair, ListFilter } from 'lucide-react';
 import { parseDurationToSeconds, calculateSpeedComparison, formatSecondsToFriendly, calculateLessonsForGoal } from '../lib/durationHelpers';
+import { parseCourseIndexSubtopics } from '../lib/courseIndexParser';
 
 const shiftDateStr = (baseStr, offsetDays) => {
   const base = baseStr && /^\d{4}-\d{2}-\d{2}$/.test(baseStr)
@@ -31,6 +32,11 @@ export default function ClassCompletionModal({
   timeGoalMinutes = null,
   initialStudyDate = null,
   todayDateStr = '',
+  lessonNames = [],
+  allRemainingLessonNames = [],
+  initialIndexText = '',
+  latestCapturedCourseIndex = null,
+  onSaveLessonIndex = null,
   onPracticeQuestions = null
 }) {
   const todayStr = todayDateStr || shiftDateStr('', 0);
@@ -41,20 +47,43 @@ export default function ClassCompletionModal({
   const [numClasses, setNumClasses] = useState(initialCount);
   const [speed, setSpeed] = useState(Number(subjectSpeed) || 1);
   const [studyDate, setStudyDate] = useState(resolvedInitialDate);
-  const [prevProps, setPrevProps] = useState({ subjectSpeed, suggestedClasses, maxClasses, resolvedInitialDate });
+  const [indexText, setIndexText] = useState(initialIndexText || '');
+  const [showIndexEditor, setShowIndexEditor] = useState(Boolean(initialIndexText));
+  const [prevProps, setPrevProps] = useState({ subjectSpeed, suggestedClasses, maxClasses, resolvedInitialDate, topicName, initialIndexText, isOpen });
 
   // Padrão oficial React 19: ajusta o estado durante a renderização quando props mudam, sem causar cascading render
   if (
     prevProps.subjectSpeed !== subjectSpeed ||
     prevProps.suggestedClasses !== suggestedClasses ||
     prevProps.maxClasses !== maxClasses ||
-    prevProps.resolvedInitialDate !== resolvedInitialDate
+    prevProps.resolvedInitialDate !== resolvedInitialDate ||
+    prevProps.topicName !== topicName ||
+    prevProps.isOpen !== isOpen
   ) {
-    setPrevProps({ subjectSpeed, suggestedClasses, maxClasses, resolvedInitialDate });
+    setPrevProps({ subjectSpeed, suggestedClasses, maxClasses, resolvedInitialDate, topicName, initialIndexText, isOpen });
     setSpeed(Number(subjectSpeed) || 1);
     setNumClasses(suggestedClasses ? Math.min(suggestedClasses, maxClasses) : 1);
     setStudyDate(resolvedInitialDate);
+    setIndexText(initialIndexText || '');
+    setShowIndexEditor(Boolean(initialIndexText));
+  } else if (prevProps.initialIndexText !== initialIndexText && !indexText && initialIndexText) {
+    setPrevProps({ ...prevProps, initialIndexText });
+    setIndexText(initialIndexText);
+    setShowIndexEditor(true);
   }
+
+  const currentNum = Math.max(1, Number(numClasses) || 1);
+  const activeLessons = useMemo(() => {
+    const rem = Array.isArray(allRemainingLessonNames) && allRemainingLessonNames.length > 0
+      ? allRemainingLessonNames
+      : (Array.isArray(lessonNames) ? lessonNames : []);
+    return rem.slice(0, currentNum).filter(Boolean);
+  }, [allRemainingLessonNames, lessonNames, currentNum]);
+
+  const parsedSubtopics = useMemo(
+    () => parseCourseIndexSubtopics(indexText, [topicName, ...activeLessons]),
+    [indexText, topicName, activeLessons]
+  );
 
   const handleSpeedChange = (newSpeed) => {
     setSpeed(newSpeed);
@@ -68,7 +97,6 @@ export default function ClassCompletionModal({
 
   if (!isOpen) return null;
 
-  const currentNum = Math.max(1, Number(numClasses) || 1);
   const speeds = [1, 1.25, 1.5, 1.75, 2];
 
   // Cálculo da duração total das aulas selecionadas
@@ -310,15 +338,88 @@ export default function ClassCompletionModal({
           )}
         </div>
 
+        {/* Índice da Aula / Subassuntos para Filtro Detalhado */}
+        {typeof onPracticeQuestions === 'function' && (
+          <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 mb-4 text-left">
+            <div className="flex items-center justify-between gap-2 mb-1.5">
+              <span className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5">
+                <ListFilter className="w-3.5 h-3.5 text-orange-500" /> Índice da Aula ({parsedSubtopics.length} subassuntos)
+              </span>
+              <button
+                type="button"
+                onClick={() => setShowIndexEditor(v => !v)}
+                className="text-[9px] font-black text-blue-600 dark:text-blue-400 hover:underline uppercase"
+              >
+                {showIndexEditor ? 'Ocultar' : 'Colar Índice'}
+              </button>
+            </div>
+
+            {parsedSubtopics.length > 0 && (
+              <div className="flex flex-wrap gap-1 mb-2">
+                {parsedSubtopics.slice(0, 8).map((sub, i) => (
+                  <span
+                    key={i}
+                    className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-orange-500/10 text-orange-700 dark:text-orange-300 border border-orange-500/20"
+                  >
+                    {sub}
+                  </span>
+                ))}
+                {parsedSubtopics.length > 8 && (
+                  <span className="text-[9px] font-bold text-slate-400 px-1 py-0.5">
+                    +{parsedSubtopics.length - 8}
+                  </span>
+                )}
+              </div>
+            )}
+
+            {showIndexEditor && (
+              <div className="space-y-1.5">
+                <textarea
+                  rows={3}
+                  value={indexText}
+                  onChange={(e) => {
+                    const val = e.target.value;
+                    setIndexText(val);
+                    if (typeof onSaveLessonIndex === 'function') {
+                      onSaveLessonIndex(val, activeLessons[0] || topicName);
+                    }
+                  }}
+                  placeholder="Cole aqui o Índice da aula do Caveira ([00:01:42] Conceitos...)"
+                  className="w-full text-[10px] font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2 text-slate-700 dark:text-slate-200 focus:border-orange-500 outline-none resize-y"
+                />
+                {latestCapturedCourseIndex?.rawIndexText && latestCapturedCourseIndex.rawIndexText !== indexText && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const captured = latestCapturedCourseIndex.rawIndexText;
+                      setIndexText(captured);
+                      if (typeof onSaveLessonIndex === 'function') {
+                        onSaveLessonIndex(captured, activeLessons[0] || topicName);
+                      }
+                    }}
+                    className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-2 py-1 hover:bg-emerald-500/20 transition-colors"
+                  >
+                    ⚡ Usar índice capturado do Caveira ({latestCapturedCourseIndex.lessonTitle || 'Aula aberta'})
+                  </button>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
         <div className="flex flex-col gap-2.5">
           {typeof onPracticeQuestions === 'function' && (
             <button
               type="button"
-              onClick={() => onPracticeQuestions(currentNum)}
+              onClick={() => onPracticeQuestions(currentNum, parsedSubtopics, indexText)}
               className="w-full py-2.5 px-3 bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/30 font-black rounded-xl transition-all flex items-center justify-center gap-2 text-[11px] uppercase tracking-wider"
             >
               <Crosshair className="w-3.5 h-3.5" />
-              <span>Ir para Questões desta(s) Aula(s) no Caveira</span>
+              <span>
+                {parsedSubtopics.length > 0
+                  ? `Ir para Questões (${parsedSubtopics.length} subassuntos)`
+                  : 'Ir para Questões desta(s) Aula(s) no Caveira'}
+              </span>
             </button>
           )}
           <button 

@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.17 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.18 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -18,6 +18,7 @@
   const ACTIVE_USER_KEY = 'qg_active_user_id';
   const ACTIVE_USER_LABEL_KEY = 'qg_active_user_label';
   const PENDING_FILTER_KEY = 'qg_pending_caveira_filter';
+  const COURSE_INDEX_CACHE_KEY = 'qg_caveira_course_index_cache';
   const MAX_BUCKET_QUESTIONS = 1500;
   let cachedDailyGoal = 50;
   let cachedActiveUserId = null;
@@ -25,6 +26,17 @@
   let activePracticeFilter = null;
   let isApplyingFilter = false;
   let filterStatusMessage = '';
+  let lastCapturedCourseSignature = '';
+  let currentCourseIndexStatus = null;
+  const peekedCourseUrls = new Set();
+
+  function isCoursePage() {
+    try {
+      return window.location.pathname.includes('/courses');
+    } catch (_) {
+      return false;
+    }
+  }
 
   function compactQuestionsForStorage(questions, maxItems = MAX_BUCKET_QUESTIONS) {
     if (!Array.isArray(questions)) return [];
@@ -168,7 +180,7 @@
         cachedActiveUserLabel = res?.[ACTIVE_USER_LABEL_KEY] || '';
         updateHudUser();
         const pendingFilter = res?.[PENDING_FILTER_KEY];
-        if (pendingFilter && (pendingFilter.topic || (Array.isArray(pendingFilter.lessons) && pendingFilter.lessons.length > 0)) && (Date.now() - (pendingFilter.createdAt || 0)) < 180000) {
+        if (!isCoursePage() && pendingFilter && (pendingFilter.topic || (Array.isArray(pendingFilter.lessons) && pendingFilter.lessons.length > 0)) && (Date.now() - (pendingFilter.createdAt || 0)) < 180000) {
           setTimeout(() => applyCaveiraPracticeFilter(pendingFilter), 900);
         }
         if (res && res[GOAL_KEY]) {
@@ -548,19 +560,27 @@
     el.click();
   }
 
-  function clickOptionRow(rowEl) {
-    if (!rowEl) return;
+  function isOptionRowChecked(rowEl) {
+    if (!rowEl) return false;
     const checkboxChild = rowEl.querySelector('input[type="checkbox"], [role="checkbox"], .q-checkbox__inner');
-    const target = checkboxChild || rowEl;
-    if (checkboxChild) {
-      const isChecked = Boolean(
+    return Boolean(
+      rowEl.getAttribute('aria-checked') === 'true' ||
+      rowEl.getAttribute('aria-selected') === 'true' ||
+      rowEl.getAttribute('data-state') === 'checked' ||
+      rowEl.classList.contains('q-checkbox--truthy') ||
+      (checkboxChild && (
         checkboxChild.checked === true ||
         checkboxChild.getAttribute('aria-checked') === 'true' ||
-        checkboxChild.classList.contains('q-checkbox__inner--truthy') ||
-        rowEl.getAttribute('aria-selected') === 'true'
-      );
-      if (isChecked) return;
-    }
+        checkboxChild.classList.contains('q-checkbox__inner--truthy')
+      ))
+    );
+  }
+
+  function clickOptionRow(rowEl) {
+    if (!rowEl) return;
+    if (isOptionRowChecked(rowEl)) return;
+    const checkboxChild = rowEl.querySelector('input[type="checkbox"], [role="checkbox"], .q-checkbox__inner');
+    const target = checkboxChild || rowEl;
     clickElementRealistically(target);
   }
 
@@ -886,8 +906,209 @@
     }
   }
 
-  async function matchOptionInOpenDropdown(filterInput, searchTerms) {
+  const GENERIC_INDEX_LINES = new Set([
+    'introducao',
+    'apresentacao',
+    'abertura',
+    'encerramento',
+    'conclusao',
+    'finalizacao',
+    'consideracoes finais',
+    'duvidas',
+    'recados',
+    'avisos',
+    'revisao',
+    'resumo',
+    'exercicios',
+    'questoes',
+    'simulado',
+    'inicio',
+    'fim',
+    'boas vindas'
+  ]);
+
+  const LEADING_INDEX_FILLER_REGEX = /^(?:conceitos?\s+(?:de|da|do|dos|das|sobre)|no[cç][oõ]es?\s+(?:de|da|do|dos|das|gerais\s+de)|introdu[cç][aã]o\s+(?:[aà]|ao|aos|[aà]s|de|sobre)|estrutura\s+(?:da|do|de|dos|das)|aspectos?\s+(?:gerais|iniciais|principais)\s+(?:de|da|do|dos|das)|vis[aã]o\s+geral\s+(?:de|da|do)|entendendo\s+(?:a|o|as|os)|compreendendo\s+(?:a|o|as|os)|o\s+que\s+[eé])\s+/i;
+
+  const BROAD_PARENT_PREFIX_REGEX = /^(?:organiza[cç][aã]o\s+(?:da|do|de)|conceitos?\s+(?:de|da|do|dos|das|sobre)|no[cç][oõ]es?\s+(?:de|da|do|dos|das|gerais\s+de)|introdu[cç][aã]o\s+(?:[aà]|ao|aos|[aà]s|de|sobre)|estrutura\s+(?:da|do|de|dos|das))\s+/i;
+
+  function normalizeCourseIndexKey(str) {
+    return normalizeFilterText(str)
+      .replace(/[-–—:|/]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
+  function buildBroadParentNorms(contextNames = []) {
+    const broad = new Set();
+    for (const name of (Array.isArray(contextNames) ? contextNames : [contextNames])) {
+      const raw = String(name || '').trim();
+      if (!raw) continue;
+      const stripped = raw
+        .replace(/\s*[-–—]\s*(?:parte|aula|bloco|modulo)\s*\d+\s*$/i, '')
+        .trim();
+      for (const candidate of [raw, stripped]) {
+        const norm = normalizeCourseIndexKey(candidate);
+        if (norm) broad.add(norm);
+        let cur = candidate;
+        for (let i = 0; i < 2; i++) {
+          const next = cur.replace(BROAD_PARENT_PREFIX_REGEX, '').trim();
+          const nextNorm = normalizeCourseIndexKey(next);
+          if (nextNorm && nextNorm !== normalizeCourseIndexKey(cur)) {
+            broad.add(nextNorm);
+            cur = next;
+          } else {
+            break;
+          }
+        }
+      }
+    }
+    return broad;
+  }
+
+  function parseCourseIndexSubtopics(rawText, contextNames = []) {
+    const input = String(rawText || '').trim();
+    if (!input) return [];
+
+    const normalizedBlock = input.replace(/([^\n])\s*(\[\d{1,2}:\d{2}(?::\d{2})?\])/g, '$1\n$2');
+    const rawLines = normalizedBlock.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const mergedLines = [];
+    for (let i = 0; i < rawLines.length; i++) {
+      const cur = rawLines[i];
+      if (/^[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?$/.test(cur) && i + 1 < rawLines.length) {
+        mergedLines.push(`${cur} ${rawLines[i + 1]}`);
+        i += 1;
+      } else {
+        mergedLines.push(cur);
+      }
+    }
+
+    const broadContext = buildBroadParentNorms(contextNames);
+    const results = [];
+    const seenNorm = new Set();
+
+    for (const rawLine of mergedLines) {
+      const rawNorm = normalizeCourseIndexKey(rawLine);
+      if (
+        !rawNorm ||
+        rawNorm === 'indice' ||
+        rawNorm === 'charlie' ||
+        rawNorm === 'bizus' ||
+        rawNorm === 'arquivos' ||
+        rawNorm === 'comentarios'
+      ) {
+        continue;
+      }
+
+      const hadIntroPrefix = /^(?:[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?\s*)?introdu[cç][aã]o\b/i.test(rawLine);
+      let cleaned = rawLine
+        .replace(/^[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?\s*[-–—:|]*\s*/, '')
+        .replace(/^(?:[-•*●▪◦]|\d+[.)-])\s+/, '')
+        .replace(/\bademi\s+publica\b/gi, 'Administração Pública')
+        .replace(/\bademi\b/gi, 'Administração')
+        .replace(/\badm\.?\s+publica\b/gi, 'Administração Pública')
+        .replace(/\badm\.?\b/gi, 'Administração')
+        .replace(/\bconst\.?\s+federal\b/gi, 'Constituição Federal')
+        .replace(/\bcf\b(?=\s|$|[.,])/gi, 'Constituição Federal')
+        .replace(/\bctb\b(?=\s|$|[.,])/gi, 'Código de Trânsito Brasileiro')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!cleaned) continue;
+
+      let norm = normalizeCourseIndexKey(cleaned);
+      if (
+        !norm ||
+        norm.length < 3 ||
+        GENERIC_INDEX_LINES.has(norm) ||
+        /^(?:parte|aula|bloco|modulo)\s*\d+$/.test(norm) ||
+        broadContext.has(norm)
+      ) {
+        continue;
+      }
+
+      const strippedCore = cleaned.replace(LEADING_INDEX_FILLER_REGEX, '').trim();
+      const strippedNorm = normalizeCourseIndexKey(strippedCore);
+      if (strippedCore && strippedNorm.length >= 4) {
+        if (hadIntroPrefix && strippedNorm.split(' ').length === 1 && strippedNorm.length < 10) {
+          continue;
+        }
+        cleaned = strippedCore;
+        norm = strippedNorm;
+      }
+
+      if (!norm || norm.length < 3 || GENERIC_INDEX_LINES.has(norm) || broadContext.has(norm)) {
+        continue;
+      }
+
+      const formatted = cleaned.charAt(0).toUpperCase() + cleaned.slice(1);
+      if (!seenNorm.has(norm)) {
+        seenNorm.add(norm);
+        results.push(formatted);
+      }
+    }
+
+    return results;
+  }
+
+  function expandSubtopicToSearchGroups(subtopic) {
+    const clean = normalizeFilterText(subtopic)
+      .replace(/\bademi\b/g, 'administracao')
+      .replace(/\badm\b/g, 'administracao')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!clean) return [];
+
+    const groups = [];
+    const primary = [clean];
+
+    if (clean.includes('administracao publica direta e indireta')) {
+      primary.push('administracao direta e indireta');
+    }
+    if (clean.includes('teoria do orgao')) {
+      primary.push('orgaos publicos', 'orgao publico');
+    }
+    if (clean.includes('terceiro setor')) {
+      primary.push('terceiro setor', 'entidades paraestatais', 'paraestatais');
+    }
+    if (clean.includes('por servico')) {
+      primary.push('outorga', 'descentralizacao por servico');
+    }
+    if (clean.includes('por colaboracao')) {
+      primary.push('delegacao', 'descentralizacao por colaboracao');
+    }
+    if (clean.includes('ministerios')) {
+      primary.push('ministerios');
+    }
+
+    groups.push(Array.from(new Set(primary)));
+
+    // Se o subtópico combina 2 conceitos-chave de edital, gera buscas específicas adicionais caso apareçam separados no Caveira
+    const extraSplits = [];
+    if (clean.includes('direta') && clean.includes('indireta')) {
+      extraSplits.push(['administracao direta'], ['administracao indireta']);
+    }
+    if (clean.includes('desconcentracao') && (clean.includes('descentralizacao') || clean.includes('orgao'))) {
+      extraSplits.push(['desconcentracao']);
+      if (clean.includes('descentralizacao')) extraSplits.push(['descentralizacao']);
+      if (clean.includes('orgao')) extraSplits.push(['orgaos publicos', 'teoria do orgao']);
+    } else if (clean.includes('concentracao') && clean.includes('descentralizacao')) {
+      extraSplits.push(['concentracao', 'centralizacao'], ['descentralizacao']);
+    }
+    if (clean.includes('terceiro setor') && clean.includes('entidades')) {
+      extraSplits.push(['terceiro setor', 'paraestatais']);
+    }
+
+    return { primary: groups[0], splitFallbacks: extraSplits };
+  }
+
+  async function matchOptionInOpenDropdown(filterInput, searchTerms, opts = {}) {
+    const forbiddenNorms = opts.forbiddenNorms instanceof Set ? opts.forbiddenNorms : null;
+    const excludeNorms = opts.excludeNorms instanceof Set ? opts.excludeNorms : null;
+    const minScore = typeof opts.minScore === 'number' ? opts.minScore : 200;
+    const allowEmptyFallback = opts.allowEmptyFallback !== false;
+
     let matched = null;
+    let bestScore = 0;
+
     for (const term of searchTerms) {
       if (filterInput) {
         filterInput.focus();
@@ -900,30 +1121,42 @@
       }
 
       const options = findDropdownOptionElements(filterInput);
-      let bestScore = 0;
+      bestScore = 0;
+      matched = null;
       for (const opt of options) {
+        const optNorm = normalizeCourseIndexKey(opt.innerText || opt.textContent);
+        if (!optNorm) continue;
+        if (forbiddenNorms && forbiddenNorms.has(optNorm)) continue;
+        if (excludeNorms && excludeNorms.has(optNorm)) continue;
+
         const sc = scoreOptionMatch(opt.innerText || opt.textContent, [term, ...searchTerms]);
         if (sc > bestScore) {
           bestScore = sc;
           matched = opt;
         }
       }
-      if (matched && bestScore >= 200) break;
+      if (matched && bestScore >= minScore) break;
+      matched = null;
     }
 
-    if ((!matched || (filterInput && hasNoSearchResultsInMenu(filterInput))) && filterInput) {
+    if ((!matched || (filterInput && hasNoSearchResultsInMenu(filterInput))) && filterInput && allowEmptyFallback) {
       setNativeInputValue(filterInput, '');
       await sleepMs(220);
       const allOptions = findDropdownOptionElements(filterInput);
       let bestFallbackScore = 0;
       for (const opt of allOptions) {
+        const optNorm = normalizeCourseIndexKey(opt.innerText || opt.textContent);
+        if (!optNorm) continue;
+        if (forbiddenNorms && forbiddenNorms.has(optNorm)) continue;
+        if (excludeNorms && excludeNorms.has(optNorm)) continue;
+
         const sc = scoreOptionMatch(opt.innerText || opt.textContent, searchTerms);
         if (sc > bestFallbackScore) {
           bestFallbackScore = sc;
           matched = opt;
         }
       }
-      if (bestFallbackScore < 150) matched = null;
+      if (bestFallbackScore < Math.max(150, minScore)) matched = null;
     }
 
     return matched;
@@ -955,10 +1188,11 @@
     return Boolean(matched);
   }
 
-  async function selectCaveiraLessonsInDropdown(lessonsList, fallbackTopic) {
+  async function selectCaveiraLessonsInDropdown(lessonsList, fallbackTopic, subtopicsList = [], subjectName = '') {
     const validLessons = (Array.isArray(lessonsList) ? lessonsList : []).filter(Boolean);
+    const validSubtopics = (Array.isArray(subtopicsList) ? subtopicsList : []).filter(Boolean);
     const hasFallback = Boolean(String(fallbackTopic || '').trim());
-    if (isDestroyed || (validLessons.length === 0 && !hasFallback)) return false;
+    if (isDestroyed || (validLessons.length === 0 && validSubtopics.length === 0 && !hasFallback)) return false;
 
     const trigger = findFilterDropdownTrigger('Assunto');
     if (!trigger) return false;
@@ -974,26 +1208,68 @@
     }
 
     let matchedCount = 0;
-    for (const lessonTitle of validLessons) {
-      if (isDestroyed) break;
-      const lessonTerms = getLessonSearchTerms(lessonTitle);
-      if (lessonTerms.length === 0) continue;
-      const matched = await matchOptionInOpenDropdown(filterInput, lessonTerms);
-      if (matched) {
+    const selectedOptionNorms = new Set();
+
+    const trySelectWithTerms = async (terms, matchOpts = {}) => {
+      if (!terms || terms.length === 0) return false;
+      const matched = await matchOptionInOpenDropdown(filterInput, terms, {
+        ...matchOpts,
+        excludeNorms: selectedOptionNorms
+      });
+      if (!matched) return false;
+      const matchedNorm = normalizeCourseIndexKey(matched.innerText || matched.textContent);
+      if (matchedNorm && selectedOptionNorms.has(matchedNorm)) return false;
+      if (matchedNorm) selectedOptionNorms.add(matchedNorm);
+      if (!isOptionRowChecked(matched)) {
         clickOptionRow(matched);
         matchedCount += 1;
-        await sleepMs(200);
+        await sleepMs(180);
+      } else {
+        matchedCount += 1;
+      }
+      return true;
+    };
+
+    // 1. Prioridade máxima: se houver subassuntos do Índice da aula, marca apenas as subpastas filhas específicas
+    if (validSubtopics.length > 0) {
+      const forbiddenParentNorms = buildBroadParentNorms([subjectName, fallbackTopic, ...validLessons]);
+      for (const subtopic of validSubtopics) {
+        if (isDestroyed) break;
+        const expanded = expandSubtopicToSearchGroups(subtopic);
+        if (!expanded || !expanded.primary || expanded.primary.length === 0) continue;
+
+        const directHit = await trySelectWithTerms(expanded.primary, {
+          forbiddenNorms: forbiddenParentNorms,
+          minScore: 420,
+          allowEmptyFallback: false
+        });
+
+        if (!directHit && Array.isArray(expanded.splitFallbacks) && expanded.splitFallbacks.length > 0) {
+          for (const splitTerms of expanded.splitFallbacks) {
+            if (isDestroyed) break;
+            await trySelectWithTerms(splitTerms, {
+              forbiddenNorms: forbiddenParentNorms,
+              minScore: 420,
+              allowEmptyFallback: false
+            });
+          }
+        }
+      }
+    }
+
+    // 2. Fallback seguro: se não havia índice ou nenhum subassunto específico casou na árvore, filtra pelo título da aula
+    if (matchedCount === 0) {
+      for (const lessonTitle of validLessons) {
+        if (isDestroyed) break;
+        const lessonTerms = getLessonSearchTerms(lessonTitle);
+        if (lessonTerms.length === 0) continue;
+        await trySelectWithTerms(lessonTerms, { minScore: 200, allowEmptyFallback: true });
       }
     }
 
     if (matchedCount === 0 && hasFallback) {
       const fallbackTerms = getTopicSearchTerms(fallbackTopic);
-      const matchedFallback = await matchOptionInOpenDropdown(filterInput, fallbackTerms);
-      if (matchedFallback) {
-        clickOptionRow(matchedFallback);
-        matchedCount += 1;
-        await sleepMs(200);
-      }
+      await trySelectWithTerms(fallbackTerms, { minScore: 200, allowEmptyFallback: true });
     }
 
     await closeOpenDropdown(trigger, filterInput);
@@ -1187,6 +1463,78 @@
     return true;
   }
 
+  function resolveSubtopicsFromCourseCache(lessonsList, fallbackTopic, subjectName) {
+    return new Promise((resolve) => {
+      if (!isExtensionContextValid()) {
+        resolve({ subtopics: [], rawIndexText: '' });
+        return;
+      }
+      try {
+        chrome.storage.local.get([COURSE_INDEX_CACHE_KEY], (res) => {
+          if (chrome.runtime.lastError || isDestroyed) {
+            resolve({ subtopics: [], rawIndexText: '' });
+            return;
+          }
+          const cache = res?.[COURSE_INDEX_CACHE_KEY];
+          if (!cache || typeof cache !== 'object') {
+            resolve({ subtopics: [], rawIndexText: '' });
+            return;
+          }
+
+          const byLesson = (cache.byLesson && typeof cache.byLesson === 'object') ? cache.byLesson : {};
+          const candidates = [...(Array.isArray(lessonsList) ? lessonsList : []), fallbackTopic].filter(Boolean);
+          let matchedEntry = null;
+
+          // 1. Chave exata
+          for (const c of candidates) {
+            const k = normalizeCourseIndexKey(c);
+            if (k && byLesson[k]?.rawIndexText) {
+              matchedEntry = byLesson[k];
+              break;
+            }
+          }
+
+          // 2. Correspondência canônica parcial
+          if (!matchedEntry) {
+            const canon = (s) => normalizeCourseIndexKey(s).replace(/\bparte\s*0*(\d+)\b/g, 'parte $1').replace(/\baula\s*0*(\d+)\b/g, 'aula $1').trim();
+            const candCanon = candidates.map(canon).filter(Boolean);
+            for (const [k, entry] of Object.entries(byLesson)) {
+              if (!entry?.rawIndexText) continue;
+              const eCanon = canon(entry.lessonTitle || k);
+              if (!eCanon) continue;
+              if (candCanon.some(c => c === eCanon || (c.length >= 10 && eCanon.includes(c)) || (eCanon.length >= 10 && c.includes(eCanon)))) {
+                matchedEntry = entry;
+                break;
+              }
+            }
+          }
+
+          // 3. Fallback opcional: último índice capturado recentemente se compartilhar palavras-chave relevantes com a aula
+          if (!matchedEntry && cache.latest?.rawIndexText && (Date.now() - (cache.latest.capturedAt || 0)) < 1800000) {
+            const latestCanon = normalizeCourseIndexKey(cache.latest.lessonTitle || '');
+            const combinedCand = candidates.map(normalizeCourseIndexKey).join(' ');
+            const sigWords = combinedCand.split(' ').filter(w => w.length >= 5);
+            if (latestCanon && sigWords.some(w => latestCanon.includes(w))) {
+              matchedEntry = cache.latest;
+            }
+          }
+
+          if (!matchedEntry) {
+            resolve({ subtopics: [], rawIndexText: '' });
+            return;
+          }
+
+          const parsed = matchedEntry.rawIndexText
+            ? parseCourseIndexSubtopics(matchedEntry.rawIndexText, [subjectName, fallbackTopic, ...(Array.isArray(lessonsList) ? lessonsList : [])])
+            : (Array.isArray(matchedEntry.subtopics) ? matchedEntry.subtopics : []);
+          resolve({ subtopics: parsed, rawIndexText: matchedEntry.rawIndexText || '' });
+        });
+      } catch (_) {
+        resolve({ subtopics: [], rawIndexText: '' });
+      }
+    });
+  }
+
   async function applyCaveiraPracticeFilter(filterObj) {
     if (isDestroyed || !filterObj || isApplyingFilter) return;
     const subject = String(filterObj.subject || '').trim();
@@ -1197,8 +1545,30 @@
     const displayTarget = effectiveLessons.join(' • ') || fallbackTopic;
     if (!subject && !displayTarget) return;
 
+    const rawIndexText = String(filterObj.rawIndexText || '').trim();
+    let effectiveSubtopics = Array.isArray(filterObj.subtopics)
+      ? filterObj.subtopics.map(s => String(s || '').trim()).filter(Boolean)
+      : [];
+
+    if (effectiveSubtopics.length === 0 && rawIndexText) {
+      effectiveSubtopics = parseCourseIndexSubtopics(rawIndexText, [subject, fallbackTopic, ...effectiveLessons]);
+    }
+    if (effectiveSubtopics.length === 0) {
+      const cached = await resolveSubtopicsFromCourseCache(effectiveLessons, fallbackTopic, subject);
+      if (cached.subtopics.length > 0) {
+        effectiveSubtopics = cached.subtopics;
+      }
+    }
+
     isApplyingFilter = true;
-    activePracticeFilter = { subject, lessons: effectiveLessons, topic: displayTarget, fallbackTopic };
+    activePracticeFilter = {
+      subject,
+      lessons: effectiveLessons,
+      topic: displayTarget,
+      fallbackTopic,
+      subtopics: effectiveSubtopics,
+      rawIndexText
+    };
     renderFilterBanner('⏳ Abrindo Banco de Questões...');
 
     try {
@@ -1246,10 +1616,14 @@
         await sleepMs(500);
       }
 
-      // 3. Seleciona Assunto(s) pelo conteúdo da(s) aula(s) (com fallback para o assunto do QG se necessário)
-      if (effectiveLessons.length > 0 || fallbackTopic) {
-        renderFilterBanner(`⏳ Selecionando Aula(s): ${displayTarget}...`);
-        topicOk = await selectCaveiraLessonsInDropdown(effectiveLessons, fallbackTopic);
+      // 3. Seleciona Assunto(s) pelos subassuntos do Índice (quando houver) ou pelo título da(s) aula(s)
+      if (effectiveSubtopics.length > 0 || effectiveLessons.length > 0 || fallbackTopic) {
+        if (effectiveSubtopics.length > 0) {
+          renderFilterBanner(`⏳ Filtrando ${effectiveSubtopics.length} subassuntos do Índice...`);
+        } else {
+          renderFilterBanner(`⏳ Selecionando Aula(s): ${displayTarget}...`);
+        }
+        topicOk = await selectCaveiraLessonsInDropdown(effectiveLessons, fallbackTopic, effectiveSubtopics, subject);
         await sleepMs(300);
       }
 
@@ -1273,9 +1647,10 @@
       } catch (_) {}
 
       const summary = [subject, displayTarget].filter(Boolean).join(' • ');
+      const subtag = effectiveSubtopics.length > 0 ? ` • ${effectiveSubtopics.length} subassuntos` : '';
       if (subjectOk && topicOk && applyBtn) {
         const statusTag = unresolvedOk ? 'Não resolvidas' : 'Não resolvidas pendente';
-        renderFilterBanner(`✅ Filtro aplicado (${statusTag}): ${summary}`);
+        renderFilterBanner(`✅ Filtro aplicado (${statusTag}${subtag}): ${summary}`);
       } else if (subjectOk && topicOk) {
         renderFilterBanner(`⚠️ Selecionado (clique em Filtrar): ${summary}`);
       } else {
@@ -1393,7 +1768,16 @@
   }
 
   function clearActiveQuestionState() {
-    if (!currentQuestionId && !isTimerRunning) return;
+    if (!currentQuestionId && !isTimerRunning) {
+      if (isCoursePage() && currentCourseIndexStatus?.count > 0) {
+        const currentQEl = document.getElementById('qg-current-q-id');
+        if (currentQEl) {
+          currentQEl.textContent = `📑 Índice capturado (${currentCourseIndexStatus.count} subassuntos)`;
+          currentQEl.title = currentCourseIndexStatus.preview || '';
+        }
+      }
+      return;
+    }
     isTimerRunning = false;
     currentQuestionId = null;
     timerSeconds = 0;
@@ -1402,7 +1786,12 @@
     renderQuestionHistory(null, false);
     const currentQEl = document.getElementById('qg-current-q-id');
     if (currentQEl) {
-      currentQEl.textContent = 'Aguardando questão...';
+      if (isCoursePage() && currentCourseIndexStatus?.count > 0) {
+        currentQEl.textContent = `📑 Índice capturado (${currentCourseIndexStatus.count} subassuntos)`;
+        currentQEl.title = currentCourseIndexStatus.preview || '';
+      } else {
+        currentQEl.textContent = 'Aguardando questão...';
+      }
     }
   }
 
@@ -2077,6 +2466,163 @@
     }, 10000);
   }
 
+  function extractCourseLessonTitle() {
+    const ignored = new Set([
+      'indice', 'charlie', 'bizus', 'arquivos', 'comentarios', 'comentario',
+      'voltar', 'cursos', 'aulas', 'modulos', 'projeto caveira', 'digite para pesquisar'
+    ]);
+    const candidates = Array.from(
+      document.querySelectorAll('h1, h2, h3, [aria-current="page"], [aria-current="true"], [class*="active"], [class*="selected"], [class*="lesson"] [class*="title"], [class*="video"] [class*="title"]')
+    ).filter(el => {
+      if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
+      const txt = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (txt.length < 4 || txt.length > 140) return false;
+      if (/^[\[(]?\d{1,2}:\d{2}/.test(txt)) return false;
+      const norm = normalizeCourseIndexKey(txt);
+      if (!norm || ignored.has(norm)) return false;
+      if (/^\d+\s+[a-z]/.test(norm) && !norm.includes('parte') && !norm.includes('aula')) return false;
+      return true;
+    });
+
+    candidates.sort((a, b) => {
+      const aTxt = normalizeCourseIndexKey(a.innerText || a.textContent);
+      const bTxt = normalizeCourseIndexKey(b.innerText || b.textContent);
+      const aPart = /\bparte\s*\d+\b|\baula\s*\d+\b/.test(aTxt) ? 0 : 1;
+      const bPart = /\bparte\s*\d+\b|\baula\s*\d+\b/.test(bTxt) ? 0 : 1;
+      if (aPart !== bPart) return aPart - bPart;
+      const aHeading = a.matches('h1, h2, h3') ? 0 : 1;
+      const bHeading = b.matches('h1, h2, h3') ? 0 : 1;
+      return aHeading - bHeading;
+    });
+
+    if (candidates[0]) {
+      return (candidates[0].innerText || candidates[0].textContent || '').replace(/\s+/g, ' ').trim();
+    }
+
+    const docTitle = String(document.title || '')
+      .replace(/\s*[|\-–]\s*projeto\s*caveira.*$/i, '')
+      .replace(/\s*[|\-–]\s*caveira.*$/i, '')
+      .trim();
+    return docTitle.length >= 4 && !ignored.has(normalizeCourseIndexKey(docTitle)) ? docTitle : '';
+  }
+
+  function extractCourseIndexRawTextFromDom() {
+    const tsRegex = /\[\d{1,2}:\d{2}(?::\d{2})?\]/g;
+    const containers = [];
+    for (const el of document.querySelectorAll('div, ul, ol, section, aside, main')) {
+      if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) continue;
+      const txt = el.innerText || el.textContent || '';
+      const matches = txt.match(tsRegex);
+      if (matches && matches.length >= 2) {
+        containers.push({ el, count: matches.length, len: txt.length, txt });
+      }
+    }
+
+    if (containers.length === 0) return '';
+
+    containers.sort((a, b) => {
+      if (b.count !== a.count) return b.count - a.count;
+      return a.len - b.len;
+    });
+
+    const best = containers[0];
+    const rawLines = best.txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
+    const tsLines = [];
+    for (let i = 0; i < rawLines.length; i++) {
+      const cur = rawLines[i];
+      if (/^\[\d{1,2}:\d{2}(?::\d{2})?\]$/.test(cur) && i + 1 < rawLines.length) {
+        tsLines.push(`${cur} ${rawLines[i + 1]}`);
+        i += 1;
+      } else if (/^\[\d{1,2}:\d{2}(?::\d{2})?\]\s*\S+/.test(cur)) {
+        tsLines.push(cur);
+      }
+    }
+    return tsLines.join('\n');
+  }
+
+  function scanCourseVideoIndex() {
+    if (isDestroyed || !isCoursePage()) return;
+
+    let rawIndexText = extractCourseIndexRawTextFromDom();
+    if (!rawIndexText) {
+      const currentUrl = window.location.href;
+      if (!peekedCourseUrls.has(currentUrl)) {
+        const indexTab = Array.from(document.querySelectorAll('button, [role="tab"], .q-tab, a, div, span')).find(el => {
+          if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
+          const r = el.getBoundingClientRect();
+          if (r.width < 32 || r.width > 200 || r.height < 20 || r.height > 58) return false;
+          const txt = normalizeFilterText(el.innerText || el.textContent);
+          return txt === 'indice';
+        });
+        if (indexTab) {
+          peekedCourseUrls.add(currentUrl);
+          clickElementRealistically(indexTab);
+          setTimeout(scanCourseVideoIndex, 450);
+        }
+      }
+      return;
+    }
+
+    const lessonTitle = extractCourseLessonTitle();
+    const subtopics = parseCourseIndexSubtopics(rawIndexText, lessonTitle ? [lessonTitle] : []);
+    if (subtopics.length === 0) return;
+
+    currentCourseIndexStatus = {
+      count: subtopics.length,
+      lessonTitle,
+      preview: `${lessonTitle ? lessonTitle + ': ' : ''}${subtopics.slice(0, 6).join(' • ')}`
+    };
+
+    const currentQEl = document.getElementById('qg-current-q-id');
+    if (currentQEl) {
+      currentQEl.textContent = `📑 Índice capturado (${subtopics.length} subassuntos)`;
+      currentQEl.title = currentCourseIndexStatus.preview;
+    }
+
+    const signature = `${window.location.href}|${lessonTitle}|${rawIndexText}`;
+    if (signature === lastCapturedCourseSignature || !isExtensionContextValid()) return;
+    lastCapturedCourseSignature = signature;
+
+    let videoId = '';
+    try {
+      videoId = new URL(window.location.href).searchParams.get('course_video_id') || '';
+    } catch (_) {}
+
+    const entry = {
+      url: window.location.href,
+      videoId,
+      lessonTitle,
+      rawIndexText,
+      subtopics,
+      capturedAt: Date.now()
+    };
+
+    try {
+      chrome.storage.local.get([COURSE_INDEX_CACHE_KEY], (res) => {
+        if (chrome.runtime.lastError || isDestroyed) return;
+        const prev = (res?.[COURSE_INDEX_CACHE_KEY] && typeof res[COURSE_INDEX_CACHE_KEY] === 'object')
+          ? res[COURSE_INDEX_CACHE_KEY]
+          : { latest: null, byLesson: {} };
+        const nextByLesson = { ...(prev.byLesson || {}) };
+        const lessonKey = normalizeCourseIndexKey(lessonTitle);
+        if (lessonKey) {
+          nextByLesson[lessonKey] = entry;
+        }
+        // Mantém no máximo 40 aulas mais recentes em cache
+        const ordered = Object.entries(nextByLesson)
+          .sort((a, b) => (b[1]?.capturedAt || 0) - (a[1]?.capturedAt || 0))
+          .slice(0, 40);
+        const compactedByLesson = Object.fromEntries(ordered);
+        chrome.storage.local.set({
+          [COURSE_INDEX_CACHE_KEY]: {
+            latest: entry,
+            byLesson: compactedByLesson
+          }
+        });
+      });
+    } catch (_) {}
+  }
+
   // --- 7. VARREDURA DE CARDS E DETECÇÃO DE VIEWPORT ---
   function scanCards() {
     if (!isExtensionContextValid()) {
@@ -2085,6 +2631,10 @@
     }
     createHud();
     if (!isStorageLoaded) return;
+
+    if (isCoursePage()) {
+      scanCourseVideoIndex();
+    }
 
     const cards = getQuestionCards();
     if (!cards || cards.length === 0) {
