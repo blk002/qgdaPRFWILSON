@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
-import { Play, FastForward, Clock, Zap, Target, Calendar } from 'lucide-react';
+import { Play, FastForward, Clock, Zap, Target, Calendar, Crosshair } from 'lucide-react';
 import { parseDurationToSeconds, calculateSpeedComparison, formatSecondsToFriendly, calculateLessonsForGoal } from '../lib/durationHelpers';
 
 const shiftDateStr = (baseStr, offsetDays) => {
@@ -30,7 +30,8 @@ export default function ClassCompletionModal({
   suggestedClasses = null,
   timeGoalMinutes = null,
   initialStudyDate = null,
-  todayDateStr = ''
+  todayDateStr = '',
+  onPracticeQuestions = null
 }) {
   const todayStr = todayDateStr || shiftDateStr('', 0);
   const yesterdayStr = shiftDateStr(todayStr, -1);
@@ -310,6 +311,16 @@ export default function ClassCompletionModal({
         </div>
 
         <div className="flex flex-col gap-2.5">
+          {typeof onPracticeQuestions === 'function' && (
+            <button
+              type="button"
+              onClick={onPracticeQuestions}
+              className="w-full py-2.5 px-3 bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/30 font-black rounded-xl transition-all flex items-center justify-center gap-2 text-[11px] uppercase tracking-wider"
+            >
+              <Crosshair className="w-3.5 h-3.5" />
+              <span>Ir para Questões deste Assunto no Caveira</span>
+            </button>
+          )}
           <button 
             onClick={() => onConfirm(currentNum, speed, studyDate)}
             disabled={!numClasses}

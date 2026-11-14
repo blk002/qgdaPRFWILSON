@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.11 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.12 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -23,6 +23,8 @@
   let cachedActiveUserId = null;
   let cachedActiveUserLabel = '';
   let activePracticeFilter = null;
+  let isApplyingFilter = false;
+  let filterStatusMessage = '';
 
   function compactQuestionsForStorage(questions, maxItems = MAX_BUCKET_QUESTIONS) {
     if (!Array.isArray(questions)) return [];
@@ -397,7 +399,8 @@
     hud.querySelector('#qg-btn-close-filter')?.addEventListener('click', (e) => {
       e.stopPropagation();
       activePracticeFilter = null;
-      renderFilterBanner();
+      filterStatusMessage = '';
+      renderFilterBanner('');
     });
 
     const btnMin = hud.querySelector('#qg-btn-min');
@@ -481,18 +484,31 @@
       .trim();
   }
 
-  function renderFilterBanner() {
+  function renderFilterBanner(customText = '') {
     const banner = document.getElementById('qg-hud-filter-banner');
     const textEl = document.getElementById('qg-hud-filter-text');
     if (!banner || !textEl) return;
+    if (customText !== undefined && customText !== null && customText !== '') {
+      filterStatusMessage = customText;
+    }
     if (activePracticeFilter && (activePracticeFilter.topic || activePracticeFilter.subject)) {
-      const label = [activePracticeFilter.subject, activePracticeFilter.topic].filter(Boolean).join(' • ');
-      textEl.textContent = `🎯 ${label}`;
-      textEl.title = label;
+      const baseLabel = [activePracticeFilter.subject, activePracticeFilter.topic].filter(Boolean).join(' • ');
+      const displayLabel = filterStatusMessage || `🎯 ${baseLabel}`;
+      textEl.textContent = displayLabel;
+      textEl.title = baseLabel;
       banner.style.display = 'flex';
     } else {
+      filterStatusMessage = '';
       banner.style.display = 'none';
     }
+  }
+
+  function isElementVisible(el) {
+    if (!el || !el.isConnected) return false;
+    const r = el.getBoundingClientRect();
+    if (r.width <= 0 || r.height <= 0) return false;
+    const style = window.getComputedStyle(el);
+    return style.visibility !== 'hidden' && style.display !== 'none' && Number(style.opacity || '1') > 0;
   }
 
   function setNativeInputValue(input, value) {
@@ -504,12 +520,34 @@
     } else {
       input.value = value;
     }
-    input.dispatchEvent(new Event('input', { bubbles: true }));
+    try {
+      input.dispatchEvent(new InputEvent('input', { bubbles: true, data: value, inputType: 'insertText' }));
+    } catch (_) {
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+    }
     input.dispatchEvent(new Event('change', { bubbles: true }));
+    input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
   }
 
   function sleepMs(ms) {
     return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  function clickElementRealistically(el) {
+    if (!el) return;
+    try {
+      el.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    } catch (_) {}
+    const checkboxChild = el.querySelector('input[type="checkbox"], [role="checkbox"], .q-checkbox__inner');
+    const target = checkboxChild || el;
+    const rect = target.getBoundingClientRect();
+    const clientX = rect.left + Math.min(rect.width / 2, 16);
+    const clientY = rect.top + rect.height / 2;
+    const evtInit = { bubbles: true, cancelable: true, view: window, clientX, clientY };
+    try { target.dispatchEvent(new PointerEvent('pointerdown', evtInit)); } catch (_) {}
+    try { target.dispatchEvent(new MouseEvent('mousedown', evtInit)); } catch (_) {}
+    try { target.dispatchEvent(new MouseEvent('mouseup', evtInit)); } catch (_) {}
+    target.click();
   }
 
   function getSubjectSearchTerms(subject) {
@@ -557,55 +595,90 @@
 
   function findFilterDropdownTrigger(labelWord) {
     const targetNorm = normalizeFilterText(labelWord);
-    const candidates = Array.from(document.querySelectorAll('button, [role="button"], .q-select, .q-field, div, span'))
+    const matches = Array.from(document.querySelectorAll('button, [role="button"], [role="combobox"], .q-select, .q-field, div, span'))
       .filter(el => {
-        if (!el || el.closest('#qg-caveira-hud')) return false;
-        const rect = el.getBoundingClientRect();
-        if (rect.width < 70 || rect.width > 420 || rect.height < 24 || rect.height > 72) return false;
+        if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
         const txt = normalizeFilterText(el.innerText || el.textContent);
-        return txt === targetNorm || txt.startsWith(`${targetNorm} `) || txt.endsWith(` ${targetNorm}`);
+        if (!txt || txt.length > 60) return false;
+        return txt === targetNorm || txt.startsWith(`${targetNorm} `) || txt.startsWith(`${targetNorm}\n`);
       });
 
-    // Prefere o elemento clicável mais específico (menor área ou que seja button/.q-select)
-    candidates.sort((a, b) => {
-      const aClickable = a.matches('button, [role="button"], .q-select, .q-field') ? 0 : 1;
-      const bClickable = b.matches('button, [role="button"], .q-select, .q-field') ? 0 : 1;
+    const containers = [];
+    for (const el of matches) {
+      let cur = el;
+      let chosen = null;
+      for (let depth = 0; depth < 5 && cur && cur !== document.body; depth++) {
+        const r = cur.getBoundingClientRect();
+        if (r.width >= 110 && r.width <= 420 && r.height >= 28 && r.height <= 65) {
+          if (cur.matches('button, [role="button"], [role="combobox"], .q-select, .q-field, div')) {
+            chosen = cur;
+            if (cur.matches('button, [role="button"], [role="combobox"], .q-select, .q-field')) break;
+          }
+        }
+        cur = cur.parentElement;
+      }
+      if (chosen) containers.push(chosen);
+    }
+
+    const unique = Array.from(new Set(containers));
+    unique.sort((a, b) => {
+      const aClickable = a.matches('button, [role="button"], [role="combobox"], .q-select, .q-field') ? 0 : 1;
+      const bClickable = b.matches('button, [role="button"], [role="combobox"], .q-select, .q-field') ? 0 : 1;
       if (aClickable !== bClickable) return aClickable - bClickable;
       const ra = a.getBoundingClientRect();
       const rb = b.getBoundingClientRect();
       return (ra.width * ra.height) - (rb.width * rb.height);
     });
-    return candidates[0] || null;
+    return unique[0] || null;
   }
 
   function findMenuFilterInput() {
     const inputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])'))
-      .filter(el => !el.closest('#qg-caveira-hud') && el.offsetParent !== null);
+      .filter(el => !el.closest('#qg-caveira-hud') && isElementVisible(el));
     return inputs.find(el => {
-      const meta = normalizeFilterText(`${el.placeholder || ''} ${el.getAttribute('aria-label') || ''}`);
-      return meta.includes('digite para filtrar') || meta.includes('filtrar');
+      const meta = normalizeFilterText(`${el.placeholder || ''} ${el.getAttribute('aria-label') || ''} ${el.name || ''}`);
+      if (!meta || meta.includes('filtrar carreiras') || meta.includes('palavra chave')) return false;
+      return meta.includes('digite para filtrar');
     }) || null;
   }
 
-  function findVisibleMenuOptions(filterInput) {
-    const container = filterInput
-      ? (filterInput.closest('.q-menu, [role="listbox"], .v-menu__content, .dropdown-menu') || filterInput.parentElement?.parentElement || document.body)
-      : document.body;
+  function findDropdownOptionElements(filterInput) {
+    if (!filterInput) return [];
+    let container = filterInput.closest('.q-menu, [role="listbox"], .v-menu__content, .dropdown-menu');
+    if (!container) {
+      let cur = filterInput.parentElement;
+      for (let depth = 0; depth < 6 && cur && cur !== document.body; depth++) {
+        const r = cur.getBoundingClientRect();
+        if (r.height >= 100 && r.width >= 160 && r.width <= 650) {
+          container = cur;
+          break;
+        }
+        cur = cur.parentElement;
+      }
+    }
+    if (!container) return [];
 
-    const rawItems = Array.from(container.querySelectorAll('label, .q-item, .q-checkbox, [role="option"], [role="checkbox"], li, div'))
+    const inputRect = filterInput.getBoundingClientRect();
+    const candidates = Array.from(container.querySelectorAll('label, li, [role="option"], [role="menuitem"], [role="checkbox"], .q-item, div'))
       .filter(el => {
-        if (!el || el.closest('#qg-caveira-hud') || el === filterInput) return false;
-        if (filterInput && el.contains(filterInput)) return false;
-        const rect = el.getBoundingClientRect();
-        if (rect.width < 60 || rect.height < 20 || rect.height > 76) return false;
+        if (!el || el.closest('#qg-caveira-hud') || el === filterInput || el.contains(filterInput) || !isElementVisible(el)) return false;
+        const r = el.getBoundingClientRect();
+        if (r.top < inputRect.bottom - 4) return false;
+        if (r.width < 80 || r.height < 18 || r.height > 84) return false;
         const txt = normalizeFilterText(el.innerText || el.textContent);
         if (!txt || txt === 'digite para filtrar') return false;
-        const hasCheckbox = Boolean(el.querySelector('input[type="checkbox"], .q-checkbox__inner, [role="checkbox"]') || el.matches('[role="checkbox"], [role="option"], .q-item'));
-        return hasCheckbox;
+        return true;
       });
 
-    // Remove ancestrais que contêm outro candidato para evitar cliques duplos
-    return rawItems.filter(el => !rawItems.some(other => other !== el && el.contains(other)));
+    // Mantém apenas linhas-folha (não contêm outro candidato com texto diferente)
+    return candidates.filter(el => {
+      const elTxt = normalizeFilterText(el.innerText || el.textContent);
+      return !candidates.some(other => {
+        if (other === el || !el.contains(other)) return false;
+        const otherTxt = normalizeFilterText(other.innerText || other.textContent);
+        return Boolean(otherTxt && otherTxt !== elTxt);
+      });
+    });
   }
 
   function scoreOptionMatch(optionText, searchTerms) {
@@ -629,19 +702,35 @@
     return best;
   }
 
+  async function closeOpenDropdown(trigger) {
+    if (!findMenuFilterInput()) return;
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', code: 'Escape', keyCode: 27, bubbles: true }));
+    await sleepMs(150);
+    if (!findMenuFilterInput()) return;
+    const filtrosHeading = Array.from(document.querySelectorAll('h1, h2, h3, h4, div, span, p'))
+      .find(el => !el.closest('#qg-caveira-hud') && isElementVisible(el) && normalizeFilterText(el.innerText || el.textContent) === 'filtros');
+    if (filtrosHeading) {
+      clickElementRealistically(filtrosHeading);
+      await sleepMs(150);
+    }
+    if (findMenuFilterInput() && trigger) {
+      clickElementRealistically(trigger);
+      await sleepMs(150);
+    }
+  }
+
   async function selectCaveiraDropdownOption(labelWord, searchTerms) {
     if (isDestroyed || !searchTerms || searchTerms.length === 0) return false;
     const trigger = findFilterDropdownTrigger(labelWord);
     if (!trigger) return false;
 
-    trigger.click();
-    await sleepMs(300);
+    clickElementRealistically(trigger);
+    await sleepMs(320);
 
     let filterInput = findMenuFilterInput();
     if (!filterInput) {
-      trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
-      trigger.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
-      await sleepMs(300);
+      clickElementRealistically(trigger);
+      await sleepMs(350);
       filterInput = findMenuFilterInput();
     }
 
@@ -650,10 +739,10 @@
       if (filterInput) {
         filterInput.focus();
         setNativeInputValue(filterInput, term);
-        await sleepMs(280);
+        await sleepMs(300);
       }
 
-      const options = findVisibleMenuOptions(filterInput);
+      const options = findDropdownOptionElements(filterInput);
       let bestScore = 0;
       for (const opt of options) {
         const sc = scoreOptionMatch(opt.innerText || opt.textContent, [term, ...searchTerms]);
@@ -666,77 +755,87 @@
     }
 
     if (matched) {
-      const clickTarget = matched.querySelector('input[type="checkbox"], .q-checkbox__inner') || matched;
-      clickTarget.click();
-      await sleepMs(200);
+      clickElementRealistically(matched);
+      await sleepMs(220);
     }
 
-    // Fecha o dropdown clicando fora ou enviando Escape
-    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
-    if (findMenuFilterInput()) {
-      trigger.click();
-    }
-    await sleepMs(250);
+    await closeOpenDropdown(trigger);
+    await sleepMs(200);
     return Boolean(matched);
   }
 
   async function applyCaveiraPracticeFilter(filterObj) {
-    if (isDestroyed || !filterObj) return;
+    if (isDestroyed || !filterObj || isApplyingFilter) return;
     const subject = String(filterObj.subject || '').trim();
     const topic = String(filterObj.topic || '').trim();
     if (!subject && !topic) return;
 
+    isApplyingFilter = true;
     activePracticeFilter = { subject, topic };
-    renderFilterBanner();
+    renderFilterBanner('⏳ Abrindo Banco de Questões...');
 
     try {
       chrome.storage.local.remove([PENDING_FILTER_KEY]);
     } catch (_) {}
 
-    // 1. Se ainda não estiver no Banco de Questões (sem dropdown Disciplina), navega para a aba Questões
-    if (!findFilterDropdownTrigger('Disciplina')) {
-      const navCandidates = Array.from(document.querySelectorAll('a, button, [role="tab"], .q-tab, .q-item'));
-      const questTab = navCandidates.find(el => {
-        if (!el || el.closest('#qg-caveira-hud')) return false;
-        const rect = el.getBoundingClientRect();
-        if (rect.width === 0 || rect.height === 0) return false;
-        const txt = normalizeFilterText(el.innerText || el.textContent);
-        return txt === 'questoes' || txt === 'banco de questoes' || txt === 'resolver questoes';
-      });
-      if (questTab) {
-        questTab.click();
+    try {
+      // 1. Se ainda não estiver no Banco de Questões (sem dropdown Disciplina), navega para a aba Questões
+      if (!findFilterDropdownTrigger('Disciplina')) {
+        const navCandidates = Array.from(document.querySelectorAll('a, button, [role="tab"], .q-tab, .q-item'));
+        const questTab = navCandidates.find(el => {
+          if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
+          const txt = normalizeFilterText(el.innerText || el.textContent);
+          return txt === 'questoes' || txt === 'banco de questoes' || txt === 'resolver questoes';
+        });
+        if (questTab) {
+          clickElementRealistically(questTab);
+        }
       }
-    }
 
-    // Aguarda até ~4s o dropdown de Disciplina aparecer
-    for (let waitIdx = 0; waitIdx < 12; waitIdx++) {
-      if (isDestroyed) return;
-      if (findFilterDropdownTrigger('Disciplina')) break;
-      await sleepMs(350);
-    }
+      // Aguarda até ~5s o dropdown de Disciplina aparecer
+      for (let waitIdx = 0; waitIdx < 14; waitIdx++) {
+        if (isDestroyed) return;
+        if (findFilterDropdownTrigger('Disciplina')) break;
+        await sleepMs(350);
+      }
 
-    // 2. Seleciona Disciplina primeiro (pois libera/carrega os Assuntos no Caveira)
-    if (subject) {
-      const subjectTerms = getSubjectSearchTerms(subject);
-      await selectCaveiraDropdownOption('Disciplina', subjectTerms);
-      await sleepMs(450);
-    }
+      let subjectOk = true;
+      let topicOk = true;
 
-    // 3. Seleciona Assunto
-    if (topic) {
-      const topicTerms = getTopicSearchTerms(topic);
-      await selectCaveiraDropdownOption('Assunto', topicTerms);
-      await sleepMs(300);
-    }
+      // 2. Seleciona Disciplina primeiro (pois libera/carrega os Assuntos no Caveira)
+      if (subject) {
+        renderFilterBanner(`⏳ Selecionando Disciplina: ${subject}...`);
+        const subjectTerms = getSubjectSearchTerms(subject);
+        subjectOk = await selectCaveiraDropdownOption('Disciplina', subjectTerms);
+        await sleepMs(500);
+      }
 
-    // 4. Se houver botão explícito "Filtrar" / "Aplicar filtros", aciona
-    const applyBtn = Array.from(document.querySelectorAll('button, [role="button"]')).find(el => {
-      if (!el || el.closest('#qg-caveira-hud') || el.offsetParent === null) return false;
-      const txt = normalizeFilterText(el.innerText || el.textContent);
-      return txt === 'filtrar' || txt === 'aplicar filtros' || txt === 'buscar questoes' || txt === 'filtrar questoes';
-    });
-    if (applyBtn) {
-      applyBtn.click();
+      // 3. Seleciona Assunto
+      if (topic) {
+        renderFilterBanner(`⏳ Selecionando Assunto: ${topic}...`);
+        const topicTerms = getTopicSearchTerms(topic);
+        topicOk = await selectCaveiraDropdownOption('Assunto', topicTerms);
+        await sleepMs(300);
+      }
+
+      // 4. Se houver botão explícito "Filtrar" / "Aplicar filtros", aciona
+      const applyBtn = Array.from(document.querySelectorAll('button, [role="button"]')).find(el => {
+        if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
+        const txt = normalizeFilterText(el.innerText || el.textContent);
+        return txt === 'filtrar' || txt === 'aplicar filtros' || txt === 'buscar questoes' || txt === 'filtrar questoes';
+      });
+      if (applyBtn) {
+        clickElementRealistically(applyBtn);
+      }
+
+      const summary = [subject, topic].filter(Boolean).join(' • ');
+      if (subjectOk && topicOk) {
+        renderFilterBanner(`✅ Filtro aplicado: ${summary}`);
+      } else {
+        renderFilterBanner(`⚠️ Parcial (${subjectOk ? 'Disciplina OK' : 'Disciplina não encontrada'} / ${topicOk ? 'Assunto OK' : 'Selecione o assunto'})`);
+      }
+    } finally {
+      isApplyingFilter = false;
     }
   }
 

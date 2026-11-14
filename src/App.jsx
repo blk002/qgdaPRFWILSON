@@ -79,8 +79,26 @@ export default function App() {
   } = useStore();
   
   const [promotionModal, setPromotionModal] = useState(null);
-  const [practicePromptModal, setPracticePromptModal] = useState(null);
+  const [dismissedPrePromptModalRef, setDismissedPrePromptModalRef] = useState(null);
   const lastPatenteId = useRef(null);
+
+  const triggerCaveiraPractice = (subjectName = '', topicName = '') => {
+    const hasExt = document.documentElement.getAttribute('data-qg-caveira-extension-installed') === 'true';
+    if (navigator.clipboard && topicName) {
+      navigator.clipboard.writeText(topicName).catch(() => {});
+    }
+    if (hasExt) {
+      window.postMessage({
+        source: 'QG_WEB_APP',
+        type: 'OPEN_CAVEIRA_PRACTICE',
+        payload: { subject: subjectName, topic: topicName }
+      }, '*');
+      toast.success(`Abrindo Caveira com filtro: ${topicName || subjectName}`);
+    } else {
+      window.open('https://projetocaveira.com.br/', '_blank', 'noopener');
+      toast.info('Extensão não detectada nesta aba. Assunto copiado para a área de transferência!');
+    }
+  };
 
   const [reviewInputs, setReviewInputs] = useState({ total: 10, correct: 0 });
   const location = useLocation();
@@ -719,34 +737,9 @@ export default function App() {
         document.body
       )}
 
-      {/* 2. Modal de Confirmação de Aula (Componente Externo) */}
-      <ClassCompletionModal 
-        key={classConfirmModal ? `${classConfirmModal.subjectId}_${classConfirmModal.initialStudyDate || 'today'}` : 'none'}
-        isOpen={Boolean(classConfirmModal)}
-        topicName={classConfirmModal?.topicName}
-        maxClasses={classConfirmModal?.maxClasses}
-        subjectSpeed={subjects[classConfirmModal?.subjectId]?.speed || 1}
-        lessonDuration={classConfirmModal?.lessonDuration}
-        allLessonsDurations={classConfirmModal?.allLessonsDurations}
-        suggestedClasses={classConfirmModal?.suggestedClasses || null}
-        timeGoalMinutes={classConfirmModal?.timeGoalMinutes || null}
-        initialStudyDate={classConfirmModal?.initialStudyDate || null}
-        todayDateStr={getLocalDateStr ? getLocalDateStr() : ''}
-        onClose={() => setClassConfirmModal(null)}
-        onConfirm={(amount, speed, studyDate) => {
-          const subjectName = subjects[classConfirmModal.subjectId]?.name || '';
-          const topicName = classConfirmModal.topicName || '';
-          watchClass(classConfirmModal.subjectId, classConfirmModal.slotIndex, amount, speed, studyDate);
-          setClassConfirmModal(null);
-          if (topicName || subjectName) {
-            setPracticePromptModal({ subjectName, topicName });
-          }
-        }}
-      />
-
-      {/* 2b. Caixa de Diálogo Pós-Aula: Praticar Questões no Projeto Caveira */}
-      {practicePromptModal && createPortal(
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[115] p-4 fade-in font-sans">
+      {/* 2a. Diálogo Pré-Confirmação: Fazer Questões Antes de Queimar Aula */}
+      {classConfirmModal && dismissedPrePromptModalRef !== classConfirmModal && createPortal(
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[120] p-4 fade-in font-sans">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center border border-slate-200 dark:border-slate-800 relative overflow-hidden">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 via-blue-500 to-emerald-500"></div>
 
@@ -758,55 +751,75 @@ export default function App() {
               Fazer Questões Agora?
             </h3>
 
-            {practicePromptModal.subjectName && (
+            {subjects[classConfirmModal.subjectId]?.name && (
               <span className="inline-block text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 mb-2">
-                {practicePromptModal.subjectName}
+                {subjects[classConfirmModal.subjectId].name}
               </span>
             )}
 
             <p className="text-xs font-bold text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
-              Você concluiu a aula de <span className="text-slate-900 dark:text-white font-black">{practicePromptModal.topicName}</span>. Deseja abrir o Projeto Caveira na aba de questões com esse assunto filtrado?
+              Assunto da aula: <span className="text-slate-900 dark:text-white font-black">{classConfirmModal.topicName}</span>. Deseja abrir o Projeto Caveira na aba de questões com esse assunto já filtrado?
             </p>
 
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => {
-                  const { subjectName, topicName } = practicePromptModal;
-                  const hasExt = document.documentElement.getAttribute('data-qg-caveira-extension-installed') === 'true';
-                  if (navigator.clipboard && topicName) {
-                    navigator.clipboard.writeText(topicName).catch(() => {});
-                  }
-                  if (hasExt) {
-                    window.postMessage({
-                      source: 'QG_WEB_APP',
-                      type: 'OPEN_CAVEIRA_PRACTICE',
-                      payload: { subject: subjectName, topic: topicName }
-                    }, '*');
-                    toast.success(`Abrindo Caveira com filtro: ${topicName}`);
-                  } else {
-                    window.open('https://projetocaveira.com.br/', '_blank', 'noopener');
-                    toast.info('Extensão não detectada nesta aba. Assunto copiado para a área de transferência!');
-                  }
-                  setPracticePromptModal(null);
+                  const subjectName = subjects[classConfirmModal.subjectId]?.name || '';
+                  const topicName = classConfirmModal.topicName || '';
+                  triggerCaveiraPractice(subjectName, topicName);
+                  setClassConfirmModal(null);
                 }}
                 className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2"
               >
                 <Skull className="w-4 h-4" />
-                <span>Sim, ir para Questões</span>
+                <span>Sim, ir para Questões no Caveira</span>
                 <ArrowRight className="w-4 h-4" />
               </button>
 
               <button
-                onClick={() => setPracticePromptModal(null)}
-                className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors"
+                onClick={() => setDismissedPrePromptModalRef(classConfirmModal)}
+                className="w-full py-2.5 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-colors flex items-center justify-center gap-1.5"
               >
-                Agora não
+                <Check className="w-4 h-4" />
+                <span>Continuar para Confirmar Aula</span>
+              </button>
+
+              <button
+                onClick={() => setClassConfirmModal(null)}
+                className="w-full py-2 px-4 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-xl text-[10px] font-bold uppercase tracking-wider transition-colors"
+              >
+                Cancelar
               </button>
             </div>
           </div>
         </div>,
         document.body
       )}
+
+      {/* 2b. Modal de Confirmação de Aula (Componente Externo) */}
+      <ClassCompletionModal 
+        key={classConfirmModal ? `${classConfirmModal.subjectId}_${classConfirmModal.initialStudyDate || 'today'}` : 'none'}
+        isOpen={Boolean(classConfirmModal && dismissedPrePromptModalRef === classConfirmModal)}
+        topicName={classConfirmModal?.topicName}
+        maxClasses={classConfirmModal?.maxClasses}
+        subjectSpeed={subjects[classConfirmModal?.subjectId]?.speed || 1}
+        lessonDuration={classConfirmModal?.lessonDuration}
+        allLessonsDurations={classConfirmModal?.allLessonsDurations}
+        suggestedClasses={classConfirmModal?.suggestedClasses || null}
+        timeGoalMinutes={classConfirmModal?.timeGoalMinutes || null}
+        initialStudyDate={classConfirmModal?.initialStudyDate || null}
+        todayDateStr={getLocalDateStr ? getLocalDateStr() : ''}
+        onPracticeQuestions={() => {
+          const subjectName = subjects[classConfirmModal?.subjectId]?.name || '';
+          const topicName = classConfirmModal?.topicName || '';
+          triggerCaveiraPractice(subjectName, topicName);
+        }}
+        onClose={() => setClassConfirmModal(null)}
+        onConfirm={(amount, speed, studyDate) => {
+          watchClass(classConfirmModal.subjectId, classConfirmModal.slotIndex, amount, speed, studyDate);
+          setClassConfirmModal(null);
+        }}
+      />
 
       {/* 3. Modal de Substituição de Matéria no Ciclo */}
       {replaceSubjectModal && createPortal(
