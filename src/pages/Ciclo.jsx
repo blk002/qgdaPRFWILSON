@@ -786,14 +786,18 @@ export default function Ciclo() {
                                     const pastSug = (pastGoalMin > 0 || pastLessonsN > 0)
                                       ? calculateLessonsForGoal(pastActiveTopic.lessons || [], pastActiveTopic.completed, spdPast, pastGoalMin, pastActiveTopic.total, pastLessonsN).count
                                       : 1;
+                                    const pastPlannedCount = Math.max(1, pastSug || 1);
+                                    const pastLessonNames = remLessons.slice(0, pastPlannedCount).map(l => l?.name).filter(Boolean);
                                     setClassConfirmModal({
                                       subjectId,
                                       slotIndex,
                                       topicName: pastActiveTopic.name,
+                                      lessonNames: pastLessonNames,
+                                      allRemainingLessonNames: remLessons.map(l => l?.name).filter(Boolean),
                                       maxClasses: pastActiveTopic.total - pastActiveTopic.completed,
                                       lessonDuration: remLessons[0]?.duration || '',
                                       allLessonsDurations: remLessons.map(l => l.duration || '60:00'),
-                                      suggestedClasses: Math.max(1, pastSug || 1),
+                                      suggestedClasses: pastPlannedCount,
                                       timeGoalMinutes: pastGoalMin || null,
                                       initialStudyDate: dateInfo.fullDateStr
                                     });
@@ -1005,10 +1009,13 @@ export default function Ciclo() {
                                 <button 
                                   onClick={() => {
                                     const remainingLessons = (activeTopic.lessons || []).slice(currentCompleted, activeTopic.total);
+                                    const blockLessonNames = plannedLessons.map(pl => pl?.name).filter(Boolean);
                                     setClassConfirmModal({ 
                                       subjectId, 
                                       slotIndex, 
                                       topicName: activeTopic.name, 
+                                      lessonNames: blockLessonNames.length > 0 ? blockLessonNames : (activeLessonName ? [activeLessonName] : []),
+                                      allRemainingLessonNames: remainingLessons.map(l => l?.name).filter(Boolean),
                                       maxClasses: activeTopic.total - activeTopic.completed,
                                       lessonDuration: activeLessonDuration,
                                       allLessonsDurations: remainingLessons.map(l => l.duration || '60:00'),

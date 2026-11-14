@@ -314,11 +314,11 @@ export default function ClassCompletionModal({
           {typeof onPracticeQuestions === 'function' && (
             <button
               type="button"
-              onClick={onPracticeQuestions}
+              onClick={() => onPracticeQuestions(currentNum)}
               className="w-full py-2.5 px-3 bg-orange-500/10 hover:bg-orange-500/20 text-orange-600 dark:text-orange-400 border border-orange-500/30 font-black rounded-xl transition-all flex items-center justify-center gap-2 text-[11px] uppercase tracking-wider"
             >
               <Crosshair className="w-3.5 h-3.5" />
-              <span>Ir para Questões deste Assunto no Caveira</span>
+              <span>Ir para Questões desta(s) Aula(s) no Caveira</span>
             </button>
           )}
           <button 

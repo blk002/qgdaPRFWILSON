@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.14 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.15 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -168,7 +168,7 @@
         cachedActiveUserLabel = res?.[ACTIVE_USER_LABEL_KEY] || '';
         updateHudUser();
         const pendingFilter = res?.[PENDING_FILTER_KEY];
-        if (pendingFilter && pendingFilter.topic && (Date.now() - (pendingFilter.createdAt || 0)) < 180000) {
+        if (pendingFilter && (pendingFilter.topic || (Array.isArray(pendingFilter.lessons) && pendingFilter.lessons.length > 0)) && (Date.now() - (pendingFilter.createdAt || 0)) < 180000) {
           setTimeout(() => applyCaveiraPracticeFilter(pendingFilter), 900);
         }
         if (res && res[GOAL_KEY]) {
@@ -627,6 +627,53 @@
     return terms;
   }
 
+  function getLessonSearchTerms(lessonTitle) {
+    const raw = String(lessonTitle || '').trim();
+    if (!raw) return [];
+    const terms = [];
+    const pushUnique = (t) => {
+      const s = normalizeFilterText(t)
+        .replace(/\b(aula|parte|bloco|modulo|capitulo)\s*\d+\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (s && !terms.includes(s)) terms.push(s);
+    };
+
+    pushUnique(raw);
+
+    // Subdivisões por hífen / travessão (ex.: "VELOCIDADE ESCALAR MÉDIA - CASOS PARTICULARES")
+    const dashParts = raw.split(/\s*[-–—:]\s*/).map(p => p.trim()).filter(Boolean);
+    if (dashParts.length > 1) {
+      dashParts.forEach(part => pushUnique(part));
+    }
+
+    // Múltiplos tópicos na mesma aula (ex.: "INTERJEIÇÃO, NUMERAL E PREPOSIÇÃO")
+    const listParts = raw.split(/\s*,\s*|\s+\be\b\s+/i).map(p => p.trim()).filter(Boolean);
+    if (listParts.length > 1) {
+      listParts.forEach(part => {
+        if (normalizeFilterText(part).length >= 3) pushUnique(part);
+      });
+    }
+
+    // Variantes sem palavras genéricas e palavras-chave significativas (>= 4 letras)
+    const expanded = [...terms];
+    expanded.forEach(t => {
+      const words = t.split(' ').filter(Boolean);
+      if (words.length >= 2) {
+        pushUnique(`${words[0]} ${words[1]}`);
+        if (!words[0].endsWith('s') && words[0].length >= 4) {
+          pushUnique(`${words[0]}s ${words[1]}`);
+        }
+      }
+      words
+        .filter(w => w.length >= 4)
+        .sort((a, b) => b.length - a.length)
+        .forEach(w => pushUnique(w));
+    });
+
+    return terms;
+  }
+
   function findFilterDropdownTrigger(labelWord) {
     const targetNorm = normalizeFilterText(labelWord);
     const matches = Array.from(document.querySelectorAll('button, [role="button"], [role="combobox"], .q-select, .q-field, div, span'))
@@ -806,27 +853,13 @@
     }
   }
 
-  async function selectCaveiraDropdownOption(labelWord, searchTerms) {
-    if (isDestroyed || !searchTerms || searchTerms.length === 0) return false;
-    const trigger = findFilterDropdownTrigger(labelWord);
-    if (!trigger) return false;
-
-    clickElementRealistically(trigger);
-    await sleepMs(320);
-
-    let filterInput = findMenuFilterInput();
-    if (!filterInput) {
-      clickElementRealistically(trigger);
-      await sleepMs(350);
-      filterInput = findMenuFilterInput();
-    }
-
+  async function matchOptionInOpenDropdown(filterInput, searchTerms) {
     let matched = null;
     for (const term of searchTerms) {
       if (filterInput) {
         filterInput.focus();
         setNativeInputValue(filterInput, term);
-        await sleepMs(300);
+        await sleepMs(280);
       }
 
       if (filterInput && hasNoSearchResultsInMenu(filterInput)) {
@@ -857,8 +890,28 @@
           matched = opt;
         }
       }
+      if (bestFallbackScore < 150) matched = null;
     }
 
+    return matched;
+  }
+
+  async function selectCaveiraDropdownOption(labelWord, searchTerms) {
+    if (isDestroyed || !searchTerms || searchTerms.length === 0) return false;
+    const trigger = findFilterDropdownTrigger(labelWord);
+    if (!trigger) return false;
+
+    clickElementRealistically(trigger);
+    await sleepMs(320);
+
+    let filterInput = findMenuFilterInput();
+    if (!filterInput) {
+      clickElementRealistically(trigger);
+      await sleepMs(350);
+      filterInput = findMenuFilterInput();
+    }
+
+    const matched = await matchOptionInOpenDropdown(filterInput, searchTerms);
     if (matched) {
       clickOptionRow(matched);
       await sleepMs(220);
@@ -869,14 +922,64 @@
     return Boolean(matched);
   }
 
+  async function selectCaveiraLessonsInDropdown(lessonsList, fallbackTopic) {
+    const validLessons = (Array.isArray(lessonsList) ? lessonsList : []).filter(Boolean);
+    const hasFallback = Boolean(String(fallbackTopic || '').trim());
+    if (isDestroyed || (validLessons.length === 0 && !hasFallback)) return false;
+
+    const trigger = findFilterDropdownTrigger('Assunto');
+    if (!trigger) return false;
+
+    clickElementRealistically(trigger);
+    await sleepMs(320);
+
+    let filterInput = findMenuFilterInput();
+    if (!filterInput) {
+      clickElementRealistically(trigger);
+      await sleepMs(350);
+      filterInput = findMenuFilterInput();
+    }
+
+    let matchedCount = 0;
+    for (const lessonTitle of validLessons) {
+      if (isDestroyed) break;
+      const lessonTerms = getLessonSearchTerms(lessonTitle);
+      if (lessonTerms.length === 0) continue;
+      const matched = await matchOptionInOpenDropdown(filterInput, lessonTerms);
+      if (matched) {
+        clickOptionRow(matched);
+        matchedCount += 1;
+        await sleepMs(200);
+      }
+    }
+
+    if (matchedCount === 0 && hasFallback) {
+      const fallbackTerms = getTopicSearchTerms(fallbackTopic);
+      const matchedFallback = await matchOptionInOpenDropdown(filterInput, fallbackTerms);
+      if (matchedFallback) {
+        clickOptionRow(matchedFallback);
+        matchedCount += 1;
+        await sleepMs(200);
+      }
+    }
+
+    await closeOpenDropdown(trigger, filterInput);
+    await sleepMs(200);
+    return matchedCount > 0;
+  }
+
   async function applyCaveiraPracticeFilter(filterObj) {
     if (isDestroyed || !filterObj || isApplyingFilter) return;
     const subject = String(filterObj.subject || '').trim();
+    const lessons = Array.isArray(filterObj.lessons) ? filterObj.lessons.map(l => String(l || '').trim()).filter(Boolean) : [];
     const topic = String(filterObj.topic || '').trim();
-    if (!subject && !topic) return;
+    const fallbackTopic = String(filterObj.fallbackTopic || topic || '').trim();
+    const effectiveLessons = lessons.length > 0 ? lessons : (topic ? [topic] : []);
+    const displayTarget = effectiveLessons.join(' • ') || fallbackTopic;
+    if (!subject && !displayTarget) return;
 
     isApplyingFilter = true;
-    activePracticeFilter = { subject, topic };
+    activePracticeFilter = { subject, lessons: effectiveLessons, topic: displayTarget, fallbackTopic };
     renderFilterBanner('⏳ Abrindo Banco de Questões...');
 
     try {
@@ -915,11 +1018,10 @@
         await sleepMs(500);
       }
 
-      // 3. Seleciona Assunto
-      if (topic) {
-        renderFilterBanner(`⏳ Selecionando Assunto: ${topic}...`);
-        const topicTerms = getTopicSearchTerms(topic);
-        topicOk = await selectCaveiraDropdownOption('Assunto', topicTerms);
+      // 3. Seleciona Assunto(s) pelo conteúdo da(s) aula(s) (com fallback para o assunto do QG se necessário)
+      if (effectiveLessons.length > 0 || fallbackTopic) {
+        renderFilterBanner(`⏳ Selecionando Aula(s): ${displayTarget}...`);
+        topicOk = await selectCaveiraLessonsInDropdown(effectiveLessons, fallbackTopic);
         await sleepMs(300);
       }
 
@@ -942,7 +1044,7 @@
         window.scrollBy({ top: 260, behavior: 'smooth' });
       } catch (_) {}
 
-      const summary = [subject, topic].filter(Boolean).join(' • ');
+      const summary = [subject, displayTarget].filter(Boolean).join(' • ');
       if (subjectOk && topicOk && applyBtn) {
         renderFilterBanner(`✅ Filtro aplicado: ${summary}`);
       } else if (subjectOk && topicOk) {

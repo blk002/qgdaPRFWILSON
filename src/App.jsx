@@ -82,21 +82,37 @@ export default function App() {
   const [dismissedPrePromptModalRef, setDismissedPrePromptModalRef] = useState(null);
   const lastPatenteId = useRef(null);
 
-  const triggerCaveiraPractice = (subjectName = '', topicName = '') => {
+  const triggerCaveiraPractice = (subjectName = '', lessonNames = [], topicName = '') => {
+    const isGenericLesson = (name) => {
+      const clean = String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+      return !clean || /^testes?\s+propostos?$/.test(clean) || /^exercicios?(\s+de\s+fixacao)?$/.test(clean) || /^simulado$/.test(clean) || /^revisao$/.test(clean);
+    };
+    const cleanedLessons = (Array.isArray(lessonNames) ? lessonNames : [])
+      .map(l => String(l || '').replace(/\s*[-–]\s*aula\s*\d+\s*$/i, '').trim())
+      .filter(l => l && !isGenericLesson(l));
+    const primaryLessons = cleanedLessons.length > 0 ? cleanedLessons : (topicName ? [topicName] : []);
+    const displayFilterLabel = primaryLessons.join(' • ');
+    const copyText = primaryLessons[0] || topicName || subjectName;
+
     const hasExt = document.documentElement.getAttribute('data-qg-caveira-extension-installed') === 'true';
-    if (navigator.clipboard && topicName) {
-      navigator.clipboard.writeText(topicName).catch(() => {});
+    if (navigator.clipboard && copyText) {
+      navigator.clipboard.writeText(copyText).catch(() => {});
     }
     if (hasExt) {
       window.postMessage({
         source: 'QG_WEB_APP',
         type: 'OPEN_CAVEIRA_PRACTICE',
-        payload: { subject: subjectName, topic: topicName }
+        payload: {
+          subject: subjectName,
+          lessons: primaryLessons,
+          topic: displayFilterLabel,
+          fallbackTopic: topicName
+        }
       }, '*');
-      toast.success(`Abrindo Caveira com filtro: ${topicName || subjectName}`);
+      toast.success(`Abrindo Caveira com filtro: ${displayFilterLabel || subjectName}`);
     } else {
       window.open('https://projetocaveira.com.br/', '_blank', 'noopener');
-      toast.info('Extensão não detectada nesta aba. Assunto copiado para a área de transferência!');
+      toast.info('Extensão não detectada nesta aba. Conteúdo copiado para a área de transferência!');
     }
   };
 
@@ -758,15 +774,16 @@ export default function App() {
             )}
 
             <p className="text-xs font-bold text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
-              Assunto da aula: <span className="text-slate-900 dark:text-white font-black">{classConfirmModal.topicName}</span>. Deseja abrir o Projeto Caveira na aba de questões com esse assunto já filtrado?
+              Conteúdo da(s) aula(s): <span className="text-slate-900 dark:text-white font-black">{classConfirmModal.lessonNames?.length ? classConfirmModal.lessonNames.join(' • ') : classConfirmModal.topicName}</span>. Deseja abrir o Projeto Caveira na aba de questões com esse conteúdo já filtrado?
             </p>
 
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => {
                   const subjectName = subjects[classConfirmModal.subjectId]?.name || '';
+                  const lessonNames = classConfirmModal.lessonNames || [];
                   const topicName = classConfirmModal.topicName || '';
-                  triggerCaveiraPractice(subjectName, topicName);
+                  triggerCaveiraPractice(subjectName, lessonNames, topicName);
                   setClassConfirmModal(null);
                 }}
                 className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2"
@@ -809,10 +826,13 @@ export default function App() {
         timeGoalMinutes={classConfirmModal?.timeGoalMinutes || null}
         initialStudyDate={classConfirmModal?.initialStudyDate || null}
         todayDateStr={getLocalDateStr ? getLocalDateStr() : ''}
-        onPracticeQuestions={() => {
+        onPracticeQuestions={(selectedCount) => {
           const subjectName = subjects[classConfirmModal?.subjectId]?.name || '';
+          const allRem = classConfirmModal?.allRemainingLessonNames || [];
+          const count = Math.max(1, Number(selectedCount) || 1);
+          const chosenLessons = allRem.length > 0 ? allRem.slice(0, count) : (classConfirmModal?.lessonNames || []);
           const topicName = classConfirmModal?.topicName || '';
-          triggerCaveiraPractice(subjectName, topicName);
+          triggerCaveiraPractice(subjectName, chosenLessons, topicName);
         }}
         onClose={() => setClassConfirmModal(null)}
         onConfirm={(amount, speed, studyDate) => {

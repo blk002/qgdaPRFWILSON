@@ -367,7 +367,9 @@
       if (event.data.type === 'OPEN_CAVEIRA_PRACTICE') {
         const subject = event.data.payload?.subject || '';
         const topic = event.data.payload?.topic || '';
-        const filterData = { subject, topic, createdAt: Date.now() };
+        const lessons = Array.isArray(event.data.payload?.lessons) ? event.data.payload.lessons : [];
+        const fallbackTopic = event.data.payload?.fallbackTopic || '';
+        const filterData = { subject, topic, lessons, fallbackTopic, createdAt: Date.now() };
         try {
           chrome.storage.local.set({ [PENDING_FILTER_KEY]: filterData }, () => {
             if (chrome.runtime && chrome.runtime.sendMessage) {
