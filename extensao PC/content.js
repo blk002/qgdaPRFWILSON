@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.10 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.11 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -508,7 +508,179 @@
     input.dispatchEvent(new Event('change', { bubbles: true }));
   }
 
-  function applyCaveiraPracticeFilter(filterObj) {
+  function sleepMs(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+  }
+
+  function getSubjectSearchTerms(subject) {
+    const norm = normalizeFilterText(subject);
+    if (!norm) return [];
+    const aliases = {
+      'portugues': ['lingua portuguesa', 'portugues'],
+      'lingua portuguesa': ['lingua portuguesa', 'portugues'],
+      'legislacao de transito': ['codigo de transito brasileiro', 'ctb', 'transito'],
+      'transito': ['codigo de transito brasileiro', 'ctb', 'transito'],
+      'ctb': ['codigo de transito brasileiro', 'ctb'],
+      'raciocinio logico': ['raciocinio logico', 'matematica'],
+      'rlm': ['raciocinio logico', 'matematica'],
+      'processo penal': ['direito processual penal', 'processo penal'],
+      'direito processual penal': ['direito processual penal', 'processo penal'],
+      'legislacao especial': ['legislacao penal especial', 'legislacao especial'],
+      'informatica': ['informatica', 'nocoes de informatica'],
+      'etica': ['etica no servico publico', 'etica'],
+      'fisica': ['fisica']
+    };
+    const list = aliases[norm] ? [...aliases[norm]] : [norm];
+    if (!list.includes(norm)) list.push(norm);
+    return list;
+  }
+
+  function getTopicSearchTerms(topic) {
+    const norm = normalizeFilterText(topic);
+    if (!norm) return [];
+    const terms = [norm];
+    const cleaned = norm
+      .replace(/\b(bases da|bases do|nocoes de|introducao a|introducao ao|parte \d+|aula \d+|modulo \d+)\b/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (cleaned && cleaned !== norm) terms.push(cleaned);
+    const words = cleaned.split(' ').filter(w => w.length >= 4);
+    if (words.length >= 2) {
+      terms.push(`${words[0]} ${words[1]}`);
+    }
+    words.sort((a, b) => b.length - a.length);
+    if (words[0] && !terms.includes(words[0])) {
+      terms.push(words[0]);
+    }
+    return terms;
+  }
+
+  function findFilterDropdownTrigger(labelWord) {
+    const targetNorm = normalizeFilterText(labelWord);
+    const candidates = Array.from(document.querySelectorAll('button, [role="button"], .q-select, .q-field, div, span'))
+      .filter(el => {
+        if (!el || el.closest('#qg-caveira-hud')) return false;
+        const rect = el.getBoundingClientRect();
+        if (rect.width < 70 || rect.width > 420 || rect.height < 24 || rect.height > 72) return false;
+        const txt = normalizeFilterText(el.innerText || el.textContent);
+        return txt === targetNorm || txt.startsWith(`${targetNorm} `) || txt.endsWith(` ${targetNorm}`);
+      });
+
+    // Prefere o elemento clicável mais específico (menor área ou que seja button/.q-select)
+    candidates.sort((a, b) => {
+      const aClickable = a.matches('button, [role="button"], .q-select, .q-field') ? 0 : 1;
+      const bClickable = b.matches('button, [role="button"], .q-select, .q-field') ? 0 : 1;
+      if (aClickable !== bClickable) return aClickable - bClickable;
+      const ra = a.getBoundingClientRect();
+      const rb = b.getBoundingClientRect();
+      return (ra.width * ra.height) - (rb.width * rb.height);
+    });
+    return candidates[0] || null;
+  }
+
+  function findMenuFilterInput() {
+    const inputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])'))
+      .filter(el => !el.closest('#qg-caveira-hud') && el.offsetParent !== null);
+    return inputs.find(el => {
+      const meta = normalizeFilterText(`${el.placeholder || ''} ${el.getAttribute('aria-label') || ''}`);
+      return meta.includes('digite para filtrar') || meta.includes('filtrar');
+    }) || null;
+  }
+
+  function findVisibleMenuOptions(filterInput) {
+    const container = filterInput
+      ? (filterInput.closest('.q-menu, [role="listbox"], .v-menu__content, .dropdown-menu') || filterInput.parentElement?.parentElement || document.body)
+      : document.body;
+
+    const rawItems = Array.from(container.querySelectorAll('label, .q-item, .q-checkbox, [role="option"], [role="checkbox"], li, div'))
+      .filter(el => {
+        if (!el || el.closest('#qg-caveira-hud') || el === filterInput) return false;
+        if (filterInput && el.contains(filterInput)) return false;
+        const rect = el.getBoundingClientRect();
+        if (rect.width < 60 || rect.height < 20 || rect.height > 76) return false;
+        const txt = normalizeFilterText(el.innerText || el.textContent);
+        if (!txt || txt === 'digite para filtrar') return false;
+        const hasCheckbox = Boolean(el.querySelector('input[type="checkbox"], .q-checkbox__inner, [role="checkbox"]') || el.matches('[role="checkbox"], [role="option"], .q-item'));
+        return hasCheckbox;
+      });
+
+    // Remove ancestrais que contêm outro candidato para evitar cliques duplos
+    return rawItems.filter(el => !rawItems.some(other => other !== el && el.contains(other)));
+  }
+
+  function scoreOptionMatch(optionText, searchTerms) {
+    const normOpt = normalizeFilterText(optionText);
+    if (!normOpt) return 0;
+    let best = 0;
+    for (let i = 0; i < searchTerms.length; i++) {
+      const term = searchTerms[i];
+      if (!term) continue;
+      if (normOpt === term) return 1000 - i;
+      if (normOpt.startsWith(term)) best = Math.max(best, 800 - i);
+      else if (normOpt.includes(term)) best = Math.max(best, 600 - i);
+      else {
+        const words = term.split(' ').filter(w => w.length >= 3);
+        const hits = words.filter(w => normOpt.includes(w)).length;
+        if (hits > 0) {
+          best = Math.max(best, Math.round((hits / Math.max(1, words.length)) * 400) - i);
+        }
+      }
+    }
+    return best;
+  }
+
+  async function selectCaveiraDropdownOption(labelWord, searchTerms) {
+    if (isDestroyed || !searchTerms || searchTerms.length === 0) return false;
+    const trigger = findFilterDropdownTrigger(labelWord);
+    if (!trigger) return false;
+
+    trigger.click();
+    await sleepMs(300);
+
+    let filterInput = findMenuFilterInput();
+    if (!filterInput) {
+      trigger.dispatchEvent(new MouseEvent('mousedown', { bubbles: true }));
+      trigger.dispatchEvent(new MouseEvent('mouseup', { bubbles: true }));
+      await sleepMs(300);
+      filterInput = findMenuFilterInput();
+    }
+
+    let matched = null;
+    for (const term of searchTerms) {
+      if (filterInput) {
+        filterInput.focus();
+        setNativeInputValue(filterInput, term);
+        await sleepMs(280);
+      }
+
+      const options = findVisibleMenuOptions(filterInput);
+      let bestScore = 0;
+      for (const opt of options) {
+        const sc = scoreOptionMatch(opt.innerText || opt.textContent, [term, ...searchTerms]);
+        if (sc > bestScore) {
+          bestScore = sc;
+          matched = opt;
+        }
+      }
+      if (matched && bestScore >= 200) break;
+    }
+
+    if (matched) {
+      const clickTarget = matched.querySelector('input[type="checkbox"], .q-checkbox__inner') || matched;
+      clickTarget.click();
+      await sleepMs(200);
+    }
+
+    // Fecha o dropdown clicando fora ou enviando Escape
+    document.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', keyCode: 27, bubbles: true }));
+    if (findMenuFilterInput()) {
+      trigger.click();
+    }
+    await sleepMs(250);
+    return Boolean(matched);
+  }
+
+  async function applyCaveiraPracticeFilter(filterObj) {
     if (isDestroyed || !filterObj) return;
     const subject = String(filterObj.subject || '').trim();
     const topic = String(filterObj.topic || '').trim();
@@ -521,8 +693,8 @@
       chrome.storage.local.remove([PENDING_FILTER_KEY]);
     } catch (_) {}
 
-    // 1. Tenta navegar para a aba/rota de Questões caso não esteja nela
-    if (!/quest[oõ]es/i.test(window.location.href)) {
+    // 1. Se ainda não estiver no Banco de Questões (sem dropdown Disciplina), navega para a aba Questões
+    if (!findFilterDropdownTrigger('Disciplina')) {
       const navCandidates = Array.from(document.querySelectorAll('a, button, [role="tab"], .q-tab, .q-item'));
       const questTab = navCandidates.find(el => {
         if (!el || el.closest('#qg-caveira-hud')) return false;
@@ -536,36 +708,36 @@
       }
     }
 
-    // 2. Aplica o termo de assunto/busca nos inputs de filtro da página
-    const searchTerm = topic || subject;
-    const tryFillInputs = (attempt = 0) => {
+    // Aguarda até ~4s o dropdown de Disciplina aparecer
+    for (let waitIdx = 0; waitIdx < 12; waitIdx++) {
       if (isDestroyed) return;
-      const inputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])'))
-        .filter(el => !el.closest('#qg-caveira-hud') && el.offsetParent !== null);
+      if (findFilterDropdownTrigger('Disciplina')) break;
+      await sleepMs(350);
+    }
 
-      const targetInput = inputs.find(el => {
-        const meta = normalizeFilterText(`${el.placeholder || ''} ${el.getAttribute('aria-label') || ''} ${el.name || ''}`);
-        return meta.includes('assunto') || meta.includes('tema') || meta.includes('topico') || meta.includes('pesquis') || meta.includes('busc') || meta.includes('filtr') || el.type === 'search';
-      }) || inputs[0];
+    // 2. Seleciona Disciplina primeiro (pois libera/carrega os Assuntos no Caveira)
+    if (subject) {
+      const subjectTerms = getSubjectSearchTerms(subject);
+      await selectCaveiraDropdownOption('Disciplina', subjectTerms);
+      await sleepMs(450);
+    }
 
-      if (targetInput) {
-        targetInput.focus();
-        setNativeInputValue(targetInput, searchTerm);
-        setTimeout(() => {
-          const normTerm = normalizeFilterText(searchTerm);
-          const menuItems = Array.from(document.querySelectorAll('.q-menu .q-item, [role="listbox"] [role="option"], .dropdown-menu li, .select-dropdown li'));
-          const matchItem = menuItems.find(item => {
-            const txt = normalizeFilterText(item.innerText || item.textContent);
-            return txt && (txt.includes(normTerm) || normTerm.includes(txt));
-          });
-          if (matchItem) matchItem.click();
-        }, 350);
-      } else if (attempt < 3) {
-        setTimeout(() => tryFillInputs(attempt + 1), 700);
-      }
-    };
+    // 3. Seleciona Assunto
+    if (topic) {
+      const topicTerms = getTopicSearchTerms(topic);
+      await selectCaveiraDropdownOption('Assunto', topicTerms);
+      await sleepMs(300);
+    }
 
-    setTimeout(() => tryFillInputs(0), 650);
+    // 4. Se houver botão explícito "Filtrar" / "Aplicar filtros", aciona
+    const applyBtn = Array.from(document.querySelectorAll('button, [role="button"]')).find(el => {
+      if (!el || el.closest('#qg-caveira-hud') || el.offsetParent === null) return false;
+      const txt = normalizeFilterText(el.innerText || el.textContent);
+      return txt === 'filtrar' || txt === 'aplicar filtros' || txt === 'buscar questoes' || txt === 'filtrar questoes';
+    });
+    if (applyBtn) {
+      applyBtn.click();
+    }
   }
 
   function updateHudUser() {
