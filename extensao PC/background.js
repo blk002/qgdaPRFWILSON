@@ -139,9 +139,6 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     if (total > 0) {
       chrome.action.setBadgeBackgroundColor({ color: net >= 0 ? '#10b981' : '#ef4444' });
     }
-    chrome.storage.local.get([STORAGE_KEY], (res) => {
-      broadcastToQgTabs(res[STORAGE_KEY] || [], session);
-    });
     sendResponse({ success: true });
     return true;
   }

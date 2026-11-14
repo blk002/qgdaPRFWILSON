@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.4 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.6 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -98,13 +98,36 @@
     }
   }
 
+  let handleScrollUpdateRef = null;
+  let handlePopstateHashRef = null;
+  let handleDocumentClickRef = null;
+  let handleDocumentKeydownRef = null;
+
   function teardownInstance() {
     isDestroyed = true;
     if (timerInterval) clearInterval(timerInterval);
     if (scanIntervalId) clearInterval(scanIntervalId);
     if (scanDebounceTimer) clearTimeout(scanDebounceTimer);
     if (promptDismissTimer) clearTimeout(promptDismissTimer);
+    if (scrollRafId) {
+      cancelAnimationFrame(scrollRafId);
+      scrollRafId = null;
+    }
     if (domObserver) domObserver.disconnect();
+    if (handleScrollUpdateRef) {
+      window.removeEventListener('scroll', handleScrollUpdateRef, { capture: true });
+      window.removeEventListener('wheel', handleScrollUpdateRef);
+    }
+    if (handlePopstateHashRef) {
+      window.removeEventListener('popstate', handlePopstateHashRef);
+      window.removeEventListener('hashchange', handlePopstateHashRef);
+    }
+    if (handleDocumentClickRef) {
+      document.removeEventListener('click', handleDocumentClickRef, true);
+    }
+    if (handleDocumentKeydownRef) {
+      document.removeEventListener('keydown', handleDocumentKeydownRef);
+    }
   }
 
   window.addEventListener('qg-caveira-teardown', teardownInstance, { once: true });
@@ -169,7 +192,25 @@
           if (changes[STORAGE_KEY]) {
             const updatedList = Array.isArray(changes[STORAGE_KEY].newValue) ? changes[STORAGE_KEY].newValue : [];
             questionsCache = [...updatedList];
-            updatedList.forEach(q => { if (q && q.id) savedQuestionIds.add(q.id); });
+            savedQuestionIds.clear();
+            savedQuestionsMissingAlts.clear();
+            updatedList.forEach(q => {
+              if (q && q.id) {
+                savedQuestionIds.add(q.id);
+                if (!Array.isArray(q.alternatives) || q.alternatives.length === 0 || q.alternatives.every(a => !a.text || a.text === a.letter)) {
+                  savedQuestionsMissingAlts.add(q.id);
+                }
+              }
+            });
+            for (const pId of Array.from(processedInSession)) {
+              if (!savedQuestionIds.has(pId)) {
+                processedInSession.delete(pId);
+              }
+            }
+            if (currentQuestionId) {
+              const activeCard = getQuestionCards().find(c => extractQuestionId(c) === currentQuestionId);
+              renderQuestionHistory(currentQuestionId, activeCard ? isCardAnswered(activeCard) : false);
+            }
           }
           if (changes[SESSION_KEY]) {
             sessionStats = normalizeSession(changes[SESSION_KEY].newValue);
@@ -477,8 +518,6 @@
     renderQuestionHistory(newQId, isAlreadyAnswered);
     renderTimerDisplay();
 
-    renderTimerDisplay();
-
     const currentQEl = document.getElementById('qg-current-q-id');
     if (currentQEl) {
       currentQEl.textContent = isAlreadyAnswered ? `${newQId} ✓` : newQId;
@@ -784,24 +823,19 @@
       const combinedClasses = `${altEl.className || ''} ${letterEl.className || ''} ${altEl.parentElement?.className || ''}`;
       const styleAttr = `${altEl.getAttribute('style') || ''} ${letterEl.getAttribute('style') || ''}`;
 
-      const isGreen =
-        combinedClasses.includes('bg-correct') ||
-        combinedClasses.includes('correct') ||
-        combinedClasses.includes('success') ||
-        combinedClasses.includes('is-correct') ||
-        styleAttr.includes('rgb(16, 185, 129)') ||
-        styleAttr.includes('#10b981') ||
-        styleAttr.includes('green');
-
       const isRed =
-        combinedClasses.includes('bg-incorrect') ||
-        combinedClasses.includes('incorrect') ||
-        combinedClasses.includes('danger') ||
-        combinedClasses.includes('is-wrong') ||
-        combinedClasses.includes('negative') ||
+        /\b(bg-incorrect(?:-\d+)?|incorrect|is-wrong|wrong|bg-negative|text-negative|danger)\b/i.test(combinedClasses) ||
         styleAttr.includes('rgb(239, 68, 68)') ||
         styleAttr.includes('#ef4444') ||
         styleAttr.includes('red');
+
+      const isGreen =
+        !isRed && (
+          /\b(bg-correct(?:-\d+)?|correct|is-correct|bg-positive|text-positive|success)\b/i.test(combinedClasses) ||
+          styleAttr.includes('rgb(16, 185, 129)') ||
+          styleAttr.includes('#10b981') ||
+          styleAttr.includes('green')
+        );
 
       if (isRed) {
         incorrectLetterFromDom = rawLetter;
@@ -815,14 +849,19 @@
     const statsAnswerMatch = statsText.match(/(?:Resposta correta|Gabarito|Alternativa correta|Gabarito definitivo|Resposta)\s*[:=]?\s*\(?([A-E])\)?/i) ||
                              fullCardText.match(/(?:Resposta correta|Gabarito|Alternativa correta|Gabarito definitivo|Resposta)\s*[:=]?\s*\(?([A-E])\)?/i);
 
-    const isCorrect = incorrectLetterFromDom
+    const hasStatsIncorrect =
+      Boolean(statsBox?.querySelector('.bg-incorrect-1, .bg-incorrect-2, .bg-negative, .text-negative')) ||
+      /\b(VOC[EÊ]\s+ERROU|ERROU|INCORRETA|RESPOSTA\s+ERRADA)\b/i.test(statsText);
+
+    const hasStatsCorrect =
+      !hasStatsIncorrect && (
+        Boolean(statsBox?.querySelector('.bg-correct-1, .bg-correct-2, .bg-positive, .text-positive')) ||
+        /\b(PARAB[EÉ]NS|VOC[EÊ]\s+ACERTOU|ACERTOU)\b/i.test(statsText)
+      );
+
+    const isCorrect = (incorrectLetterFromDom || hasStatsIncorrect)
       ? false
-      : (
-          Boolean(statsBox?.querySelector('.bg-correct-1, .bg-correct-2, [class*="correct"]')) ||
-          statsText.toUpperCase().includes('PARABÉNS') ||
-          statsText.toLowerCase().includes('acertou') ||
-          (Boolean(correctLetterFromDom) && !statsText.toUpperCase().includes('ERROU') && !statsText.toUpperCase().includes('RESPOSTA CORRETA'))
-        );
+      : (hasStatsCorrect || (Boolean(correctLetterFromDom) && !statsText.toUpperCase().includes('RESPOSTA CORRETA')));
 
     // Identifica o que o usuário marcou
     const userSelectedEl = altScope.querySelector('.q-radio[aria-checked="true"], .q-radio--active, [class*="selected"], [class*="active"], input:checked');
@@ -953,7 +992,9 @@
       durationSeconds,
       confidence: isCorrect ? 'sabia' : 'duvida',
       errorReason: isCorrect ? null : 'conteudo',
-      timestamp: new Date().toISOString()
+      fsrsRequested: false,
+      timestamp: new Date().toISOString(),
+      updatedAt: new Date().toISOString()
     };
   }
 
@@ -973,11 +1014,25 @@
       updateHudStats();
     }
 
+    const nowIso = new Date().toISOString();
     const existingIdx = questionsCache.findIndex(q => q && q.id === question.id);
     if (existingIdx >= 0) {
-      questionsCache[existingIdx] = { ...questionsCache[existingIdx], ...question };
+      const prev = questionsCache[existingIdx];
+      questionsCache[existingIdx] = {
+        ...prev,
+        ...question,
+        teacherComment: question.teacherComment || prev.teacherComment || '',
+        userNote: question.userNote !== undefined ? question.userNote : (prev.userNote || ''),
+        alternatives: (Array.isArray(question.alternatives) && question.alternatives.length > 0)
+          ? question.alternatives
+          : (prev.alternatives || null),
+        updatedAt: nowIso
+      };
     } else {
-      questionsCache.unshift(question);
+      questionsCache.unshift({
+        ...question,
+        updatedAt: question.updatedAt || nowIso
+      });
     }
 
     savedQuestionIds.add(question.id);
@@ -1149,9 +1204,11 @@
 
   // Handler leve para rolagem da página (detecta imediatamente quando o usuário rola para a questão de baixo)
   function handleScrollUpdate() {
+    if (isDestroyed) return;
     if (scrollRafId) return;
     scrollRafId = requestAnimationFrame(() => {
       scrollRafId = null;
+      if (isDestroyed) return;
       const cards = getQuestionCards();
       if (!cards || cards.length === 0) {
         clearActiveQuestionState();
@@ -1170,14 +1227,18 @@
 
   // --- 8. GATILHOS DE INTERAÇÃO E ROLAGEM (SCROLL) ---
   function setupTriggers() {
+    handleScrollUpdateRef = handleScrollUpdate;
+    handlePopstateHashRef = () => scheduleScan(50);
+
     // 1. Detecção em tempo real ao rolar a página e ao trocar de rota na SPA
-    window.addEventListener('scroll', handleScrollUpdate, { capture: true, passive: true });
-    window.addEventListener('wheel', handleScrollUpdate, { passive: true });
-    window.addEventListener('popstate', () => scheduleScan(50));
-    window.addEventListener('hashchange', () => scheduleScan(50));
+    window.addEventListener('scroll', handleScrollUpdateRef, { capture: true, passive: true });
+    window.addEventListener('wheel', handleScrollUpdateRef, { passive: true });
+    window.addEventListener('popstate', handlePopstateHashRef);
+    window.addEventListener('hashchange', handlePopstateHashRef);
 
     // 2. Cliques do usuário
-    document.addEventListener('click', (e) => {
+    handleDocumentClickRef = (e) => {
+      if (isDestroyed) return;
       if (e.target.closest('#qg-caveira-hud')) return;
 
       const card = e.target.closest('.q-card');
@@ -1202,12 +1263,13 @@
         const textUpper = text.toUpperCase();
         if (
           textUpper.includes('RESPONDER') ||
+          textUpper.includes('CONFIRMAR') ||
           btn.classList.contains('light-mode-answer-btn') ||
-          btn.classList.contains('bg-primary') ||
           (btn.getAttribute('aria-label') || '').toUpperCase().includes('RESPONDER')
         ) {
           const targetQId = clickedCardQId || currentQuestionId;
-          if (targetQId) {
+          const targetCard = rootCard || getQuestionCards().find(c => extractQuestionId(c) === targetQId);
+          if (targetQId && targetCard && !isCardAnswered(targetCard)) {
             processedInSession.delete(targetQId);
             pendingAnswerQIds.add(targetQId);
           }
@@ -1248,21 +1310,27 @@
           setTimeout(scanCards, 300);
         }
       }
-    }, true);
+    };
+    document.addEventListener('click', handleDocumentClickRef, true);
 
     // 3. Teclado (Enter, Setas, PageDown/PageUp)
-    document.addEventListener('keydown', (e) => {
+    handleDocumentKeydownRef = (e) => {
+      if (isDestroyed) return;
       if (e.key === 'Enter' && currentQuestionId) {
-        processedInSession.delete(currentQuestionId);
-        pendingAnswerQIds.add(currentQuestionId);
-        setTimeout(scanCards, 80);
-        setTimeout(scanCards, 350);
+        const focusedCard = getQuestionCards().find(c => extractQuestionId(c) === currentQuestionId);
+        if (focusedCard && !isCardAnswered(focusedCard)) {
+          processedInSession.delete(currentQuestionId);
+          pendingAnswerQIds.add(currentQuestionId);
+          setTimeout(scanCards, 80);
+          setTimeout(scanCards, 350);
+        }
       }
       if (e.key === 'ArrowDown' || e.key === 'ArrowUp' || e.key === 'ArrowRight' || e.key === 'PageDown' || e.key === 'PageUp') {
         setTimeout(handleScrollUpdate, 60);
         setTimeout(scanCards, 200);
       }
-    });
+    };
+    document.addEventListener('keydown', handleDocumentKeydownRef);
 
     // 4. MutationObserver para capturar respostas instantaneamente
     domObserver = new MutationObserver((mutations) => {

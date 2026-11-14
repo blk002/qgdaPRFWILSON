@@ -1738,25 +1738,48 @@ export const useStore = create(
             newCount++;
             map.set(q.id, q);
           } else {
+            const prevIsNewer = Boolean(prev.updatedAt && (!q.updatedAt || prev.updatedAt > q.updatedAt));
+            const mergedItem = prevIsNewer
+              ? {
+                  ...prev,
+                  ...q,
+                  confidence: prev.confidence,
+                  errorReason: prev.errorReason,
+                  fsrsRequested: prev.fsrsRequested,
+                  userNote: prev.userNote !== undefined ? prev.userNote : (q.userNote || ''),
+                  teacherComment: prev.teacherComment || q.teacherComment || '',
+                  alternatives: (Array.isArray(q.alternatives) && q.alternatives.length > (Array.isArray(prev.alternatives) ? prev.alternatives.length : 0))
+                    ? q.alternatives
+                    : (prev.alternatives || q.alternatives || null),
+                  updatedAt: prev.updatedAt
+                }
+              : {
+                  ...prev,
+                  ...q,
+                  teacherComment: q.teacherComment || prev.teacherComment || '',
+                  userNote: q.userNote !== undefined ? q.userNote : (prev.userNote || ''),
+                  alternatives: (Array.isArray(q.alternatives) && q.alternatives.length >= (Array.isArray(prev.alternatives) ? prev.alternatives.length : 0))
+                    ? q.alternatives
+                    : (prev.alternatives || null)
+                };
+
             if (
-              prev.confidence !== q.confidence ||
-              prev.errorReason !== q.errorReason ||
-              prev.hit !== q.hit ||
-              prev.subject !== q.subject ||
-              prev.topic !== q.topic ||
-              prev.userChoice !== q.userChoice ||
-              prev.correctChoice !== q.correctChoice ||
-              (!prev.alternatives && q.alternatives) ||
-              (!prev.teacherComment && q.teacherComment)
+              prev.confidence !== mergedItem.confidence ||
+              prev.errorReason !== mergedItem.errorReason ||
+              Boolean(prev.fsrsRequested) !== Boolean(mergedItem.fsrsRequested) ||
+              (prev.userNote || '') !== (mergedItem.userNote || '') ||
+              (prev.teacherComment || '') !== (mergedItem.teacherComment || '') ||
+              prev.hit !== mergedItem.hit ||
+              prev.subject !== mergedItem.subject ||
+              prev.topic !== mergedItem.topic ||
+              prev.userChoice !== mergedItem.userChoice ||
+              prev.correctChoice !== mergedItem.correctChoice ||
+              (!prev.alternatives && mergedItem.alternatives) ||
+              (Array.isArray(mergedItem.alternatives) && mergedItem.alternatives.length > (Array.isArray(prev.alternatives) ? prev.alternatives.length : 0))
             ) {
               updatedExisting = true;
             }
-            map.set(q.id, {
-              ...prev,
-              ...q,
-              teacherComment: q.teacherComment || prev.teacherComment || '',
-              userNote: q.userNote || prev.userNote || ''
-            });
+            map.set(q.id, mergedItem);
           }
         });
 
@@ -1786,9 +1809,12 @@ export const useStore = create(
 
       updateCaveiraQuestion: (id, updates) => {
         const { caveiraQuestions = [] } = get();
-        const updated = caveiraQuestions.map(q => q.id === id ? { ...q, ...updates } : q);
+        const updatedAt = new Date().toISOString();
+        const enrichedUpdates = { ...updates, updatedAt };
+        const updated = caveiraQuestions.map(q => q.id === id ? { ...q, ...enrichedUpdates } : q);
         set({ caveiraQuestions: updated });
         try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updated)); } catch (_) {}
+        try { window.postMessage({ source: 'QG_WEB_APP', type: 'UPDATE_CAVEIRA_QUESTION', payload: { id, updates: enrichedUpdates } }, '*'); } catch (_) {}
         get().syncAndRepairCaveiraReviews?.();
       },
 

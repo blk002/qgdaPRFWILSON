@@ -181,31 +181,16 @@ export default function RaioXCaveira() {
   const [selectedLegalDevice, setSelectedLegalDevice] = useState(null);
   const [topicReportScope, setTopicReportScope] = useState('all'); // 'all' | 'bloco2' | 'fps'
 
-  // Escuta detecção e sincronização da extensão via bridge
+  // Escuta detecção e reset da extensão via bridge (sincronização centralizada em App.jsx)
   useEffect(() => {
     const handleMessage = (event) => {
       if (event.data && event.data.source === 'QG_CAVEIRA_EXTENSION') {
-        if (event.data.type === 'EXTENSION_DETECTED') {
+        if (['EXTENSION_DETECTED', 'SYNC_UPDATE', 'CAVEIRA_DATA_RESPONSE'].includes(event.data.type)) {
           setExtensionDetected(true);
         }
         if (event.data.type === 'RESET_CORRUPTED_DATA') {
           setExtensionDetected(true);
           useStore.getState().clearCaveiraQuestions();
-        }
-        if (event.data.type === 'SYNC_UPDATE' && event.data.payload) {
-          setExtensionDetected(true);
-          const { newQuestion, questions } = event.data.payload;
-          if (newQuestion) {
-            useStore.getState().addCaveiraQuestion(newQuestion);
-          } else if (questions) {
-            useStore.getState().importCaveiraQuestions(questions, true);
-          }
-        }
-        if (event.data.type === 'CAVEIRA_DATA_RESPONSE' && event.data.payload) {
-          setExtensionDetected(true);
-          if (event.data.payload.questions && event.data.payload.questions.length > 0) {
-            useStore.getState().importCaveiraQuestions(event.data.payload.questions, true);
-          }
         }
       }
     };
@@ -1680,7 +1665,7 @@ export default function RaioXCaveira() {
                               type="button"
                               onClick={() => updateCaveiraQuestion(q.id, {
                                 confidence: c.id,
-                                ...(c.id === 'chute' || c.id === 'duvida' ? { fsrsRequested: true } : {})
+                                fsrsRequested: c.id === 'chute' || c.id === 'duvida'
                               })}
                               className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                                 (q.confidence || 'sabia') === c.id

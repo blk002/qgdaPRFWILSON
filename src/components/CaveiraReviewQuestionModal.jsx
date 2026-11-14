@@ -227,6 +227,10 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
               <span className="text-[11px] font-black uppercase bg-yellow-500/15 text-yellow-300 border border-yellow-500/30 px-2.5 py-1 rounded-lg">
                 🤔 Acertou com Dúvida
               </span>
+            ) : qData.hit ? (
+              <span className="text-[11px] font-black uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-2.5 py-1 rounded-lg">
+                ✓ Acertou • Revisão Manual
+              </span>
             ) : (
               <span className="text-[11px] font-black uppercase bg-red-500/15 text-red-400 border border-red-500/25 px-2.5 py-1 rounded-lg">
                 ✗ Errou no Caveira

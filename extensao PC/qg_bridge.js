@@ -1,10 +1,39 @@
 // Bridge entre a Extensão e a aplicação Web QG da PRF (v3 Strict)
 
 (function() {
+  try {
+    window.dispatchEvent(new CustomEvent('qg-bridge-teardown'));
+  } catch (_) {}
+
   console.log('💀 [QG Bridge] Inicializado na aplicação web.');
 
   const STORAGE_KEY = 'qg_caveira_questions';
   const SESSION_KEY = 'qg_caveira_session';
+  let isBridgeDestroyed = false;
+  const initTimers = [];
+  let lastSyncPayloadJson = '';
+  let lastSyncPayloadTime = 0;
+
+  function postSyncUpdate(questions) {
+    if (isBridgeDestroyed || !Array.isArray(questions)) return;
+    const now = Date.now();
+    let payloadJson = '';
+    try {
+      payloadJson = JSON.stringify(questions);
+    } catch (_) {
+      payloadJson = `${questions.length}`;
+    }
+    if (payloadJson === lastSyncPayloadJson && now - lastSyncPayloadTime < 800) {
+      return;
+    }
+    lastSyncPayloadJson = payloadJson;
+    lastSyncPayloadTime = now;
+    window.postMessage({
+      source: 'QG_CAVEIRA_EXTENSION',
+      type: 'SYNC_UPDATE',
+      payload: { questions }
+    }, '*');
+  }
 
   function getTodaySessionDate() {
     const now = new Date();
@@ -33,7 +62,7 @@
 
   function isExtensionContextValid() {
     try {
-      return Boolean(typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id && chrome.storage && chrome.storage.local);
+      return !isBridgeDestroyed && Boolean(typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id && chrome.storage && chrome.storage.local);
     } catch (_) {
       return false;
     }
@@ -107,59 +136,46 @@
 
   // Dispara em múltiplos intervalos no carregamento (para garantir entrega após login/hidratação da nuvem)
   sendStoredData();
-  setTimeout(sendStoredData, 800);
-  setTimeout(sendStoredData, 2000);
-  setTimeout(sendStoredData, 4000);
+  initTimers.push(setTimeout(sendStoredData, 800));
+  initTimers.push(setTimeout(sendStoredData, 2000));
+  initTimers.push(setTimeout(sendStoredData, 4000));
 
-  // Sincroniza sempre que o usuário focar/voltar para a aba do QG da PRF
-  window.addEventListener('focus', sendStoredData);
-  document.addEventListener('visibilitychange', () => {
+  function handleFocus() {
+    if (isBridgeDestroyed) return;
+    sendStoredData();
+  }
+
+  function handleVisibilityChange() {
+    if (isBridgeDestroyed) return;
     if (document.visibilityState === 'visible') {
       sendStoredData();
     }
-  });
-
-  if (isExtensionContextValid() && chrome.storage.onChanged) {
-    try {
-      chrome.storage.onChanged.addListener((changes, area) => {
-        if (area === 'local' && changes[STORAGE_KEY]) {
-          const newQuestions = changes[STORAGE_KEY].newValue || [];
-          window.postMessage({
-            source: 'QG_CAVEIRA_EXTENSION',
-            type: 'SYNC_UPDATE',
-            payload: { questions: newQuestions }
-          }, '*');
-        }
-      });
-    } catch (_) {}
   }
 
-  if (isExtensionContextValid() && chrome.runtime.onMessage) {
-    try {
-      chrome.runtime.onMessage.addListener((msg) => {
-        if (msg && msg.type === 'PUSH_CAVEIRA_SYNC' && msg.payload) {
-          window.postMessage({
-            source: 'QG_CAVEIRA_EXTENSION',
-            type: 'SYNC_UPDATE',
-            payload: { questions: msg.payload.questions || [] }
-          }, '*');
-        }
-      });
-    } catch (_) {}
-  }
-
-  window.addEventListener('message', (event) => {
-    if (!isExtensionContextValid()) return;
+  function handleWindowMessage(event) {
+    if (isBridgeDestroyed || !isExtensionContextValid()) return;
     if (event.data && event.data.source === 'QG_WEB_APP') {
       if (event.data.type === 'FETCH_CAVEIRA_DATA') {
         sendStoredData();
+      }
+
+      if (event.data.type === 'UPDATE_CAVEIRA_QUESTION' && event.data.payload?.id && event.data.payload?.updates) {
+        const { id, updates } = event.data.payload;
+        try {
+          chrome.storage.local.get([STORAGE_KEY], (res) => {
+            if (chrome.runtime.lastError || isBridgeDestroyed) return;
+            const list = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
+            const updatedList = list.map(q => (q && q.id === id) ? { ...q, ...updates } : q);
+            chrome.storage.local.set({ [STORAGE_KEY]: updatedList });
+          });
+        } catch (_) {}
       }
 
       if (event.data.type === 'DELETE_CAVEIRA_QUESTION' && event.data.payload?.id) {
         const targetId = event.data.payload.id;
         try {
           chrome.storage.local.get([STORAGE_KEY], (res) => {
-            if (chrome.runtime.lastError) return;
+            if (chrome.runtime.lastError || isBridgeDestroyed) return;
             const list = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
             const filtered = list.filter(q => q && q.id !== targetId);
             chrome.storage.local.set({ [STORAGE_KEY]: filtered });
@@ -195,5 +211,44 @@
         } catch (_) {}
       }
     }
-  });
+  }
+
+  // Sincroniza sempre que o usuário focar/voltar para a aba do QG da PRF
+  window.addEventListener('focus', handleFocus);
+  document.addEventListener('visibilitychange', handleVisibilityChange);
+  window.addEventListener('message', handleWindowMessage);
+
+  function teardownBridge() {
+    isBridgeDestroyed = true;
+    initTimers.forEach(t => clearTimeout(t));
+    initTimers.length = 0;
+    window.removeEventListener('focus', handleFocus);
+    document.removeEventListener('visibilitychange', handleVisibilityChange);
+    window.removeEventListener('message', handleWindowMessage);
+  }
+
+  window.addEventListener('qg-bridge-teardown', teardownBridge, { once: true });
+
+  if (isExtensionContextValid() && chrome.storage.onChanged) {
+    try {
+      chrome.storage.onChanged.addListener((changes, area) => {
+        if (isBridgeDestroyed || !isExtensionContextValid()) return;
+        if (area === 'local' && changes[STORAGE_KEY]) {
+          const newQuestions = changes[STORAGE_KEY].newValue || [];
+          postSyncUpdate(newQuestions);
+        }
+      });
+    } catch (_) {}
+  }
+
+  if (isExtensionContextValid() && chrome.runtime.onMessage) {
+    try {
+      chrome.runtime.onMessage.addListener((msg) => {
+        if (isBridgeDestroyed || !isExtensionContextValid()) return;
+        if (msg && msg.type === 'PUSH_CAVEIRA_SYNC' && msg.payload) {
+          postSyncUpdate(msg.payload.questions || []);
+        }
+      });
+    } catch (_) {}
+  }
 })();
