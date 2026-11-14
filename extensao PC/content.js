@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.15 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.16 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -968,6 +968,54 @@
     return matchedCount > 0;
   }
 
+  async function selectUnresolvedQuestionsFilter() {
+    if (isDestroyed) return false;
+    const rawCandidates = Array.from(
+      document.querySelectorAll('button, [role="button"], [role="radio"], [role="tab"], .q-btn, .q-chip, label, div, span, a')
+    ).filter(el => {
+      if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
+      const r = el.getBoundingClientRect();
+      if (r.width < 40 || r.width > 260 || r.height < 18 || r.height > 60) return false;
+      const txt = normalizeFilterText(el.innerText || el.textContent);
+      return txt === 'nao resolvidas' || txt === 'nao resolvida';
+    });
+
+    const pills = [];
+    for (const el of rawCandidates) {
+      const target = el.closest('button, [role="button"], [role="radio"], [role="tab"], .q-btn, .q-chip, label') || el;
+      if (!target || target.closest('#qg-caveira-hud') || !isElementVisible(target)) continue;
+      const tr = target.getBoundingClientRect();
+      if (tr.width < 40 || tr.width > 260 || tr.height < 18 || tr.height > 60) continue;
+      const targetTxt = normalizeFilterText(target.innerText || target.textContent);
+      if (targetTxt !== 'nao resolvidas' && targetTxt !== 'nao resolvida') continue;
+      if (!pills.includes(target)) pills.push(target);
+    }
+
+    if (pills.length === 0) return false;
+
+    pills.sort((a, b) => {
+      const aInteractive = a.matches('button, [role="button"], [role="radio"], [role="tab"], .q-btn, .q-chip, label') ? 0 : 1;
+      const bInteractive = b.matches('button, [role="button"], [role="radio"], [role="tab"], .q-btn, .q-chip, label') ? 0 : 1;
+      if (aInteractive !== bInteractive) return aInteractive - bInteractive;
+      const ra = a.getBoundingClientRect();
+      const rb = b.getBoundingClientRect();
+      return (ra.width * ra.height) - (rb.width * rb.height);
+    });
+
+    const pill = pills[0];
+    if (
+      pill.getAttribute('aria-pressed') === 'true' ||
+      pill.getAttribute('aria-selected') === 'true' ||
+      pill.getAttribute('aria-checked') === 'true'
+    ) {
+      return true;
+    }
+
+    clickElementRealistically(pill);
+    await sleepMs(250);
+    return true;
+  }
+
   async function applyCaveiraPracticeFilter(filterObj) {
     if (isDestroyed || !filterObj || isApplyingFilter) return;
     const subject = String(filterObj.subject || '').trim();
@@ -1006,6 +1054,10 @@
         if (findFilterDropdownTrigger('Disciplina')) break;
         await sleepMs(350);
       }
+
+      // Sempre marca o filtro de questões "Não resolvidas" antes de abrir os dropdowns
+      renderFilterBanner('⏳ Marcando: Não resolvidas...');
+      const unresolvedOk = await selectUnresolvedQuestionsFilter();
 
       let subjectOk = true;
       let topicOk = true;
@@ -1046,7 +1098,8 @@
 
       const summary = [subject, displayTarget].filter(Boolean).join(' • ');
       if (subjectOk && topicOk && applyBtn) {
-        renderFilterBanner(`✅ Filtro aplicado: ${summary}`);
+        const statusTag = unresolvedOk ? 'Não resolvidas' : 'Não resolvidas pendente';
+        renderFilterBanner(`✅ Filtro aplicado (${statusTag}): ${summary}`);
       } else if (subjectOk && topicOk) {
         renderFilterBanner(`⚠️ Selecionado (clique em Filtrar): ${summary}`);
       } else {
