@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.13 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.14 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -923,29 +923,93 @@
         await sleepMs(300);
       }
 
-      // 4. Se houver botão explícito de busca/filtragem, aciona e rola suavemente para as questões
-      const applyBtn = Array.from(document.querySelectorAll('button, [role="button"]')).find(el => {
-        if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
-        const txt = normalizeFilterText(el.innerText || el.textContent);
-        return txt === 'filtrar' || txt === 'aplicar' || txt === 'aplicar filtros' || txt === 'buscar' || txt === 'buscar questoes' || txt === 'filtrar questoes' || txt === 'pesquisar';
-      });
+      // 4. Localiza e aciona o botão explícito de busca/filtragem (inclui .q-btn, div/span estilizados e texto com ícones)
+      await sleepMs(250);
+      const applyBtn = findCaveiraFilterSubmitButton();
       if (applyBtn) {
+        try {
+          applyBtn.scrollIntoView({ block: 'center', inline: 'nearest' });
+        } catch (_) {}
+        await sleepMs(120);
         clickElementRealistically(applyBtn);
-        await sleepMs(250);
+        const nestedBtn = applyBtn.querySelector('button, [role="button"], .q-btn');
+        if (nestedBtn && nestedBtn !== applyBtn) {
+          clickElementRealistically(nestedBtn);
+        }
+        await sleepMs(300);
       }
       try {
         window.scrollBy({ top: 260, behavior: 'smooth' });
       } catch (_) {}
 
       const summary = [subject, topic].filter(Boolean).join(' • ');
-      if (subjectOk && topicOk) {
+      if (subjectOk && topicOk && applyBtn) {
         renderFilterBanner(`✅ Filtro aplicado: ${summary}`);
+      } else if (subjectOk && topicOk) {
+        renderFilterBanner(`⚠️ Selecionado (clique em Filtrar): ${summary}`);
       } else {
         renderFilterBanner(`⚠️ Parcial (${subjectOk ? 'Disciplina OK' : 'Disciplina não encontrada'} / ${topicOk ? 'Assunto OK' : 'Selecione o assunto'})`);
       }
     } finally {
       isApplyingFilter = false;
     }
+  }
+
+  function findCaveiraFilterSubmitButton() {
+    const allowedExact = ['filtrar', 'filtrar questoes', 'aplicar', 'aplicar filtros', 'buscar', 'buscar questoes', 'pesquisar'];
+    const blockedWords = ['carreiras', 'digite', 'limpar', 'salvar', 'caderno', 'filtros'];
+
+    const rawCandidates = Array.from(
+      document.querySelectorAll('button, [role="button"], .q-btn, a, input[type="button"], input[type="submit"], div, span')
+    ).filter(el => {
+      if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
+      const r = el.getBoundingClientRect();
+      if (r.width < 36 || r.width > 380 || r.height < 20 || r.height > 72) return false;
+
+      let txt = normalizeFilterText(el.tagName === 'INPUT' ? el.value : (el.innerText || el.textContent));
+      txt = txt
+        .replace(/\b(filter_alt|filter_list|search|tune|find_in_page)\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      if (!txt || txt.length > 40) return false;
+      if (blockedWords.some(bw => txt.includes(bw))) return false;
+
+      return allowedExact.includes(txt) || txt.startsWith('filtrar ') || txt.endsWith(' filtrar');
+    });
+
+    const resolved = [];
+    for (const el of rawCandidates) {
+      let clickable = el.closest('button, [role="button"], .q-btn, a, input[type="button"], input[type="submit"]');
+      if (!clickable) {
+        let cur = el;
+        for (let depth = 0; depth < 4 && cur && cur !== document.body; depth++) {
+          const r = cur.getBoundingClientRect();
+          const cursorStyle = window.getComputedStyle(cur).cursor;
+          if (r.height >= 28 && r.height <= 60 && r.width >= 36 && r.width <= 380 && (cursorStyle === 'pointer' || depth === 0)) {
+            clickable = cur;
+            if (cursorStyle === 'pointer') break;
+          }
+          cur = cur.parentElement;
+        }
+      }
+      if (clickable && !clickable.closest('#qg-caveira-hud') && isElementVisible(clickable)) {
+        resolved.push(clickable);
+      }
+    }
+
+    const unique = Array.from(new Set(resolved));
+    unique.sort((a, b) => {
+      const aNative = a.matches('button, [role="button"], .q-btn, input[type="submit"], input[type="button"]') ? 0 : 1;
+      const bNative = b.matches('button, [role="button"], .q-btn, input[type="submit"], input[type="button"]') ? 0 : 1;
+      if (aNative !== bNative) return aNative - bNative;
+      const aExact = normalizeFilterText(a.innerText || a.textContent || a.value || '') === 'filtrar' ? 0 : 1;
+      const bExact = normalizeFilterText(b.innerText || b.textContent || b.value || '') === 'filtrar' ? 0 : 1;
+      if (aExact !== bExact) return aExact - bExact;
+      const ra = a.getBoundingClientRect();
+      const rb = b.getBoundingClientRect();
+      return (ra.width * ra.height) - (rb.width * rb.height);
+    });
+    return unique[0] || null;
   }
 
   function updateHudUser() {
