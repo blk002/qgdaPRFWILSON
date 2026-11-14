@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.21 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.22 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -654,6 +654,7 @@
   const SPECIAL_LAW_RULES = [
     {
       id: 'eca',
+      lawDigits: '8069',
       test: (norm) =>
         /\beca\b/.test(norm) ||
         norm.includes('crianca e do adolescente') ||
@@ -672,6 +673,7 @@
     },
     {
       id: 'henry_borel',
+      lawDigits: '14344',
       test: (norm) =>
         norm.includes('henry borel') ||
         norm.includes('14.344') ||
@@ -680,6 +682,7 @@
     },
     {
       id: 'escuta_especializada',
+      lawDigits: '13431',
       test: (norm) =>
         norm.includes('escuta especializada') ||
         norm.includes('depoimento especial') ||
@@ -689,6 +692,7 @@
     },
     {
       id: 'drogas',
+      lawDigits: '11343',
       test: (norm) =>
         /\bdrogas?\b|\bsisnad\b|entorpecente/.test(norm) ||
         norm.includes('11.343') ||
@@ -697,6 +701,7 @@
     },
     {
       id: 'desarmamento',
+      lawDigits: '10826',
       test: (norm) =>
         norm.includes('desarmamento') ||
         /\barmas?\b/.test(norm) ||
@@ -707,6 +712,7 @@
     },
     {
       id: 'abuso_autoridade',
+      lawDigits: '13869',
       test: (norm) =>
         norm.includes('abuso de autoridade') ||
         norm.includes('13.869') ||
@@ -715,6 +721,7 @@
     },
     {
       id: 'tortura',
+      lawDigits: '9455',
       test: (norm) =>
         norm.includes('tortura') ||
         norm.includes('9.455') ||
@@ -723,6 +730,7 @@
     },
     {
       id: 'hediondos',
+      lawDigits: '8072',
       test: (norm) =>
         norm.includes('hediondo') ||
         norm.includes('8.072') ||
@@ -731,6 +739,7 @@
     },
     {
       id: 'orcrim',
+      lawDigits: '12850',
       test: (norm) =>
         norm.includes('organizacao criminosa') ||
         norm.includes('organizacoes criminosas') ||
@@ -741,6 +750,7 @@
     },
     {
       id: 'maria_da_penha',
+      lawDigits: '11340',
       test: (norm) =>
         norm.includes('maria da penha') ||
         (norm.includes('violencia domestica') && /\bmulher(?:es)?\b/.test(norm)) ||
@@ -757,6 +767,7 @@
     },
     {
       id: 'crimes_ambientais',
+      lawDigits: '9605',
       test: (norm) =>
         norm.includes('meio ambiente') ||
         norm.includes('ambienta') ||
@@ -766,6 +777,7 @@
     },
     {
       id: 'interceptacao',
+      lawDigits: '9296',
       test: (norm) =>
         norm.includes('interceptacao') ||
         norm.includes('9.296') ||
@@ -774,6 +786,7 @@
     },
     {
       id: 'jecrim',
+      lawDigits: '9099',
       test: (norm) =>
         norm.includes('juizado') ||
         /\bjecrim\b/.test(norm) ||
@@ -783,6 +796,7 @@
     },
     {
       id: 'lavagem',
+      lawDigits: '9613',
       test: (norm) =>
         norm.includes('lavagem') ||
         norm.includes('9.613') ||
@@ -791,6 +805,7 @@
     },
     {
       id: 'racismo',
+      lawDigits: '7716',
       test: (norm) =>
         norm.includes('racismo') ||
         norm.includes('7.716') ||
@@ -799,6 +814,7 @@
     },
     {
       id: 'lep',
+      lawDigits: '7210',
       test: (norm) =>
         /\blep\b/.test(norm) ||
         norm.includes('execucao penal') ||
@@ -808,6 +824,7 @@
     },
     {
       id: 'prisao_temporaria',
+      lawDigits: '7960',
       test: (norm) =>
         norm.includes('prisao temporaria') ||
         norm.includes('7.960') ||
@@ -816,6 +833,7 @@
     },
     {
       id: 'idoso',
+      lawDigits: '10741',
       test: (norm) =>
         norm.includes('idoso') ||
         norm.includes('pessoa idosa') ||
@@ -825,6 +843,7 @@
     },
     {
       id: 'anticrime',
+      lawDigits: '13964',
       test: (norm) =>
         norm.includes('pacote anticrime') ||
         /\banticrime\b/.test(norm) ||
@@ -834,6 +853,7 @@
     },
     {
       id: 'igualdade_racial',
+      lawDigits: '12288',
       test: (norm) =>
         norm.includes('igualdade racial') ||
         norm.includes('12.288') ||
@@ -842,6 +862,7 @@
     },
     {
       id: 'pcd',
+      lawDigits: '13146',
       test: (norm) =>
         norm.includes('pessoa com deficiencia') ||
         /\blbi\b/.test(norm) ||
@@ -851,6 +872,7 @@
     },
     {
       id: 'ctb',
+      lawDigits: '9503',
       test: (norm) =>
         /\bctb\b/.test(norm) ||
         norm.includes('codigo de transito') ||
@@ -860,6 +882,7 @@
     },
     {
       id: 'lia',
+      lawDigits: '8429',
       test: (norm) =>
         /\blia\b/.test(norm) ||
         norm.includes('improbidade administrativa') ||
@@ -1001,25 +1024,52 @@
       .join(' ');
   }
 
-  function getMatchingSpecialLawIds(rawText) {
-    const norm = normalizeFilterText(rawText)
+  function stripAmendedLawTail(rawText) {
+    const norm = normalizeFilterText(rawText);
+    if (!norm) return '';
+    return norm
+      .replace(/\b(?:e\s+)?(?:altera|modifica|acrescenta|revoga|da\s+nova\s+redacao)\s+(?:a\s+|o\s+|os\s+|as\s+|dispositivos\s+da\s+)?(?:lei|decreto|codigo|estatuto)\b.*$/i, '')
+      .trim();
+  }
+
+  function extractLeadingLawDigits(rawText) {
+    const base = stripAmendedLawTail(rawText) || normalizeFilterText(rawText);
+    if (!base) return '';
+    const match = base.match(/\b(?:lei|decreto(?:-lei)?|lc)\s*(?:complementar\s*)?(?:n\.?[oº°.]?\s*|numero\s+)?(\d{1,2}\.?\d{3})\b/i);
+    return match ? match[1].replace(/\D/g, '') : '';
+  }
+
+  function getMatchingSpecialLawIds(rawText, opts = {}) {
+    const primaryOnly = Boolean(opts && opts.primaryOnly);
+    const sourceText = primaryOnly ? (stripAmendedLawTail(rawText) || rawText) : rawText;
+    const norm = normalizeFilterText(sourceText)
       .replace(/[-–—:|/]+/g, ' ')
       .replace(/\s+/g, ' ')
       .trim();
     if (!norm) return [];
+    const leadingDigits = primaryOnly ? extractLeadingLawDigits(sourceText) : '';
     const ids = [];
     for (const rule of SPECIAL_LAW_RULES) {
-      if (rule.id && rule.test(norm) && !ids.includes(rule.id)) {
+      if (!rule.id || !rule.test(norm)) continue;
+      if (primaryOnly && leadingDigits && rule.lawDigits && rule.lawDigits !== leadingDigits) {
+        continue;
+      }
+      if (!ids.includes(rule.id)) {
         ids.push(rule.id);
       }
     }
-    const lawRegex = /\blei\s+(?:n[oº°.]?\s*)?(\d{1,2}\.?\d{3})\b/gi;
-    let match;
-    while ((match = lawRegex.exec(norm)) !== null) {
-      const digits = match[1].replace(/\D/g, '');
-      if (digits.length >= 4 && digits.length <= 5) {
-        const key = `lei_${digits}`;
-        if (!ids.includes(key)) ids.push(key);
+    if (primaryOnly && leadingDigits) {
+      const key = `lei_${leadingDigits}`;
+      if (!ids.includes(key)) ids.push(key);
+    } else {
+      const lawRegex = /\blei\s+(?:n\.?[oº°.]?\s*|numero\s+)?(\d{1,2}\.?\d{3})\b/gi;
+      let match;
+      while ((match = lawRegex.exec(norm)) !== null) {
+        const digits = match[1].replace(/\D/g, '');
+        if (digits.length >= 4 && digits.length <= 5) {
+          const key = `lei_${digits}`;
+          if (!ids.includes(key)) ids.push(key);
+        }
       }
     }
     return ids;
@@ -1343,8 +1393,9 @@
   }
 
   function scoreOptionMatch(optionText, searchTerms, opts = {}) {
-    const normOpt = normalizeFilterText(optionText);
-    const stemOpt = normalizeStemText(optionText);
+    const primaryOptionText = stripAmendedLawTail(optionText) || optionText;
+    const normOpt = normalizeFilterText(primaryOptionText);
+    const stemOpt = normalizeStemText(primaryOptionText);
     if (!normOpt) return 0;
 
     const validTerms = Array.isArray(searchTerms)
@@ -1352,8 +1403,8 @@
       : [];
     if (validTerms.length === 0) return 0;
 
-    // Guarda de Lei Específica: evita que palavras genéricas ("autoridade", "crimes") marquem outra lei
-    const optLawIds = getMatchingSpecialLawIds(normOpt);
+    // Guarda de Lei Específica: avalia a lei principal da opção (sem a cauda "e altera a Lei...")
+    const optLawIds = getMatchingSpecialLawIds(primaryOptionText, { primaryOnly: true });
     if (optLawIds.length > 0) {
       if (opts.allowedLawIds instanceof Set && opts.allowedLawIds.size > 0) {
         if (!optLawIds.some(id => opts.allowedLawIds.has(id))) {
@@ -1377,16 +1428,30 @@
       }
     }
 
+    const normOptWithoutLeiPrefix = normOpt
+      .replace(/^(?:lei|decreto(?:-lei)?|lc)\s*(?:complementar\s*)?(?:n\.?[oº°.]?\s*|numero\s+)?/, '')
+      .trim();
+    const stemOptWithoutLeiPrefix = normalizeStemText(normOptWithoutLeiPrefix);
+
     let best = 0;
+    let additionalTermMatches = 0;
     for (let i = 0; i < validTerms.length; i++) {
       const term = validTerms[i];
       const stemTerm = normalizeStemText(term);
       if (!term) continue;
       if (normOpt === term || (stemTerm && stemOpt === stemTerm)) return 1000 - i;
-      if (hasWholeStartMatch(normOpt, term) || (stemTerm && hasWholeStartMatch(stemOpt, stemTerm))) {
+      if (
+        (normOptWithoutLeiPrefix && hasWholeStartMatch(normOptWithoutLeiPrefix, term)) ||
+        (stemOptWithoutLeiPrefix && stemTerm && hasWholeStartMatch(stemOptWithoutLeiPrefix, stemTerm))
+      ) {
+        best = Math.max(best, 900 - i);
+        if (i > 0) additionalTermMatches += 1;
+      } else if (hasWholeStartMatch(normOpt, term) || (stemTerm && hasWholeStartMatch(stemOpt, stemTerm))) {
         best = Math.max(best, 800 - i);
+        if (i > 0) additionalTermMatches += 1;
       } else if (hasWholeTermMatch(normOpt, term) || (stemTerm && hasWholeTermMatch(stemOpt, stemTerm))) {
         best = Math.max(best, 600 - i);
+        if (i > 0) additionalTermMatches += 1;
       } else {
         const words = (stemTerm || term).split(' ').filter(w => w.length >= 3);
         const hits = words.filter(w => hasWholeTermMatch(stemOpt, w) || hasWholeTermMatch(normOpt, w)).length;
@@ -1401,6 +1466,10 @@
           best = Math.max(best, Math.round((hits / Math.max(1, words.length)) * 450) - i);
         }
       }
+    }
+
+    if (best > 0 && additionalTermMatches > 0) {
+      best += Math.min(60, additionalTermMatches * 15);
     }
     return best;
   }
