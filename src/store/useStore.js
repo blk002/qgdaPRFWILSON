@@ -630,7 +630,7 @@ export const useStore = create(
             });
           }
 
-          try { window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id } }, '*'); } catch (_) {}
+          try { window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id, userEmail: user.email || '' } }, '*'); } catch (_) {}
           return true;
         };
 
@@ -727,7 +727,7 @@ export const useStore = create(
             get().checkAndAdvanceSeason();
             get().checkAndResetDailyMissions();
             get().syncAndRepairCaveiraReviews?.();
-            try { window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id } }, '*'); } catch (_) {}
+            try { window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id, userEmail: user.email || '' } }, '*'); } catch (_) {}
             return true;
           }
 
@@ -753,7 +753,7 @@ export const useStore = create(
           get().checkAndResetDailyMissions();
           get().syncAndRepairCaveiraReviews?.();
           await get().saveToCloud({ allowEmptyOverwrite: true });
-          try { window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id } }, '*'); } catch (_) {}
+          try { window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id, userEmail: user.email || '' } }, '*'); } catch (_) {}
           return true;
         } catch (error) {
           if (retryCount < 2) {
@@ -802,7 +802,7 @@ export const useStore = create(
               get().checkAndAdvanceSeason();
               get().checkAndResetDailyMissions();
               get().syncAndRepairCaveiraReviews?.();
-              try { window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id } }, '*'); } catch (_) {}
+              try { window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id, userEmail: user.email || '' } }, '*'); } catch (_) {}
 
               toast.info(`⚠️ Usando dados salvos localmente (${chosenDateStr}) devido a erro de conexão.`);
               return true;
@@ -1784,6 +1784,7 @@ export const useStore = create(
                   confidence: prev.confidence,
                   errorReason: prev.errorReason,
                   fsrsRequested: prev.fsrsRequested,
+                  priorityReview: prev.priorityReview,
                   userNote: prev.userNote !== undefined ? prev.userNote : (q.userNote || ''),
                   teacherComment: prev.teacherComment || q.teacherComment || '',
                   alternatives: (Array.isArray(q.alternatives) && q.alternatives.length > (Array.isArray(prev.alternatives) ? prev.alternatives.length : 0))
@@ -1805,6 +1806,7 @@ export const useStore = create(
               prev.confidence !== mergedItem.confidence ||
               prev.errorReason !== mergedItem.errorReason ||
               Boolean(prev.fsrsRequested) !== Boolean(mergedItem.fsrsRequested) ||
+              Boolean(prev.priorityReview) !== Boolean(mergedItem.priorityReview) ||
               (prev.userNote || '') !== (mergedItem.userNote || '') ||
               (prev.teacherComment || '') !== (mergedItem.teacherComment || '') ||
               prev.hit !== mergedItem.hit ||

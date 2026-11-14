@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.7 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.8 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -16,8 +16,27 @@
   const SCHEMA_KEY = 'qg_caveira_schema_v3';
   const GOAL_KEY = 'qg_caveira_daily_goal';
   const ACTIVE_USER_KEY = 'qg_active_user_id';
+  const MAX_BUCKET_QUESTIONS = 1500;
   let cachedDailyGoal = 50;
   let cachedActiveUserId = null;
+
+  function compactQuestionsForStorage(questions, maxItems = MAX_BUCKET_QUESTIONS) {
+    if (!Array.isArray(questions)) return [];
+    return questions.slice(0, maxItems).map((q, idx) => {
+      if (!q || idx < 150) return q;
+      const compacted = { ...q };
+      if (typeof compacted.content === 'string' && compacted.content.length > 400) {
+        compacted.content = compacted.content.slice(0, 400);
+      }
+      if (typeof compacted.teacherComment === 'string' && compacted.teacherComment.length > 500) {
+        compacted.teacherComment = compacted.teacherComment.slice(0, 500);
+      }
+      if (Array.isArray(compacted.alternatives) && compacted.alternatives.length > 6) {
+        compacted.alternatives = compacted.alternatives.slice(0, 6);
+      }
+      return compacted;
+    });
+  }
 
   let isDestroyed = false;
   let isStorageLoaded = false;
@@ -315,6 +334,7 @@
           <button class="qg-btn-tag" data-confidence="sabia">🎯 Sabia</button>
           <button class="qg-btn-tag" data-confidence="duvida" title="Envia para a fila de Revisão FSRS mesmo acertando">🤔 Dúvida</button>
           <button class="qg-btn-tag" data-confidence="chute" title="Envia para a fila de Revisão FSRS mesmo acertando">🎲 Chute</button>
+          <button class="qg-btn-tag" id="qg-btn-priority" data-priority="true" title="Marcar para revisão urgente no FSRS do QG">🔥 Prioridade</button>
         </div>
 
         <div id="qg-error-reasons" style="display: none;">
@@ -378,6 +398,22 @@
       });
     });
 
+    hud.querySelector('#qg-btn-priority')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const btn = e.currentTarget;
+      const isNowActive = !btn.classList.contains('active');
+      btn.classList.toggle('active', isNowActive);
+      if (activeQuestionData) {
+        activeQuestionData.priorityReview = isNowActive;
+        if (isNowActive) activeQuestionData.fsrsRequested = true;
+        saveQuestion(activeQuestionData, true);
+        const badge = document.getElementById('qg-prompt-status-badge');
+        if (badge && isNowActive) {
+          badge.textContent = '🔥 REVISÃO PRIORITÁRIA';
+        }
+      }
+    });
+
     hud.querySelectorAll('[data-reason]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
@@ -416,7 +452,7 @@
     timerEl.textContent = `${mins}:${secs}`;
     if (isTimerRunning) {
       timerEl.style.opacity = '1';
-      timerEl.style.color = '#fbbf24';
+      timerEl.style.color = timerSeconds >= 150 ? '#ef4444' : timerSeconds >= 90 ? '#f97316' : '#fbbf24';
     } else {
       timerEl.style.opacity = '0.7';
     }
@@ -1055,6 +1091,8 @@
       hits: sessionStats.hits,
       errors: sessionStats.errors
     };
+
+    questionsCache = compactQuestionsForStorage(questionsCache);
 
     try {
       chrome.storage.local.set({

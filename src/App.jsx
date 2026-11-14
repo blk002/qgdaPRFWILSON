@@ -267,7 +267,7 @@ export default function App() {
         const currentUser = useStore.getState().user;
         const cloudReady = useStore.getState().hasCompletedInitialCloudSync;
         if (!currentUser?.id || !cloudReady) return;
-        window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: currentUser.id } }, '*');
+        window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: currentUser.id, userEmail: currentUser.email || '' } }, '*');
       } catch (_) {}
     };
 

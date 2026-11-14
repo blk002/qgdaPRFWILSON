@@ -4,6 +4,26 @@ const STORAGE_KEY = 'qg_caveira_questions';
 const SESSION_KEY = 'qg_caveira_session';
 const SCHEMA_KEY = 'qg_caveira_schema_v3';
 const GOAL_KEY = 'qg_caveira_daily_goal';
+const ACTIVE_USER_KEY = 'qg_active_user_id';
+const ACTIVE_USER_LABEL_KEY = 'qg_active_user_label';
+const USER_BUCKETS_KEY = 'qg_caveira_user_buckets';
+
+function renderAccountStatus(activeUserId, activeUserLabel) {
+  const pill = document.getElementById('account-status-pill');
+  if (!pill) return;
+  if (activeUserId) {
+    const label = (activeUserLabel || '').trim() || `ID ${String(activeUserId).slice(0, 8)}...`;
+    pill.style.borderColor = 'rgba(16, 185, 129, 0.35)';
+    pill.style.background = 'rgba(16, 185, 129, 0.08)';
+    pill.style.color = '#86efac';
+    pill.innerHTML = `<span>🟢</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${label}">Conta: ${label}</span>`;
+  } else {
+    pill.style.borderColor = 'rgba(251, 191, 36, 0.35)';
+    pill.style.background = 'rgba(251, 191, 36, 0.08)';
+    pill.style.color = '#fde68a';
+    pill.innerHTML = '<span>🟡</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Abra o QG da PRF e faça login</span>';
+  }
+}
 
 function getTodaySessionDate() {
   const now = new Date();
@@ -87,9 +107,10 @@ document.addEventListener('DOMContentLoaded', () => {
     versionEl.textContent = `v${chrome.runtime.getManifest().version}`;
   }
 
-  chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, GOAL_KEY], (res) => {
+  chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, GOAL_KEY, ACTIVE_USER_KEY, ACTIVE_USER_LABEL_KEY], (res) => {
     const today = getTodaySessionDate();
     const dailyGoal = Number(res[GOAL_KEY]) || 50;
+    renderAccountStatus(res[ACTIVE_USER_KEY] || null, res[ACTIVE_USER_LABEL_KEY] || '');
 
     if (res[SCHEMA_KEY] !== 'v3_strict_clean') {
       const cleanSession = { date: today, total: 0, hits: 0, errors: 0 };
@@ -115,10 +136,11 @@ document.addEventListener('DOMContentLoaded', () => {
   // Atualização em tempo real caso o popup esteja aberto
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local') {
-      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, GOAL_KEY], (res) => {
+      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, GOAL_KEY, ACTIVE_USER_KEY, ACTIVE_USER_LABEL_KEY], (res) => {
         const questions = Array.isArray(res[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
         const session = normalizeSession(res[SESSION_KEY]);
         const dailyGoal = Number(res[GOAL_KEY]) || 50;
+        renderAccountStatus(res[ACTIVE_USER_KEY] || null, res[ACTIVE_USER_LABEL_KEY] || '');
         renderPopupStats(questions, session, dailyGoal);
       });
     }
@@ -141,11 +163,22 @@ document.addEventListener('DOMContentLoaded', () => {
   if (btnSaveGoal && inputDailyGoal) {
     btnSaveGoal.addEventListener('click', () => {
       const newGoal = Math.max(5, Math.min(1000, Number(inputDailyGoal.value) || 50));
-      chrome.storage.local.set({ [GOAL_KEY]: newGoal }, () => {
-        if (boxEditGoal) boxEditGoal.style.display = 'none';
-        chrome.storage.local.get([SESSION_KEY], (res) => {
-          const session = normalizeSession(res[SESSION_KEY]);
-          renderGoal(session, newGoal);
+      chrome.storage.local.get([ACTIVE_USER_KEY, USER_BUCKETS_KEY], (res) => {
+        const activeUserId = res?.[ACTIVE_USER_KEY] || null;
+        const payload = { [GOAL_KEY]: newGoal };
+        if (activeUserId) {
+          const buckets = (res?.[USER_BUCKETS_KEY] && typeof res[USER_BUCKETS_KEY] === 'object')
+            ? { ...res[USER_BUCKETS_KEY] }
+            : {};
+          buckets[activeUserId] = { ...(buckets[activeUserId] || {}), dailyGoal: newGoal };
+          payload[USER_BUCKETS_KEY] = buckets;
+        }
+        chrome.storage.local.set(payload, () => {
+          if (boxEditGoal) boxEditGoal.style.display = 'none';
+          chrome.storage.local.get([SESSION_KEY], (sRes) => {
+            const session = normalizeSession(sRes[SESSION_KEY]);
+            renderGoal(session, newGoal);
+          });
         });
       });
     });

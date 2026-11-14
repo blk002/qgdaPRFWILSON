@@ -10,11 +10,32 @@
   const STORAGE_KEY = 'qg_caveira_questions';
   const SESSION_KEY = 'qg_caveira_session';
   const ACTIVE_USER_KEY = 'qg_active_user_id';
+  const ACTIVE_USER_LABEL_KEY = 'qg_active_user_label';
   const USER_BUCKETS_KEY = 'qg_caveira_user_buckets';
+  const GOAL_KEY = 'qg_caveira_daily_goal';
+  const MAX_BUCKET_QUESTIONS = 1500;
   let isBridgeDestroyed = false;
   let cachedActiveUserId = null;
   let lastSyncPayloadJson = '';
   let lastSyncPayloadTime = 0;
+
+  function compactQuestionsForStorage(questions, maxItems = MAX_BUCKET_QUESTIONS) {
+    if (!Array.isArray(questions)) return [];
+    return questions.slice(0, maxItems).map((q, idx) => {
+      if (!q || idx < 150) return q;
+      const compacted = { ...q };
+      if (typeof compacted.content === 'string' && compacted.content.length > 400) {
+        compacted.content = compacted.content.slice(0, 400);
+      }
+      if (typeof compacted.teacherComment === 'string' && compacted.teacherComment.length > 500) {
+        compacted.teacherComment = compacted.teacherComment.slice(0, 500);
+      }
+      if (Array.isArray(compacted.alternatives) && compacted.alternatives.length > 6) {
+        compacted.alternatives = compacted.alternatives.slice(0, 6);
+      }
+      return compacted;
+    });
+  }
 
   function postSyncUpdate(questions, userId) {
     if (isBridgeDestroyed || !Array.isArray(questions) || !userId) return;
@@ -93,12 +114,14 @@
     }).catch(() => {});
   }
 
-  function switchUserBucket(nextUserId, callback) {
+  function switchUserBucket(nextUserId, callback, nextUserLabel = '') {
     if (!isExtensionContextValid()) return;
     try {
-      chrome.storage.local.get([ACTIVE_USER_KEY, STORAGE_KEY, SESSION_KEY, USER_BUCKETS_KEY], (res) => {
+      chrome.storage.local.get([ACTIVE_USER_KEY, ACTIVE_USER_LABEL_KEY, STORAGE_KEY, SESSION_KEY, USER_BUCKETS_KEY, GOAL_KEY], (res) => {
         if (chrome.runtime.lastError || isBridgeDestroyed) return;
         const prevUserId = res?.[ACTIVE_USER_KEY] || null;
+        const prevUserLabel = res?.[ACTIVE_USER_LABEL_KEY] || '';
+        const prevDailyGoal = Number(res?.[GOAL_KEY]) || 50;
         const currentQuestions = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
         const currentSession = normalizeSession(res?.[SESSION_KEY]);
         const buckets = (res?.[USER_BUCKETS_KEY] && typeof res[USER_BUCKETS_KEY] === 'object')
@@ -108,8 +131,10 @@
         if (!nextUserId) {
           if (prevUserId) {
             buckets[prevUserId] = {
-              questions: currentQuestions.map(q => ({ ...q, ownerUserId: q.ownerUserId || prevUserId })),
-              session: currentSession
+              questions: compactQuestionsForStorage(currentQuestions.map(q => ({ ...q, ownerUserId: q.ownerUserId || prevUserId }))),
+              session: currentSession,
+              dailyGoal: prevDailyGoal,
+              userLabel: prevUserLabel || buckets[prevUserId]?.userLabel || ''
             };
           }
           const emptySession = normalizeSession(null);
@@ -118,6 +143,8 @@
             [STORAGE_KEY]: [],
             [SESSION_KEY]: emptySession,
             [ACTIVE_USER_KEY]: null,
+            [ACTIVE_USER_LABEL_KEY]: '',
+            [GOAL_KEY]: 50,
             [USER_BUCKETS_KEY]: buckets
           }, () => {
             if (chrome.runtime && chrome.runtime.sendMessage) {
@@ -130,8 +157,9 @@
 
         if (prevUserId === nextUserId) {
           cachedActiveUserId = nextUserId;
-          let changed = false;
-          const cleanQuestions = currentQuestions.filter(q => {
+          const resolvedLabel = nextUserLabel || prevUserLabel || buckets[nextUserId]?.userLabel || '';
+          let changed = resolvedLabel !== prevUserLabel;
+          const cleanQuestions = compactQuestionsForStorage(currentQuestions.filter(q => {
             if (!q) return false;
             if (q.ownerUserId && q.ownerUserId !== nextUserId) {
               changed = true;
@@ -144,9 +172,12 @@
               return { ...q, ownerUserId: nextUserId };
             }
             return q;
-          });
+          }));
           if (changed) {
-            chrome.storage.local.set({ [STORAGE_KEY]: cleanQuestions }, () => {
+            chrome.storage.local.set({
+              [STORAGE_KEY]: cleanQuestions,
+              ...(resolvedLabel ? { [ACTIVE_USER_LABEL_KEY]: resolvedLabel } : {})
+            }, () => {
               if (callback) callback({ userId: nextUserId, questions: cleanQuestions, session: currentSession });
             });
           } else if (callback) {
@@ -157,18 +188,26 @@
 
         if (prevUserId && prevUserId !== nextUserId) {
           buckets[prevUserId] = {
-            questions: currentQuestions.map(q => ({ ...q, ownerUserId: q.ownerUserId || prevUserId })),
-            session: currentSession
+            questions: compactQuestionsForStorage(currentQuestions.map(q => ({ ...q, ownerUserId: q.ownerUserId || prevUserId }))),
+            session: currentSession,
+            dailyGoal: prevDailyGoal,
+            userLabel: prevUserLabel || buckets[prevUserId]?.userLabel || ''
           };
           const targetBucket = buckets[nextUserId] || {};
-          const nextQuestions = (Array.isArray(targetBucket.questions) ? targetBucket.questions : [])
-            .map(q => ({ ...q, ownerUserId: nextUserId }));
+          const nextQuestions = compactQuestionsForStorage(
+            (Array.isArray(targetBucket.questions) ? targetBucket.questions : [])
+              .map(q => ({ ...q, ownerUserId: nextUserId }))
+          );
           const nextSession = normalizeSession(targetBucket.session);
+          const nextGoal = Number(targetBucket.dailyGoal) || 50;
+          const nextLabel = nextUserLabel || targetBucket.userLabel || '';
           cachedActiveUserId = nextUserId;
           chrome.storage.local.set({
             [STORAGE_KEY]: nextQuestions,
             [SESSION_KEY]: nextSession,
             [ACTIVE_USER_KEY]: nextUserId,
+            [ACTIVE_USER_LABEL_KEY]: nextLabel,
+            [GOAL_KEY]: nextGoal,
             [USER_BUCKETS_KEY]: buckets
           }, () => {
             if (chrome.runtime && chrome.runtime.sendMessage) {
@@ -187,7 +226,7 @@
           const ownerMap = new Map();
           (prevOwnerBucket.questions || []).forEach(item => { if (item?.id) ownerMap.set(item.id, item); });
           if (q.id) ownerMap.set(q.id, q);
-          buckets[owner] = { ...prevOwnerBucket, questions: Array.from(ownerMap.values()) };
+          buckets[owner] = { ...prevOwnerBucket, questions: compactQuestionsForStorage(Array.from(ownerMap.values())) };
         });
 
         const ownOrOrphan = currentQuestions
@@ -203,16 +242,20 @@
           if (q?.id) mergedMap.set(q.id, { ...(mergedMap.get(q.id) || {}), ...q, ownerUserId: nextUserId });
         });
 
-        const finalQuestions = Array.from(mergedMap.values());
+        const finalQuestions = compactQuestionsForStorage(Array.from(mergedMap.values()));
         const finalSession = existingBucket.session
           ? normalizeSession(existingBucket.session)
           : (foreignQuestions.length === 0 ? currentSession : normalizeSession(null));
+        const finalGoal = Number(existingBucket.dailyGoal) || prevDailyGoal || 50;
+        const finalLabel = nextUserLabel || existingBucket.userLabel || '';
 
         cachedActiveUserId = nextUserId;
         chrome.storage.local.set({
           [STORAGE_KEY]: finalQuestions,
           [SESSION_KEY]: finalSession,
           [ACTIVE_USER_KEY]: nextUserId,
+          [ACTIVE_USER_LABEL_KEY]: finalLabel,
+          [GOAL_KEY]: finalGoal,
           [USER_BUCKETS_KEY]: buckets
         }, () => {
           if (chrome.runtime && chrome.runtime.sendMessage) {
@@ -306,9 +349,10 @@
     if (event.data && event.data.source === 'QG_WEB_APP') {
       if (event.data.type === 'SET_ACTIVE_USER') {
         const nextUserId = event.data.payload?.userId || null;
+        const nextUserLabel = event.data.payload?.userEmail || event.data.payload?.userLabel || '';
         switchUserBucket(nextUserId, ({ userId }) => {
           if (userId) deliverDataForActiveUser(userId);
-        });
+        }, nextUserLabel);
       }
 
       if (event.data.type === 'USER_SIGNED_OUT') {
@@ -344,7 +388,7 @@
       }
 
       if (event.data.type === 'REPLACE_CAVEIRA_QUESTIONS' && Array.isArray(event.data.payload?.questions)) {
-        const newQuestions = event.data.payload.questions;
+        const newQuestions = compactQuestionsForStorage(event.data.payload.questions);
         const today = getTodaySessionDate();
         const hits = newQuestions.filter(q => q && q.hit).length;
         const errors = newQuestions.length - hits;

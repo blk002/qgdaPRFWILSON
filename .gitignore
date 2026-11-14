@@ -10,6 +10,7 @@ lerna-debug.log*
 node_modules
 dist
 dist-ssr
+releases
 
 # Variáveis de ambiente (não versionar segredos/credenciais)
 .env
