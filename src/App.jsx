@@ -267,7 +267,9 @@ export default function App() {
         const currentUser = useStore.getState().user;
         const cloudReady = useStore.getState().hasCompletedInitialCloudSync;
         if (!currentUser?.id || !cloudReady) return;
-        window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: currentUser.id, userEmail: currentUser.email || '' } }, '*');
+        const currentStats = useStore.getState().userStats;
+        const userLabel = (currentStats?.displayName || currentUser.user_metadata?.display_name || currentUser.email?.split('@')[0] || currentUser.email || '').trim();
+        window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: currentUser.id, userEmail: currentUser.email || '', userLabel } }, '*');
       } catch (_) {}
     };
 

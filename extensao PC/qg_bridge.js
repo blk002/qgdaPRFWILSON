@@ -349,7 +349,7 @@
     if (event.data && event.data.source === 'QG_WEB_APP') {
       if (event.data.type === 'SET_ACTIVE_USER') {
         const nextUserId = event.data.payload?.userId || null;
-        const nextUserLabel = event.data.payload?.userEmail || event.data.payload?.userLabel || '';
+        const nextUserLabel = event.data.payload?.userLabel || event.data.payload?.userEmail || '';
         switchUserBucket(nextUserId, ({ userId }) => {
           if (userId) deliverDataForActiveUser(userId);
         }, nextUserLabel);

@@ -630,7 +630,7 @@ export const useStore = create(
             });
           }
 
-          try { window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id, userEmail: user.email || '' } }, '*'); } catch (_) {}
+          try { const st = get(); const userLabel = (st.userStats?.displayName || user.user_metadata?.display_name || user.email?.split('@')[0] || user.email || '').trim(); window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id, userEmail: user.email || '', userLabel } }, '*'); } catch (_) {}
           return true;
         };
 
@@ -727,7 +727,7 @@ export const useStore = create(
             get().checkAndAdvanceSeason();
             get().checkAndResetDailyMissions();
             get().syncAndRepairCaveiraReviews?.();
-            try { window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id, userEmail: user.email || '' } }, '*'); } catch (_) {}
+            try { const st = get(); const userLabel = (st.userStats?.displayName || user.user_metadata?.display_name || user.email?.split('@')[0] || user.email || '').trim(); window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id, userEmail: user.email || '', userLabel } }, '*'); } catch (_) {}
             return true;
           }
 
@@ -753,7 +753,7 @@ export const useStore = create(
           get().checkAndResetDailyMissions();
           get().syncAndRepairCaveiraReviews?.();
           await get().saveToCloud({ allowEmptyOverwrite: true });
-          try { window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id, userEmail: user.email || '' } }, '*'); } catch (_) {}
+          try { const st = get(); const userLabel = (st.userStats?.displayName || user.user_metadata?.display_name || user.email?.split('@')[0] || user.email || '').trim(); window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id, userEmail: user.email || '', userLabel } }, '*'); } catch (_) {}
           return true;
         } catch (error) {
           if (retryCount < 2) {
@@ -802,7 +802,7 @@ export const useStore = create(
               get().checkAndAdvanceSeason();
               get().checkAndResetDailyMissions();
               get().syncAndRepairCaveiraReviews?.();
-              try { window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id, userEmail: user.email || '' } }, '*'); } catch (_) {}
+              try { const st = get(); const userLabel = (st.userStats?.displayName || user.user_metadata?.display_name || user.email?.split('@')[0] || user.email || '').trim(); window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id, userEmail: user.email || '', userLabel } }, '*'); } catch (_) {}
 
               toast.info(`⚠️ Usando dados salvos localmente (${chosenDateStr}) devido a erro de conexão.`);
               return true;

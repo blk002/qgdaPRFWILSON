@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.8 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.9 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -16,9 +16,11 @@
   const SCHEMA_KEY = 'qg_caveira_schema_v3';
   const GOAL_KEY = 'qg_caveira_daily_goal';
   const ACTIVE_USER_KEY = 'qg_active_user_id';
+  const ACTIVE_USER_LABEL_KEY = 'qg_active_user_label';
   const MAX_BUCKET_QUESTIONS = 1500;
   let cachedDailyGoal = 50;
   let cachedActiveUserId = null;
+  let cachedActiveUserLabel = '';
 
   function compactQuestionsForStorage(questions, maxItems = MAX_BUCKET_QUESTIONS) {
     if (!Array.isArray(questions)) return [];
@@ -156,9 +158,11 @@
   function loadInitialState() {
     if (!isExtensionContextValid()) return;
     try {
-      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, GOAL_KEY, ACTIVE_USER_KEY], (res) => {
+      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, GOAL_KEY, ACTIVE_USER_KEY, ACTIVE_USER_LABEL_KEY], (res) => {
         if (chrome.runtime.lastError || isDestroyed) return;
         cachedActiveUserId = res?.[ACTIVE_USER_KEY] || null;
+        cachedActiveUserLabel = res?.[ACTIVE_USER_LABEL_KEY] || '';
+        updateHudUser();
         if (res && res[GOAL_KEY]) {
           cachedDailyGoal = Number(res[GOAL_KEY]) || 50;
         }
@@ -240,6 +244,11 @@
           }
           if (changes[ACTIVE_USER_KEY]) {
             cachedActiveUserId = changes[ACTIVE_USER_KEY].newValue || null;
+            updateHudUser();
+          }
+          if (changes[ACTIVE_USER_LABEL_KEY]) {
+            cachedActiveUserLabel = changes[ACTIVE_USER_LABEL_KEY].newValue || '';
+            updateHudUser();
           }
           if (changes[GOAL_KEY]) {
             cachedDailyGoal = Number(changes[GOAL_KEY].newValue) || 50;
@@ -280,6 +289,10 @@
         <div class="qg-hud-controls">
           <button class="qg-hud-btn-icon" id="qg-btn-min" title="Minimizar / Expandir">_</button>
         </div>
+      </div>
+
+      <div id="qg-hud-user-bar" style="display:flex;align-items:center;justify-content:space-between;padding:5px 14px;background:rgba(255,255,255,0.02);border-bottom:1px solid rgba(255,255,255,0.06);font-size:10px;font-weight:700;color:#94a3b8;">
+        <span id="qg-hud-user-text" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🟡 Conecte sua conta no QG</span>
       </div>
 
       <div class="qg-hud-body">
@@ -356,6 +369,7 @@
     `;
 
     document.body.appendChild(hud);
+    updateHudUser();
     updateHudStats();
 
     const btnMin = hud.querySelector('#qg-btn-min');
@@ -431,6 +445,24 @@
   }
 
   // --- 2. CRONÔMETRO POR QUESTÃO ---
+  function updateHudUser() {
+    const userTextEl = document.getElementById('qg-hud-user-text');
+    const userBarEl = document.getElementById('qg-hud-user-bar');
+    if (!userTextEl || !userBarEl) return;
+    if (cachedActiveUserId) {
+      const label = (cachedActiveUserLabel || '').trim() || `ID ${String(cachedActiveUserId).slice(0, 8)}...`;
+      userTextEl.textContent = `👤 ${label}`;
+      userTextEl.title = label;
+      userBarEl.style.color = '#86efac';
+      userBarEl.style.background = 'rgba(16, 185, 129, 0.08)';
+    } else {
+      userTextEl.textContent = '🟡 Faça login no QG para vincular';
+      userTextEl.title = 'Nenhuma conta vinculada';
+      userBarEl.style.color = '#fde68a';
+      userBarEl.style.background = 'rgba(251, 191, 36, 0.06)';
+    }
+  }
+
   function startTimerInterval() {
     if (timerInterval) return;
     timerInterval = setInterval(() => {
