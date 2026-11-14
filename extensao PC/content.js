@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.18 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.19 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -584,17 +584,386 @@
     clickElementRealistically(target);
   }
 
+  const GENERIC_MATCH_WORDS = new Set([
+    'legislacao',
+    'direito',
+    'direitos',
+    'nocao',
+    'nocoes',
+    'codigo',
+    'codigos',
+    'lei',
+    'leis',
+    'lingua',
+    'linguas',
+    'estatuto',
+    'estatutos',
+    'curso',
+    'cursos',
+    'conhecimento',
+    'conhecimentos',
+    'administracao',
+    'processo',
+    'processos',
+    'geral',
+    'gerais',
+    'publica',
+    'publico',
+    'publicas',
+    'publicos',
+    'crime',
+    'crimes',
+    'contra',
+    'sobre',
+    'entre',
+    'para',
+    'pelo',
+    'pela',
+    'pelos',
+    'pelas',
+    'com',
+    'sem',
+    'dos',
+    'das',
+    'nos',
+    'nas',
+    'uma',
+    'uns',
+    'umas',
+    'parte',
+    'partes',
+    'aula',
+    'aulas',
+    'modulo',
+    'modulos',
+    'bloco',
+    'blocos'
+  ]);
+
+  const CONFLICTING_QUALIFIER_FAMILIES = [
+    ['estadual'],
+    ['municipal'],
+    ['distrital', 'distrito'],
+    ['eleitoral'],
+    ['tributario', 'tributaria'],
+    ['previdenciario', 'previdenciaria'],
+    ['trabalhista']
+  ];
+
+  const SPECIAL_LAW_RULES = [
+    {
+      test: (norm) =>
+        /\beca\b/.test(norm) ||
+        norm.includes('crianca e do adolescente') ||
+        norm.includes('crianca e o adolescente') ||
+        norm.includes('estatuto da crianca') ||
+        norm.includes('8.069') ||
+        norm.includes('8069'),
+      terms: [
+        'estatuto da crianca e do adolescente',
+        'crianca e do adolescente',
+        'crianca e o adolescente',
+        'eca',
+        '8.069',
+        '8069'
+      ]
+    },
+    {
+      test: (norm) =>
+        /\bdrogas?\b|\bsisnad\b|entorpecente/.test(norm) ||
+        norm.includes('11.343') ||
+        norm.includes('11343'),
+      terms: ['lei de drogas', 'drogas', '11.343', '11343', 'sisnad']
+    },
+    {
+      test: (norm) =>
+        norm.includes('desarmamento') ||
+        /\barmas?\b/.test(norm) ||
+        norm.includes('sinarm') ||
+        norm.includes('10.826') ||
+        norm.includes('10826'),
+      terms: ['estatuto do desarmamento', 'desarmamento', 'arma de fogo', '10.826', '10826']
+    },
+    {
+      test: (norm) =>
+        norm.includes('abuso de autoridade') ||
+        norm.includes('13.869') ||
+        norm.includes('13869'),
+      terms: ['abuso de autoridade', '13.869', '13869']
+    },
+    {
+      test: (norm) =>
+        norm.includes('tortura') ||
+        norm.includes('9.455') ||
+        norm.includes('9455'),
+      terms: ['tortura', 'lei de tortura', 'crimes de tortura', '9.455', '9455']
+    },
+    {
+      test: (norm) =>
+        norm.includes('hediondo') ||
+        norm.includes('8.072') ||
+        norm.includes('8072'),
+      terms: ['crimes hediondos', 'hediondos', '8.072', '8072']
+    },
+    {
+      test: (norm) =>
+        norm.includes('organizacao criminosa') ||
+        norm.includes('organizacoes criminosas') ||
+        /\borcrim\b/.test(norm) ||
+        norm.includes('12.850') ||
+        norm.includes('12850'),
+      terms: ['organizacoes criminosas', 'organizacao criminosa', '12.850', '12850']
+    },
+    {
+      test: (norm) =>
+        norm.includes('maria da penha') ||
+        norm.includes('violencia domestica') ||
+        norm.includes('11.340') ||
+        norm.includes('11340'),
+      terms: ['lei maria da penha', 'maria da penha', 'violencia domestica', '11.340', '11340']
+    },
+    {
+      test: (norm) =>
+        norm.includes('meio ambiente') ||
+        norm.includes('ambienta') ||
+        norm.includes('9.605') ||
+        norm.includes('9605'),
+      terms: ['crimes ambientais', 'lei ambiental', 'meio ambiente', '9.605', '9605']
+    },
+    {
+      test: (norm) =>
+        norm.includes('interceptacao') ||
+        norm.includes('9.296') ||
+        norm.includes('9296'),
+      terms: ['interceptacao telefonica', '9.296', '9296']
+    },
+    {
+      test: (norm) =>
+        norm.includes('juizado') ||
+        /\bjecrim\b/.test(norm) ||
+        norm.includes('9.099') ||
+        norm.includes('9099'),
+      terms: ['juizados especiais', 'juizado especial', 'jecrim', '9.099', '9099']
+    },
+    {
+      test: (norm) =>
+        norm.includes('lavagem') ||
+        norm.includes('9.613') ||
+        norm.includes('9613'),
+      terms: ['lavagem de dinheiro', 'lavagem de capitais', '9.613', '9613']
+    },
+    {
+      test: (norm) =>
+        norm.includes('racismo') ||
+        norm.includes('7.716') ||
+        norm.includes('7716'),
+      terms: ['racismo', 'crimes de racismo', '7.716', '7716']
+    },
+    {
+      test: (norm) =>
+        /\blep\b/.test(norm) ||
+        norm.includes('execucao penal') ||
+        norm.includes('7.210') ||
+        norm.includes('7210'),
+      terms: ['lei de execucao penal', 'execucao penal', 'lep', '7.210', '7210']
+    },
+    {
+      test: (norm) =>
+        norm.includes('prisao temporaria') ||
+        norm.includes('7.960') ||
+        norm.includes('7960'),
+      terms: ['prisao temporaria', '7.960', '7960']
+    },
+    {
+      test: (norm) =>
+        norm.includes('idoso') ||
+        norm.includes('pessoa idosa') ||
+        norm.includes('10.741') ||
+        norm.includes('10741'),
+      terms: ['estatuto do idoso', 'estatuto da pessoa idosa', '10.741', '10741']
+    },
+    {
+      test: (norm) =>
+        /\bctb\b/.test(norm) ||
+        norm.includes('codigo de transito') ||
+        norm.includes('9.503') ||
+        norm.includes('9503'),
+      terms: ['codigo de transito brasileiro', 'ctb', '9.503', '9503']
+    },
+    {
+      test: (norm) =>
+        /\blia\b/.test(norm) ||
+        norm.includes('improbidade administrativa') ||
+        norm.includes('8.429') ||
+        norm.includes('8429'),
+      terms: ['improbidade administrativa', 'lei de improbidade administrativa', '8.429', '8429']
+    }
+  ];
+
   function normalizeStemText(str) {
     return normalizeFilterText(str)
+      .replace(/[()[\],;:!?"'“”]+/g, ' ')
       .split(/\s+/)
       .filter(Boolean)
-      .map(w => (w.length >= 4 && w.endsWith('s') ? w.slice(0, -1) : w))
+      .map(w => {
+        if (w.length >= 5 && w.endsWith('ais')) return `${w.slice(0, -3)}al`;
+        if (w.length >= 5 && (w.endsWith('oes') || w.endsWith('aes'))) return `${w.slice(0, -3)}ao`;
+        if (w.length >= 5 && w.endsWith('res')) return w.slice(0, -2);
+        if (w.length >= 4 && w.endsWith('ns')) return `${w.slice(0, -2)}m`;
+        if (w.length >= 4 && w.endsWith('s')) return w.slice(0, -1);
+        return w;
+      })
       .join(' ');
+  }
+
+  function isOnlyGenericWords(phrase) {
+    const tokens = normalizeFilterText(phrase).split(/[^a-z0-9]+/).filter(Boolean);
+    if (tokens.length === 0) return true;
+    return tokens.every(w => {
+      if (w.length <= 2) return true;
+      const stem = normalizeStemText(w);
+      return GENERIC_MATCH_WORDS.has(w) || (stem && GENERIC_MATCH_WORDS.has(stem));
+    });
+  }
+
+  function restoreCommonPortugueseAccents(str) {
+    const raw = String(str || '').trim();
+    if (!raw) return '';
+    const wordMap = {
+      crianca: 'criança',
+      criancas: 'crianças',
+      lingua: 'língua',
+      portugues: 'português',
+      raciocinio: 'raciocínio',
+      logico: 'lógico',
+      logica: 'lógica',
+      matematica: 'matemática',
+      fisica: 'física',
+      etica: 'ética',
+      geopolitica: 'geopolítica',
+      informatica: 'informática',
+      transito: 'trânsito',
+      codigo: 'código',
+      publico: 'público',
+      publica: 'pública',
+      publicos: 'públicos',
+      publicas: 'públicas',
+      orgao: 'órgão',
+      orgaos: 'órgãos',
+      juridico: 'jurídico',
+      juridica: 'jurídica',
+      politico: 'político',
+      politica: 'política',
+      economico: 'econômico',
+      economica: 'econômica',
+      tributario: 'tributário',
+      tributaria: 'tributária',
+      previdenciario: 'previdenciário',
+      previdenciaria: 'previdenciária',
+      inquerito: 'inquérito',
+      ilicito: 'ilícito',
+      ilicitos: 'ilícitos',
+      unico: 'único',
+      unica: 'única',
+      numero: 'número',
+      veiculo: 'veículo',
+      veiculos: 'veículos',
+      servico: 'serviço',
+      servicos: 'serviços',
+      comercio: 'comércio',
+      exercicio: 'exercício',
+      exercicios: 'exercícios',
+      beneficio: 'benefício',
+      beneficios: 'benefícios',
+      principio: 'princípio',
+      principios: 'princípios',
+      seguranca: 'segurança',
+      violencia: 'violência',
+      domestica: 'doméstica',
+      domestico: 'doméstico',
+      estatistica: 'estatística',
+      tecnica: 'técnica',
+      tecnico: 'técnico',
+      pratica: 'prática',
+      pratico: 'prático',
+      mecanica: 'mecânica',
+      cinematica: 'cinemática',
+      dinamica: 'dinâmica',
+      telefonica: 'telefônica',
+      nao: 'não',
+      sao: 'são',
+      familia: 'família',
+      saude: 'saúde',
+      medio: 'médio',
+      media: 'média',
+      historia: 'história',
+      memoria: 'memória',
+      materia: 'matéria',
+      patrimonio: 'patrimônio',
+      homicidio: 'homicídio',
+      suicidio: 'suicídio',
+      auxilio: 'auxílio',
+      justica: 'justiça',
+      forca: 'força',
+      licenca: 'licença',
+      rodoviario: 'rodoviário',
+      rodoviaria: 'rodoviária',
+      extraordinario: 'extraordinário',
+      extraordinaria: 'extraordinária',
+      sumario: 'sumário',
+      sumaria: 'sumária',
+      ordinario: 'ordinário',
+      ordinaria: 'ordinária'
+    };
+
+    return raw
+      .split(/\s+/)
+      .map(token => {
+        const lower = token.toLowerCase();
+        if (wordMap[lower]) return wordMap[lower];
+        if (/^[a-z]+cao$/.test(lower)) return `${lower.slice(0, -3)}ção`;
+        if (/^[a-z]+coes$/.test(lower)) return `${lower.slice(0, -4)}ções`;
+        if (/^[a-z]{2,}sao$/.test(lower)) return `${lower.slice(0, -3)}são`;
+        if (/^[a-z]{2,}encia$/.test(lower)) return `${lower.slice(0, -5)}ência`;
+        if (/^[a-z]{2,}encias$/.test(lower)) return `${lower.slice(0, -6)}ências`;
+        if (/^[a-z]{2,}ario$/.test(lower)) return `${lower.slice(0, -4)}ário`;
+        return token;
+      })
+      .join(' ');
+  }
+
+  function getSpecialLawSearchTerms(rawText) {
+    const norm = normalizeFilterText(rawText)
+      .replace(/[-–—:|]+/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!norm) return [];
+    const results = [];
+    for (const rule of SPECIAL_LAW_RULES) {
+      if (rule.test(norm)) {
+        for (const t of rule.terms) {
+          if (t && !results.includes(t)) results.push(t);
+        }
+      }
+    }
+    return results;
   }
 
   function getSubjectSearchTerms(subject) {
     const norm = normalizeFilterText(subject);
     if (!norm) return [];
+    const specialLegislationTerms = [
+      'legislacao penal especial',
+      'legislacao especial',
+      'leis penais especiais',
+      'leis especiais',
+      'legislacao extravagante',
+      'direito penal especial',
+      'penal especial',
+      'especial',
+      'especiais',
+      'extravagante'
+    ];
     const aliases = {
       'portugues': ['lingua portuguesa', 'portugues'],
       'lingua portuguesa': ['lingua portuguesa', 'portugues'],
@@ -605,7 +974,10 @@
       'rlm': ['raciocinio logico', 'matematica'],
       'processo penal': ['direito processual penal', 'processo penal'],
       'direito processual penal': ['direito processual penal', 'processo penal'],
-      'legislacao especial': ['legislacao penal especial', 'legislacao especial'],
+      'legislacao especial': specialLegislationTerms,
+      'legislacao penal especial': specialLegislationTerms,
+      'leis especiais': specialLegislationTerms,
+      'leis penais especiais': specialLegislationTerms,
       'informatica': ['informatica', 'nocoes de informatica'],
       'etica': ['etica no servico publico', 'etica'],
       'fisica': ['fisica']
@@ -632,16 +1004,24 @@
     pushUnique(norm);
     pushUnique(cleaned);
 
+    getSpecialLawSearchTerms(norm).forEach(t => pushUnique(t));
+    if (cleaned && cleaned !== norm) {
+      getSpecialLawSearchTerms(cleaned).forEach(t => pushUnique(t));
+    }
+
     // Gera variante plural simples caso o assunto do QG esteja no singular (ex.: "conceito iniciais" -> "conceitos iniciais")
     const cleanedWords = cleaned.split(' ').filter(Boolean);
-    if (cleanedWords.length >= 2) {
-      pushUnique(`${cleanedWords[0]} ${cleanedWords[1]}`);
-      if (!cleanedWords[0].endsWith('s') && cleanedWords[0].length >= 4) {
-        pushUnique(`${cleanedWords[0]}s ${cleanedWords[1]}`);
+    if (cleanedWords.length >= 2 && cleanedWords[1].length >= 3) {
+      const pair = `${cleanedWords[0]} ${cleanedWords[1]}`;
+      if (!isOnlyGenericWords(pair)) {
+        pushUnique(pair);
+        if (!cleanedWords[0].endsWith('s') && cleanedWords[0].length >= 4 && !isOnlyGenericWords(cleanedWords[0])) {
+          pushUnique(`${cleanedWords[0]}s ${cleanedWords[1]}`);
+        }
       }
     }
 
-    const sigWords = cleanedWords.filter(w => w.length >= 4);
+    const sigWords = cleanedWords.filter(w => w.length >= 4 && !isOnlyGenericWords(w));
     sigWords.sort((a, b) => b.length - a.length);
     sigWords.forEach(w => pushUnique(w));
     return terms;
@@ -654,6 +1034,7 @@
     const pushUnique = (t) => {
       const s = normalizeFilterText(t)
         .replace(/\b(aula|parte|bloco|modulo|capitulo)\s*\d+\b/g, ' ')
+        .replace(/^[\s\-–—:|]+|[\s\-–—:|]+$/g, '')
         .replace(/\s+/g, ' ')
         .trim();
       if (s && !terms.includes(s)) terms.push(s);
@@ -667,11 +1048,15 @@
       dashParts.forEach(part => pushUnique(part));
     }
 
+    // Expansão de siglas e nomes de leis especiais (ex.: "Crimes contra a Criança e o Adolescente" -> ECA / 8.069)
+    getSpecialLawSearchTerms(raw).forEach(t => pushUnique(t));
+
     // Múltiplos tópicos na mesma aula (ex.: "INTERJEIÇÃO, NUMERAL E PREPOSIÇÃO")
     const listParts = raw.split(/\s*,\s*|\s+\be\b\s+/i).map(p => p.trim()).filter(Boolean);
     if (listParts.length > 1) {
       listParts.forEach(part => {
-        if (normalizeFilterText(part).length >= 3) pushUnique(part);
+        const cleanPart = normalizeFilterText(part);
+        if (cleanPart.length >= 3 && !isOnlyGenericWords(cleanPart)) pushUnique(part);
       });
     }
 
@@ -679,14 +1064,17 @@
     const expanded = [...terms];
     expanded.forEach(t => {
       const words = t.split(' ').filter(Boolean);
-      if (words.length >= 2) {
-        pushUnique(`${words[0]} ${words[1]}`);
-        if (!words[0].endsWith('s') && words[0].length >= 4) {
-          pushUnique(`${words[0]}s ${words[1]}`);
+      if (words.length >= 2 && words[1].length >= 3) {
+        const pair = `${words[0]} ${words[1]}`;
+        if (!isOnlyGenericWords(pair)) {
+          pushUnique(pair);
+          if (!words[0].endsWith('s') && words[0].length >= 4 && !isOnlyGenericWords(words[0])) {
+            pushUnique(`${words[0]}s ${words[1]}`);
+          }
         }
       }
       words
-        .filter(w => w.length >= 4)
+        .filter(w => w.length >= 4 && !isOnlyGenericWords(w))
         .sort((a, b) => b.length - a.length)
         .forEach(w => pushUnique(w));
     });
@@ -827,22 +1215,62 @@
     });
   }
 
+  function hasWholeStartMatch(text, term) {
+    if (!text || !term) return false;
+    if (!text.startsWith(term)) return false;
+    if (term.length > 4 || text.length === term.length) return true;
+    return /[^a-z0-9]/.test(text.charAt(term.length));
+  }
+
+  function hasWholeTermMatch(text, term) {
+    if (!text || !term) return false;
+    if (term.length <= 4) {
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      return new RegExp(`(?:^|[^a-z0-9])${escaped}(?:$|[^a-z0-9])`).test(text);
+    }
+    return text.includes(term);
+  }
+
   function scoreOptionMatch(optionText, searchTerms) {
     const normOpt = normalizeFilterText(optionText);
     const stemOpt = normalizeStemText(optionText);
     if (!normOpt) return 0;
+
+    const validTerms = Array.isArray(searchTerms) ? searchTerms.filter(Boolean) : [];
+    if (validTerms.length === 0) return 0;
+
+    // Rejeita qualificadores conflitantes (ex.: "Legislação Estadual" quando busca "Legislação Especial")
+    const optStemWords = new Set(normalizeStemText(normOpt.replace(/[^a-z0-9]+/g, ' ')).split(' ').filter(Boolean));
+    const searchStemJoined = normalizeStemText(validTerms.join(' ').replace(/[^a-z0-9]+/g, ' '));
+    const searchStemWords = new Set(searchStemJoined.split(' ').filter(Boolean));
+    for (const family of CONFLICTING_QUALIFIER_FAMILIES) {
+      const optHasFamily = family.some(w => optStemWords.has(w));
+      if (optHasFamily && !family.some(w => searchStemWords.has(w))) {
+        return 0;
+      }
+    }
+
     let best = 0;
-    for (let i = 0; i < searchTerms.length; i++) {
-      const term = searchTerms[i];
+    for (let i = 0; i < validTerms.length; i++) {
+      const term = validTerms[i];
       const stemTerm = normalizeStemText(term);
       if (!term) continue;
       if (normOpt === term || (stemTerm && stemOpt === stemTerm)) return 1000 - i;
-      if (normOpt.startsWith(term) || (stemTerm && stemOpt.startsWith(stemTerm))) best = Math.max(best, 800 - i);
-      else if (normOpt.includes(term) || (stemTerm && stemOpt.includes(stemTerm))) best = Math.max(best, 600 - i);
-      else {
+      if (hasWholeStartMatch(normOpt, term) || (stemTerm && hasWholeStartMatch(stemOpt, stemTerm))) {
+        best = Math.max(best, 800 - i);
+      } else if (hasWholeTermMatch(normOpt, term) || (stemTerm && hasWholeTermMatch(stemOpt, stemTerm))) {
+        best = Math.max(best, 600 - i);
+      } else {
         const words = (stemTerm || term).split(' ').filter(w => w.length >= 3);
-        const hits = words.filter(w => stemOpt.includes(w) || normOpt.includes(w)).length;
+        const hits = words.filter(w => hasWholeTermMatch(stemOpt, w) || hasWholeTermMatch(normOpt, w)).length;
         if (hits > 0) {
+          const specificWords = words.filter(w => !GENERIC_MATCH_WORDS.has(w));
+          if (specificWords.length > 0) {
+            const specificHits = specificWords.filter(
+              w => hasWholeTermMatch(stemOpt, w) || hasWholeTermMatch(normOpt, w)
+            ).length;
+            if (specificHits === 0) continue;
+          }
           best = Math.max(best, Math.round((hits / Math.max(1, words.length)) * 450) - i);
         }
       }
@@ -1114,6 +1542,15 @@
         filterInput.focus();
         setNativeInputValue(filterInput, term);
         await sleepMs(280);
+
+        if (hasNoSearchResultsInMenu(filterInput)) {
+          const accented = restoreCommonPortugueseAccents(term);
+          if (accented && accented !== term) {
+            filterInput.focus();
+            setNativeInputValue(filterInput, accented);
+            await sleepMs(280);
+          }
+        }
       }
 
       if (filterInput && hasNoSearchResultsInMenu(filterInput)) {
