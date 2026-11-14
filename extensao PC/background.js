@@ -179,4 +179,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     });
     return true;
   }
+
+  if (message.type === 'OPEN_CAVEIRA_PRACTICE') {
+    (async () => {
+      try {
+        const tabs = chrome.tabs ? await chrome.tabs.query({ url: CAVEIRA_URL_PATTERNS }) : [];
+        if (tabs && tabs.length > 0 && tabs[0].id) {
+          const targetTab = tabs[0];
+          await chrome.tabs.update(targetTab.id, { active: true });
+          if (targetTab.windowId && chrome.windows) {
+            chrome.windows.update(targetTab.windowId, { focused: true }).catch(() => {});
+          }
+          chrome.tabs.sendMessage(targetTab.id, {
+            type: 'APPLY_CAVEIRA_FILTER',
+            payload: message.payload || {}
+          }).catch(() => {});
+        } else if (chrome.tabs) {
+          await chrome.tabs.create({ url: 'https://projetocaveira.com.br/' });
+        }
+        sendResponse({ success: true });
+      } catch (_) {
+        sendResponse({ success: false });
+      }
+    })();
+    return true;
+  }
 });

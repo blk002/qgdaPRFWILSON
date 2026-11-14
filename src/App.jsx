@@ -79,6 +79,7 @@ export default function App() {
   } = useStore();
   
   const [promotionModal, setPromotionModal] = useState(null);
+  const [practicePromptModal, setPracticePromptModal] = useState(null);
   const lastPatenteId = useRef(null);
 
   const [reviewInputs, setReviewInputs] = useState({ total: 10, correct: 0 });
@@ -733,10 +734,79 @@ export default function App() {
         todayDateStr={getLocalDateStr ? getLocalDateStr() : ''}
         onClose={() => setClassConfirmModal(null)}
         onConfirm={(amount, speed, studyDate) => {
+          const subjectName = subjects[classConfirmModal.subjectId]?.name || '';
+          const topicName = classConfirmModal.topicName || '';
           watchClass(classConfirmModal.subjectId, classConfirmModal.slotIndex, amount, speed, studyDate);
           setClassConfirmModal(null);
+          if (topicName || subjectName) {
+            setPracticePromptModal({ subjectName, topicName });
+          }
         }}
       />
+
+      {/* 2b. Caixa de Diálogo Pós-Aula: Praticar Questões no Projeto Caveira */}
+      {practicePromptModal && createPortal(
+        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[115] p-4 fade-in font-sans">
+          <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center border border-slate-200 dark:border-slate-800 relative overflow-hidden">
+            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 via-blue-500 to-emerald-500"></div>
+
+            <div className="w-14 h-14 bg-orange-100 dark:bg-orange-950/50 text-orange-600 dark:text-orange-400 rounded-full mx-auto mb-3 flex items-center justify-center shadow-inner">
+              <Crosshair className="w-7 h-7" />
+            </div>
+
+            <h3 className="text-lg font-black mb-1 text-slate-800 dark:text-slate-100 tracking-tight uppercase">
+              Fazer Questões Agora?
+            </h3>
+
+            {practicePromptModal.subjectName && (
+              <span className="inline-block text-[10px] font-black uppercase tracking-widest px-2.5 py-0.5 rounded-full bg-blue-100 dark:bg-blue-950/60 text-blue-700 dark:text-blue-300 mb-2">
+                {practicePromptModal.subjectName}
+              </span>
+            )}
+
+            <p className="text-xs font-bold text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
+              Você concluiu a aula de <span className="text-slate-900 dark:text-white font-black">{practicePromptModal.topicName}</span>. Deseja abrir o Projeto Caveira na aba de questões com esse assunto filtrado?
+            </p>
+
+            <div className="flex flex-col gap-2">
+              <button
+                onClick={() => {
+                  const { subjectName, topicName } = practicePromptModal;
+                  const hasExt = document.documentElement.getAttribute('data-qg-caveira-extension-installed') === 'true';
+                  if (navigator.clipboard && topicName) {
+                    navigator.clipboard.writeText(topicName).catch(() => {});
+                  }
+                  if (hasExt) {
+                    window.postMessage({
+                      source: 'QG_WEB_APP',
+                      type: 'OPEN_CAVEIRA_PRACTICE',
+                      payload: { subject: subjectName, topic: topicName }
+                    }, '*');
+                    toast.success(`Abrindo Caveira com filtro: ${topicName}`);
+                  } else {
+                    window.open('https://projetocaveira.com.br/', '_blank', 'noopener');
+                    toast.info('Extensão não detectada nesta aba. Assunto copiado para a área de transferência!');
+                  }
+                  setPracticePromptModal(null);
+                }}
+                className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2"
+              >
+                <Skull className="w-4 h-4" />
+                <span>Sim, ir para Questões</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
+
+              <button
+                onClick={() => setPracticePromptModal(null)}
+                className="w-full py-2.5 px-4 bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-600 dark:text-slate-300 rounded-xl text-xs font-bold uppercase tracking-wider transition-colors"
+              >
+                Agora não
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
 
       {/* 3. Modal de Substituição de Matéria no Ciclo */}
       {replaceSubjectModal && createPortal(

@@ -13,6 +13,7 @@
   const ACTIVE_USER_LABEL_KEY = 'qg_active_user_label';
   const USER_BUCKETS_KEY = 'qg_caveira_user_buckets';
   const GOAL_KEY = 'qg_caveira_daily_goal';
+  const PENDING_FILTER_KEY = 'qg_pending_caveira_filter';
   const MAX_BUCKET_QUESTIONS = 1500;
   let isBridgeDestroyed = false;
   let cachedActiveUserId = null;
@@ -361,6 +362,22 @@
 
       if (event.data.type === 'FETCH_CAVEIRA_DATA') {
         sendStoredData(event.data.payload?.userId || null);
+      }
+
+      if (event.data.type === 'OPEN_CAVEIRA_PRACTICE') {
+        const subject = event.data.payload?.subject || '';
+        const topic = event.data.payload?.topic || '';
+        const filterData = { subject, topic, createdAt: Date.now() };
+        try {
+          chrome.storage.local.set({ [PENDING_FILTER_KEY]: filterData }, () => {
+            if (chrome.runtime && chrome.runtime.sendMessage) {
+              chrome.runtime.sendMessage({
+                type: 'OPEN_CAVEIRA_PRACTICE',
+                payload: filterData
+              }).catch(() => {});
+            }
+          });
+        } catch (_) {}
       }
 
       if (event.data.type === 'UPDATE_CAVEIRA_QUESTION' && event.data.payload?.id && event.data.payload?.updates) {

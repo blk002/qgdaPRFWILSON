@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.9 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.10 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -17,10 +17,12 @@
   const GOAL_KEY = 'qg_caveira_daily_goal';
   const ACTIVE_USER_KEY = 'qg_active_user_id';
   const ACTIVE_USER_LABEL_KEY = 'qg_active_user_label';
+  const PENDING_FILTER_KEY = 'qg_pending_caveira_filter';
   const MAX_BUCKET_QUESTIONS = 1500;
   let cachedDailyGoal = 50;
   let cachedActiveUserId = null;
   let cachedActiveUserLabel = '';
+  let activePracticeFilter = null;
 
   function compactQuestionsForStorage(questions, maxItems = MAX_BUCKET_QUESTIONS) {
     if (!Array.isArray(questions)) return [];
@@ -158,11 +160,15 @@
   function loadInitialState() {
     if (!isExtensionContextValid()) return;
     try {
-      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, GOAL_KEY, ACTIVE_USER_KEY, ACTIVE_USER_LABEL_KEY], (res) => {
+      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, GOAL_KEY, ACTIVE_USER_KEY, ACTIVE_USER_LABEL_KEY, PENDING_FILTER_KEY], (res) => {
         if (chrome.runtime.lastError || isDestroyed) return;
         cachedActiveUserId = res?.[ACTIVE_USER_KEY] || null;
         cachedActiveUserLabel = res?.[ACTIVE_USER_LABEL_KEY] || '';
         updateHudUser();
+        const pendingFilter = res?.[PENDING_FILTER_KEY];
+        if (pendingFilter && pendingFilter.topic && (Date.now() - (pendingFilter.createdAt || 0)) < 180000) {
+          setTimeout(() => applyCaveiraPracticeFilter(pendingFilter), 900);
+        }
         if (res && res[GOAL_KEY]) {
           cachedDailyGoal = Number(res[GOAL_KEY]) || 50;
         }
@@ -266,6 +272,10 @@
           scanCards();
           sendResponse({ ok: true });
         }
+        if (msg && msg.type === 'APPLY_CAVEIRA_FILTER' && msg.payload) {
+          applyCaveiraPracticeFilter(msg.payload);
+          sendResponse({ ok: true });
+        }
       });
     } catch (_) {}
   }
@@ -293,6 +303,12 @@
 
       <div id="qg-hud-user-bar" style="display:flex;align-items:center;justify-content:space-between;padding:5px 14px;background:rgba(255,255,255,0.02);border-bottom:1px solid rgba(255,255,255,0.06);font-size:10px;font-weight:700;color:#94a3b8;">
         <span id="qg-hud-user-text" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🟡 Conecte sua conta no QG</span>
+      </div>
+
+      <div id="qg-hud-filter-banner" style="display:none;align-items:center;justify-content:space-between;gap:6px;padding:6px 14px;background:rgba(37,99,235,0.14);border-bottom:1px solid rgba(59,130,246,0.3);font-size:10px;font-weight:700;color:#bfdbfe;">
+        <span id="qg-hud-filter-text" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">🎯 Filtro</span>
+        <button type="button" id="qg-btn-refilter" style="background:#2563eb;color:#fff;border:none;border-radius:6px;padding:2px 6px;font-size:9px;font-weight:800;cursor:pointer;flex-shrink:0;" title="Aplicar filtro novamente">🔄</button>
+        <button type="button" id="qg-btn-close-filter" style="background:none;color:#94a3b8;border:none;font-size:11px;cursor:pointer;padding:0 2px;flex-shrink:0;" title="Fechar aviso">✕</button>
       </div>
 
       <div class="qg-hud-body">
@@ -371,6 +387,18 @@
     document.body.appendChild(hud);
     updateHudUser();
     updateHudStats();
+    renderFilterBanner();
+
+    hud.querySelector('#qg-btn-refilter')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (activePracticeFilter) applyCaveiraPracticeFilter(activePracticeFilter);
+    });
+
+    hud.querySelector('#qg-btn-close-filter')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      activePracticeFilter = null;
+      renderFilterBanner();
+    });
 
     const btnMin = hud.querySelector('#qg-btn-min');
     btnMin.addEventListener('click', (e) => {
@@ -445,6 +473,101 @@
   }
 
   // --- 2. CRONÔMETRO POR QUESTÃO ---
+  function normalizeFilterText(str) {
+    return String(str || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+  }
+
+  function renderFilterBanner() {
+    const banner = document.getElementById('qg-hud-filter-banner');
+    const textEl = document.getElementById('qg-hud-filter-text');
+    if (!banner || !textEl) return;
+    if (activePracticeFilter && (activePracticeFilter.topic || activePracticeFilter.subject)) {
+      const label = [activePracticeFilter.subject, activePracticeFilter.topic].filter(Boolean).join(' • ');
+      textEl.textContent = `🎯 ${label}`;
+      textEl.title = label;
+      banner.style.display = 'flex';
+    } else {
+      banner.style.display = 'none';
+    }
+  }
+
+  function setNativeInputValue(input, value) {
+    if (!input) return;
+    const proto = window.HTMLInputElement && window.HTMLInputElement.prototype;
+    const descriptor = proto ? Object.getOwnPropertyDescriptor(proto, 'value') : null;
+    if (descriptor && typeof descriptor.set === 'function') {
+      descriptor.set.call(input, value);
+    } else {
+      input.value = value;
+    }
+    input.dispatchEvent(new Event('input', { bubbles: true }));
+    input.dispatchEvent(new Event('change', { bubbles: true }));
+  }
+
+  function applyCaveiraPracticeFilter(filterObj) {
+    if (isDestroyed || !filterObj) return;
+    const subject = String(filterObj.subject || '').trim();
+    const topic = String(filterObj.topic || '').trim();
+    if (!subject && !topic) return;
+
+    activePracticeFilter = { subject, topic };
+    renderFilterBanner();
+
+    try {
+      chrome.storage.local.remove([PENDING_FILTER_KEY]);
+    } catch (_) {}
+
+    // 1. Tenta navegar para a aba/rota de Questões caso não esteja nela
+    if (!/quest[oõ]es/i.test(window.location.href)) {
+      const navCandidates = Array.from(document.querySelectorAll('a, button, [role="tab"], .q-tab, .q-item'));
+      const questTab = navCandidates.find(el => {
+        if (!el || el.closest('#qg-caveira-hud')) return false;
+        const rect = el.getBoundingClientRect();
+        if (rect.width === 0 || rect.height === 0) return false;
+        const txt = normalizeFilterText(el.innerText || el.textContent);
+        return txt === 'questoes' || txt === 'banco de questoes' || txt === 'resolver questoes';
+      });
+      if (questTab) {
+        questTab.click();
+      }
+    }
+
+    // 2. Aplica o termo de assunto/busca nos inputs de filtro da página
+    const searchTerm = topic || subject;
+    const tryFillInputs = (attempt = 0) => {
+      if (isDestroyed) return;
+      const inputs = Array.from(document.querySelectorAll('input:not([type="hidden"]):not([type="checkbox"]):not([type="radio"])'))
+        .filter(el => !el.closest('#qg-caveira-hud') && el.offsetParent !== null);
+
+      const targetInput = inputs.find(el => {
+        const meta = normalizeFilterText(`${el.placeholder || ''} ${el.getAttribute('aria-label') || ''} ${el.name || ''}`);
+        return meta.includes('assunto') || meta.includes('tema') || meta.includes('topico') || meta.includes('pesquis') || meta.includes('busc') || meta.includes('filtr') || el.type === 'search';
+      }) || inputs[0];
+
+      if (targetInput) {
+        targetInput.focus();
+        setNativeInputValue(targetInput, searchTerm);
+        setTimeout(() => {
+          const normTerm = normalizeFilterText(searchTerm);
+          const menuItems = Array.from(document.querySelectorAll('.q-menu .q-item, [role="listbox"] [role="option"], .dropdown-menu li, .select-dropdown li'));
+          const matchItem = menuItems.find(item => {
+            const txt = normalizeFilterText(item.innerText || item.textContent);
+            return txt && (txt.includes(normTerm) || normTerm.includes(txt));
+          });
+          if (matchItem) matchItem.click();
+        }, 350);
+      } else if (attempt < 3) {
+        setTimeout(() => tryFillInputs(attempt + 1), 700);
+      }
+    };
+
+    setTimeout(() => tryFillInputs(0), 650);
+  }
+
   function updateHudUser() {
     const userTextEl = document.getElementById('qg-hud-user-text');
     const userBarEl = document.getElementById('qg-hud-user-bar');
