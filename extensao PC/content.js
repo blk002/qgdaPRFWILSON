@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.16 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.17 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -674,14 +674,47 @@
     return terms;
   }
 
+  function findAppliedFiltersSection() {
+    const label = Array.from(document.querySelectorAll('div, span, p, h1, h2, h3, h4, label, strong'))
+      .find(el => {
+        if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
+        const txt = normalizeFilterText(el.innerText || el.textContent);
+        return txt === 'filtros aplicados' || txt === 'filtros aplicados:';
+      });
+    if (!label) return null;
+    const labelRect = label.getBoundingClientRect();
+    let container = label.parentElement;
+    while (container && container !== document.body) {
+      const r = container.getBoundingClientRect();
+      if (r.height >= 45 && r.height <= 460 && r.width >= 260) {
+        return { container, labelRect };
+      }
+      container = container.parentElement;
+    }
+    return { container: label.parentElement, labelRect };
+  }
+
   function findFilterDropdownTrigger(labelWord) {
     const targetNorm = normalizeFilterText(labelWord);
+    const targetPrefix = targetNorm.slice(0, Math.min(6, targetNorm.length));
+    const appliedInfo = findAppliedFiltersSection();
+
     const matches = Array.from(document.querySelectorAll('button, [role="button"], [role="combobox"], .q-select, .q-field, div, span'))
       .filter(el => {
         if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
+        if (appliedInfo) {
+          const r = el.getBoundingClientRect();
+          if (r.top >= appliedInfo.labelRect.top - 4) return false;
+          if (appliedInfo.container && appliedInfo.container.contains(el)) return false;
+        }
         const txt = normalizeFilterText(el.innerText || el.textContent);
-        if (!txt || txt.length > 60) return false;
-        return txt === targetNorm || txt.startsWith(`${targetNorm} `) || txt.startsWith(`${targetNorm}\n`);
+        if (!txt || txt.length > 60 || txt.includes('filtros aplicados')) return false;
+        return (
+          txt === targetNorm ||
+          txt.startsWith(`${targetNorm} `) ||
+          txt.startsWith(`${targetNorm}\n`) ||
+          (targetPrefix.length >= 5 && txt.startsWith(targetPrefix) && /\bselecionad/.test(txt))
+        );
       });
 
     const containers = [];
@@ -968,6 +1001,144 @@
     return matchedCount > 0;
   }
 
+  function findCaveiraClearFiltersButton() {
+    const rawCandidates = Array.from(
+      document.querySelectorAll('button, [role="button"], .q-btn, a, div, span')
+    ).filter(el => {
+      if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
+      const r = el.getBoundingClientRect();
+      if (r.width < 55 || r.width > 340 || r.height < 18 || r.height > 64) return false;
+
+      let txt = normalizeFilterText(el.innerText || el.textContent);
+      txt = txt
+        .replace(/\b(refresh|sync|clear|close|restart_alt|autorenew|delete_sweep|replay)\b/g, ' ')
+        .replace(/\s+/g, ' ')
+        .trim();
+      return txt === 'limpar filtros' || txt === 'limpar filtro';
+    });
+
+    const resolved = [];
+    for (const el of rawCandidates) {
+      let clickable = el.closest('button, [role="button"], .q-btn, a');
+      if (!clickable) {
+        let cur = el;
+        for (let depth = 0; depth < 4 && cur && cur !== document.body; depth++) {
+          const r = cur.getBoundingClientRect();
+          const cursorStyle = window.getComputedStyle(cur).cursor;
+          if (r.height >= 20 && r.height <= 64 && r.width >= 55 && r.width <= 340 && (cursorStyle === 'pointer' || depth === 0)) {
+            clickable = cur;
+            if (cursorStyle === 'pointer') break;
+          }
+          cur = cur.parentElement;
+        }
+      }
+      if (clickable && !clickable.closest('#qg-caveira-hud') && isElementVisible(clickable)) {
+        resolved.push(clickable);
+      }
+    }
+
+    const unique = Array.from(new Set(resolved));
+    unique.sort((a, b) => {
+      const aNative = a.matches('button, [role="button"], .q-btn, a') ? 0 : 1;
+      const bNative = b.matches('button, [role="button"], .q-btn, a') ? 0 : 1;
+      if (aNative !== bNative) return aNative - bNative;
+      const ra = a.getBoundingClientRect();
+      const rb = b.getBoundingClientRect();
+      return (ra.width * ra.height) - (rb.width * rb.height);
+    });
+    return unique[0] || null;
+  }
+
+  function hasActiveCaveiraFilters() {
+    for (const labelWord of ['Disciplina', 'Assunto', 'Caderno', 'Banca', 'Nivel', 'Ano', 'Dificuldade']) {
+      const trigger = findFilterDropdownTrigger(labelWord);
+      if (trigger) {
+        const txt = normalizeFilterText(trigger.innerText || trigger.textContent);
+        if (/\b\d+\s+selecionad/.test(txt)) return true;
+      }
+    }
+    const appliedInfo = findAppliedFiltersSection();
+    if (appliedInfo && appliedInfo.container) {
+      const cTxt = normalizeFilterText(appliedInfo.container.innerText || appliedInfo.container.textContent);
+      if (/\b(disciplina|assunto|caderno|banca|nivel|ano|dificuldade|palavra)\b/.test(cTxt)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  async function removeAppliedFilterChipsFallback() {
+    const appliedInfo = findAppliedFiltersSection();
+    if (!appliedInfo || !appliedInfo.container) return;
+
+    const removeIcons = Array.from(
+      appliedInfo.container.querySelectorAll('button, [role="button"], .q-chip__icon--remove, svg, i, span')
+    ).filter(el => {
+      if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
+      const r = el.getBoundingClientRect();
+      if (r.width < 10 || r.width > 34 || r.height < 10 || r.height > 34) return false;
+      const parentBtn = el.closest('button, [role="button"], a');
+      if (parentBtn) {
+        const pTxt = normalizeFilterText(parentBtn.innerText || parentBtn.textContent);
+        if (
+          pTxt.includes('limpar filtros') ||
+          pTxt.includes('filtrar') ||
+          pTxt.includes('simulado') ||
+          pTxt.includes('mostrar filtros')
+        ) {
+          return false;
+        }
+      }
+      const txt = normalizeFilterText(el.innerText || el.textContent);
+      return !txt || txt === 'x' || txt === 'close' || txt === 'cancel' || txt === 'clear';
+    });
+
+    for (const icon of removeIcons.slice(0, 25)) {
+      if (isDestroyed || !icon.isConnected || !isElementVisible(icon)) continue;
+      const clickable = icon.closest('button, [role="button"]') || icon;
+      clickElementRealistically(clickable);
+      await sleepMs(80);
+    }
+  }
+
+  async function clearPreviousCaveiraFilters() {
+    if (isDestroyed) return;
+    const clearBtn = findCaveiraClearFiltersButton();
+    const hasActiveBefore = hasActiveCaveiraFilters() || Boolean(findAppliedFiltersSection());
+    if (!clearBtn && !hasActiveBefore) return;
+
+    if (clearBtn) {
+      try {
+        clearBtn.scrollIntoView({ block: 'center', inline: 'nearest' });
+      } catch (_) {}
+      await sleepMs(100);
+      clickElementRealistically(clearBtn);
+      const nestedBtn = !clearBtn.matches('button, [role="button"], .q-btn')
+        ? clearBtn.querySelector('button, [role="button"], .q-btn')
+        : null;
+      if (nestedBtn && nestedBtn !== clearBtn) {
+        clickElementRealistically(nestedBtn);
+      }
+      for (let i = 0; i < 8; i++) {
+        if (isDestroyed) return;
+        await sleepMs(180);
+        if (!hasActiveCaveiraFilters()) break;
+      }
+    }
+
+    if (hasActiveCaveiraFilters()) {
+      const retryBtn = findCaveiraClearFiltersButton();
+      if (retryBtn) {
+        clickElementRealistically(retryBtn);
+        await sleepMs(350);
+      }
+      if (hasActiveCaveiraFilters()) {
+        await removeAppliedFilterChipsFallback();
+        await sleepMs(250);
+      }
+    }
+  }
+
   async function selectUnresolvedQuestionsFilter() {
     if (isDestroyed) return false;
     const rawCandidates = Array.from(
@@ -1054,6 +1225,11 @@
         if (findFilterDropdownTrigger('Disciplina')) break;
         await sleepMs(350);
       }
+
+      // Limpa quaisquer filtros anteriores (de aulas passadas) antes de aplicar os novos
+      renderFilterBanner('⏳ Limpando filtros anteriores...');
+      await clearPreviousCaveiraFilters();
+      await sleepMs(200);
 
       // Sempre marca o filtro de questões "Não resolvidas" antes de abrir os dropdowns
       renderFilterBanner('⏳ Marcando: Não resolvidas...');
