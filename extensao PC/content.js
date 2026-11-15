@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.3.1 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.3.2 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -3328,26 +3328,37 @@
     }
 
     // 1A-bis. Âncora Nível A (Título da aula / tópico via BM25 na árvore cacheada)
+    const subjectExcludeTokens = new Set();
+    if (treeMatcher) {
+      const subjectTokensSources = [subjectName, fallbackTopic, ...(subjectName ? getSubjectSearchTerms(subjectName) : [])].filter(Boolean);
+      for (const src of subjectTokensSources) {
+        treeMatcher.canon(src).tokens.forEach(t => subjectExcludeTokens.add(t));
+      }
+    }
+
     let anchorFolderMatched = false;
     if (bm25Index && !isSpecialSubject) {
       const anchorQueries = [...validLessons, fallbackTopic].filter(Boolean);
       for (const rawAnchorQ of anchorQueries) {
         if (isDestroyed) break;
         const anchorQ = stripSubjectFromLessonTitle(rawAnchorQ, subjectName) || rawAnchorQ;
-        const ranked = treeMatcher.scoreTreeNodesBm25(anchorQ, bm25Index, { excludeNorms: selectedOptionNorms });
+        const ranked = treeMatcher.scoreTreeNodesBm25(anchorQ, bm25Index, {
+          excludeNorms: selectedOptionNorms,
+          excludeTokens: subjectExcludeTokens
+        });
         const top1 = ranked[0];
         const top2 = ranked[1];
         if (diagLog && Array.isArray(diagLog.queries) && ranked.length > 0) {
           diagLog.queries.push({
             source: `bm25-anchor-A:${anchorQ}`,
             terms: [anchorQ],
-            minScore: 3.8,
+            minRelScore: 0.55,
             top5: ranked.slice(0, 5).map(r => ({ label: r.node.label, score: r.score, relScore: r.relScore, coverage: r.coverage })),
             selected: null
           });
         }
         const hasMargin = !top2 || top1.score >= top2.score * 1.12;
-        const passesScore = top1 && (top1.score >= 3.8 || top1.relScore >= 0.55);
+        const passesScore = top1 && top1.relScore >= 0.55;
         if (passesScore && !top1.node.isLeaf && top1.coverage >= 0.5 && hasMargin) {
           const ok = await selectOptionByExactLabel(top1.node.label, top1.node.norm);
           if (ok) {
@@ -3387,20 +3398,22 @@
         // Tenta BM25 local antes de expandir/digitar termos (resolve Romanos<->Arábicos como Anexo 1 <-> Anexo I)
         if (bm25Index) {
           const bm25Query = stripSubjectFromLessonTitle(subtopic, subjectName) || subtopic;
-          const ranked = treeMatcher.scoreTreeNodesBm25(bm25Query, bm25Index, { excludeNorms: selectedOptionNorms });
+          const ranked = treeMatcher.scoreTreeNodesBm25(bm25Query, bm25Index, {
+            excludeNorms: selectedOptionNorms,
+            excludeTokens: subjectExcludeTokens
+          });
           const top1 = ranked[0];
           const top2 = ranked[1];
-          const bm25Threshold = (anchorFolderMatched || isLevelC) ? 4.5 : 3.2;
           const relThreshold = (anchorFolderMatched || isLevelC) ? 0.65 : 0.50;
           const hasMargin = !top2 || top1.score >= top2.score * 1.15;
-          const passesScore = top1 && (top1.score >= bm25Threshold || top1.relScore >= relThreshold);
+          const passesScore = top1 && top1.relScore >= relThreshold;
           if (passesScore && !top1.node.isLeaf && top1.coverage >= 0.45 && hasMargin) {
             const ok = await selectOptionByExactLabel(top1.node.label, top1.node.norm);
             if (diagLog && Array.isArray(diagLog.queries)) {
               diagLog.queries.push({
                 source: `bm25-${subEntry.level}:${bm25Query}`,
                 terms: [bm25Query],
-                minScore: bm25Threshold,
+                minRelScore: relThreshold,
                 top5: ranked.slice(0, 5).map(r => ({ label: r.node.label, score: r.score, relScore: r.relScore, coverage: r.coverage })),
                 selected: ok ? top1.node.label : null
               });
@@ -3842,7 +3855,7 @@
       : subject;
 
     lastFilterDiagnosticLog = {
-      version: '1.3.1',
+      version: '1.3.2',
       timestamp: new Date().toISOString(),
       input: {
         rawSubject,

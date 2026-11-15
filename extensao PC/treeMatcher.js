@@ -59,8 +59,7 @@
     let s = singularizePtWord(w);
     const suffixes = [
       'amentos', 'amento', 'imentos', 'imento', 'acoes', 'acao', 'icoes', 'icao',
-      'idades', 'idade', 'mente', 'adores', 'ador', 'encias', 'encia',
-      'ando', 'endo', 'indo', 'ada', 'ida', 'ar', 'er', 'ir'
+      'ada', 'ida', 'ar', 'er', 'ir'
     ];
     for (const suf of suffixes) {
       if (s.length > suf.length + 2 && s.endsWith(suf)) {
@@ -68,7 +67,6 @@
         break;
       }
     }
-    if (s.length >= 7) return s.slice(0, 6);
     return s;
   }
 
@@ -182,7 +180,7 @@
 
     for (const item of (Array.isArray(rawNodes) ? rawNodes : [])) {
       const label = typeof item === 'string' ? item : (item?.label || '');
-      if (!label) continue;
+      if (!label || isLeafArticleLabel(label)) continue;
       const c = canon(label);
       const uniqueTokens = Array.from(c.tokenSet);
       for (const tok of uniqueTokens) {
@@ -220,7 +218,22 @@
 
   function scoreTreeNodesBm25(queryText, index, opts = {}) {
     if (!index || !Array.isArray(index.nodes) || index.nodes.length === 0) return [];
-    const q = canon(queryText);
+    let q = canon(queryText);
+    if (opts.excludeTokens instanceof Set && opts.excludeTokens.size > 0 && q.tokens.length > 1) {
+      const keptIdx = [];
+      for (let i = 0; i < q.tokens.length; i++) {
+        if (!opts.excludeTokens.has(q.tokens[i])) keptIdx.push(i);
+      }
+      if (keptIdx.length > 0) {
+        q = {
+          norm: keptIdx.map(i => q.tokens[i]).join(' '),
+          tokens: keptIdx.map(i => q.tokens[i]),
+          tokenSet: new Set(keptIdx.map(i => q.tokens[i])),
+          stems: keptIdx.map(i => q.stems[i]),
+          stemSet: new Set(keptIdx.map(i => q.stems[i]))
+        };
+      }
+    }
     if (q.tokens.length === 0) return [];
 
     const k1 = 1.2;
