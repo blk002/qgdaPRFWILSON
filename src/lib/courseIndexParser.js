@@ -53,10 +53,17 @@ const GENERIC_EXACT_LINES = new Set([
   'simulado',
   'inicio',
   'fim',
-  'boas vindas'
+  'boas vindas',
+  'bizus da aula',
+  'resumo da aula',
+  'topicos da aula',
+  'assuntos da aula',
+  'pontos importantes',
+  'quadro resumo',
+  'mapa mental'
 ]);
 
-const LEADING_FILLER_REGEX = /^(?:conceitos?\s+(?:de|da|do|dos|das|sobre)|defini[cç][aã]o\s+(?:de|da|do|dos|das)|defini[cç][oõ]es\s+(?:de|da|do|dos|das)|resumo\s+(?:de|da|do|dos|das|sobre)|no[cç][oõ]es?\s+(?:de|da|do|dos|das|gerais\s+de)|introdu[cç][aã]o\s+(?:[aà]|ao|aos|[aà]s|de|sobre)|estrutura\s+(?:da|do|de|dos|das)|aspectos?\s+(?:gerais|iniciais|principais)\s+(?:de|da|do|dos|das)|vis[aã]o\s+geral\s+(?:de|da|do)|entendendo\s+(?:a|o|as|os)|compreendendo\s+(?:a|o|as|os)|o\s+que\s+[eé])\s+/i;
+const LEADING_FILLER_REGEX = /^(?:(?:diferen[cç]as?|distin[cç][aã]o|compara[cç][aã]o)\s+entre|comparativo\s+(?:entre|de|da|do)|quadro\s+comparativo\s+(?:entre|de|da|do)|rela[cç][aã]o\s+entre|conceitos?\s+e\s+caracter[ií]sticas\s+(?:de|da|do|dos|das)|conceitos?\s+(?:de|da|do|dos|das|sobre)|defini[cç][aã]o\s+(?:de|da|do|dos|das)|defini[cç][oõ]es\s+(?:de|da|do|dos|das)|resumo\s+(?:de|da|do|dos|das|sobre)|no[cç][oõ]es?\s+(?:de|da|do|dos|das|gerais\s+de)|introdu[cç][aã]o\s+(?:[aà]|ao|aos|[aà]s|de|sobre)|estrutura\s+(?:da|do|de|dos|das)|aspectos?\s+(?:gerais|iniciais|principais)\s+(?:de|da|do|dos|das)|vis[aã]o\s+geral\s+(?:de|da|do)|entendendo\s+(?:a|o|as|os)|compreendendo\s+(?:a|o|as|os)|o\s+que\s+[eé])\s+/i;
 
 const BROAD_PREFIX_REGEX = /^(?:organiza[cç][aã]o\s+(?:da|do|de)|conceitos?\s+(?:de|da|do|dos|das|sobre)|no[cç][oõ]es?\s+(?:de|da|do|dos|das|gerais\s+de)|introdu[cç][aã]o\s+(?:[aà]|ao|aos|[aà]s|de|sobre)|estrutura\s+(?:da|do|de|dos|das))\s+/i;
 
@@ -203,6 +210,7 @@ export function parseCourseIndexSubtopics(rawText, contextNames = []) {
     if (PROSE_NOTE_PREFIX_REGEX.test(cleaned)) continue;
 
     if (isNumberedBizusFormat) {
+      let didTruncateColon = false;
       const colonIdx = cleaned.indexOf(':');
       if (colonIdx > 2 && colonIdx < cleaned.length - 1) {
         const beforeColon = cleaned.slice(0, colonIdx).trim();
@@ -210,8 +218,29 @@ export function parseCourseIndexSubtopics(rawText, contextNames = []) {
         const afterWords = afterColon.split(/\s+/).filter(Boolean).length;
         if (normalizeCourseLookupKey(beforeColon).length >= 3 && (afterColon.length > 25 || afterWords > 4)) {
           cleaned = beforeColon;
+          didTruncateColon = true;
         }
       }
+      if (!didTruncateColon) {
+        const dashMatch = cleaned.match(/^(.+?)\s+[-–—]\s+(.+)$/);
+        if (dashMatch) {
+          const beforeDash = dashMatch[1].trim();
+          const afterDash = dashMatch[2].trim();
+          const beforeNorm = normalizeCourseLookupKey(beforeDash);
+          const afterWords = afterDash.split(/\s+/).filter(Boolean).length;
+          if (
+            beforeNorm.length >= 4 &&
+            !PURE_ARTICLE_LINE_REGEX.test(beforeDash) &&
+            !LEADING_FILLER_REGEX.test(beforeDash) &&
+            !GENERIC_EXACT_LINES.has(beforeNorm) &&
+            !PROSE_NOTE_PREFIX_REGEX.test(beforeDash) &&
+            (afterDash.length > 35 || afterWords > 6)
+          ) {
+            cleaned = beforeDash;
+          }
+        }
+      }
+      cleaned = cleaned.replace(/\s*\([^()]{28,}\)\s*$/g, '').trim();
       cleaned = cleaned.replace(/[:;.\-–—]+$/g, '').trim();
       if (!cleaned) continue;
     }
