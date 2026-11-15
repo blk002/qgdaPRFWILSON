@@ -54,6 +54,24 @@
     return w;
   }
 
+  function stemPtWord(w) {
+    if (!w || w.length < 4) return w;
+    let s = singularizePtWord(w);
+    const suffixes = [
+      'amentos', 'amento', 'imentos', 'imento', 'acoes', 'acao', 'icoes', 'icao',
+      'idades', 'idade', 'mente', 'adores', 'ador', 'encias', 'encia',
+      'ando', 'endo', 'indo', 'ada', 'ida', 'ar', 'er', 'ir'
+    ];
+    for (const suf of suffixes) {
+      if (s.length > suf.length + 2 && s.endsWith(suf)) {
+        s = s.slice(0, -suf.length);
+        break;
+      }
+    }
+    if (s.length >= 7) return s.slice(0, 6);
+    return s;
+  }
+
   function canon(text) {
     let s = stripAccentsLower(text);
     s = s
@@ -67,15 +85,20 @@
 
     const rawTokens = s.split(' ').filter(Boolean);
     const tokens = [];
+    const stems = [];
     for (const tok of rawTokens) {
       if (STOP_WORDS.has(tok)) continue;
       if (tok.length === 1 && !/^\d$/.test(tok)) continue;
-      tokens.push(singularizePtWord(tok));
+      const sing = singularizePtWord(tok);
+      tokens.push(sing);
+      stems.push(stemPtWord(sing));
     }
     return {
       norm: s,
       tokens,
-      tokenSet: new Set(tokens)
+      tokenSet: new Set(tokens),
+      stems,
+      stemSet: new Set(stems)
     };
   }
 
@@ -154,6 +177,7 @@
   function buildBm25Index(rawNodes) {
     const nodes = [];
     const df = new Map();
+    const stemDf = new Map();
     let totalLen = 0;
 
     for (const item of (Array.isArray(rawNodes) ? rawNodes : [])) {
@@ -164,6 +188,9 @@
       for (const tok of uniqueTokens) {
         df.set(tok, (df.get(tok) || 0) + 1);
       }
+      for (const st of Array.from(c.stemSet)) {
+        stemDf.set(st, (stemDf.get(st) || 0) + 1);
+      }
       totalLen += c.tokens.length;
       nodes.push({
         label,
@@ -171,6 +198,8 @@
         romanNorm: c.norm,
         tokens: c.tokens,
         tokenSet: c.tokenSet,
+        stems: c.stems,
+        stemSet: c.stemSet,
         isLeaf: isLeafArticleLabel(label)
       });
     }
@@ -181,8 +210,12 @@
     for (const [tok, freq] of df.entries()) {
       idf.set(tok, Math.log(1 + (N - freq + 0.5) / (freq + 0.5)));
     }
+    const stemIdf = new Map();
+    for (const [st, freq] of stemDf.entries()) {
+      stemIdf.set(st, Math.log(1 + (N - freq + 0.5) / (freq + 0.5)));
+    }
 
-    return { N, avgLen, df, idf, nodes };
+    return { N, avgLen, df, idf, stemIdf, nodes };
   }
 
   function scoreTreeNodesBm25(queryText, index, opts = {}) {
@@ -206,6 +239,10 @@
     const rareTokens = queryTokenIdfs.filter(x => x.df > 0 && x.idf >= maxIdf * 0.65).map(x => x.tok);
 
     const results = [];
+    const maxTheoreticalIdf = q.tokens.reduce((acc, tok, qi) => {
+      const stIdf = (index.stemIdf && q.stems[qi]) ? (index.stemIdf.get(q.stems[qi]) || 0) : 0;
+      return acc + Math.max(index.idf.get(tok) || 0, stIdf, 0.6);
+    }, 0) || 1;
     for (const node of index.nodes) {
       if (excludeNorms && excludeNorms.has(node.norm)) continue;
 
@@ -213,14 +250,23 @@
       let matchedCount = 0;
       let matchedRare = 0;
 
-      for (const tok of q.tokens) {
-        if (!node.tokenSet.has(tok)) continue;
+      for (let qi = 0; qi < q.tokens.length; qi++) {
+        const tok = q.tokens[qi];
+        const qStem = q.stems[qi];
+        const exactHit = node.tokenSet.has(tok);
+        const stemHit = !exactHit && qStem && node.stemSet && node.stemSet.has(qStem);
+        if (!exactHit && !stemHit) continue;
+
         matchedCount += 1;
         if (rareTokens.includes(tok)) matchedRare += 1;
-        const tokIdf = index.idf.get(tok) || 0.5;
-        const tf = node.tokens.filter(t => t === tok).length;
+        const stIdf = (index.stemIdf && qStem) ? (index.stemIdf.get(qStem) || 0) : 0;
+        const tokIdf = exactHit ? (index.idf.get(tok) || 0.5) : Math.max(stIdf, 0.5);
+        const tf = exactHit
+          ? node.tokens.filter(t => t === tok).length
+          : node.stems.filter(st => st === qStem).length;
         const denom = tf + k1 * (1 - b + b * (node.tokens.length / index.avgLen));
-        bm25 += tokIdf * ((tf * (k1 + 1)) / (denom || 1));
+        const stemFactor = exactHit ? 1.0 : 0.85;
+        bm25 += tokIdf * ((tf * (k1 + 1)) / (denom || 1)) * stemFactor;
       }
 
       if (matchedCount === 0) continue;
@@ -246,10 +292,12 @@
       if (coverage < minCov) continue;
 
       const finalScore = (bm25 + phraseBonus) * (0.65 + 0.35 * coverage) * leafPenalty;
+      const relScore = (bm25 / maxTheoreticalIdf) + (phraseBonus > 0 ? 0.35 : 0);
 
       results.push({
         node,
         score: Number(finalScore.toFixed(3)),
+        relScore: Number(relScore.toFixed(3)),
         coverage: Number(coverage.toFixed(3)),
         matchedRare
       });

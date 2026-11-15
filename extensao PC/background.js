@@ -70,7 +70,7 @@ async function reinjectOpenTabs() {
         }).catch(() => {});
         chrome.scripting.executeScript({
           target: { tabId: tab.id },
-          files: ['content.js']
+          files: ['treeMatcher.js', 'content.js']
         }).catch(() => {});
       }
     }

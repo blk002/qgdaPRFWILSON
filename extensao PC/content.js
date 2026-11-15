@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.3.0 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.3.1 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -2670,23 +2670,29 @@
     try {
       const key = normalizeCourseIndexKey(subjectName || '');
       if (!key || !Array.isArray(options) || options.length < 3 || !isExtensionContextValid() || !chrome?.storage?.local) return;
+      const treeMatcher = (typeof globalThis !== 'undefined' && globalThis.QGCaveiraTreeMatcher) ? globalThis.QGCaveiraTreeMatcher : null;
+      const nonLeafNodes = options
+        .filter(o => !treeMatcher || !treeMatcher.isLeafArticleLabel(o.label))
+        .map(o => ({ label: o.label, norm: o.norm }));
+      if (nonLeafNodes.length < 2) return;
       chrome.storage.local.get([SUBJECT_TREE_CACHE_KEY], (res) => {
+        if (chrome.runtime?.lastError) return;
         const store = (res && res[SUBJECT_TREE_CACHE_KEY] && typeof res[SUBJECT_TREE_CACHE_KEY] === 'object')
           ? { ...res[SUBJECT_TREE_CACHE_KEY] }
           : {};
         store[key] = {
           subjectName,
           scannedAt: Date.now(),
-          hash: buildTreeCacheHash(options),
-          nodes: options.map(o => ({ label: o.label, norm: o.norm }))
+          hash: buildTreeCacheHash(nonLeafNodes),
+          nodes: nonLeafNodes
         };
         const entries = Object.entries(store);
-        if (entries.length > 35) {
-          entries.sort((a, b) => (b[1]?.scannedAt || 0) - (a[1]?.scannedAt || 0));
-          chrome.storage.local.set({ [SUBJECT_TREE_CACHE_KEY]: Object.fromEntries(entries.slice(0, 35)) });
-        } else {
-          chrome.storage.local.set({ [SUBJECT_TREE_CACHE_KEY]: store });
-        }
+        const payload = entries.length > 35
+          ? Object.fromEntries(entries.sort((a, b) => (b[1]?.scannedAt || 0) - (a[1]?.scannedAt || 0)).slice(0, 35))
+          : store;
+        chrome.storage.local.set({ [SUBJECT_TREE_CACHE_KEY]: payload }, () => {
+          void chrome.runtime?.lastError;
+        });
       });
     } catch (_) {}
   }
@@ -3325,8 +3331,9 @@
     let anchorFolderMatched = false;
     if (bm25Index && !isSpecialSubject) {
       const anchorQueries = [...validLessons, fallbackTopic].filter(Boolean);
-      for (const anchorQ of anchorQueries) {
+      for (const rawAnchorQ of anchorQueries) {
         if (isDestroyed) break;
+        const anchorQ = stripSubjectFromLessonTitle(rawAnchorQ, subjectName) || rawAnchorQ;
         const ranked = treeMatcher.scoreTreeNodesBm25(anchorQ, bm25Index, { excludeNorms: selectedOptionNorms });
         const top1 = ranked[0];
         const top2 = ranked[1];
@@ -3335,12 +3342,13 @@
             source: `bm25-anchor-A:${anchorQ}`,
             terms: [anchorQ],
             minScore: 3.8,
-            top5: ranked.slice(0, 5).map(r => ({ label: r.node.label, score: r.score, coverage: r.coverage })),
+            top5: ranked.slice(0, 5).map(r => ({ label: r.node.label, score: r.score, relScore: r.relScore, coverage: r.coverage })),
             selected: null
           });
         }
-        const hasMargin = !top2 || top1.score >= top2.score * 1.12 || top1.coverage >= 0.75;
-        if (top1 && !top1.node.isLeaf && top1.score >= 3.8 && top1.coverage >= 0.5 && hasMargin) {
+        const hasMargin = !top2 || top1.score >= top2.score * 1.12;
+        const passesScore = top1 && (top1.score >= 3.8 || top1.relScore >= 0.55);
+        if (passesScore && !top1.node.isLeaf && top1.coverage >= 0.5 && hasMargin) {
           const ok = await selectOptionByExactLabel(top1.node.label, top1.node.norm);
           if (ok) {
             anchorFolderMatched = true;
@@ -3378,19 +3386,22 @@
 
         // Tenta BM25 local antes de expandir/digitar termos (resolve Romanos<->Arábicos como Anexo 1 <-> Anexo I)
         if (bm25Index) {
-          const ranked = treeMatcher.scoreTreeNodesBm25(subtopic, bm25Index, { excludeNorms: selectedOptionNorms });
+          const bm25Query = stripSubjectFromLessonTitle(subtopic, subjectName) || subtopic;
+          const ranked = treeMatcher.scoreTreeNodesBm25(bm25Query, bm25Index, { excludeNorms: selectedOptionNorms });
           const top1 = ranked[0];
           const top2 = ranked[1];
           const bm25Threshold = (anchorFolderMatched || isLevelC) ? 4.5 : 3.2;
+          const relThreshold = (anchorFolderMatched || isLevelC) ? 0.65 : 0.50;
           const hasMargin = !top2 || top1.score >= top2.score * 1.15;
-          if (top1 && !top1.node.isLeaf && top1.score >= bm25Threshold && top1.coverage >= 0.45 && hasMargin) {
+          const passesScore = top1 && (top1.score >= bm25Threshold || top1.relScore >= relThreshold);
+          if (passesScore && !top1.node.isLeaf && top1.coverage >= 0.45 && hasMargin) {
             const ok = await selectOptionByExactLabel(top1.node.label, top1.node.norm);
             if (diagLog && Array.isArray(diagLog.queries)) {
               diagLog.queries.push({
-                source: `bm25-${subEntry.level}:${subtopic}`,
-                terms: [subtopic],
+                source: `bm25-${subEntry.level}:${bm25Query}`,
+                terms: [bm25Query],
                 minScore: bm25Threshold,
-                top5: ranked.slice(0, 5).map(r => ({ label: r.node.label, score: r.score, coverage: r.coverage })),
+                top5: ranked.slice(0, 5).map(r => ({ label: r.node.label, score: r.score, relScore: r.relScore, coverage: r.coverage })),
                 selected: ok ? top1.node.label : null
               });
             }
@@ -3831,7 +3842,7 @@
       : subject;
 
     lastFilterDiagnosticLog = {
-      version: '1.3.0',
+      version: '1.3.1',
       timestamp: new Date().toISOString(),
       input: {
         rawSubject,
