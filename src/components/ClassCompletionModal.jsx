@@ -338,19 +338,19 @@ export default function ClassCompletionModal({
           )}
         </div>
 
-        {/* Índice da Aula / Subassuntos para Filtro Detalhado */}
+        {/* Bizus / Assuntos da Aula para Filtro Detalhado */}
         {typeof onPracticeQuestions === 'function' && (
           <div className="bg-slate-50 dark:bg-slate-950 p-3 rounded-2xl border border-slate-100 dark:border-slate-800 mb-4 text-left">
             <div className="flex items-center justify-between gap-2 mb-1.5">
               <span className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1.5">
-                <ListFilter className="w-3.5 h-3.5 text-orange-500" /> Índice da Aula ({parsedSubtopics.length} subassuntos)
+                <ListFilter className="w-3.5 h-3.5 text-orange-500" /> Bizus / Assuntos da Aula ({parsedSubtopics.length} subassuntos)
               </span>
               <button
                 type="button"
                 onClick={() => setShowIndexEditor(v => !v)}
                 className="text-[9px] font-black text-blue-600 dark:text-blue-400 hover:underline uppercase"
               >
-                {showIndexEditor ? 'Ocultar' : 'Colar Índice'}
+                {showIndexEditor ? 'Ocultar' : 'Colar Bizus'}
               </button>
             </div>
 
@@ -384,7 +384,7 @@ export default function ClassCompletionModal({
                       onSaveLessonIndex(val, activeLessons[0] || topicName);
                     }
                   }}
-                  placeholder="Cole aqui o Índice da aula do Caveira ([00:01:42] Conceitos...)"
+                  placeholder="Cole aqui os assuntos da aba Bizus da aula (ex.: 1. Desconcentração, 2. Descentralização...)"
                   className="w-full text-[10px] font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2 text-slate-700 dark:text-slate-200 focus:border-orange-500 outline-none resize-y"
                 />
                 {latestCapturedCourseIndex?.rawIndexText && latestCapturedCourseIndex.rawIndexText !== indexText && (
@@ -399,7 +399,7 @@ export default function ClassCompletionModal({
                     }}
                     className="text-[9px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/30 rounded-lg px-2 py-1 hover:bg-emerald-500/20 transition-colors"
                   >
-                    ⚡ Usar índice capturado do Caveira ({latestCapturedCourseIndex.lessonTitle || 'Aula aberta'})
+                    ⚡ Usar Bizus capturados do Caveira ({latestCapturedCourseIndex.lessonTitle || 'Aula aberta'})
                   </button>
                 )}
               </div>

@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.23 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.24 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -1594,6 +1594,14 @@
       } else if (hasWholeTermMatch(normOpt, term) || (stemTerm && hasWholeTermMatch(stemOpt, stemTerm))) {
         best = Math.max(best, 600 - i);
         if (i > 0) additionalTermMatches += 1;
+      } else if (
+        normOpt.length >= 4 &&
+        !isOnlyGenericWords(normOpt) &&
+        isPureConceptSubset &&
+        (hasWholeTermMatch(term, normOpt) || (stemTerm && stemOpt && hasWholeTermMatch(stemTerm, stemOpt)))
+      ) {
+        best = Math.max(best, 700 - i);
+        if (i > 0) additionalTermMatches += 1;
       } else {
         const words = (stemTerm || term).split(' ').filter(w => w.length >= 3);
         const hits = words.filter(w => hasWholeTermMatch(stemOpt, w) || hasWholeTermMatch(normOpt, w)).length;
@@ -1701,7 +1709,7 @@
     'boas vindas'
   ]);
 
-  const LEADING_INDEX_FILLER_REGEX = /^(?:conceitos?\s+(?:de|da|do|dos|das|sobre)|no[cç][oõ]es?\s+(?:de|da|do|dos|das|gerais\s+de)|introdu[cç][aã]o\s+(?:[aà]|ao|aos|[aà]s|de|sobre)|estrutura\s+(?:da|do|de|dos|das)|aspectos?\s+(?:gerais|iniciais|principais)\s+(?:de|da|do|dos|das)|vis[aã]o\s+geral\s+(?:de|da|do)|entendendo\s+(?:a|o|as|os)|compreendendo\s+(?:a|o|as|os)|o\s+que\s+[eé])\s+/i;
+  const LEADING_INDEX_FILLER_REGEX = /^(?:conceitos?\s+(?:de|da|do|dos|das|sobre)|defini[cç][aã]o\s+(?:de|da|do|dos|das)|defini[cç][oõ]es\s+(?:de|da|do|dos|das)|resumo\s+(?:de|da|do|dos|das|sobre)|no[cç][oõ]es?\s+(?:de|da|do|dos|das|gerais\s+de)|introdu[cç][aã]o\s+(?:[aà]|ao|aos|[aà]s|de|sobre)|estrutura\s+(?:da|do|de|dos|das)|aspectos?\s+(?:gerais|iniciais|principais)\s+(?:de|da|do|dos|das)|vis[aã]o\s+geral\s+(?:de|da|do)|entendendo\s+(?:a|o|as|os)|compreendendo\s+(?:a|o|as|os)|o\s+que\s+[eé])\s+/i;
 
   const BROAD_PARENT_PREFIX_REGEX = /^(?:organiza[cç][aã]o\s+(?:da|do|de)|conceitos?\s+(?:de|da|do|dos|das|sobre)|no[cç][oõ]es?\s+(?:de|da|do|dos|das|gerais\s+de)|introdu[cç][aã]o\s+(?:[aà]|ao|aos|[aà]s|de|sobre)|estrutura\s+(?:da|do|de|dos|das))\s+/i;
 
@@ -1755,7 +1763,10 @@
     const mergedLines = [];
     for (let i = 0; i < rawLines.length; i++) {
       const cur = rawLines[i];
-      if (/^[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?$/.test(cur) && i + 1 < rawLines.length) {
+      if (
+        (/^[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?$/.test(cur) || /^\d{1,2}\s*[.)\-–—]$/.test(cur)) &&
+        i + 1 < rawLines.length
+      ) {
         mergedLines.push(`${cur} ${rawLines[i + 1]}`);
         i += 1;
       } else {
@@ -1763,13 +1774,23 @@
       }
     }
 
+    // Modo Bizus numerado (ex.: "1. Desconcentração", "2. Descentralização"):
+    // mantém apenas as linhas numeradas dos títulos de assunto e descarta explicações/bullets.
+    const hasTimestamps = /\[\d{1,2}:\d{2}(?::\d{2})?\]/.test(input);
+    const isNumberedBizusFormat =
+      !hasTimestamps &&
+      mergedLines.some(l => /^\s*\d{1,2}\s*[.)\-–—]\s+[A-Za-zÀ-ÿ]/.test(l));
+    const linesToProcess = isNumberedBizusFormat
+      ? mergedLines.filter(l => /^\s*\d{1,2}\s*[.)\-–—]\s+\S+/.test(l))
+      : mergedLines;
+
     const broadContext = buildBroadParentNorms(contextNames);
     const contextText = (Array.isArray(contextNames) ? contextNames : [contextNames]).filter(Boolean).join(' ');
     const mainLawIds = new Set(getMatchingSpecialLawIds(contextText));
     const results = [];
     const seenNorm = new Set();
 
-    for (const rawLine of mergedLines) {
+    for (const rawLine of linesToProcess) {
       const rawNorm = normalizeCourseIndexKey(rawLine);
       if (
         !rawNorm ||
@@ -1782,10 +1803,10 @@
         continue;
       }
 
-      const hadIntroPrefix = /^(?:[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?\s*)?introdu[cç][aã]o\b/i.test(rawLine);
+      const hadIntroPrefix = /^(?:[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?\s*|\d{1,2}\s*[.)\-–—]\s*)?introdu[cç][aã]o\b/i.test(rawLine);
       let cleaned = rawLine
         .replace(/^[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?\s*[-–—:|]*\s*/, '')
-        .replace(/^(?:[-•*●▪◦]|\d+[.)-])\s+/, '')
+        .replace(/^(?:[-•*●▪◦]|\d{1,2}\s*[.)\-–—])\s+/, '')
         .replace(/\bademi\s+publica\b/gi, 'Administração Pública')
         .replace(/\bademi\b/gi, 'Administração')
         .replace(/\badm\.?\s+publica\b/gi, 'Administração Pública')
@@ -1798,6 +1819,21 @@
       if (!cleaned) continue;
 
       if (PROSE_NOTE_PREFIX_REGEX.test(cleaned)) continue;
+
+      if (isNumberedBizusFormat) {
+        const colonIdx = cleaned.indexOf(':');
+        if (colonIdx > 2 && colonIdx < cleaned.length - 1) {
+          const beforeColon = cleaned.slice(0, colonIdx).trim();
+          const afterColon = cleaned.slice(colonIdx + 1).trim();
+          const afterWords = afterColon.split(/\s+/).filter(Boolean).length;
+          if (normalizeCourseIndexKey(beforeColon).length >= 3 && (afterColon.length > 25 || afterWords > 4)) {
+            cleaned = beforeColon;
+          }
+        }
+        cleaned = cleaned.replace(/[:;.\-–—]+$/g, '').trim();
+        if (!cleaned) continue;
+      }
+
       if (cleaned.length > 85 || (/\.\s*$/.test(cleaned) && cleaned.split(/\s+/).length > 8)) {
         continue;
       }
@@ -1862,64 +1898,130 @@
       .trim();
     if (!clean) return { primary: [], splitFallbacks: [] };
 
-    const primary = [clean];
+    const primary = [];
+    const pushPrimary = (t) => {
+      const s = normalizeFilterText(t).replace(/\s+/g, ' ').trim();
+      if (s && !primary.includes(s)) primary.push(s);
+    };
     const extraSplits = [];
-
-    if (clean.includes('administracao publica direta e indireta')) {
-      primary.push('administracao direta e indireta');
-    }
-    if (clean.includes('teoria do orgao')) {
-      primary.push('orgaos publicos', 'orgao publico');
-    }
-    if (clean.includes('terceiro setor')) {
-      primary.push('terceiro setor', 'entidades paraestatais', 'paraestatais');
-    }
-    if (clean.includes('por servico')) {
-      primary.push('outorga', 'descentralizacao por servico');
-    }
-    if (clean.includes('por colaboracao')) {
-      primary.push('delegacao', 'descentralizacao por colaboracao');
-    }
-    if (clean.includes('ministerios')) {
-      primary.push('ministerios');
-    }
+    const seenSplitKeys = new Set();
+    const pushSplit = (arr) => {
+      const cleanArr = (Array.isArray(arr) ? arr : [arr])
+        .map(x => normalizeFilterText(x).replace(/\s+/g, ' ').trim())
+        .filter(Boolean);
+      if (cleanArr.length === 0) return;
+      const key = cleanArr.join('|');
+      if (!seenSplitKeys.has(key)) {
+        seenSplitKeys.add(key);
+        extraSplits.push(cleanArr);
+      }
+    };
 
     const lawTerms = getSpecialLawSearchTerms(clean);
+
+    // Se o título do Bizu contiver travessão ou dois-pontos (-, –, :), prioriza a parte direita específica antes do título completo
+    const dashParts = String(subtopic || '')
+      .split(/\s*[-–—:]\s*/)
+      .map(p => normalizeFilterText(p).replace(/\bademi\b/g, 'administracao').replace(/\badm\b/g, 'administracao').replace(/\s+/g, ' ').trim())
+      .filter(Boolean);
+    if (dashParts.length > 1) {
+      const rightJoined = dashParts.slice(1).join(' ').trim();
+      if (rightJoined.length >= 3 && !isOnlyGenericWords(rightJoined)) {
+        pushPrimary(rightJoined);
+      }
+    }
+
+    pushPrimary(clean);
+
+    // Remove prefixo descritivo (ex.: "Espécies de Descentralização" -> "descentralizacao")
+    const descriptivePrefixRegex = /^(?:conceitos?|nocoes|definicoes|definicao|especies|formas|tipos|classificacao|caracteristicas|atributos|elementos|requisitos|regras|modalidades|principios|aspectos|estudo|teoria\s+geral)\s+(?:de|da|do|dos|das|sobre)\s+/i;
+    const withoutPrefix = clean.replace(descriptivePrefixRegex, '').trim();
+    if (withoutPrefix && withoutPrefix !== clean && withoutPrefix.length >= 4 && !isOnlyGenericWords(withoutPrefix)) {
+      pushPrimary(withoutPrefix);
+    }
+
+    // Remove qualificador genérico final da disciplina (ex.: "desconcentracao administrativa" -> "desconcentracao")
+    const trailingSubjectQualifierRegex = /\s+(?:administrativa|administrativo|publica|publico|constitucional|penal|processual|civil|especial|geral|gerais)$/i;
+    for (const candidate of [clean, withoutPrefix]) {
+      if (!candidate) continue;
+      const withoutSuffix = candidate.replace(trailingSubjectQualifierRegex, '').trim();
+      if (withoutSuffix && withoutSuffix !== candidate && withoutSuffix.length >= 4 && !isOnlyGenericWords(withoutSuffix)) {
+        pushPrimary(withoutSuffix);
+      }
+    }
+
+    // Enumerações em títulos de Bizus (ex.: "1. Desconcentração e Descentralização", "Internet, Intranet e Extranet")
+    if (lawTerms.length === 0) {
+      const enumItems = extractEnumeratedSubitemsFromLesson(subtopic);
+      if (enumItems.length >= 2) {
+        enumItems.forEach(item => {
+          pushPrimary(item);
+          pushSplit([item]);
+        });
+      }
+    }
+
+    if (clean.includes('administracao publica direta e indireta')) {
+      pushPrimary('administracao direta e indireta');
+    }
+    if (clean.includes('teoria do orgao')) {
+      pushPrimary('orgaos publicos');
+      pushPrimary('orgao publico');
+    }
+    if (clean.includes('terceiro setor')) {
+      pushPrimary('terceiro setor');
+      pushPrimary('entidades paraestatais');
+      pushPrimary('paraestatais');
+    }
+    if (clean.includes('por servico')) {
+      pushPrimary('outorga');
+      pushPrimary('descentralizacao por servico');
+    }
+    if (clean.includes('por colaboracao')) {
+      pushPrimary('delegacao');
+      pushPrimary('descentralizacao por colaboracao');
+    }
+    if (clean.includes('ministerios')) {
+      pushPrimary('ministerios');
+    }
+
     if (lawTerms.length > 0) {
       if (/\beca\b/.test(clean)) {
-        primary.push(clean.replace(/\beca\b/g, 'estatuto da crianca e do adolescente'));
+        pushPrimary(clean.replace(/\beca\b/g, 'estatuto da crianca e do adolescente'));
         if (/\bcrimes?\b/.test(clean)) {
-          primary.push('crimes contra a crianca e o adolescente');
+          pushPrimary('crimes contra a crianca e o adolescente');
         }
       } else if (/\bctb\b/.test(clean)) {
-        primary.push(clean.replace(/\bctb\b/g, 'codigo de transito brasileiro'));
+        pushPrimary(clean.replace(/\bctb\b/g, 'codigo de transito brasileiro'));
       } else if (/\blep\b/.test(clean)) {
-        primary.push(clean.replace(/\blep\b/g, 'lei de execucao penal'));
+        pushPrimary(clean.replace(/\blep\b/g, 'lei de execucao penal'));
       } else if (/\blia\b/.test(clean)) {
-        primary.push(clean.replace(/\blia\b/g, 'improbidade administrativa'));
+        pushPrimary(clean.replace(/\blia\b/g, 'improbidade administrativa'));
       }
       lawTerms.forEach(t => {
-        primary.push(t);
-        extraSplits.push([t]);
+        pushPrimary(t);
+        pushSplit([t]);
       });
     }
 
     // Se o subtópico combina 2 conceitos-chave de edital, gera buscas específicas adicionais caso apareçam separados no Caveira
     if (clean.includes('direta') && clean.includes('indireta')) {
-      extraSplits.push(['administracao direta'], ['administracao indireta']);
+      pushSplit(['administracao direta']);
+      pushSplit(['administracao indireta']);
     }
     if (clean.includes('desconcentracao') && (clean.includes('descentralizacao') || clean.includes('orgao'))) {
-      extraSplits.push(['desconcentracao']);
-      if (clean.includes('descentralizacao')) extraSplits.push(['descentralizacao']);
-      if (clean.includes('orgao')) extraSplits.push(['orgaos publicos', 'teoria do orgao']);
+      pushSplit(['desconcentracao']);
+      if (clean.includes('descentralizacao')) pushSplit(['descentralizacao']);
+      if (clean.includes('orgao')) pushSplit(['orgaos publicos', 'teoria do orgao']);
     } else if (clean.includes('concentracao') && clean.includes('descentralizacao')) {
-      extraSplits.push(['concentracao', 'centralizacao'], ['descentralizacao']);
+      pushSplit(['concentracao', 'centralizacao']);
+      pushSplit(['descentralizacao']);
     }
     if (clean.includes('terceiro setor') && clean.includes('entidades')) {
-      extraSplits.push(['terceiro setor', 'paraestatais']);
+      pushSplit(['terceiro setor', 'paraestatais']);
     }
 
-    return { primary: Array.from(new Set(primary)), splitFallbacks: extraSplits };
+    return { primary, splitFallbacks: extraSplits };
   }
 
   async function matchOptionInOpenDropdown(filterInput, searchTerms, opts = {}) {
@@ -2077,8 +2179,11 @@
       }
       extractConceptWords(scopeText).forEach(c => lessonTargetConcepts.add(c));
     };
-    validLessons.forEach(lesson => addConceptsFromSource(lesson, true));
-    validSubtopics.forEach(sub => addConceptsFromSource(sub, false));
+    if (validSubtopics.length > 0) {
+      validSubtopics.forEach(sub => addConceptsFromSource(sub, true));
+    } else {
+      validLessons.forEach(lesson => addConceptsFromSource(lesson, true));
+    }
 
     const mainContextText = [fallbackTopic, ...validLessons].filter(Boolean).join(' ');
     const mainLawIds = getMatchingSpecialLawIds(mainContextText);
@@ -2157,14 +2262,33 @@
           targetConcepts: lessonTargetConcepts
         });
 
-        if (!directHit && Array.isArray(expanded.splitFallbacks) && expanded.splitFallbacks.length > 0) {
+        const hasUncoveredSplits =
+          Array.isArray(expanded.splitFallbacks) &&
+          expanded.splitFallbacks.length > 0 &&
+          (!directHit || expanded.splitFallbacks.some(splitTerms => {
+            const sc = extractConceptWords(splitTerms.join(' '));
+            return sc.length > 0 && !sc.every(c => coveredConcepts.has(c));
+          }));
+
+        if (hasUncoveredSplits) {
           for (const splitTerms of expanded.splitFallbacks) {
             if (isDestroyed) break;
-            if (allowedLawIds) {
-              const splitLawIds = getMatchingSpecialLawIds(splitTerms.join(' '));
-              if (splitLawIds.some(id => !allowedLawIds.has(id))) {
-                continue;
-              }
+            const splitConcepts = extractConceptWords(splitTerms.join(' '));
+            if (splitConcepts.length > 0 && splitConcepts.every(c => coveredConcepts.has(c))) {
+              continue;
+            }
+            const splitLawIds = getMatchingSpecialLawIds(splitTerms.join(' '));
+            if (allowedLawIds && splitLawIds.some(id => !allowedLawIds.has(id))) {
+              continue;
+            }
+            if (
+              directHit &&
+              splitLawIds.length > 0 &&
+              Array.from(selectedOptionNorms).some(sel =>
+                splitLawIds.every(id => getMatchingSpecialLawIds(sel, { primaryOnly: true }).includes(id))
+              )
+            ) {
+              continue;
             }
             await trySelectWithTerms(splitTerms, {
               forbiddenNorms: forbiddenParentNorms,
@@ -2458,7 +2582,7 @@
           // 1. Chave exata
           for (const c of candidates) {
             const k = normalizeCourseIndexKey(c);
-            if (k && byLesson[k]?.rawIndexText) {
+            if (k && (byLesson[k]?.bizusRawText || byLesson[k]?.rawIndexText)) {
               matchedEntry = byLesson[k];
               break;
             }
@@ -2469,7 +2593,7 @@
             const canon = (s) => normalizeCourseIndexKey(s).replace(/\bparte\s*0*(\d+)\b/g, 'parte $1').replace(/\baula\s*0*(\d+)\b/g, 'aula $1').trim();
             const candCanon = candidates.map(canon).filter(Boolean);
             for (const [k, entry] of Object.entries(byLesson)) {
-              if (!entry?.rawIndexText) continue;
+              if (!(entry?.bizusRawText || entry?.rawIndexText)) continue;
               const eCanon = canon(entry.lessonTitle || k);
               if (!eCanon) continue;
               if (candCanon.some(c => c === eCanon || (c.length >= 10 && eCanon.includes(c)) || (eCanon.length >= 10 && c.includes(eCanon)))) {
@@ -2479,8 +2603,8 @@
             }
           }
 
-          // 3. Fallback opcional: último índice capturado recentemente se compartilhar palavras-chave relevantes com a aula
-          if (!matchedEntry && cache.latest?.rawIndexText && (Date.now() - (cache.latest.capturedAt || 0)) < 1800000) {
+          // 3. Fallback opcional: último Bizus/índice capturado recentemente se compartilhar palavras-chave relevantes com a aula
+          if (!matchedEntry && (cache.latest?.bizusRawText || cache.latest?.rawIndexText) && (Date.now() - (cache.latest.capturedAt || 0)) < 1800000) {
             const latestCanon = normalizeCourseIndexKey(cache.latest.lessonTitle || '');
             const combinedCand = candidates.map(normalizeCourseIndexKey).join(' ');
             const sigWords = combinedCand.split(' ').filter(w => w.length >= 5);
@@ -2494,10 +2618,13 @@
             return;
           }
 
-          const parsed = matchedEntry.rawIndexText
-            ? parseCourseIndexSubtopics(matchedEntry.rawIndexText, [subjectName, fallbackTopic, ...(Array.isArray(lessonsList) ? lessonsList : [])])
-            : (Array.isArray(matchedEntry.subtopics) ? matchedEntry.subtopics : []);
-          resolve({ subtopics: parsed, rawIndexText: matchedEntry.rawIndexText || '' });
+          const effectiveRaw = matchedEntry.bizusRawText || matchedEntry.rawIndexText || '';
+          const parsed = effectiveRaw
+            ? parseCourseIndexSubtopics(effectiveRaw, [subjectName, fallbackTopic, ...(Array.isArray(lessonsList) ? lessonsList : [])])
+            : (Array.isArray(matchedEntry.bizusSubtopics) && matchedEntry.bizusSubtopics.length > 0
+                ? matchedEntry.bizusSubtopics
+                : (Array.isArray(matchedEntry.subtopics) ? matchedEntry.subtopics : []));
+          resolve({ subtopics: parsed, rawIndexText: effectiveRaw });
         });
       } catch (_) {
         resolve({ subtopics: [], rawIndexText: '' });
@@ -2744,7 +2871,8 @@
       if (isCoursePage() && currentCourseIndexStatus?.count > 0) {
         const currentQEl = document.getElementById('qg-current-q-id');
         if (currentQEl) {
-          currentQEl.textContent = `📑 Índice capturado (${currentCourseIndexStatus.count} subassuntos)`;
+          const capLabel = currentCourseIndexStatus.source === 'bizus' ? 'Bizus capturado' : 'Índice capturado';
+          currentQEl.textContent = `📑 ${capLabel} (${currentCourseIndexStatus.count} subassuntos)`;
           currentQEl.title = currentCourseIndexStatus.preview || '';
         }
       }
@@ -2759,7 +2887,8 @@
     const currentQEl = document.getElementById('qg-current-q-id');
     if (currentQEl) {
       if (isCoursePage() && currentCourseIndexStatus?.count > 0) {
-        currentQEl.textContent = `📑 Índice capturado (${currentCourseIndexStatus.count} subassuntos)`;
+        const capLabel = currentCourseIndexStatus.source === 'bizus' ? 'Bizus capturado' : 'Índice capturado';
+        currentQEl.textContent = `📑 ${capLabel} (${currentCourseIndexStatus.count} subassuntos)`;
         currentQEl.title = currentCourseIndexStatus.preview || '';
       } else {
         currentQEl.textContent = 'Aguardando questão...';
@@ -3567,64 +3696,199 @@
 
     if (!panelEl) return '';
 
-    // Extrai preferencialmente títulos e marcadores curtos de tópicos dentro da aba Bizus
-    const structuredNodes = Array.from(panelEl.querySelectorAll('h1, h2, h3, h4, h5, h6, strong, b, li'))
-      .filter(el => isElementVisible(el));
-    const lines = [];
+    const titles = [];
     const seen = new Set();
 
-    const pushCandidate = (rawLine) => {
-      const line = String(rawLine || '').replace(/\s+/g, ' ').trim();
-      if (!line || line.length < 4 || line.length > 85) return;
-      const key = normalizeCourseIndexKey(line);
-      if (!key || key === 'bizus' || key === 'indice' || key === 'charlie' || key === 'arquivos' || key === 'comentarios') return;
-      if (!seen.has(key)) {
-        seen.add(key);
-        lines.push(line);
+    const cleanBizusTitleCandidate = (rawStr) => {
+      let s = String(rawStr || '').replace(/\s+/g, ' ').trim();
+      if (!s) return '';
+      s = s.replace(/^(?:[-•*●▪◦]|\d{1,2}\s*[.)\-–—]|[IVXLCDM]{1,5}\s*[.)\-–—])\s+/i, '').trim();
+      if (!s) return '';
+      const colonIdx = s.indexOf(':');
+      if (colonIdx > 2 && colonIdx < s.length - 1) {
+        const beforeColon = s.slice(0, colonIdx).trim();
+        const afterColon = s.slice(colonIdx + 1).trim();
+        const afterWords = afterColon.split(/\s+/).filter(Boolean).length;
+        const beforeNorm = normalizeFilterText(beforeColon);
+        if (
+          beforeNorm.length >= 4 &&
+          !/^(?:obs(?:ervacao)?|atencao|cuidado|dica|bizu|ex(?:emplo)?|stf|stj|sumula|importante)$/.test(beforeNorm) &&
+          (afterColon.length > 25 || afterWords > 4)
+        ) {
+          s = beforeColon;
+        }
       }
+      s = s.replace(/[:;.\-–—]+$/g, '').trim();
+      return s;
     };
 
-    for (const node of structuredNodes) {
-      const nodeText = node.innerText || node.textContent || '';
-      nodeText.split(/\r?\n/).forEach(pushCandidate);
+    const pushBizusTitle = (rawCandidate) => {
+      const rawTrimmed = String(rawCandidate || '').replace(/\s+/g, ' ').trim();
+      if (!rawTrimmed) return false;
+      const title = cleanBizusTitleCandidate(rawTrimmed);
+      if (!title || title.length < 3 || title.length > 85) return false;
+      if (/\.\s*$/.test(rawTrimmed) && title.split(/\s+/).length > 8 && rawTrimmed.length > 85) return false;
+      if (PROSE_NOTE_PREFIX_REGEX.test(title) || PROSE_NOTE_PREFIX_REGEX.test(rawTrimmed)) return false;
+      const key = normalizeCourseIndexKey(title);
+      if (
+        !key ||
+        key.length < 3 ||
+        key === 'bizus' ||
+        key === 'indice' ||
+        key === 'charlie' ||
+        key === 'arquivos' ||
+        key === 'comentarios' ||
+        GENERIC_INDEX_LINES.has(key)
+      ) {
+        return false;
+      }
+      if (!seen.has(key)) {
+        seen.add(key);
+        titles.push(title);
+        return true;
+      }
+      return false;
+    };
+
+    // Extrai apenas títulos estruturados de assuntos (Headings, <ol> > <li>, blocos/linhas numeradas "1. Título")
+    const structuralNodes = Array.from(panelEl.querySelectorAll('h1, h2, h3, h4, h5, h6, li, p, div, span'))
+      .filter(el => el && isElementVisible(el));
+
+    for (const el of structuralNodes) {
+      const tag = (el.tagName || '').toUpperCase();
+
+      // Regra 1: Headings
+      if (/^H[1-6]$/.test(tag)) {
+        pushBizusTitle(el.innerText || el.textContent || '');
+        continue;
+      }
+
+      // Regra 2: Itens diretos de listas ordenadas (<ol> > <li>)
+      if (tag === 'LI' && el.parentElement && (el.parentElement.tagName || '').toUpperCase() === 'OL') {
+        const liText = (el.innerText || el.textContent || '').trim();
+        const leadNode = Array.from(el.querySelectorAll('h1, h2, h3, h4, h5, h6, strong, b'))
+          .find(child => !child.closest('ul') && child.closest('ol, ul') === el.parentElement && isElementVisible(child));
+        if (leadNode) {
+          const leadText = (leadNode.innerText || leadNode.textContent || '').replace(/\s+/g, ' ').trim();
+          const liNorm = normalizeFilterText(liText).replace(/^\d{1,2}\s*[.)\-–—]\s*/, '').trim();
+          const leadNorm = normalizeFilterText(leadText);
+          if (leadText && leadText.length <= 85 && leadNorm && liNorm.startsWith(leadNorm)) {
+            pushBizusTitle(leadText);
+            continue;
+          }
+        }
+        const firstLine = (liText.split(/\r?\n/)[0] || '').trim();
+        if (firstLine && firstLine.length <= 85 && !(/\.\s*$/.test(firstLine) && firstLine.split(/\s+/).length > 8)) {
+          pushBizusTitle(firstLine);
+        }
+        continue;
+      }
+
+      // Regra 3: Blocos iniciando com numeração explícita (ex.: "1. Desconcentração", "2) Descentralização")
+      if (tag === 'P' || tag === 'DIV' || tag === 'LI' || tag === 'SPAN') {
+        if (tag === 'DIV' && el.querySelector('p, div, ol, ul, h1, h2, h3, h4, h5, h6')) {
+          continue;
+        }
+        if (tag === 'LI' && el.closest('ul')) {
+          continue;
+        }
+        const blockText = (el.innerText || el.textContent || '').trim();
+        const firstLine = (blockText.split(/\r?\n/)[0] || '').trim();
+        const numMatch = firstLine.match(/^\s*(\d{1,2}\s*[.)\-–—]\s+)(.+)$/);
+        if (numMatch) {
+          const afterNumber = numMatch[2].trim();
+          const boldNode = Array.from(el.querySelectorAll('strong, b')).find(child => !child.closest('ul') && isElementVisible(child));
+          if (boldNode) {
+            const boldText = (boldNode.innerText || boldNode.textContent || '').replace(/\s+/g, ' ').trim();
+            const afterNorm = normalizeFilterText(afterNumber);
+            const boldNorm = normalizeFilterText(boldText);
+            if (boldText && boldText.length <= 85 && boldNorm && afterNorm.startsWith(boldNorm)) {
+              pushBizusTitle(boldText);
+              continue;
+            }
+          }
+          if (afterNumber.length <= 85 || afterNumber.includes(':')) {
+            pushBizusTitle(firstLine);
+          }
+        }
+      }
     }
 
-    if (lines.length === 0) {
-      const rawTxt = panelEl.innerText || panelEl.textContent || '';
-      rawTxt.split(/\r?\n/).forEach(pushCandidate);
+    // Complemento da Regra 3 para linhas numeradas separadas por <br>/texto corrido em panelEl.innerText
+    const rawPanelText = (panelEl.innerText || panelEl.textContent || '').trim();
+    if (rawPanelText) {
+      for (const line of rawPanelText.split(/\r?\n/)) {
+        const trimmedLine = line.trim();
+        if (!/^\s*\d{1,2}\s*[.)\-–—]\s+[A-Za-zÀ-ÿ]/.test(trimmedLine)) continue;
+        const candidate = cleanBizusTitleCandidate(trimmedLine);
+        const candidateKey = normalizeCourseIndexKey(candidate);
+        if (!candidateKey) continue;
+        const alreadyCoveredByShortTitle = titles.some(t => {
+          const tk = normalizeCourseIndexKey(t);
+          return tk && (candidateKey === tk || candidateKey.startsWith(`${tk} `));
+        });
+        if (alreadyCoveredByShortTitle) continue;
+        pushBizusTitle(trimmedLine);
+      }
     }
 
-    return lines.slice(0, 20).join('\n');
+    // Regra 4: Caso nenhuma regra estruturada/numerada tenha retornado títulos, aceita negritos isolados (<p><strong>Título</strong></p>)
+    if (titles.length === 0) {
+      const boldNodes = Array.from(panelEl.querySelectorAll('strong, b')).filter(el => el && isElementVisible(el));
+      for (const boldEl of boldNodes) {
+        if (boldEl.closest('ul')) continue;
+        const parentBlock = boldEl.closest('p, div, li') || boldEl.parentElement;
+        if (!parentBlock) continue;
+        const parentFirstLine = ((parentBlock.innerText || parentBlock.textContent || '').split(/\r?\n/)[0] || '').trim();
+        const boldText = (boldEl.innerText || boldEl.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!boldText || boldText.length > 80) continue;
+        const cleanParentKey = normalizeCourseIndexKey(cleanBizusTitleCandidate(parentFirstLine));
+        const cleanBoldKey = normalizeCourseIndexKey(cleanBizusTitleCandidate(boldText));
+        if (cleanParentKey && cleanParentKey === cleanBoldKey) {
+          pushBizusTitle(boldText);
+        }
+      }
+    }
+
+    if (titles.length === 0) return '';
+    return titles.slice(0, 20).map((t, idx) => `${idx + 1}. ${t}`).join('\n');
   }
 
   function scanCourseVideoIndex() {
     if (isDestroyed || !isCoursePage()) return;
 
-    let captureSource = 'indice';
-    let rawIndexText = extractCourseIndexRawTextFromDom();
-    if (!rawIndexText) {
-      const bizusText = extractCourseBizusRawTextFromDom();
-      if (bizusText) {
-        rawIndexText = bizusText;
-        captureSource = 'bizus';
-      }
-    }
+    const lessonTitle = extractCourseLessonTitle();
+    const peekKey = `${window.location.href}|${lessonTitle}`;
+
+    let captureSource = 'bizus';
+    let rawIndexText = extractCourseBizusRawTextFromDom();
 
     if (!rawIndexText) {
-      const currentUrl = window.location.href;
       const bizusTab = findCourseTabElement('bizus');
-      if (!peekedCourseUrls.has(currentUrl) && (!bizusTab || !isCourseTabActive(bizusTab))) {
+      if (bizusTab && !isCourseTabActive(bizusTab) && !peekedCourseUrls.has(peekKey)) {
+        peekedCourseUrls.add(peekKey);
+        clickElementRealistically(bizusTab);
+        setTimeout(scanCourseVideoIndex, 450);
+        setTimeout(scanCourseVideoIndex, 950);
+        return;
+      }
+
+      const indexText = extractCourseIndexRawTextFromDom();
+      if (indexText) {
+        rawIndexText = indexText;
+        captureSource = 'indice';
+      } else {
         const indexTab = findCourseTabElement('indice');
-        if (indexTab) {
-          peekedCourseUrls.add(currentUrl);
+        const indicePeekKey = `${peekKey}|indice`;
+        if (indexTab && !isCourseTabActive(indexTab) && !peekedCourseUrls.has(indicePeekKey)) {
+          peekedCourseUrls.add(indicePeekKey);
           clickElementRealistically(indexTab);
           setTimeout(scanCourseVideoIndex, 450);
         }
+        return;
       }
-      return;
     }
 
-    const lessonTitle = extractCourseLessonTitle();
     const subtopics = parseCourseIndexSubtopics(rawIndexText, lessonTitle ? [lessonTitle] : []);
     if (subtopics.length === 0) return;
 
@@ -3657,6 +3921,7 @@
       lessonTitle,
       source: captureSource,
       rawIndexText,
+      ...(captureSource === 'bizus' ? { bizusRawText: rawIndexText, bizusSubtopics: subtopics } : {}),
       subtopics,
       capturedAt: Date.now()
     };
@@ -3671,13 +3936,10 @@
         const lessonKey = normalizeCourseIndexKey(lessonTitle);
         if (lessonKey) {
           const existing = nextByLesson[lessonKey];
-          if (existing && existing.source === 'indice' && captureSource === 'bizus') {
-            nextByLesson[lessonKey] = {
-              ...existing,
-              bizusRawText: rawIndexText,
-              bizusSubtopics: subtopics,
-              capturedAt: Date.now()
-            };
+          if (captureSource === 'bizus') {
+            nextByLesson[lessonKey] = entry;
+          } else if (existing && existing.source === 'bizus') {
+            // Mantém os títulos dos Bizus como fonte prioritária da aula
           } else {
             nextByLesson[lessonKey] = entry;
           }
@@ -3687,9 +3949,13 @@
           .sort((a, b) => (b[1]?.capturedAt || 0) - (a[1]?.capturedAt || 0))
           .slice(0, 40);
         const compactedByLesson = Object.fromEntries(ordered);
+        const latestEntry =
+          (prev.latest && prev.latest.source === 'bizus' && captureSource === 'indice' && lessonKey && normalizeCourseIndexKey(prev.latest.lessonTitle || '') === lessonKey)
+            ? prev.latest
+            : ((lessonKey && compactedByLesson[lessonKey]) || entry);
         chrome.storage.local.set({
           [COURSE_INDEX_CACHE_KEY]: {
-            latest: (lessonKey && compactedByLesson[lessonKey]) || entry,
+            latest: latestEntry,
             byLesson: compactedByLesson
           }
         });

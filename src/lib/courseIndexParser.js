@@ -15,7 +15,7 @@ export function normalizeCourseIndexLineText(rawLine) {
   // Remove timestamps no início: [00:01:42], (00:01:42), 00:01:42 -
   line = line
     .replace(/^[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?\s*[-–—:|]*\s*/, '')
-    .replace(/^(?:[-•*●▪◦]|\d+[.)-])\s+/, '')
+    .replace(/^(?:[-•*●▪◦]|\d{1,2}\s*[.)\-–—])\s+/, '')
     .trim();
 
   if (!line) return '';
@@ -56,7 +56,7 @@ const GENERIC_EXACT_LINES = new Set([
   'boas vindas'
 ]);
 
-const LEADING_FILLER_REGEX = /^(?:conceitos?\s+(?:de|da|do|dos|das|sobre)|no[cç][oõ]es?\s+(?:de|da|do|dos|das|gerais\s+de)|introdu[cç][aã]o\s+(?:[aà]|ao|aos|[aà]s|de|sobre)|estrutura\s+(?:da|do|de|dos|das)|aspectos?\s+(?:gerais|iniciais|principais)\s+(?:de|da|do|dos|das)|vis[aã]o\s+geral\s+(?:de|da|do)|entendendo\s+(?:a|o|as|os)|compreendendo\s+(?:a|o|as|os)|o\s+que\s+[eé])\s+/i;
+const LEADING_FILLER_REGEX = /^(?:conceitos?\s+(?:de|da|do|dos|das|sobre)|defini[cç][aã]o\s+(?:de|da|do|dos|das)|defini[cç][oõ]es\s+(?:de|da|do|dos|das)|resumo\s+(?:de|da|do|dos|das|sobre)|no[cç][oõ]es?\s+(?:de|da|do|dos|das|gerais\s+de)|introdu[cç][aã]o\s+(?:[aà]|ao|aos|[aà]s|de|sobre)|estrutura\s+(?:da|do|de|dos|das)|aspectos?\s+(?:gerais|iniciais|principais)\s+(?:de|da|do|dos|das)|vis[aã]o\s+geral\s+(?:de|da|do)|entendendo\s+(?:a|o|as|os)|compreendendo\s+(?:a|o|as|os)|o\s+que\s+[eé])\s+/i;
 
 const BROAD_PREFIX_REGEX = /^(?:organiza[cç][aã]o\s+(?:da|do|de)|conceitos?\s+(?:de|da|do|dos|das|sobre)|no[cç][oõ]es?\s+(?:de|da|do|dos|das|gerais\s+de)|introdu[cç][aã]o\s+(?:[aà]|ao|aos|[aà]s|de|sobre)|estrutura\s+(?:da|do|de|dos|das))\s+/i;
 
@@ -151,11 +151,14 @@ export function parseCourseIndexSubtopics(rawText, contextNames = []) {
   const normalizedBlock = input.replace(/([^\n])\s*(\[\d{1,2}:\d{2}(?::\d{2})?\])/g, '$1\n$2');
   const rawLines = normalizedBlock.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
 
-  // Junta linhas em que o timestamp ficou sozinho numa linha e o título veio na linha seguinte
+  // Junta linhas em que o timestamp ou número (ex.: "1.") ficou sozinho numa linha e o título veio na linha seguinte
   const mergedLines = [];
   for (let i = 0; i < rawLines.length; i++) {
     const cur = rawLines[i];
-    if (/^[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?$/.test(cur) && i + 1 < rawLines.length) {
+    if (
+      (/^[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?$/.test(cur) || /^\d{1,2}\s*[.)\-–—]$/.test(cur)) &&
+      i + 1 < rawLines.length
+    ) {
       mergedLines.push(`${cur} ${rawLines[i + 1]}`);
       i += 1;
     } else {
@@ -163,13 +166,23 @@ export function parseCourseIndexSubtopics(rawText, contextNames = []) {
     }
   }
 
+  // Modo Bizus numerado (ex.: "1. Desconcentração", "2. Descentralização" copiado com explicações e bullets):
+  // mantém apenas as linhas numeradas dos títulos de assunto e descarta parágrafos/bullets explicativos.
+  const hasTimestamps = /\[\d{1,2}:\d{2}(?::\d{2})?\]/.test(input);
+  const isNumberedBizusFormat =
+    !hasTimestamps &&
+    mergedLines.some(l => /^\s*\d{1,2}\s*[.)\-–—]\s+[A-Za-zÀ-ÿ]/.test(l));
+  const linesToProcess = isNumberedBizusFormat
+    ? mergedLines.filter(l => /^\s*\d{1,2}\s*[.)\-–—]\s+\S+/.test(l))
+    : mergedLines;
+
   const broadContext = buildBroadContextSet(contextNames);
   const contextText = (Array.isArray(contextNames) ? contextNames : [contextNames]).filter(Boolean).join(' ');
   const mainLawIds = new Set(getCourseContextLawIds(contextText));
   const results = [];
   const seenNorm = new Set();
 
-  for (const rawLine of mergedLines) {
+  for (const rawLine of linesToProcess) {
     // Descarta abas/ruídos comuns caso o usuário copie a caixa inteira da página
     const rawNorm = normalizeCourseLookupKey(rawLine);
     if (
@@ -183,11 +196,26 @@ export function parseCourseIndexSubtopics(rawText, contextNames = []) {
       continue;
     }
 
-    const hadIntroPrefix = /^(?:[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?\s*)?introdu[cç][aã]o\b/i.test(rawLine);
+    const hadIntroPrefix = /^(?:[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?\s*|\d{1,2}\s*[.)\-–—]\s*)?introdu[cç][aã]o\b/i.test(rawLine);
     let cleaned = normalizeCourseIndexLineText(rawLine);
     if (!cleaned) continue;
 
     if (PROSE_NOTE_PREFIX_REGEX.test(cleaned)) continue;
+
+    if (isNumberedBizusFormat) {
+      const colonIdx = cleaned.indexOf(':');
+      if (colonIdx > 2 && colonIdx < cleaned.length - 1) {
+        const beforeColon = cleaned.slice(0, colonIdx).trim();
+        const afterColon = cleaned.slice(colonIdx + 1).trim();
+        const afterWords = afterColon.split(/\s+/).filter(Boolean).length;
+        if (normalizeCourseLookupKey(beforeColon).length >= 3 && (afterColon.length > 25 || afterWords > 4)) {
+          cleaned = beforeColon;
+        }
+      }
+      cleaned = cleaned.replace(/[:;.\-–—]+$/g, '').trim();
+      if (!cleaned) continue;
+    }
+
     if (cleaned.length > 85 || (/\.\s*$/.test(cleaned) && cleaned.split(/\s+/).length > 8)) {
       continue;
     }
@@ -267,11 +295,13 @@ export function findMatchingCourseIndexEntry({
   for (const name of candidates) {
     const key = normalizeCourseLookupKey(name);
     if (!key) continue;
-    if (manualIndexMap[key]?.rawIndexText) {
-      return { source: 'manual', ...manualIndexMap[key] };
+    const manualRaw = manualIndexMap[key]?.bizusRawText || manualIndexMap[key]?.rawIndexText;
+    if (manualRaw) {
+      return { source: 'manual', ...manualIndexMap[key], rawIndexText: manualRaw };
     }
-    if (byLesson[key]?.rawIndexText) {
-      return { source: 'extension', ...byLesson[key] };
+    const extRaw = byLesson[key]?.bizusRawText || byLesson[key]?.rawIndexText;
+    if (extRaw) {
+      return { source: 'extension', ...byLesson[key], rawIndexText: extRaw };
     }
   }
 
@@ -290,11 +320,12 @@ export function findMatchingCourseIndexEntry({
 
   for (const { source, map } of allMaps) {
     for (const [k, entry] of Object.entries(map || {})) {
-      if (!entry?.rawIndexText) continue;
+      const entryRaw = entry?.bizusRawText || entry?.rawIndexText;
+      if (!entryRaw) continue;
       const entryCanon = canonicalizeLesson(entry.lessonTitle || k);
       if (!entryCanon) continue;
       if (candCanonical.some(c => c === entryCanon || (c.length >= 10 && entryCanon.includes(c)) || (entryCanon.length >= 10 && c.includes(entryCanon)))) {
-        return { source, ...entry };
+        return { source, ...entry, rawIndexText: entryRaw };
       }
     }
   }
