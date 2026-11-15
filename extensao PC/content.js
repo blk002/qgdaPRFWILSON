@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.27 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.28 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -2004,6 +2004,9 @@
       if (missingTargetCount > 0 && foreignConcepts.length > 0) {
         return 0;
       }
+      if (targetConcepts.size >= 3 && matchedConcepts.length <= 1 && optConcepts.some(c => !targetConcepts.has(c))) {
+        return 0;
+      }
     }
 
     const isPureConceptSubset = optConcepts.length > 0 && matchedConcepts.length === optConcepts.length;
@@ -2716,16 +2719,17 @@
     const seenAssuntos = new Set();
     for (const block of blocks) {
       const rawText = String(block.innerText || block.textContent || '').replace(/\s+/g, ' ').trim();
-      const norm = normalizeFilterText(rawText);
+      const strippedRaw = rawText.replace(/^(?:close|cancel|clear|highlight_off|✕|×|x)\s+/i, '').trim();
+      const norm = normalizeFilterText(strippedRaw);
       if (!norm || norm === 'filtros aplicados' || norm === 'filtros aplicados:') continue;
 
-      if (/^disciplina\b/.test(norm) && rawText.length < 180) {
-        const val = cleanChipText(rawText.replace(/^(?:close|x|✕)?\s*disciplina\s*:?\s*/i, ''));
+      if (/^disciplina\b/.test(norm) && strippedRaw.length < 180) {
+        const val = cleanChipText(strippedRaw.replace(/^disciplina\s*:?\s*/i, ''));
         if (val && !result.disciplina) result.disciplina = val;
-      } else if (/^status\b/.test(norm) && rawText.length < 100) {
-        const val = cleanChipText(rawText.replace(/^(?:close|x|✕)?\s*status\s*:?\s*/i, ''));
+      } else if (/^status\b/.test(norm) && strippedRaw.length < 100) {
+        const val = cleanChipText(strippedRaw.replace(/^status\s*:?\s*/i, ''));
         if (val && !result.status) result.status = val;
-      } else if (/^assunto\b/.test(norm) && rawText.length < 360) {
+      } else if (/^assunto\b/.test(norm) && strippedRaw.length < 360) {
         const childChips = Array.from(block.querySelectorAll('.q-chip, [class*="chip"], [class*="badge"], [class*="tag"], button, span, div'))
           .filter(ch => {
             if (!ch || ch === block || !isElementVisible(ch)) return false;
@@ -2746,7 +2750,7 @@
             }
           }
         } else {
-          const val = cleanChipText(rawText.replace(/^(?:close|x|✕)?\s*assunto\s*:?\s*/i, ''));
+          const val = cleanChipText(strippedRaw.replace(/^assunto\s*:?\s*/i, ''));
           const vn = normalizeCourseIndexKey(val);
           if (vn && !seenAssuntos.has(vn)) {
             seenAssuntos.add(vn);
@@ -2918,11 +2922,17 @@
         });
       }
       if (bestEntry && bestScore >= minScore) {
-        if (bestEntry.el && bestEntry.el.isConnected) {
+        // Verifica primeiro no DOM visível atual (nós de virtual-scroll podem ser reciclados ao rolar)
+        const liveOptions = findDropdownOptionElements(filterInput);
+        const liveMatch = liveOptions.find(el => normalizeCourseIndexKey(el.innerText || el.textContent) === bestEntry.norm);
+        if (liveMatch) return liveMatch;
+
+        if (bestEntry.el && bestEntry.el.isConnected && normalizeCourseIndexKey(bestEntry.el.innerText || bestEntry.el.textContent) === bestEntry.norm) {
           return bestEntry.el;
         }
+
         if (filterInput) {
-          const revealQuery = bestEntry.label.slice(0, 40).trim();
+          const revealQuery = bestEntry.label.slice(0, 48).trim();
           filterInput.focus();
           setNativeInputValue(filterInput, revealQuery);
           await sleepMs(320);
@@ -2933,7 +2943,11 @@
       }
     }
 
-    for (const term of searchTerms) {
+    const typedTerms = (preScannedOptions && preScannedOptions.length > 0)
+      ? searchTerms.filter(t => String(t || '').trim().split(/\s+/).length >= 2 || !(opts.targetConcepts && opts.targetConcepts.size >= 3)).slice(0, 2)
+      : searchTerms;
+
+    for (const term of typedTerms) {
       if (filterInput) {
         const accented = restoreCommonPortugueseAccents(term);
         const primaryQuery = (accented && accented !== term) ? accented : term;
@@ -3120,7 +3134,11 @@
 
     const mainContextText = [fallbackTopic, ...validLessons].filter(Boolean).join(' ');
     const mainLawIds = getMatchingSpecialLawIds(mainContextText);
-    const mainLawTerms = getSpecialLawSearchTerms(mainContextText);
+    const subjectOwnLawIds = new Set(getMatchingSpecialLawIds(`${subjectName || ''} ${fallbackTopic === 'CTB' ? 'ctb' : ''}`.trim()));
+    const isSpecialSubject = isSpecialLegislationSubjectName(subjectName);
+    const mainLawTerms = (isSpecialSubject || !mainLawIds.every(id => subjectOwnLawIds.has(id)))
+      ? getSpecialLawSearchTerms(mainContextText)
+      : [];
     const allowedLawIds = mainLawIds.length > 0 ? new Set(mainLawIds) : null;
 
     const trySelectWithTerms = async (terms, matchOpts = {}) => {
@@ -3263,7 +3281,7 @@
     }
 
     // 1B. Caso não houvesse lei principal no título/tópico, verifica se o contexto geral revelou uma única lei específica
-    if (mainLawTerms.length === 0) {
+    if (mainLawTerms.length === 0 && isSpecialSubject) {
       const allContextText = [fallbackTopic, ...validLessons, ...validSubtopics].filter(Boolean).join(' ');
       const allContextLawTerms = getSpecialLawSearchTerms(allContextText);
       if (allContextLawTerms.length > 0) {
@@ -3635,7 +3653,7 @@
       : subject;
 
     lastFilterDiagnosticLog = {
-      version: '1.2.27',
+      version: '1.2.28',
       timestamp: new Date().toISOString(),
       input: {
         rawSubject,
