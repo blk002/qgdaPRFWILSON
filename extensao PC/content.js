@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.22 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.23 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -637,8 +637,64 @@
     'modulo',
     'modulos',
     'bloco',
-    'blocos'
+    'blocos',
+    'definicao',
+    'definicoes',
+    'conceito',
+    'conceitos',
+    'introducao',
+    'aspecto',
+    'aspectos',
+    'estudo',
+    'classificacao',
+    'tipo',
+    'tipos'
   ]);
+
+  const CONCEPT_STOP_WORDS = new Set([
+    'x', 'vs', 'versus', 'e', 'ou', 'de', 'da', 'do', 'dos', 'das',
+    'em', 'na', 'no', 'nas', 'nos', 'para', 'por', 'com', 'sem',
+    'sobre', 'entre', 'ao', 'aos', 'as', 'os', 'um', 'uma'
+  ]);
+
+  let stemmedGenericMatchWordsCache = null;
+  function getStemmedGenericMatchWords() {
+    if (!stemmedGenericMatchWordsCache) {
+      stemmedGenericMatchWordsCache = new Set();
+      for (const gw of GENERIC_MATCH_WORDS) {
+        stemmedGenericMatchWordsCache.add(gw);
+        const st = normalizeStemText(gw);
+        if (st) {
+          for (const sw of st.split(' ')) {
+            if (sw) stemmedGenericMatchWordsCache.add(sw);
+          }
+        }
+      }
+    }
+    return stemmedGenericMatchWordsCache;
+  }
+
+  function extractConceptWords(str) {
+    const rawNorm = normalizeFilterText(String(str || ''))
+      .replace(/[^a-z0-9]+/g, ' ')
+      .trim();
+    if (!rawNorm) return [];
+    const genericStems = getStemmedGenericMatchWords();
+    const seen = new Set();
+    const result = [];
+    for (const rawWord of rawNorm.split(/\s+/)) {
+      if (!rawWord) continue;
+      if (CONCEPT_STOP_WORDS.has(rawWord) || GENERIC_MATCH_WORDS.has(rawWord)) continue;
+      const stemmed = normalizeStemText(rawWord).trim() || rawWord;
+      if (!stemmed || stemmed.length < 3) continue;
+      if (CONCEPT_STOP_WORDS.has(stemmed) || genericStems.has(stemmed)) continue;
+      if (!seen.has(stemmed)) {
+        seen.add(stemmed);
+        result.push(stemmed);
+      }
+    }
+    return result;
+  }
 
   const CONFLICTING_QUALIFIER_FAMILIES = [
     ['estadual'],
@@ -1188,9 +1244,47 @@
     return terms;
   }
 
+  function extractEnumeratedSubitemsFromLesson(lessonTitle) {
+    const cleaned = String(lessonTitle || '')
+      .replace(/\b(?:aula|parte|bloco|m[oó]dulo|cap[ií]tulo)\s*\d+\b/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/^[\s\-–—:|]+|[\s\-–—:|]+$/g, '')
+      .trim();
+    if (!cleaned) return [];
+
+    const dashParts = cleaned.split(/\s*[-–—:]\s*/).map(p => p.trim()).filter(Boolean);
+    const targetParts = dashParts.length > 1 ? dashParts.slice(1) : [cleaned];
+
+    const rawItems = [];
+    const seenNorm = new Set();
+    for (const part of targetParts) {
+      const splitItems = part.split(/\s*,\s*|\s+\be\b\s+|\s+\bx\b\s+/i).map(p => p.trim()).filter(Boolean);
+      if (splitItems.length < 2) continue;
+      splitItems.forEach((item, idx) => {
+        const cleanNorm = normalizeFilterText(item)
+          .replace(/^[\s\-–—:|]+|[\s\-–—:|]+$/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (cleanNorm.length >= 3 && !isOnlyGenericWords(cleanNorm) && !seenNorm.has(cleanNorm)) {
+          seenNorm.add(cleanNorm);
+          rawItems.push({ raw: item.trim(), norm: cleanNorm, idx });
+        }
+      });
+    }
+
+    // Ordena termos mais específicos/longos primeiro (em empate de tamanho, prefere itens posteriores como intranet/extranet antes de internet)
+    rawItems.sort((a, b) => (b.norm.length - a.norm.length) || (b.idx - a.idx));
+    return rawItems.map(entry => entry.raw);
+  }
+
   function getLessonSearchTerms(lessonTitle) {
-    const raw = String(lessonTitle || '').trim();
-    if (!raw) return [];
+    const cleanedRaw = String(lessonTitle || '')
+      .replace(/\b(?:aula|parte|bloco|m[oó]dulo|cap[ií]tulo)\s*\d+\b/gi, ' ')
+      .replace(/\s+/g, ' ')
+      .replace(/^[\s\-–—:|]+|[\s\-–—:|]+$/g, '')
+      .trim();
+    if (!cleanedRaw) return [];
+
     const terms = [];
     const pushUnique = (t) => {
       const s = normalizeFilterText(t)
@@ -1201,24 +1295,50 @@
       if (s && !terms.includes(s)) terms.push(s);
     };
 
-    pushUnique(raw);
+    const pushEnumeratedFromPart = (part) => {
+      const listParts = part.split(/\s*,\s*|\s+\be\b\s+|\s+\bx\b\s+/i).map(p => p.trim()).filter(Boolean);
+      if (listParts.length > 1) {
+        const specificParts = [];
+        listParts.forEach((sub, idx) => {
+          const cleanPart = normalizeFilterText(sub);
+          if (cleanPart.length >= 3 && !isOnlyGenericWords(cleanPart)) {
+            specificParts.push({ cleanPart, idx });
+          }
+        });
+        specificParts.sort((a, b) => (b.cleanPart.length - a.cleanPart.length) || (b.idx - a.idx));
+        specificParts.forEach(entry => pushUnique(entry.cleanPart));
+      }
+    };
 
-    // Subdivisões por hífen / travessão (ex.: "VELOCIDADE ESCALAR MÉDIA - CASOS PARTICULARES")
-    const dashParts = raw.split(/\s*[-–—:]\s*/).map(p => p.trim()).filter(Boolean);
+    // Divide primeiro por hífen / travessão para não misturar prefixo genérico com lista enumerada à direita
+    const dashParts = cleanedRaw.split(/\s*[-–—:]\s*/).map(p => p.trim()).filter(Boolean);
     if (dashParts.length > 1) {
-      dashParts.forEach(part => pushUnique(part));
-    }
+      const rightParts = dashParts.slice(1);
+      const leftPart = dashParts[0];
 
-    // Expansão de siglas e nomes de leis especiais (ex.: "Crimes contra a Criança e o Adolescente" -> ECA / 8.069)
-    getSpecialLawSearchTerms(raw).forEach(t => pushUnique(t));
-
-    // Múltiplos tópicos na mesma aula (ex.: "INTERJEIÇÃO, NUMERAL E PREPOSIÇÃO")
-    const listParts = raw.split(/\s*,\s*|\s+\be\b\s+/i).map(p => p.trim()).filter(Boolean);
-    if (listParts.length > 1) {
-      listParts.forEach(part => {
+      // Prioriza partes específicas à direita (ex.: "Internet, Intranet e Extranet") antes do prefixo à esquerda ("Definições de Redes")
+      rightParts.forEach(part => {
         const cleanPart = normalizeFilterText(part);
-        if (cleanPart.length >= 3 && !isOnlyGenericWords(cleanPart)) pushUnique(part);
+        if (cleanPart.length >= 3 && !isOnlyGenericWords(cleanPart)) {
+          pushUnique(part);
+        }
+        getSpecialLawSearchTerms(part).forEach(t => pushUnique(t));
+        pushEnumeratedFromPart(part);
       });
+
+      pushUnique(cleanedRaw);
+      getSpecialLawSearchTerms(cleanedRaw).forEach(t => pushUnique(t));
+
+      const cleanLeft = normalizeFilterText(leftPart);
+      if (cleanLeft.length >= 3 && !isOnlyGenericWords(cleanLeft)) {
+        pushUnique(leftPart);
+      }
+      getSpecialLawSearchTerms(leftPart).forEach(t => pushUnique(t));
+      pushEnumeratedFromPart(leftPart);
+    } else {
+      pushUnique(cleanedRaw);
+      getSpecialLawSearchTerms(cleanedRaw).forEach(t => pushUnique(t));
+      pushEnumeratedFromPart(cleanedRaw);
     }
 
     // Variantes sem palavras genéricas e palavras-chave significativas (>= 4 letras)
@@ -1433,13 +1553,35 @@
       .trim();
     const stemOptWithoutLeiPrefix = normalizeStemText(normOptWithoutLeiPrefix);
 
+    const targetConcepts =
+      opts.targetConcepts instanceof Set && opts.targetConcepts.size > 0
+        ? opts.targetConcepts
+        : new Set(extractConceptWords(validTerms.join(' ')));
+    const optConcepts = extractConceptWords(primaryOptionText);
+    const matchedConcepts = optConcepts.filter(c => targetConcepts.has(c));
+    const isPureConceptSubset = optConcepts.length > 0 && matchedConcepts.length === optConcepts.length;
+    const isSinglePartialConcept =
+      targetConcepts.size >= 2 &&
+      optConcepts.length === 1 &&
+      matchedConcepts.length === 1;
+    const compositeConceptScore =
+      matchedConcepts.length >= 2 && isPureConceptSubset
+        ? 1000 + matchedConcepts.length * 80
+        : 0;
+
     let best = 0;
     let additionalTermMatches = 0;
     for (let i = 0; i < validTerms.length; i++) {
       const term = validTerms[i];
       const stemTerm = normalizeStemText(term);
       if (!term) continue;
-      if (normOpt === term || (stemTerm && stemOpt === stemTerm)) return 1000 - i;
+      if (normOpt === term || (stemTerm && stemOpt === stemTerm)) {
+        if (!isSinglePartialConcept && compositeConceptScore === 0) {
+          return 1000 - i;
+        }
+        best = Math.max(best, isSinglePartialConcept ? Math.max(1, 720 - i) : (1000 - i));
+        continue;
+      }
       if (
         (normOptWithoutLeiPrefix && hasWholeStartMatch(normOptWithoutLeiPrefix, term)) ||
         (stemOptWithoutLeiPrefix && stemTerm && hasWholeStartMatch(stemOptWithoutLeiPrefix, stemTerm))
@@ -1468,8 +1610,16 @@
       }
     }
 
-    if (best > 0 && additionalTermMatches > 0) {
-      best += Math.min(60, additionalTermMatches * 15);
+    if (best > 0) {
+      if (additionalTermMatches > 0) {
+        best += Math.min(60, additionalTermMatches * 15);
+      }
+      if (compositeConceptScore > 0) {
+        best = Math.max(best, compositeConceptScore);
+      }
+      if (isSinglePartialConcept && best > 720) {
+        best = 720;
+      }
     }
     return best;
   }
@@ -1810,7 +1960,7 @@
         if (forbiddenNorms && forbiddenNorms.has(optNorm)) continue;
         if (excludeNorms && excludeNorms.has(optNorm)) continue;
 
-        const sc = scoreOptionMatch(opt.innerText || opt.textContent, [term, ...searchTerms], opts);
+        const sc = scoreOptionMatch(opt.innerText || opt.textContent, searchTerms, opts);
         if (sc > bestScore) {
           bestScore = sc;
           matched = opt;
@@ -1905,6 +2055,30 @@
 
     let matchedCount = 0;
     const selectedOptionNorms = new Set();
+    const coveredConcepts = new Set();
+
+    const lessonTargetConcepts = new Set();
+    const addConceptsFromSource = (text, preferRightDash = false) => {
+      const rawStr = String(text || '')
+        .replace(/\b(?:aula|parte|p[aá]gina|bloco|m[oó]dulo|cap[ií]tulo)\s*\d+\b/gi, ' ')
+        .replace(/\s+/g, ' ')
+        .replace(/^[\s\-–—:|]+|[\s\-–—:|]+$/g, '')
+        .trim();
+      if (!rawStr) return;
+      let scopeText = rawStr;
+      if (preferRightDash) {
+        const dashParts = rawStr.split(/\s*[-–—:]\s*/).map(p => p.trim()).filter(Boolean);
+        if (dashParts.length > 1) {
+          const rightJoined = dashParts.slice(1).join(' ');
+          if (extractConceptWords(rightJoined).length > 0) {
+            scopeText = rightJoined;
+          }
+        }
+      }
+      extractConceptWords(scopeText).forEach(c => lessonTargetConcepts.add(c));
+    };
+    validLessons.forEach(lesson => addConceptsFromSource(lesson, true));
+    validSubtopics.forEach(sub => addConceptsFromSource(sub, false));
 
     const mainContextText = [fallbackTopic, ...validLessons].filter(Boolean).join(' ');
     const mainLawIds = getMatchingSpecialLawIds(mainContextText);
@@ -1916,13 +2090,18 @@
       const effectiveOpts = {
         ...matchOpts,
         ...(allowedLawIds ? { allowedLawIds } : {}),
+        ...(matchOpts.targetConcepts !== undefined
+          ? {}
+          : (lessonTargetConcepts.size > 0 ? { targetConcepts: lessonTargetConcepts } : {})),
         excludeNorms: selectedOptionNorms
       };
       const matched = await matchOptionInOpenDropdown(filterInput, terms, effectiveOpts);
       if (!matched) return false;
-      const matchedNorm = normalizeCourseIndexKey(matched.innerText || matched.textContent);
+      const matchedLabel = matched.innerText || matched.textContent;
+      const matchedNorm = normalizeCourseIndexKey(matchedLabel);
       if (matchedNorm && selectedOptionNorms.has(matchedNorm)) return false;
       if (matchedNorm) selectedOptionNorms.add(matchedNorm);
+      extractConceptWords(matchedLabel).forEach(c => coveredConcepts.add(c));
       if (!isOptionRowChecked(matched)) {
         clickOptionRow(matched);
         matchedCount += 1;
@@ -1938,7 +2117,8 @@
       await trySelectWithTerms(mainLawTerms, {
         minScore: 220,
         allowEmptyFallback: true,
-        allowedLawIds
+        allowedLawIds,
+        targetConcepts: null
       });
 
       if (matchedCount > 0 && isSpecialLegislationSubjectName(subjectName)) {
@@ -1961,6 +2141,11 @@
           }
         }
 
+        const subConcepts = extractConceptWords(subtopic);
+        if (subConcepts.length > 0 && subConcepts.every(c => coveredConcepts.has(c))) {
+          continue;
+        }
+
         const expanded = expandSubtopicToSearchGroups(subtopic);
         if (!expanded || !expanded.primary || expanded.primary.length === 0) continue;
 
@@ -1968,7 +2153,8 @@
           forbiddenNorms: forbiddenParentNorms,
           minScore: 420,
           allowEmptyFallback: false,
-          allowedLawIds
+          allowedLawIds,
+          targetConcepts: lessonTargetConcepts
         });
 
         if (!directHit && Array.isArray(expanded.splitFallbacks) && expanded.splitFallbacks.length > 0) {
@@ -1984,7 +2170,8 @@
               forbiddenNorms: forbiddenParentNorms,
               minScore: 420,
               allowEmptyFallback: false,
-              allowedLawIds
+              allowedLawIds,
+              targetConcepts: lessonTargetConcepts
             });
           }
         }
@@ -2000,7 +2187,11 @@
           selNorm => scoreOptionMatch(selNorm, allContextLawTerms) >= 400
         );
         if (!hasContextLawSelected) {
-          await trySelectWithTerms(allContextLawTerms, { minScore: 220, allowEmptyFallback: true });
+          await trySelectWithTerms(allContextLawTerms, {
+            minScore: 220,
+            allowEmptyFallback: true,
+            targetConcepts: null
+          });
         }
       }
     }
@@ -2010,14 +2201,45 @@
       for (const lessonTitle of validLessons) {
         if (isDestroyed) break;
         const lessonTerms = getLessonSearchTerms(lessonTitle);
-        if (lessonTerms.length === 0) continue;
-        await trySelectWithTerms(lessonTerms, { minScore: 200, allowEmptyFallback: true, allowedLawIds });
+        if (lessonTerms.length > 0) {
+          await trySelectWithTerms(lessonTerms, {
+            minScore: 200,
+            allowEmptyFallback: true,
+            allowedLawIds,
+            targetConcepts: lessonTargetConcepts
+          });
+        }
+
+        // Se a aula enumera múltiplos conceitos (ex.: "Internet, Intranet e Extranet") e o filtro selecionado
+        // ainda não cobriu todos (ex.: selecionou só "Intranet" porque não havia pasta composta "Intranet x Extranet x Internet"),
+        // complementa com os conceitos restantes da enumeração.
+        const enumItems = extractEnumeratedSubitemsFromLesson(lessonTitle);
+        if (enumItems.length >= 2) {
+          for (const item of enumItems) {
+            if (isDestroyed) break;
+            const itemConcepts = extractConceptWords(item);
+            if (itemConcepts.length > 0 && itemConcepts.every(c => coveredConcepts.has(c))) {
+              continue;
+            }
+            await trySelectWithTerms([item], {
+              minScore: 200,
+              allowEmptyFallback: false,
+              allowedLawIds,
+              targetConcepts: lessonTargetConcepts
+            });
+          }
+        }
       }
     }
 
     if (matchedCount === 0 && hasFallback) {
       const fallbackTerms = getTopicSearchTerms(fallbackTopic);
-      await trySelectWithTerms(fallbackTerms, { minScore: 200, allowEmptyFallback: true, allowedLawIds });
+      await trySelectWithTerms(fallbackTerms, {
+        minScore: 200,
+        allowEmptyFallback: true,
+        allowedLawIds,
+        targetConcepts: lessonTargetConcepts
+      });
     }
 
     await closeOpenDropdown(trigger, filterInput);
