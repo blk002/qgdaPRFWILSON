@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.28 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.3.0 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -20,6 +20,7 @@
   const PENDING_FILTER_KEY = 'qg_pending_caveira_filter';
   const COURSE_INDEX_CACHE_KEY = 'qg_caveira_course_index_cache';
   const FILTER_CORRECTION_MEMORY_KEY = 'qg_caveira_filter_memory';
+  const SUBJECT_TREE_CACHE_KEY = 'qg_caveira_subject_tree_cache';
   const MAX_BUCKET_QUESTIONS = 1500;
   let cachedDailyGoal = 50;
   let cachedActiveUserId = null;
@@ -2632,8 +2633,66 @@
     return container;
   }
 
-  async function collectAllDropdownOptionsByScroll(filterInput) {
-    if (!filterInput) return { options: [], scrollSteps: 0, isVirtualized: false };
+  function buildTreeCacheHash(options) {
+    const list = Array.isArray(options) ? options : [];
+    const first = list[0]?.norm || '';
+    const last = list[list.length - 1]?.norm || '';
+    return `${list.length}:${first}:${last}`;
+  }
+
+  function loadSubjectTreeCache(subjectName) {
+    return new Promise((resolve) => {
+      try {
+        const key = normalizeCourseIndexKey(subjectName || '');
+        if (!key || !isExtensionContextValid() || !chrome?.storage?.local) {
+          resolve(null);
+          return;
+        }
+        chrome.storage.local.get([SUBJECT_TREE_CACHE_KEY], (res) => {
+          const store = (res && res[SUBJECT_TREE_CACHE_KEY] && typeof res[SUBJECT_TREE_CACHE_KEY] === 'object')
+            ? res[SUBJECT_TREE_CACHE_KEY]
+            : {};
+          const entry = store[key];
+          const maxAgeMs = 14 * 24 * 60 * 60 * 1000;
+          if (entry && Array.isArray(entry.nodes) && entry.nodes.length > 0 && (Date.now() - (entry.scannedAt || 0)) < maxAgeMs) {
+            resolve(entry);
+            return;
+          }
+          resolve(null);
+        });
+      } catch (_) {
+        resolve(null);
+      }
+    });
+  }
+
+  function saveSubjectTreeCache(subjectName, options) {
+    try {
+      const key = normalizeCourseIndexKey(subjectName || '');
+      if (!key || !Array.isArray(options) || options.length < 3 || !isExtensionContextValid() || !chrome?.storage?.local) return;
+      chrome.storage.local.get([SUBJECT_TREE_CACHE_KEY], (res) => {
+        const store = (res && res[SUBJECT_TREE_CACHE_KEY] && typeof res[SUBJECT_TREE_CACHE_KEY] === 'object')
+          ? { ...res[SUBJECT_TREE_CACHE_KEY] }
+          : {};
+        store[key] = {
+          subjectName,
+          scannedAt: Date.now(),
+          hash: buildTreeCacheHash(options),
+          nodes: options.map(o => ({ label: o.label, norm: o.norm }))
+        };
+        const entries = Object.entries(store);
+        if (entries.length > 35) {
+          entries.sort((a, b) => (b[1]?.scannedAt || 0) - (a[1]?.scannedAt || 0));
+          chrome.storage.local.set({ [SUBJECT_TREE_CACHE_KEY]: Object.fromEntries(entries.slice(0, 35)) });
+        } else {
+          chrome.storage.local.set({ [SUBJECT_TREE_CACHE_KEY]: store });
+        }
+      });
+    } catch (_) {}
+  }
+
+  async function collectAllDropdownOptionsByScroll(filterInput, subjectName = '') {
+    if (!filterInput) return { options: [], scrollSteps: 0, isVirtualized: false, fromCache: false };
     try {
       if (filterInput.value) {
         filterInput.focus();
@@ -2641,6 +2700,24 @@
         await sleepMs(260);
       }
     } catch (_) {}
+
+    const initialVisible = findDropdownOptionElements(filterInput);
+    const firstVisibleNorm = initialVisible[0] ? normalizeCourseIndexKey(initialVisible[0].innerText || initialVisible[0].textContent) : '';
+
+    if (subjectName) {
+      const cached = await loadSubjectTreeCache(subjectName);
+      if (cached && Array.isArray(cached.nodes) && cached.nodes.length >= 3) {
+        const cachedFirst = cached.nodes[0]?.norm || '';
+        if (!firstVisibleNorm || !cachedFirst || firstVisibleNorm === cachedFirst) {
+          return {
+            options: cached.nodes.map(n => ({ label: n.label, norm: n.norm, el: null })),
+            scrollSteps: 0,
+            isVirtualized: true,
+            fromCache: true
+          };
+        }
+      }
+    }
 
     const collected = new Map();
     const collectVisible = () => {
@@ -2695,10 +2772,16 @@
       }
     }
 
+    const finalOptions = Array.from(collected.values());
+    if (subjectName && finalOptions.length >= 3) {
+      saveSubjectTreeCache(subjectName, finalOptions);
+    }
+
     return {
-      options: Array.from(collected.values()),
+      options: finalOptions,
       scrollSteps,
-      isVirtualized
+      isVirtualized,
+      fromCache: false
     };
   }
 
@@ -3084,13 +3167,16 @@
       filterInput = findMenuFilterInput();
     }
 
-    const treeScan = await collectAllDropdownOptionsByScroll(filterInput);
+    const treeScan = await collectAllDropdownOptionsByScroll(filterInput, subjectName);
     const preScannedOptions = treeScan.options || [];
+    const treeMatcher = (typeof globalThis !== 'undefined' && globalThis.QGCaveiraTreeMatcher) ? globalThis.QGCaveiraTreeMatcher : null;
+    const bm25Index = (treeMatcher && preScannedOptions.length > 0) ? treeMatcher.buildBm25Index(preScannedOptions) : null;
     if (diagLog) {
       diagLog.treeScan = {
         scannedCount: preScannedOptions.length,
         scrollSteps: treeScan.scrollSteps,
         isVirtualized: treeScan.isVirtualized,
+        fromCache: Boolean(treeScan.fromCache),
         sampleOptions: preScannedOptions.slice(0, 60).map(o => o.label)
       };
     }
@@ -3173,6 +3259,34 @@
       return true;
     };
 
+    const selectOptionByExactLabel = async (label, norm) => {
+      if (!label || !norm || selectedOptionNorms.has(norm)) return false;
+      const liveOptions = findDropdownOptionElements(filterInput);
+      let targetEl = liveOptions.find(el => normalizeCourseIndexKey(el.innerText || el.textContent) === norm) || null;
+      if (!targetEl && filterInput) {
+        const revealQuery = String(label).replace(/^[\s_]+/, '').slice(0, 48).trim();
+        filterInput.focus();
+        setNativeInputValue(filterInput, revealQuery);
+        await sleepMs(320);
+        const visible = findDropdownOptionElements(filterInput);
+        targetEl = visible.find(el => normalizeCourseIndexKey(el.innerText || el.textContent) === norm) || null;
+      }
+      if (!targetEl) return false;
+      selectedOptionNorms.add(norm);
+      extractConceptWords(label).forEach(c => coveredConcepts.add(c));
+      if (!isOptionRowChecked(targetEl)) {
+        clickOptionRow(targetEl);
+        matchedCount += 1;
+        await sleepMs(180);
+      } else {
+        matchedCount += 1;
+      }
+      if (diagLog && Array.isArray(diagLog.selectedLabels)) {
+        diagLog.selectedLabels.push(String(label).replace(/\s+/g, ' ').trim());
+      }
+      return true;
+    };
+
     // 0. Prioridade 0: Memória de correções do usuário para esta aula/assunto
     if (savedMemoryAssuntos.length > 0) {
       for (const memAssunto of savedMemoryAssuntos) {
@@ -3207,11 +3321,48 @@
       }
     }
 
-    // 1. Subassuntos do Índice/Bizus da aula: marca apenas subpastas específicas compatíveis
-    if (validSubtopics.length > 0) {
-      const forbiddenParentNorms = buildBroadParentNorms([subjectName, fallbackTopic, ...validLessons]);
-      for (const subtopic of validSubtopics) {
+    // 1A-bis. Âncora Nível A (Título da aula / tópico via BM25 na árvore cacheada)
+    let anchorFolderMatched = false;
+    if (bm25Index && !isSpecialSubject) {
+      const anchorQueries = [...validLessons, fallbackTopic].filter(Boolean);
+      for (const anchorQ of anchorQueries) {
         if (isDestroyed) break;
+        const ranked = treeMatcher.scoreTreeNodesBm25(anchorQ, bm25Index, { excludeNorms: selectedOptionNorms });
+        const top1 = ranked[0];
+        const top2 = ranked[1];
+        if (diagLog && Array.isArray(diagLog.queries) && ranked.length > 0) {
+          diagLog.queries.push({
+            source: `bm25-anchor-A:${anchorQ}`,
+            terms: [anchorQ],
+            minScore: 3.8,
+            top5: ranked.slice(0, 5).map(r => ({ label: r.node.label, score: r.score, coverage: r.coverage })),
+            selected: null
+          });
+        }
+        const hasMargin = !top2 || top1.score >= top2.score * 1.12 || top1.coverage >= 0.75;
+        if (top1 && !top1.node.isLeaf && top1.score >= 3.8 && top1.coverage >= 0.5 && hasMargin) {
+          const ok = await selectOptionByExactLabel(top1.node.label, top1.node.norm);
+          if (ok) {
+            anchorFolderMatched = true;
+            if (diagLog && diagLog.queries.length > 0) {
+              diagLog.queries[diagLog.queries.length - 1].selected = top1.node.label;
+            }
+          }
+        }
+      }
+    }
+
+    // 1. Subassuntos do Índice/Bizus da aula (filtrados de ruído e ranqueados em B/C)
+    const rankedSubtopics = (treeMatcher && validSubtopics.length > 0)
+      ? treeMatcher.filterAndRankBizusSubtopics(validSubtopics, [...validLessons, fallbackTopic], 6)
+      : validSubtopics.map(s => ({ raw: s, cleaned: s, level: 'B', weight: 0.75 }));
+
+    if (rankedSubtopics.length > 0) {
+      const forbiddenParentNorms = buildBroadParentNorms([subjectName, fallbackTopic, ...validLessons]);
+      for (const subEntry of rankedSubtopics) {
+        if (isDestroyed) break;
+        const subtopic = subEntry.cleaned || subEntry.raw;
+        const isLevelC = subEntry.level === 'C';
 
         if (allowedLawIds) {
           const subLawIds = getMatchingSpecialLawIds(subtopic);
@@ -3222,6 +3373,33 @@
 
         const subConcepts = extractConceptWords(subtopic);
         if (subConcepts.length > 0 && subConcepts.every(c => coveredConcepts.has(c))) {
+          continue;
+        }
+
+        // Tenta BM25 local antes de expandir/digitar termos (resolve Romanos<->Arábicos como Anexo 1 <-> Anexo I)
+        if (bm25Index) {
+          const ranked = treeMatcher.scoreTreeNodesBm25(subtopic, bm25Index, { excludeNorms: selectedOptionNorms });
+          const top1 = ranked[0];
+          const top2 = ranked[1];
+          const bm25Threshold = (anchorFolderMatched || isLevelC) ? 4.5 : 3.2;
+          const hasMargin = !top2 || top1.score >= top2.score * 1.15;
+          if (top1 && !top1.node.isLeaf && top1.score >= bm25Threshold && top1.coverage >= 0.45 && hasMargin) {
+            const ok = await selectOptionByExactLabel(top1.node.label, top1.node.norm);
+            if (diagLog && Array.isArray(diagLog.queries)) {
+              diagLog.queries.push({
+                source: `bm25-${subEntry.level}:${subtopic}`,
+                terms: [subtopic],
+                minScore: bm25Threshold,
+                top5: ranked.slice(0, 5).map(r => ({ label: r.node.label, score: r.score, coverage: r.coverage })),
+                selected: ok ? top1.node.label : null
+              });
+            }
+            if (ok) continue;
+          }
+        }
+
+        // Se a âncora Nível A já casou com a pasta principal, subtópicos Nível C sem match forte no BM25 não arriscam busca frouxa
+        if (anchorFolderMatched && isLevelC) {
           continue;
         }
 
@@ -3653,7 +3831,7 @@
       : subject;
 
     lastFilterDiagnosticLog = {
-      version: '1.2.28',
+      version: '1.3.0',
       timestamp: new Date().toISOString(),
       input: {
         rawSubject,
