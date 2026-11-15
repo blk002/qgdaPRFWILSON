@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.25 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.26 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -1268,6 +1268,209 @@
     return results;
   }
 
+  const KNOWN_SUBJECT_RULES = [
+    {
+      canonical: 'Direito Processual Penal',
+      exactPatterns: ['direito processual penal', 'processual penal', 'processo penal', 'dpp'],
+      inlineRegex: /\b(?:direito\s+processual\s+penal|processo\s+penal)\b/i
+    },
+    {
+      canonical: 'Legislação Especial',
+      exactPatterns: [
+        'legislacao penal especial', 'legislacao especial', 'legislacao extravagante',
+        'leis penais especiais', 'leis especiais', 'direito penal especial', 'penal especial'
+      ],
+      inlineRegex: /\b(?:legislacao\s+(?:penal\s+)?especial|legislacao\s+extravagante|leis\s+(?:penais\s+)?especiais)\b/i
+    },
+    {
+      canonical: 'Direito Constitucional',
+      exactPatterns: ['direito constitucional', 'constitucional', 'dir constitucional'],
+      inlineRegex: /\bdireito\s+constitucional\b/i
+    },
+    {
+      canonical: 'Direito Administrativo',
+      exactPatterns: ['direito administrativo', 'administrativo', 'dir administrativo'],
+      inlineRegex: /\bdireito\s+administrativo\b/i
+    },
+    {
+      canonical: 'Direito Penal',
+      exactPatterns: ['direito penal', 'penal', 'dir penal'],
+      inlineRegex: /\bdireito\s+penal\b/i
+    },
+    {
+      canonical: 'Legislação de Trânsito',
+      exactPatterns: [
+        'legislacao de transito', 'codigo de transito brasileiro', 'codigo de transito',
+        'ctb', 'transito'
+      ],
+      inlineRegex: /\b(?:legislacao\s+de\s+transito|codigo\s+de\s+transito(?:\s+brasileiro)?|ctb)\b/i
+    },
+    {
+      canonical: 'Língua Portuguesa',
+      exactPatterns: ['lingua portuguesa', 'portugues', 'gramatica', 'interpretacao de texto', 'interpretacao textual'],
+      inlineRegex: /\b(?:lingua\s+portuguesa|portugues)\b/i
+    },
+    {
+      canonical: 'Raciocínio Lógico',
+      exactPatterns: ['raciocinio logico matematico', 'raciocinio logico', 'rlm', 'matematica'],
+      inlineRegex: /\b(?:raciocinio\s+logico(?:\s+matematico)?|rlm)\b/i
+    },
+    {
+      canonical: 'Informática',
+      exactPatterns: ['nocoes de informatica', 'informatica'],
+      inlineRegex: /\binformatica\b/i
+    },
+    {
+      canonical: 'Ética no Serviço Público',
+      exactPatterns: ['etica no servico publico', 'etica profissional', 'etica e cidadania', 'etica'],
+      inlineRegex: /\betica\s+no\s+servico\s+publico\b/i
+    },
+    {
+      canonical: 'Direitos Humanos',
+      exactPatterns: ['direitos humanos', 'cidadania e direitos humanos'],
+      inlineRegex: /\bdireitos\s+humanos\b/i
+    },
+    {
+      canonical: 'Física',
+      exactPatterns: ['fisica aplicada', 'fisica'],
+      inlineRegex: /\bfisica\b/i
+    },
+    {
+      canonical: 'Geopolítica',
+      exactPatterns: ['geopolitica brasileira', 'geopolitica'],
+      inlineRegex: /\bgeopolitica\b/i
+    },
+    {
+      canonical: 'Direito Civil',
+      exactPatterns: ['direito civil'],
+      inlineRegex: /\bdireito\s+civil\b/i
+    },
+    {
+      canonical: 'Redação',
+      exactPatterns: ['redacao discursiva', 'redacao oficial', 'redacao'],
+      inlineRegex: /\bredacao(?:\s+(?:discursiva|oficial))?\b/i
+    }
+  ];
+
+  function matchExactSubjectRule(segment) {
+    const norm = normalizeFilterText(segment)
+      .replace(/^(?:nocoes\s+de|disciplina\s*:?|materia\s*:?)\s+/i, '')
+      .replace(/\b(?:aula|parte|bloco|modulo)\s*\d+\b/gi, ' ')
+      .replace(/[^a-z0-9\s]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+    if (!norm) return null;
+    for (const rule of KNOWN_SUBJECT_RULES) {
+      if (rule.exactPatterns.includes(norm)) {
+        return rule.canonical;
+      }
+    }
+    return null;
+  }
+
+  function extractSubjectFromLessonTitle(lessonTitle) {
+    const raw = String(lessonTitle || '').trim();
+    if (!raw) return { subject: '', cleanedTitle: '' };
+
+    // 1. Verifica prefixo entre colchetes/parênteses no início: "[Informática] Redes" ou "(Direito Penal) Crimes"
+    const bracketMatch = raw.match(/^\s*[\[(]([^\]()]{3,45})[\])]\s*[-–—:|]*\s*(.+)$/);
+    if (bracketMatch) {
+      const bracketSubject = matchExactSubjectRule(bracketMatch[1]);
+      if (bracketSubject) {
+        const rest = bracketMatch[2].trim();
+        return {
+          subject: bracketSubject,
+          cleanedTitle: rest || raw
+        };
+      }
+    }
+
+    // 2. Verifica segmentos separados por -, –, —, :, |
+    const segments = raw.split(/\s*(?:[-–—:|])\s*/).map(s => s.trim()).filter(Boolean);
+    if (segments.length >= 2) {
+      const stripLeadingOrder = (s) => s.replace(/^(?:aula|modulo|bloco)\s*\d+\s*/i, '').trim();
+      const firstCand = stripLeadingOrder(segments[0]) || segments[0];
+      const firstSubject = matchExactSubjectRule(firstCand);
+      if (firstSubject) {
+        const remaining = segments.slice(1).join(' - ').trim();
+        return {
+          subject: firstSubject,
+          cleanedTitle: remaining && !/^(?:aula|parte|bloco|modulo)\s*\d+$/i.test(normalizeFilterText(remaining)) ? remaining : raw
+        };
+      }
+
+      // Caso venha no segundo segmento após "Aula 01 - Direito Penal - ..."
+      if (segments.length >= 3 && /^(?:aula|modulo|bloco)\s*\d+$/i.test(normalizeFilterText(segments[0]))) {
+        const secondSubject = matchExactSubjectRule(segments[1]);
+        if (secondSubject) {
+          const remaining = segments.slice(2).join(' - ').trim();
+          return {
+            subject: secondSubject,
+            cleanedTitle: remaining || raw
+          };
+        }
+      }
+
+      // Caso a matéria venha no último segmento: "Inquérito Policial - Direito Processual Penal"
+      const lastSubject = matchExactSubjectRule(segments[segments.length - 1]);
+      if (lastSubject) {
+        const remaining = segments.slice(0, -1).join(' - ').trim();
+        return {
+          subject: lastSubject,
+          cleanedTitle: remaining && !/^(?:aula|parte|bloco|modulo)\s*\d+$/i.test(normalizeFilterText(remaining)) ? remaining : raw
+        };
+      }
+    }
+
+    // 3. Fallback inline: detecta menção explícita da matéria no meio do título sem remover palavras do assunto
+    const normRaw = normalizeFilterText(raw);
+    for (const rule of KNOWN_SUBJECT_RULES) {
+      if (rule.inlineRegex && rule.inlineRegex.test(normRaw)) {
+        return { subject: rule.canonical, cleanedTitle: raw };
+      }
+    }
+
+    return { subject: '', cleanedTitle: raw };
+  }
+
+  function inferSubjectFromLessons(lessonsList = [], fallbackTopic = '') {
+    const candidates = [...(Array.isArray(lessonsList) ? lessonsList : [lessonsList]), fallbackTopic].filter(Boolean);
+    for (const cand of candidates) {
+      const { subject } = extractSubjectFromLessonTitle(cand);
+      if (subject) return subject;
+    }
+    return '';
+  }
+
+  function stripSubjectFromLessonTitle(lessonTitle, subjectName = '') {
+    const raw = String(lessonTitle || '').trim();
+    if (!raw) return '';
+    const extracted = extractSubjectFromLessonTitle(raw);
+    if (extracted.cleanedTitle && extracted.cleanedTitle !== raw) {
+      return extracted.cleanedTitle;
+    }
+    if (subjectName) {
+      const targetCanon = matchExactSubjectRule(subjectName) || normalizeFilterText(subjectName);
+      const segments = raw.split(/\s*(?:[-–—:|])\s*/).map(s => s.trim()).filter(Boolean);
+      if (segments.length >= 2) {
+        const firstCanon = matchExactSubjectRule(segments[0]) || normalizeFilterText(segments[0]);
+        if (firstCanon && firstCanon === targetCanon) {
+          const rest = segments.slice(1).join(' - ').trim();
+          if (rest && !/^(?:aula|parte|bloco|modulo)\s*\d+$/i.test(normalizeFilterText(rest))) {
+            return rest;
+          }
+        }
+      }
+    }
+    return raw;
+  }
+
+  function isGenericSubjectName(subject) {
+    const norm = normalizeFilterText(subject);
+    if (!norm) return true;
+    return /^(?:geral|edital|revisao|simulado|curso|modulo|modulos|aula|aulas|bateria|questoes|nivelamento)$/.test(norm);
+  }
+
   function getSubjectSearchTerms(subject) {
     const norm = normalizeFilterText(subject);
     if (!norm) return [];
@@ -1286,20 +1489,31 @@
     const aliases = {
       'portugues': ['lingua portuguesa', 'portugues'],
       'lingua portuguesa': ['lingua portuguesa', 'portugues'],
-      'legislacao de transito': ['codigo de transito brasileiro', 'ctb', 'transito'],
+      'legislacao de transito': ['codigo de transito brasileiro', 'ctb', 'transito', 'legislacao de transito'],
       'transito': ['codigo de transito brasileiro', 'ctb', 'transito'],
       'ctb': ['codigo de transito brasileiro', 'ctb'],
       'raciocinio logico': ['raciocinio logico', 'matematica'],
       'rlm': ['raciocinio logico', 'matematica'],
       'processo penal': ['direito processual penal', 'processo penal'],
       'direito processual penal': ['direito processual penal', 'processo penal'],
+      'direito penal': ['direito penal', 'penal'],
+      'penal': ['direito penal', 'penal'],
+      'direito constitucional': ['direito constitucional', 'constitucional'],
+      'constitucional': ['direito constitucional', 'constitucional'],
+      'direito administrativo': ['direito administrativo', 'administrativo'],
+      'administrativo': ['direito administrativo', 'administrativo'],
+      'direitos humanos': ['direitos humanos'],
+      'direito civil': ['direito civil'],
       'legislacao especial': specialLegislationTerms,
       'legislacao penal especial': specialLegislationTerms,
       'leis especiais': specialLegislationTerms,
       'leis penais especiais': specialLegislationTerms,
       'informatica': ['informatica', 'nocoes de informatica'],
       'etica': ['etica no servico publico', 'etica'],
-      'fisica': ['fisica']
+      'etica no servico publico': ['etica no servico publico', 'etica'],
+      'fisica': ['fisica'],
+      'geopolitica': ['geopolitica'],
+      'redacao': ['redacao']
     };
     const list = aliases[norm] ? [...aliases[norm]] : [norm];
     if (!list.includes(norm)) list.push(norm);
@@ -1347,7 +1561,8 @@
   }
 
   function extractEnumeratedSubitemsFromLesson(lessonTitle) {
-    const cleaned = String(lessonTitle || '')
+    const strippedSubject = stripSubjectFromLessonTitle(lessonTitle);
+    const cleaned = String(strippedSubject || lessonTitle || '')
       .replace(/\b(?:aula|parte|bloco|m[oó]dulo|cap[ií]tulo)\s*\d+\b/gi, ' ')
       .replace(/\s+/g, ' ')
       .replace(/^[\s\-–—:|]+|[\s\-–—:|]+$/g, '')
@@ -1404,7 +1619,8 @@
   }
 
   function getLessonSearchTerms(lessonTitle) {
-    const cleanedRaw = String(lessonTitle || '')
+    const withoutSubject = stripSubjectFromLessonTitle(lessonTitle);
+    const cleanedRaw = String(withoutSubject || lessonTitle || '')
       .replace(/\b(?:aula|parte|bloco|m[oó]dulo|cap[ií]tulo)\s*\d+\b/gi, ' ')
       .replace(/\s+/g, ' ')
       .replace(/^[\s\-–—:|]+|[\s\-–—:|]+$/g, '')
@@ -2505,7 +2721,8 @@
     const lessonTargetConcepts = new Set();
     const buildConceptSetFromSource = (text, preferRightDash = false) => {
       const conceptSet = new Set();
-      const rawStr = String(text || '')
+      const withoutSubject = stripSubjectFromLessonTitle(text, subjectName);
+      const rawStr = String(withoutSubject || text || '')
         .replace(/\b(?:aula|parte|p[aá]gina|bloco|m[oó]dulo|cap[ií]tulo)\s*\d+\b/gi, ' ')
         .replace(/\s+/g, ' ')
         .replace(/^[\s\-–—:|]+|[\s\-–—:|]+$/g, '')
@@ -2990,11 +3207,17 @@
 
   async function applyCaveiraPracticeFilter(filterObj) {
     if (isDestroyed || !filterObj || isApplyingFilter) return;
-    const subject = String(filterObj.subject || '').trim();
+    const rawSubject = String(filterObj.subject || '').trim();
     const lessons = Array.isArray(filterObj.lessons) ? filterObj.lessons.map(l => String(l || '').trim()).filter(Boolean) : [];
     const topic = String(filterObj.topic || '').trim();
-    const fallbackTopic = String(filterObj.fallbackTopic || topic || '').trim();
-    const effectiveLessons = lessons.length > 0 ? lessons : (topic ? [topic] : []);
+    const rawFallbackTopic = String(filterObj.fallbackTopic || topic || '').trim();
+    const rawLessons = lessons.length > 0 ? lessons : (topic ? [topic] : []);
+    const inferredSubject = inferSubjectFromLessons(rawLessons, rawFallbackTopic);
+    const subject = (!rawSubject || isGenericSubjectName(rawSubject)) && inferredSubject
+      ? inferredSubject
+      : rawSubject;
+    const effectiveLessons = rawLessons.map(l => stripSubjectFromLessonTitle(l, subject || inferredSubject)).filter(Boolean);
+    const fallbackTopic = stripSubjectFromLessonTitle(rawFallbackTopic, subject || inferredSubject) || rawFallbackTopic;
     const displayTarget = effectiveLessons.join(' • ') || fallbackTopic;
     if (!subject && !displayTarget) return;
 
@@ -3005,11 +3228,11 @@
 
     const sourceTextForParse = rawIndexText || rawSubtopicsInput.join('\n');
     let effectiveSubtopics = sourceTextForParse
-      ? parseCourseIndexSubtopics(sourceTextForParse, [subject, fallbackTopic, ...effectiveLessons])
+      ? parseCourseIndexSubtopics(sourceTextForParse, [subject, inferredSubject, fallbackTopic, ...effectiveLessons, ...rawLessons])
       : [];
 
     if (effectiveSubtopics.length === 0 && !rawIndexText) {
-      const cached = await resolveSubtopicsFromCourseCache(effectiveLessons, fallbackTopic, subject);
+      const cached = await resolveSubtopicsFromCourseCache(rawLessons, fallbackTopic, subject || inferredSubject);
       if (cached.subtopics.length > 0) {
         effectiveSubtopics = cached.subtopics;
       }
@@ -3068,6 +3291,11 @@
         renderFilterBanner(`⏳ Selecionando Disciplina: ${subject}...`);
         const subjectTerms = getSubjectSearchTerms(subject);
         subjectOk = await selectCaveiraDropdownOption('Disciplina', subjectTerms);
+        if (!subjectOk && inferredSubject && normalizeFilterText(inferredSubject) !== normalizeFilterText(subject)) {
+          renderFilterBanner(`⏳ Tentando Disciplina inferida da aula: ${inferredSubject}...`);
+          const inferredTerms = getSubjectSearchTerms(inferredSubject);
+          subjectOk = await selectCaveiraDropdownOption('Disciplina', inferredTerms);
+        }
         await sleepMs(500);
       }
 
