@@ -44,8 +44,20 @@
     );
   }
 
+  const STEM_ALIASES = {
+    administrativo: 'administr',
+    administrativa: 'administr',
+    administracao: 'administr',
+    parar: 'parad',
+    parada: 'parad',
+    constitucional: 'constituc',
+    constituicao: 'constituc'
+  };
+
   function singularizePtWord(w) {
     if (!w || w.length < 4) return w;
+    if (w === 'leis') return 'lei';
+    if (w === 'reis') return 'rei';
     if (w.endsWith('oes')) return w.slice(0, -3) + 'ao';
     if (w.endsWith('aes')) return w.slice(0, -3) + 'ao';
     if (w.endsWith('eis')) return w.slice(0, -3) + 'el';
@@ -58,6 +70,7 @@
   function stemPtWord(w) {
     if (!w || w.length < 4) return w;
     const s = singularizePtWord(w);
+    if (STEM_ALIASES[s]) return STEM_ALIASES[s];
     const suffixes = [
       'amentos', 'amento', 'imentos', 'imento', 'acoes', 'acao', 'icoes', 'icao',
       'ada', 'ida', 'ar', 'er', 'ir'
@@ -123,7 +136,7 @@
     return s;
   }
 
-  function filterAndRankBizusSubtopics(subtopics, anchorTitles = [], maxCount = 6) {
+  function filterAndRankBizusSubtopicsWithAudit(subtopics, anchorTitles = [], maxCount = 10) {
     const list = Array.isArray(subtopics) ? subtopics : [];
     const anchorTokens = new Set();
     for (const a of (Array.isArray(anchorTitles) ? anchorTitles : [anchorTitles])) {
@@ -131,12 +144,22 @@
     }
 
     const candidates = [];
+    const discarded = [];
     for (const raw of list) {
-      if (isNoiseSubtopic(raw)) continue;
+      if (isNoiseSubtopic(raw)) {
+        discarded.push({ raw: String(raw || '').trim(), reason: 'noise' });
+        continue;
+      }
       const cleaned = cleanDidacticPrefix(raw);
-      if (isNoiseSubtopic(cleaned)) continue;
+      if (isNoiseSubtopic(cleaned)) {
+        discarded.push({ raw: String(raw || '').trim(), reason: 'noise-after-prefix' });
+        continue;
+      }
       const c = canon(cleaned);
-      if (c.tokens.length === 0) continue;
+      if (c.tokens.length === 0) {
+        discarded.push({ raw: String(raw || '').trim(), reason: 'empty-tokens' });
+        continue;
+      }
 
       const sharedWithAnchor = c.tokens.filter(t => anchorTokens.has(t)).length;
       const level = sharedWithAnchor > 0 ? 'B' : 'C';
@@ -154,7 +177,7 @@
     // Ordena por peso (B antes de C) e especificidade (mais tokens informativos)
     candidates.sort((a, b) => (b.weight - a.weight) || (b.tokens.length - a.tokens.length));
 
-    // Deduplicação por similaridade (> 70% de interseção)
+    // Deduplicação por similaridade (> 70% de interseção) e limite maxCount
     const selected = [];
     for (const cand of candidates) {
       const isDup = selected.some(sel => {
@@ -165,12 +188,21 @@
         const minSize = Math.min(cand.tokenSet.size, sel.tokenSet.size);
         return minSize > 0 && (inter / minSize) >= 0.72;
       });
-      if (!isDup) {
-        selected.push(cand);
-        if (selected.length >= maxCount) break;
+      if (isDup) {
+        discarded.push({ raw: cand.raw, reason: 'duplicate' });
+        continue;
       }
+      if (selected.length >= maxCount) {
+        discarded.push({ raw: cand.raw, reason: 'max-cap' });
+        continue;
+      }
+      selected.push(cand);
     }
-    return selected;
+    return { kept: selected, discarded };
+  }
+
+  function filterAndRankBizusSubtopics(subtopics, anchorTitles = [], maxCount = 10) {
+    return filterAndRankBizusSubtopicsWithAudit(subtopics, anchorTitles, maxCount).kept;
   }
 
   function buildBm25Index(rawNodes) {
@@ -328,6 +360,7 @@
     isNoiseSubtopic,
     cleanDidacticPrefix,
     filterAndRankBizusSubtopics,
+    filterAndRankBizusSubtopicsWithAudit,
     buildBm25Index,
     scoreTreeNodesBm25
   };

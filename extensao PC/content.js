@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.3.3 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.3.5 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -3372,9 +3372,33 @@
     }
 
     // 1. Subassuntos do Índice/Bizus da aula (filtrados de ruído e ranqueados em B/C)
-    const rankedSubtopics = (treeMatcher && validSubtopics.length > 0)
-      ? treeMatcher.filterAndRankBizusSubtopics(validSubtopics, [...validLessons, fallbackTopic], 6)
-      : validSubtopics.map(s => ({ raw: s, cleaned: s, level: 'B', weight: 0.75 }));
+    const bizusAudit = (treeMatcher && validSubtopics.length > 0)
+      ? (treeMatcher.filterAndRankBizusSubtopicsWithAudit
+          ? treeMatcher.filterAndRankBizusSubtopicsWithAudit(validSubtopics, [...validLessons, fallbackTopic], 10)
+          : { kept: treeMatcher.filterAndRankBizusSubtopics(validSubtopics, [...validLessons, fallbackTopic], 10), discarded: [] })
+      : { kept: validSubtopics.map(s => ({ raw: s, cleaned: s, level: 'B', weight: 0.75 })), discarded: [] };
+    const rankedSubtopics = bizusAudit.kept;
+    if (diagLog) {
+      diagLog.bizusFilter = {
+        inputCount: validSubtopics.length,
+        keptCount: rankedSubtopics.length,
+        kept: rankedSubtopics.map(s => `[${s.level}] ${s.cleaned || s.raw}`),
+        discarded: bizusAudit.discarded || []
+      };
+      if (!Array.isArray(diagLog.subtopicOutcomes)) diagLog.subtopicOutcomes = [];
+    }
+
+    const recordSubtopicOutcome = (subtopic, level, outcome, selectedLabel = null, top5 = []) => {
+      if (diagLog && Array.isArray(diagLog.subtopicOutcomes)) {
+        diagLog.subtopicOutcomes.push({
+          subtopic,
+          level,
+          outcome,
+          selectedLabel: selectedLabel || null,
+          top5
+        });
+      }
+    };
 
     if (rankedSubtopics.length > 0) {
       const forbiddenParentNorms = buildBroadParentNorms([subjectName, fallbackTopic, ...validLessons]);
@@ -3386,16 +3410,19 @@
         if (allowedLawIds) {
           const subLawIds = getMatchingSpecialLawIds(subtopic);
           if (subLawIds.some(id => !allowedLawIds.has(id))) {
+            recordSubtopicOutcome(subtopic, subEntry.level, 'skipped-law-lock');
             continue;
           }
         }
 
         const subConcepts = extractConceptWords(subtopic);
         if (subConcepts.length > 0 && subConcepts.every(c => coveredConcepts.has(c))) {
+          recordSubtopicOutcome(subtopic, subEntry.level, 'skipped-covered');
           continue;
         }
 
         // Tenta BM25 local antes de expandir/digitar termos (resolve Romanos<->Arábicos como Anexo 1 <-> Anexo I)
+        let bm25Top5 = [];
         if (bm25Index) {
           const bm25Query = stripSubjectFromLessonTitle(subtopic, subjectName) || subtopic;
           const ranked = treeMatcher.scoreTreeNodesBm25(bm25Query, bm25Index, {
@@ -3404,7 +3431,8 @@
           });
           const top1 = ranked[0];
           const top2 = ranked[1];
-          const relThreshold = (anchorFolderMatched || isLevelC) ? 0.65 : 0.50;
+          bm25Top5 = ranked.slice(0, 5).map(r => ({ label: r.node.label, score: r.score, relScore: r.relScore, coverage: r.coverage }));
+          const relThreshold = isLevelC ? 0.55 : 0.50;
           const hasMargin = !top2 || top1.score >= top2.score * 1.15;
           const passesScore = top1 && top1.relScore >= relThreshold;
           if (passesScore && !top1.node.isLeaf && top1.coverage >= 0.45 && hasMargin) {
@@ -3414,35 +3442,38 @@
                 source: `bm25-${subEntry.level}:${bm25Query}`,
                 terms: [bm25Query],
                 minRelScore: relThreshold,
-                top5: ranked.slice(0, 5).map(r => ({ label: r.node.label, score: r.score, relScore: r.relScore, coverage: r.coverage })),
+                top5: bm25Top5,
                 selected: ok ? top1.node.label : null
               });
             }
-            if (ok) continue;
+            if (ok) {
+              recordSubtopicOutcome(subtopic, subEntry.level, 'bm25-selected', top1.node.label, bm25Top5);
+              continue;
+            }
           }
-          // Se o BM25 encontrou candidatos fortes mas barrou por empate ambíguo, não arrisca o fallback antigo
-          if (passesScore && !hasMargin) {
+          // Só pula o fallback antigo se houve empate ambíguo entre candidatos realmente fortes (coverage >= 0.45)
+          if (passesScore && !hasMargin && top1.coverage >= 0.45) {
             if (diagLog && Array.isArray(diagLog.queries)) {
               diagLog.queries.push({
                 source: `bm25-${subEntry.level}-tie-skip:${bm25Query}`,
                 terms: [bm25Query],
                 minRelScore: relThreshold,
-                top5: ranked.slice(0, 5).map(r => ({ label: r.node.label, score: r.score, relScore: r.relScore, coverage: r.coverage })),
+                top5: bm25Top5,
                 selected: null
               });
             }
+            recordSubtopicOutcome(subtopic, subEntry.level, 'bm25-tie-skip', null, bm25Top5);
             continue;
           }
         }
 
-        // Se a âncora Nível A já casou com a pasta principal, subtópicos Nível C sem match forte no BM25 não arriscam busca frouxa
-        if (anchorFolderMatched && isLevelC) {
+        const expanded = expandSubtopicToSearchGroups(subtopic);
+        if (!expanded || !expanded.primary || expanded.primary.length === 0) {
+          recordSubtopicOutcome(subtopic, subEntry.level, bm25Top5.length > 0 ? 'bm25-no-candidate' : 'legacy-no-match', null, bm25Top5);
           continue;
         }
 
-        const expanded = expandSubtopicToSearchGroups(subtopic);
-        if (!expanded || !expanded.primary || expanded.primary.length === 0) continue;
-
+        const selectedBeforeCount = selectedOptionNorms.size;
         const subConceptSet = new Set(extractConceptWords(subtopic));
         const directHit = await trySelectWithTerms(expanded.primary, {
           forbiddenNorms: forbiddenParentNorms,
@@ -3492,6 +3523,15 @@
             });
           }
         }
+
+        const newlySelected = Array.from(selectedOptionNorms).slice(selectedBeforeCount);
+        recordSubtopicOutcome(
+          subtopic,
+          subEntry.level,
+          newlySelected.length > 0 ? 'legacy-selected' : 'legacy-no-match',
+          newlySelected.length > 0 ? newlySelected.join(', ') : null,
+          bm25Top5
+        );
       }
     }
 
@@ -3868,7 +3908,7 @@
       : subject;
 
     lastFilterDiagnosticLog = {
-      version: '1.3.3',
+      version: '1.3.5',
       timestamp: new Date().toISOString(),
       input: {
         rawSubject,
