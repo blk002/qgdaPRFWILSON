@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.26 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.2.27 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -19,6 +19,7 @@
   const ACTIVE_USER_LABEL_KEY = 'qg_active_user_label';
   const PENDING_FILTER_KEY = 'qg_pending_caveira_filter';
   const COURSE_INDEX_CACHE_KEY = 'qg_caveira_course_index_cache';
+  const FILTER_CORRECTION_MEMORY_KEY = 'qg_caveira_filter_memory';
   const MAX_BUCKET_QUESTIONS = 1500;
   let cachedDailyGoal = 50;
   let cachedActiveUserId = null;
@@ -26,6 +27,7 @@
   let activePracticeFilter = null;
   let isApplyingFilter = false;
   let filterStatusMessage = '';
+  let lastFilterDiagnosticLog = null;
   let lastCapturedCourseSignature = '';
   let currentCourseIndexStatus = null;
   const peekedCourseUrls = new Set();
@@ -321,6 +323,7 @@
 
       <div id="qg-hud-filter-banner" style="display:none;align-items:center;justify-content:space-between;gap:6px;padding:6px 14px;background:rgba(37,99,235,0.14);border-bottom:1px solid rgba(59,130,246,0.3);font-size:10px;font-weight:700;color:#bfdbfe;">
         <span id="qg-hud-filter-text" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;">🎯 Filtro</span>
+        <button type="button" id="qg-btn-copy-filter-log" style="background:rgba(15,23,42,0.85);color:#cbd5e1;border:1px solid rgba(148,163,184,0.35);border-radius:6px;padding:2px 6px;font-size:9px;font-weight:800;cursor:pointer;flex-shrink:0;" title="Copiar log diagnóstico do último filtro">📋 Log</button>
         <button type="button" id="qg-btn-refilter" style="background:#2563eb;color:#fff;border:none;border-radius:6px;padding:2px 6px;font-size:9px;font-weight:800;cursor:pointer;flex-shrink:0;" title="Aplicar filtro novamente">🔄</button>
         <button type="button" id="qg-btn-close-filter" style="background:none;color:#94a3b8;border:none;font-size:11px;cursor:pointer;padding:0 2px;flex-shrink:0;" title="Fechar aviso">✕</button>
       </div>
@@ -402,6 +405,40 @@
     updateHudUser();
     updateHudStats();
     renderFilterBanner();
+
+    hud.querySelector('#qg-btn-copy-filter-log')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const btn = e.currentTarget;
+      const payload = lastFilterDiagnosticLog
+        ? JSON.stringify(lastFilterDiagnosticLog, null, 2)
+        : JSON.stringify({ message: 'Nenhum filtro executado ainda nesta aba.', activePracticeFilter }, null, 2);
+      let copied = false;
+      try {
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+          await navigator.clipboard.writeText(payload);
+          copied = true;
+        }
+      } catch (_) {}
+      if (!copied) {
+        try {
+          const ta = document.createElement('textarea');
+          ta.value = payload;
+          ta.style.position = 'fixed';
+          ta.style.opacity = '0';
+          document.body.appendChild(ta);
+          ta.select();
+          copied = document.execCommand('copy');
+          ta.remove();
+        } catch (_) {}
+      }
+      if (btn) {
+        const prev = btn.textContent;
+        btn.textContent = copied ? '✅ Copiado' : '⚠️ Erro';
+        setTimeout(() => {
+          if (btn && btn.isConnected) btn.textContent = prev || '📋 Log';
+        }, 1800);
+      }
+    });
 
     hud.querySelector('#qg-btn-refilter')?.addEventListener('click', (e) => {
       e.stopPropagation();
@@ -668,10 +705,6 @@
     'tipos',
     'especie',
     'especies',
-    'disposicao',
-    'disposicoes',
-    'preliminar',
-    'preliminares',
     'inicial',
     'iniciais',
     'basico',
@@ -2583,14 +2616,322 @@
     return { primary, splitFallbacks: extraSplits };
   }
 
+  function findScrollableMenuElement(filterInput) {
+    const container = getMenuContainer(filterInput);
+    if (!container) return null;
+    const candidates = [container, ...Array.from(container.querySelectorAll('div, ul, section'))];
+    for (const el of candidates) {
+      if (!el || el.closest('#qg-caveira-hud')) continue;
+      if ((el.scrollHeight || 0) > (el.clientHeight || 0) + 8) {
+        return el;
+      }
+    }
+    return container;
+  }
+
+  async function collectAllDropdownOptionsByScroll(filterInput) {
+    if (!filterInput) return { options: [], scrollSteps: 0, isVirtualized: false };
+    try {
+      if (filterInput.value) {
+        filterInput.focus();
+        setNativeInputValue(filterInput, '');
+        await sleepMs(260);
+      }
+    } catch (_) {}
+
+    const collected = new Map();
+    const collectVisible = () => {
+      const visible = findDropdownOptionElements(filterInput);
+      for (const el of visible) {
+        const label = String(el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+        const norm = normalizeCourseIndexKey(label);
+        if (!norm) continue;
+        if (!collected.has(norm)) {
+          collected.set(norm, { label, norm, el });
+        } else {
+          const prev = collected.get(norm);
+          if (!prev.el || !prev.el.isConnected) prev.el = el;
+        }
+      }
+      return visible.length;
+    };
+
+    collectVisible();
+    const scrollEl = findScrollableMenuElement(filterInput);
+    let scrollSteps = 0;
+    let isVirtualized = false;
+
+    if (scrollEl && (scrollEl.scrollHeight || 0) > (scrollEl.clientHeight || 0) + 8) {
+      const stepPx = Math.max(120, Math.floor((scrollEl.clientHeight || 240) * 0.75));
+      const maxScrollTop = Math.max(0, (scrollEl.scrollHeight || 0) - (scrollEl.clientHeight || 0));
+      let prevTop = -1;
+      let curTop = scrollEl.scrollTop || 0;
+
+      for (let i = 0; i < 45 && curTop < maxScrollTop - 2; i++) {
+        if (isDestroyed) break;
+        const nextTop = Math.min(maxScrollTop, curTop + stepPx);
+        if (nextTop === prevTop || nextTop === curTop) break;
+        prevTop = curTop;
+        scrollEl.scrollTop = nextTop;
+        scrollSteps += 1;
+        await sleepMs(55);
+        collectVisible();
+        curTop = scrollEl.scrollTop || nextTop;
+      }
+
+      try {
+        scrollEl.scrollTop = 0;
+        await sleepMs(40);
+      } catch (_) {}
+
+      for (const entry of collected.values()) {
+        if (!entry.el || !entry.el.isConnected) {
+          isVirtualized = true;
+          break;
+        }
+      }
+    }
+
+    return {
+      options: Array.from(collected.values()),
+      scrollSteps,
+      isVirtualized
+    };
+  }
+
+  function readAppliedFiltersFromDom() {
+    const result = { status: '', disciplina: '', assuntos: [] };
+    const appliedInfo = findAppliedFiltersSection();
+    if (!appliedInfo || !appliedInfo.container) return result;
+
+    const cleanChipText = (raw) => String(raw || '')
+      .replace(/\b(close|cancel|clear|highlight_off)\b/gi, ' ')
+      .replace(/[✕×]/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+
+    const blocks = Array.from(appliedInfo.container.querySelectorAll('div, span, li, p'))
+      .filter(el => el && !el.closest('#qg-caveira-hud') && isElementVisible(el));
+
+    const seenAssuntos = new Set();
+    for (const block of blocks) {
+      const rawText = String(block.innerText || block.textContent || '').replace(/\s+/g, ' ').trim();
+      const norm = normalizeFilterText(rawText);
+      if (!norm || norm === 'filtros aplicados' || norm === 'filtros aplicados:') continue;
+
+      if (/^disciplina\b/.test(norm) && rawText.length < 180) {
+        const val = cleanChipText(rawText.replace(/^(?:close|x|✕)?\s*disciplina\s*:?\s*/i, ''));
+        if (val && !result.disciplina) result.disciplina = val;
+      } else if (/^status\b/.test(norm) && rawText.length < 100) {
+        const val = cleanChipText(rawText.replace(/^(?:close|x|✕)?\s*status\s*:?\s*/i, ''));
+        if (val && !result.status) result.status = val;
+      } else if (/^assunto\b/.test(norm) && rawText.length < 360) {
+        const childChips = Array.from(block.querySelectorAll('.q-chip, [class*="chip"], [class*="badge"], [class*="tag"], button, span, div'))
+          .filter(ch => {
+            if (!ch || ch === block || !isElementVisible(ch)) return false;
+            const ct = cleanChipText(ch.innerText || ch.textContent);
+            const cn = normalizeFilterText(ct);
+            if (!cn || cn === 'assunto' || cn.startsWith('assunto ') || cn.length < 3) return false;
+            return ch.children.length <= 2;
+          })
+          .map(ch => cleanChipText(ch.innerText || ch.textContent))
+          .filter(Boolean);
+
+        if (childChips.length > 0) {
+          for (const chip of childChips) {
+            const cn = normalizeCourseIndexKey(chip);
+            if (cn && !seenAssuntos.has(cn)) {
+              seenAssuntos.add(cn);
+              result.assuntos.push(chip);
+            }
+          }
+        } else {
+          const val = cleanChipText(rawText.replace(/^(?:close|x|✕)?\s*assunto\s*:?\s*/i, ''));
+          const vn = normalizeCourseIndexKey(val);
+          if (vn && !seenAssuntos.has(vn)) {
+            seenAssuntos.add(vn);
+            result.assuntos.push(val);
+          }
+        }
+      }
+    }
+
+    return result;
+  }
+
+  function buildFilterMemoryKeys(subject, lessonsList, fallbackTopic) {
+    const keys = [];
+    const pushKey = (raw) => {
+      const k = normalizeCourseIndexKey(raw);
+      if (k && !keys.includes(k)) keys.push(k);
+    };
+    const subjNorm = normalizeFilterText(subject || '');
+    const lessons = Array.isArray(lessonsList) ? lessonsList.filter(Boolean) : [];
+    const combined = lessons.join(' | ') || String(fallbackTopic || '').trim();
+    if (combined) {
+      if (subjNorm) pushKey(`${subjNorm}::${combined}`);
+      pushKey(combined);
+    }
+    for (const l of lessons) {
+      if (subjNorm) pushKey(`${subjNorm}::${l}`);
+      pushKey(l);
+    }
+    if (fallbackTopic) {
+      if (subjNorm) pushKey(`${subjNorm}::${fallbackTopic}`);
+      pushKey(fallbackTopic);
+    }
+    return keys;
+  }
+
+  function loadFilterCorrectionMemory(subject, lessonsList, fallbackTopic) {
+    return new Promise((resolve) => {
+      try {
+        if (!isExtensionContextValid() || !chrome?.storage?.local) {
+          resolve(null);
+          return;
+        }
+        const keys = buildFilterMemoryKeys(subject, lessonsList, fallbackTopic);
+        if (keys.length === 0) {
+          resolve(null);
+          return;
+        }
+        chrome.storage.local.get([FILTER_CORRECTION_MEMORY_KEY], (res) => {
+          const store = (res && res[FILTER_CORRECTION_MEMORY_KEY] && typeof res[FILTER_CORRECTION_MEMORY_KEY] === 'object')
+            ? res[FILTER_CORRECTION_MEMORY_KEY]
+            : {};
+          for (const k of keys) {
+            if (store[k] && Array.isArray(store[k].assuntos) && store[k].assuntos.length > 0) {
+              resolve({ key: k, ...store[k] });
+              return;
+            }
+          }
+          resolve(null);
+        });
+      } catch (_) {
+        resolve(null);
+      }
+    });
+  }
+
+  function saveFilterCorrectionMemory(filterCtx, appliedFilters) {
+    try {
+      if (!isExtensionContextValid() || !chrome?.storage?.local) return;
+      if (!filterCtx || !appliedFilters || !Array.isArray(appliedFilters.assuntos) || appliedFilters.assuntos.length === 0) return;
+
+      const effectiveSubject = appliedFilters.disciplina || filterCtx.subject || '';
+      const keys = buildFilterMemoryKeys(effectiveSubject, filterCtx.lessons, filterCtx.fallbackTopic);
+      if (keys.length === 0) return;
+
+      const primaryKey = keys[0];
+      chrome.storage.local.get([FILTER_CORRECTION_MEMORY_KEY], (res) => {
+        const store = (res && res[FILTER_CORRECTION_MEMORY_KEY] && typeof res[FILTER_CORRECTION_MEMORY_KEY] === 'object')
+          ? { ...res[FILTER_CORRECTION_MEMORY_KEY] }
+          : {};
+        store[primaryKey] = {
+          subject: effectiveSubject,
+          assuntos: appliedFilters.assuntos.slice(0, 12),
+          lessonTitle: filterCtx.topic || filterCtx.fallbackTopic || '',
+          updatedAt: Date.now()
+        };
+        const entries = Object.entries(store);
+        if (entries.length > 300) {
+          entries.sort((a, b) => (b[1]?.updatedAt || 0) - (a[1]?.updatedAt || 0));
+          const trimmed = Object.fromEntries(entries.slice(0, 300));
+          chrome.storage.local.set({ [FILTER_CORRECTION_MEMORY_KEY]: trimmed });
+        } else {
+          chrome.storage.local.set({ [FILTER_CORRECTION_MEMORY_KEY]: store });
+        }
+      });
+    } catch (_) {}
+  }
+
+  function setupManualFilterCorrectionListener() {
+    if (typeof document === 'undefined' || !document.addEventListener) return;
+    const onDocClick = (e) => {
+      if (isDestroyed || isApplyingFilter || !activePracticeFilter) return;
+      const target = e.target;
+      if (!target || (target.closest && target.closest('#qg-caveira-hud'))) return;
+      const btn = target.closest ? target.closest('button, [role="button"], .q-btn') : null;
+      if (!btn) return;
+      const txt = normalizeFilterText(btn.innerText || btn.textContent);
+      const allowed = ['filtrar', 'filtrar questoes', 'aplicar', 'aplicar filtros', 'buscar', 'buscar questoes', 'pesquisar'];
+      if (!allowed.includes(txt)) return;
+
+      const ctxSnapshot = { ...activePracticeFilter };
+      setTimeout(() => {
+        if (isDestroyed || isApplyingFilter) return;
+        const applied = readAppliedFiltersFromDom();
+        if (applied.assuntos && applied.assuntos.length > 0) {
+          saveFilterCorrectionMemory(ctxSnapshot, applied);
+          if (lastFilterDiagnosticLog) {
+            lastFilterDiagnosticLog.manualCorrectionSaved = {
+              savedAt: new Date().toISOString(),
+              disciplina: applied.disciplina,
+              assuntos: applied.assuntos
+            };
+          }
+          renderFilterBanner(`💾 Correção memorizada (${applied.assuntos.length} assunto(s)): ${ctxSnapshot.topic || ctxSnapshot.subject}`);
+        }
+      }, 380);
+    };
+    document.addEventListener('click', onDocClick, true);
+    window.addEventListener('qg-caveira-teardown', () => {
+      document.removeEventListener('click', onDocClick, true);
+    }, { once: true });
+  }
+  setupManualFilterCorrectionListener();
+
   async function matchOptionInOpenDropdown(filterInput, searchTerms, opts = {}) {
     const forbiddenNorms = opts.forbiddenNorms instanceof Set ? opts.forbiddenNorms : null;
     const excludeNorms = opts.excludeNorms instanceof Set ? opts.excludeNorms : null;
     const minScore = typeof opts.minScore === 'number' ? opts.minScore : 200;
     const allowEmptyFallback = opts.allowEmptyFallback !== false;
+    const preScannedOptions = Array.isArray(opts.preScannedOptions) ? opts.preScannedOptions : null;
+    const diagLog = opts.diagLog && Array.isArray(opts.diagLog.queries) ? opts.diagLog : null;
 
     let matched = null;
     let bestScore = 0;
+
+    // 1. Varredura local na árvore completa coletada (evita falhas de acentuação/busca parcial do site)
+    if (preScannedOptions && preScannedOptions.length > 0) {
+      const scored = [];
+      let bestEntry = null;
+      for (const entry of preScannedOptions) {
+        if (!entry || !entry.norm) continue;
+        if (forbiddenNorms && forbiddenNorms.has(entry.norm)) continue;
+        if (excludeNorms && excludeNorms.has(entry.norm)) continue;
+        const sc = scoreOptionMatch(entry.label, searchTerms, opts);
+        if (sc > 0) scored.push({ label: entry.label, score: sc });
+        if (sc > bestScore) {
+          bestScore = sc;
+          bestEntry = entry;
+        }
+      }
+      scored.sort((a, b) => b.score - a.score);
+      if (diagLog) {
+        diagLog.queries.push({
+          source: opts.diagSource || 'tree-scan',
+          terms: searchTerms.slice(0, 6),
+          minScore,
+          top5: scored.slice(0, 5),
+          selected: (bestEntry && bestScore >= minScore) ? bestEntry.label : null
+        });
+      }
+      if (bestEntry && bestScore >= minScore) {
+        if (bestEntry.el && bestEntry.el.isConnected) {
+          return bestEntry.el;
+        }
+        if (filterInput) {
+          const revealQuery = bestEntry.label.slice(0, 40).trim();
+          filterInput.focus();
+          setNativeInputValue(filterInput, revealQuery);
+          await sleepMs(320);
+          const visible = findDropdownOptionElements(filterInput);
+          const exactEl = visible.find(el => normalizeCourseIndexKey(el.innerText || el.textContent) === bestEntry.norm);
+          if (exactEl) return exactEl;
+        }
+      }
+    }
 
     for (const term of searchTerms) {
       if (filterInput) {
@@ -2615,17 +2956,30 @@
       const options = findDropdownOptionElements(filterInput);
       bestScore = 0;
       matched = null;
+      const typedScored = [];
       for (const opt of options) {
-        const optNorm = normalizeCourseIndexKey(opt.innerText || opt.textContent);
+        const label = opt.innerText || opt.textContent;
+        const optNorm = normalizeCourseIndexKey(label);
         if (!optNorm) continue;
         if (forbiddenNorms && forbiddenNorms.has(optNorm)) continue;
         if (excludeNorms && excludeNorms.has(optNorm)) continue;
 
-        const sc = scoreOptionMatch(opt.innerText || opt.textContent, searchTerms, opts);
+        const sc = scoreOptionMatch(label, searchTerms, opts);
+        if (sc > 0) typedScored.push({ label: String(label).replace(/\s+/g, ' ').trim(), score: sc });
         if (sc > bestScore) {
           bestScore = sc;
           matched = opt;
         }
+      }
+      if (diagLog && typedScored.length > 0) {
+        typedScored.sort((a, b) => b.score - a.score);
+        diagLog.queries.push({
+          source: `${opts.diagSource || 'typed'}:${term}`,
+          terms: [term],
+          minScore,
+          top5: typedScored.slice(0, 5),
+          selected: (matched && bestScore >= minScore) ? String(matched.innerText || matched.textContent).replace(/\s+/g, ' ').trim() : null
+        });
       }
       if (matched && bestScore >= minScore) break;
       matched = null;
@@ -2695,11 +3049,13 @@
     );
   }
 
-  async function selectCaveiraLessonsInDropdown(lessonsList, fallbackTopic, subtopicsList = [], subjectName = '') {
+  async function selectCaveiraLessonsInDropdown(lessonsList, fallbackTopic, subtopicsList = [], subjectName = '', extraOpts = {}) {
     const validLessons = (Array.isArray(lessonsList) ? lessonsList : []).filter(Boolean);
     const validSubtopics = (Array.isArray(subtopicsList) ? subtopicsList : []).filter(Boolean);
+    const savedMemoryAssuntos = Array.isArray(extraOpts.savedMemoryAssuntos) ? extraOpts.savedMemoryAssuntos.filter(Boolean) : [];
+    const diagLog = extraOpts.diagLog || null;
     const hasFallback = Boolean(String(fallbackTopic || '').trim());
-    if (isDestroyed || (validLessons.length === 0 && validSubtopics.length === 0 && !hasFallback)) return false;
+    if (isDestroyed || (validLessons.length === 0 && validSubtopics.length === 0 && savedMemoryAssuntos.length === 0 && !hasFallback)) return false;
 
     const trigger = findFilterDropdownTrigger('Assunto');
     if (!trigger) return false;
@@ -2712,6 +3068,17 @@
       clickElementRealistically(trigger);
       await sleepMs(350);
       filterInput = findMenuFilterInput();
+    }
+
+    const treeScan = await collectAllDropdownOptionsByScroll(filterInput);
+    const preScannedOptions = treeScan.options || [];
+    if (diagLog) {
+      diagLog.treeScan = {
+        scannedCount: preScannedOptions.length,
+        scrollSteps: treeScan.scrollSteps,
+        isVirtualized: treeScan.isVirtualized,
+        sampleOptions: preScannedOptions.slice(0, 60).map(o => o.label)
+      };
     }
 
     let matchedCount = 0;
@@ -2764,7 +3131,9 @@
         ...(matchOpts.targetConcepts !== undefined
           ? {}
           : (lessonTargetConcepts.size > 0 ? { targetConcepts: lessonTargetConcepts } : {})),
-        excludeNorms: selectedOptionNorms
+        excludeNorms: selectedOptionNorms,
+        preScannedOptions,
+        diagLog
       };
       const matched = await matchOptionInOpenDropdown(filterInput, terms, effectiveOpts);
       if (!matched) return false;
@@ -2780,8 +3149,29 @@
       } else {
         matchedCount += 1;
       }
+      if (diagLog && Array.isArray(diagLog.selectedLabels)) {
+        diagLog.selectedLabels.push(String(matchedLabel).replace(/\s+/g, ' ').trim());
+      }
       return true;
     };
+
+    // 0. Prioridade 0: Memória de correções do usuário para esta aula/assunto
+    if (savedMemoryAssuntos.length > 0) {
+      for (const memAssunto of savedMemoryAssuntos) {
+        if (isDestroyed) break;
+        await trySelectWithTerms([memAssunto], {
+          minScore: 420,
+          allowEmptyFallback: true,
+          targetConcepts: null,
+          diagSource: 'correction-memory'
+        });
+      }
+      if (matchedCount > 0) {
+        await closeOpenDropdown(trigger, filterInput);
+        await sleepMs(200);
+        return true;
+      }
+    }
 
     // 1A. Prioridade máxima: se o card/aula já define uma Lei Principal (ex.: ECA), marca essa lei imediatamente
     if (mainLawTerms.length > 0) {
@@ -3238,9 +3628,42 @@
       }
     }
 
+    const filterStartedAt = Date.now();
+    const memoryHit = await loadFilterCorrectionMemory(subject || inferredSubject, effectiveLessons, fallbackTopic);
+    const effectiveSubjectForFilter = (memoryHit && memoryHit.subject && (!subject || isGenericSubjectName(subject)))
+      ? memoryHit.subject
+      : subject;
+
+    lastFilterDiagnosticLog = {
+      version: '1.2.27',
+      timestamp: new Date().toISOString(),
+      input: {
+        rawSubject,
+        rawLessons,
+        rawFallbackTopic,
+        rawSubtopicsCount: rawSubtopicsInput.length,
+        hasRawIndexText: Boolean(rawIndexText)
+      },
+      inferred: {
+        subject: effectiveSubjectForFilter,
+        inferredSubject,
+        effectiveLessons,
+        fallbackTopic,
+        effectiveSubtopics
+      },
+      memory: memoryHit
+        ? { hit: true, key: memoryHit.key, savedSubject: memoryHit.subject || '', savedAssuntos: memoryHit.assuntos || [] }
+        : { hit: false },
+      discipline: { ok: null, terms: [] },
+      treeScan: null,
+      queries: [],
+      selectedLabels: [],
+      final: null
+    };
+
     isApplyingFilter = true;
     activePracticeFilter = {
-      subject,
+      subject: effectiveSubjectForFilter,
       lessons: effectiveLessons,
       topic: displayTarget,
       fallbackTopic,
@@ -3287,26 +3710,34 @@
       let topicOk = true;
 
       // 2. Seleciona Disciplina primeiro (pois libera/carrega os Assuntos no Caveira)
-      if (subject) {
-        renderFilterBanner(`⏳ Selecionando Disciplina: ${subject}...`);
-        const subjectTerms = getSubjectSearchTerms(subject);
+      if (effectiveSubjectForFilter) {
+        renderFilterBanner(`⏳ Selecionando Disciplina: ${effectiveSubjectForFilter}...`);
+        const subjectTerms = getSubjectSearchTerms(effectiveSubjectForFilter);
+        if (lastFilterDiagnosticLog) lastFilterDiagnosticLog.discipline.terms = subjectTerms;
         subjectOk = await selectCaveiraDropdownOption('Disciplina', subjectTerms);
-        if (!subjectOk && inferredSubject && normalizeFilterText(inferredSubject) !== normalizeFilterText(subject)) {
+        if (!subjectOk && inferredSubject && normalizeFilterText(inferredSubject) !== normalizeFilterText(effectiveSubjectForFilter)) {
           renderFilterBanner(`⏳ Tentando Disciplina inferida da aula: ${inferredSubject}...`);
           const inferredTerms = getSubjectSearchTerms(inferredSubject);
+          if (lastFilterDiagnosticLog) lastFilterDiagnosticLog.discipline.terms = inferredTerms;
           subjectOk = await selectCaveiraDropdownOption('Disciplina', inferredTerms);
         }
+        if (lastFilterDiagnosticLog) lastFilterDiagnosticLog.discipline.ok = subjectOk;
         await sleepMs(500);
       }
 
-      // 3. Seleciona Assunto(s) pelos subassuntos do Índice (quando houver) ou pelo título da(s) aula(s)
-      if (effectiveSubtopics.length > 0 || effectiveLessons.length > 0 || fallbackTopic) {
-        if (effectiveSubtopics.length > 0) {
+      // 3. Seleciona Assunto(s) pela Memória de Correções, subassuntos do Índice/Bizus ou título da(s) aula(s)
+      if ((memoryHit && memoryHit.assuntos?.length > 0) || effectiveSubtopics.length > 0 || effectiveLessons.length > 0 || fallbackTopic) {
+        if (memoryHit && memoryHit.assuntos?.length > 0) {
+          renderFilterBanner(`💾 Aplicando correção memorizada (${memoryHit.assuntos.length})...`);
+        } else if (effectiveSubtopics.length > 0) {
           renderFilterBanner(`⏳ Filtrando ${effectiveSubtopics.length} subassuntos do Índice...`);
         } else {
           renderFilterBanner(`⏳ Selecionando Aula(s): ${displayTarget}...`);
         }
-        topicOk = await selectCaveiraLessonsInDropdown(effectiveLessons, fallbackTopic, effectiveSubtopics, subject);
+        topicOk = await selectCaveiraLessonsInDropdown(effectiveLessons, fallbackTopic, effectiveSubtopics, effectiveSubjectForFilter, {
+          savedMemoryAssuntos: memoryHit ? memoryHit.assuntos : [],
+          diagLog: lastFilterDiagnosticLog
+        });
         await sleepMs(300);
       }
 
@@ -3329,11 +3760,23 @@
         window.scrollBy({ top: 260, behavior: 'smooth' });
       } catch (_) {}
 
-      const summary = [subject, displayTarget].filter(Boolean).join(' • ');
+      if (lastFilterDiagnosticLog) {
+        lastFilterDiagnosticLog.final = {
+          subjectOk,
+          topicOk,
+          unresolvedOk,
+          applyBtnFound: Boolean(applyBtn),
+          appliedDom: readAppliedFiltersFromDom(),
+          elapsedMs: Date.now() - filterStartedAt
+        };
+      }
+
+      const summary = [effectiveSubjectForFilter, displayTarget].filter(Boolean).join(' • ');
+      const memTag = (memoryHit && memoryHit.assuntos?.length > 0) ? ' • 💾 Memória' : '';
       const subtag = effectiveSubtopics.length > 0 ? ` • ${effectiveSubtopics.length} subassuntos` : '';
       if (subjectOk && topicOk && applyBtn) {
         const statusTag = unresolvedOk ? 'Não resolvidas' : 'Não resolvidas pendente';
-        renderFilterBanner(`✅ Filtro aplicado (${statusTag}${subtag}): ${summary}`);
+        renderFilterBanner(`✅ Filtro aplicado (${statusTag}${memTag}${subtag}): ${summary}`);
       } else if (subjectOk && topicOk) {
         renderFilterBanner(`⚠️ Selecionado (clique em Filtrar): ${summary}`);
       } else {
