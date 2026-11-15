@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.3.2 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.3.3 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -3420,6 +3420,19 @@
             }
             if (ok) continue;
           }
+          // Se o BM25 encontrou candidatos fortes mas barrou por empate ambíguo, não arrisca o fallback antigo
+          if (passesScore && !hasMargin) {
+            if (diagLog && Array.isArray(diagLog.queries)) {
+              diagLog.queries.push({
+                source: `bm25-${subEntry.level}-tie-skip:${bm25Query}`,
+                terms: [bm25Query],
+                minRelScore: relThreshold,
+                top5: ranked.slice(0, 5).map(r => ({ label: r.node.label, score: r.score, relScore: r.relScore, coverage: r.coverage })),
+                selected: null
+              });
+            }
+            continue;
+          }
         }
 
         // Se a âncora Nível A já casou com a pasta principal, subtópicos Nível C sem match forte no BM25 não arriscam busca frouxa
@@ -3855,7 +3868,7 @@
       : subject;
 
     lastFilterDiagnosticLog = {
-      version: '1.3.2',
+      version: '1.3.3',
       timestamp: new Date().toISOString(),
       input: {
         rawSubject,

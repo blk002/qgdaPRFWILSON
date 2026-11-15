@@ -50,21 +50,22 @@
     if (w.endsWith('aes')) return w.slice(0, -3) + 'ao';
     if (w.endsWith('eis')) return w.slice(0, -3) + 'el';
     if (w.endsWith('is') && w.length >= 5) return w.slice(0, -2) + 'l';
+    if (/(?:r|z|n|l)es$/.test(w) && w.length >= 6) return w.slice(0, -2);
     if (w.endsWith('s') && !w.endsWith('ss') && !w.endsWith('us')) return w.slice(0, -1);
     return w;
   }
 
   function stemPtWord(w) {
     if (!w || w.length < 4) return w;
-    let s = singularizePtWord(w);
+    const s = singularizePtWord(w);
     const suffixes = [
       'amentos', 'amento', 'imentos', 'imento', 'acoes', 'acao', 'icoes', 'icao',
       'ada', 'ida', 'ar', 'er', 'ir'
     ];
     for (const suf of suffixes) {
-      if (s.length > suf.length + 2 && s.endsWith(suf)) {
-        s = s.slice(0, -suf.length);
-        break;
+      if (s.length > suf.length + 3 && s.endsWith(suf)) {
+        const candidate = s.slice(0, -suf.length);
+        if (candidate.length >= 4) return candidate;
       }
     }
     return s;
