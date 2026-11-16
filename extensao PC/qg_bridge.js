@@ -400,7 +400,9 @@
         const fallbackTopic = event.data.payload?.fallbackTopic || '';
         const subtopics = Array.isArray(event.data.payload?.subtopics) ? event.data.payload.subtopics : [];
         const rawIndexText = String(event.data.payload?.rawIndexText || '');
-        const filterData = { subject, topic, lessons, fallbackTopic, subtopics, rawIndexText, createdAt: Date.now() };
+        const examBoards = Array.isArray(event.data.payload?.examBoards) ? event.data.payload.examBoards.map(String) : undefined;
+        const numberAlternatives = Array.isArray(event.data.payload?.numberAlternatives) ? event.data.payload.numberAlternatives.map(Number).filter(Number.isFinite) : undefined;
+        const filterData = { subject, topic, lessons, fallbackTopic, subtopics, rawIndexText, examBoards, numberAlternatives, createdAt: Date.now() };
         try {
           chrome.storage.local.set({ [PENDING_FILTER_KEY]: filterData }, () => {
             if (chrome.runtime && chrome.runtime.sendMessage) {

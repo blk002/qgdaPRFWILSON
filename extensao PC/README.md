@@ -1,53 +1,65 @@
 # QG da PRF — Rastreador Caveira (Extensão Chrome MV3)
 
 ## Filtro por IDs (`caveira_arvore.json`)
-A partir da **v1.4.0**, a extensão resolve disciplinas e assuntos localmente usando `treeMatcher.js` + `caveiraResolver.js` sobre `caveira_arvore.json` e navega diretamente para a URL de questões do Caveira (`buildUrl`), sem chamar a API do Caveira durante o uso normal.
+A partir da **v1.4.0** a extensão resolve disciplinas e assuntos localmente (`treeMatcher.js` + `caveiraResolver.js`) sobre `caveira_arvore.json` e navega direto para a URL de questões do Caveira (`buildUrl`), sem chamar a API do Caveira durante o uso normal.
 
 ## Como regenerar `caveira_arvore.json`
-Se novas disciplinas ou subtópicos forem adicionados no Projeto Caveira, você pode atualizar `extensao PC/caveira_arvore.json` rodando o script abaixo no **DevTools Console** enquanto estiver logado em `https://app.caveira.com`:
+Se o Caveira ganhar disciplinas ou assuntos novos, rode o script abaixo no **DevTools Console** em `https://app.caveira.com/questions`, logado. Ele captura o token da própria sessão (não pede nem salva token), lê a API com chamadas sequenciais e baixa o arquivo novo. Substitua o `caveira_arvore.json` da extensão e recarregue-a em `chrome://extensions`.
 
-> **Importante:** nunca salve tokens de autenticação no repositório. O snippet abaixo lê o token apenas da sua sessão ativa no navegador.
+Formato real da API: lista PLANA; cada item tem `value` (id) e `label` com o caminho de ids na frente (ex.: `.8199.8200.8201. Art. 1º`); o item `group: true` é a própria disciplina.
 
 ```js
 (async () => {
-  // 1. Informe seu Bearer token da sessão atual (copie do header Authorization em DevTools > Network)
-  const TOKEN = prompt('Cole o Bearer token (apenas "eyJ...") da sua sessão atual no Caveira:');
-  if (!TOKEN) return;
-
-  const headers = { Authorization: `Bearer ${TOKEN.replace(/^Bearer\s+/i, '').trim()}` };
-  const api = 'https://api.caveira.com/api/v1/services';
-
-  const subjResp = await fetch(`${api}/subjects?limit=200&career_id=all`, { headers });
-  const subjJson = await subjResp.json();
-  const rawSubjects = Array.isArray(subjJson?.data) ? subjJson.data : (Array.isArray(subjJson) ? subjJson : []);
-
-  const flattenTree = (nodes, depth = 1, parentId = null, parentPath = []) => {
-    const out = [];
-    for (const n of nodes || []) {
-      const path = [...parentPath, n.name];
-      out.push({ id: n.id, parentId: n.parent_id ?? parentId, depth, name: n.name, path });
-      if (Array.isArray(n.children) && n.children.length > 0) {
-        out.push(...flattenTree(n.children, depth + 1, n.id, path));
-      }
-    }
-    return out;
+  let auth = null;
+  const _set = XMLHttpRequest.prototype.setRequestHeader;
+  XMLHttpRequest.prototype.setRequestHeader = function (k, v) {
+    if (/^authorization$/i.test(k) && v) auth = v;
+    return _set.apply(this, arguments);
   };
-
-  const subjects = [];
-  for (const s of rawSubjects) {
-    const r = await fetch(`${api}/subtopics?filter=&limit=5000&subject_ids[]=${s.id}&career_id=all`, { headers });
-    const j = await r.json();
-    const rawNodes = Array.isArray(j?.data) ? j.data : (Array.isArray(j) ? j : []);
-    subjects.push({ id: s.id, name: s.name, nodes: flattenTree(rawNodes, 1, null, [s.name]) });
+  const _fetch = window.fetch;
+  window.fetch = function (input, init) {
+    try {
+      const h = (init && init.headers) || (input && input.headers);
+      if (h) {
+        const v = h instanceof Headers ? h.get('authorization') : (h.Authorization || h.authorization);
+        if (v) auth = v;
+      }
+    } catch (_) {}
+    return _fetch.apply(this, arguments);
+  };
+  console.log('⏳ Aguardando a página fazer uma requisição (até 60s). Se demorar, clique em Filtrar.');
+  for (let i = 0; i < 120 && !auth; i++) await new Promise(r => setTimeout(r, 500));
+  if (!auth) { console.error('❌ Não capturei o token. Clique em Filtrar e rode de novo.'); return; }
+  const get = async (url) => {
+    const r = await _fetch(url, { headers: { Authorization: auth, Accept: 'application/json' } });
+    if (!r.ok) throw new Error(r.status + ' ' + url);
+    return r.json();
+  };
+  const list = (j) => Array.isArray(j) ? j : (j.data || j.items || j.results || []);
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+  const subjects = list(await get('https://api.caveira.com/api/v1/services/subjects/?career_id=all&with_questions=1&filter=&limit=500'));
+  const out = { geradoEm: new Date().toISOString(), subjects: [] };
+  for (const s of subjects) {
+    const sid = s.value ?? s.id, sname = s.label ?? s.name;
+    try {
+      const raw = list(await get(`https://api.caveira.com/api/v1/services/subtopics?filter=&limit=5000&subject_ids[]=${sid}&career_id=all`));
+      if (raw.length >= 5000) console.warn('⚠️ Possível corte (5000) em', sname);
+      const nodes = raw.filter(n => !n.group).map(n => {
+        const m = String(n.label).match(/^\.((?:\d+\.)+)\s*(.*)$/);
+        const ids = m ? m[1].split('.').filter(Boolean).map(Number) : [n.value];
+        return { id: n.value, parentId: ids.length >= 2 ? ids[ids.length - 2] : null, depth: ids.length - 1, name: m ? m[2] : n.label, path: ids };
+      });
+      out.subjects.push({ id: sid, name: sname, count: nodes.length, nodes });
+      console.log(`✔ ${sname}: ${nodes.length} nós`);
+    } catch (e) {
+      console.warn('✖ Falhou:', sname, e.message);
+      out.subjects.push({ id: sid, name: sname, error: String(e.message), nodes: [] });
+    }
+    await sleep(250);
   }
-
-  const out = { geradoEm: new Date().toISOString().slice(0, 10), subjects };
-  const blob = new Blob([JSON.stringify(out, null, 2)], { type: 'application/json' });
   const a = document.createElement('a');
-  a.href = URL.createObjectURL(blob);
+  a.href = URL.createObjectURL(new Blob([JSON.stringify(out)], { type: 'application/json' }));
   a.download = 'caveira_arvore.json';
   a.click();
 })();
 ```
-
-Substitua o arquivo `extensao PC/caveira_arvore.json` pelo JSON baixado e recarregue a extensão em `chrome://extensions`.

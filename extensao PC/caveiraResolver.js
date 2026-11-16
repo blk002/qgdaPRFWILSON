@@ -237,17 +237,49 @@
     };
   }
 
-  function buildUrl(origin, subjectId, ids, status = 'not_resolved') {
+  // Ids reais do Caveira (examining-boards): CAVEIRA (Inéditas)=2, CEBRASPE=5, CAVEIRA (ADAPTADA)=12
+  const BOARD_KEY_TO_ID = { caveira_ineditas: 2, cebraspe: 5, caveira_adaptadas: 12 };
+  const BOARD_LABELS = { caveira_ineditas: 'Caveira Inéditas', cebraspe: 'CEBRASPE', caveira_adaptadas: 'Caveira Adaptadas' };
+  const DEFAULT_PREFS = { examBoards: ['cebraspe', 'caveira_ineditas', 'caveira_adaptadas'], numberAlternatives: [2] };
+
+  function boardKeysToIds(keys) {
+    const out = [];
+    for (const k of Array.isArray(keys) ? keys : []) {
+      const id = BOARD_KEY_TO_ID[String(k || '').toLowerCase().trim()];
+      if (id && !out.includes(id)) out.push(id);
+    }
+    return out.sort((a, b) => a - b);
+  }
+  function sanitizeAlternatives(list) {
+    const out = [];
+    for (const v of Array.isArray(list) ? list : []) {
+      const n = Number(v);
+      if (Number.isInteger(n) && n >= 2 && n <= 5 && !out.includes(n)) out.push(n);
+    }
+    return out.sort((a, b) => a - b);
+  }
+  function describePrefs(keys, alts) {
+    const b = (Array.isArray(keys) ? keys : []).map(k => BOARD_LABELS[k]).filter(Boolean);
+    const a = sanitizeAlternatives(alts).map(n => n === 2 ? 'Certo/Errado' : `${n} alternativas`);
+    return [b.length ? b.join(' + ') : 'qualquer banca', a.length ? a.join(' / ') : 'qualquer nº de alternativas'].join(' • ');
+  }
+
+  // 4º argumento: string (status, compatível com v1.4) ou objeto { status, examBoards:[chaves], numberAlternatives:[2] }
+  function buildUrl(origin, subjectId, ids, opts = 'not_resolved') {
+    const o = (opts && typeof opts === 'object') ? opts : { status: opts };
+    const status = o.status === undefined ? 'not_resolved' : o.status;
+    const boardIds = boardKeysToIds(o.examBoards);
+    const alts = sanitizeAlternatives(o.numberAlternatives);
     const p = new URLSearchParams({
       career_id: 'all', subject_ids: String(subjectId), subtopic_id: '', subtopic_ids: ids.join(','),
-      number_alternatives: '', raw_text: '', examining_board_ids: '', book_ids: '', years: '', education_level_ids: '',
+      number_alternatives: alts.join(','), raw_text: '', examining_board_ids: boardIds.join(','), book_ids: '', years: '', education_level_ids: '',
       situation: '', difficulty_ids: '', status: status, question_id: '', ids: '', institution_ids: '',
       occupation_ids: '', has_comment: '', has_video: '', category_ids: ''
     });
     return `${origin || 'https://app.caveira.com'}/questions?${p.toString()}`;
   }
 
-  const api = { loadTree, resolveSubject, resolveLesson, buildUrl, score, isLeafName };
+  const api = { loadTree, resolveSubject, resolveLesson, buildUrl, score, isLeafName, boardKeysToIds, sanitizeAlternatives, describePrefs, BOARD_KEY_TO_ID, DEFAULT_PREFS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.QGCaveiraResolver = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

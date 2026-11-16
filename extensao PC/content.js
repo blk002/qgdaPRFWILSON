@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.4.0 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.5.0 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -22,6 +22,7 @@
   const FILTER_CORRECTION_MEMORY_KEY = 'qg_caveira_filter_memory';
   const FILTER_ID_MEMORY_KEY = 'qg_caveira_filter_id_memory_v1';
   const LAST_FILTER_DIAG_KEY = 'qg_caveira_last_filter_diag';
+  const DEFAULT_PREFS_KEY = 'qg_caveira_default_prefs';
   const SUBJECT_TREE_CACHE_KEY = 'qg_caveira_subject_tree_cache';
   const MAX_BUCKET_QUESTIONS = 1500;
   let cachedDailyGoal = 50;
@@ -3147,10 +3148,33 @@
     return null;
   }
 
+  async function getEffectiveQuestionPrefs(filterCtx) {
+    const resolver = (typeof globalThis !== 'undefined' && globalThis.QGCaveiraResolver) ? globalThis.QGCaveiraResolver : null;
+    const fromSite = filterCtx && (Array.isArray(filterCtx.examBoards) || Array.isArray(filterCtx.numberAlternatives));
+    if (fromSite) {
+      // site novo: array vazio = "sem filtro" explícito
+      return { examBoards: filterCtx.examBoards || [], numberAlternatives: filterCtx.numberAlternatives || [], source: 'site' };
+    }
+    const fallback = resolver?.DEFAULT_PREFS || { examBoards: [], numberAlternatives: [] };
+    try {
+      if (isExtensionContextValid() && chrome?.storage?.local) {
+        const saved = await new Promise((res) => chrome.storage.local.get([DEFAULT_PREFS_KEY], (r) => res(r?.[DEFAULT_PREFS_KEY] || null)));
+        if (saved && (Array.isArray(saved.examBoards) || Array.isArray(saved.numberAlternatives))) {
+          return { examBoards: saved.examBoards || [], numberAlternatives: saved.numberAlternatives || [], source: 'popup' };
+        }
+      }
+    } catch (_) {}
+    return { examBoards: fallback.examBoards, numberAlternatives: fallback.numberAlternatives, source: 'padrao' };
+  }
+
   async function navigateToCaveiraDeepLink(subjectId, ids, bannerText) {
     const resolver = (typeof globalThis !== 'undefined' && globalThis.QGCaveiraResolver) ? globalThis.QGCaveiraResolver : null;
     if (!resolver || !subjectId || !Array.isArray(ids) || ids.length === 0) return false;
-    const url = resolver.buildUrl(window.location.origin, subjectId, ids, 'not_resolved');
+    const prefs = await getEffectiveQuestionPrefs(activePracticeFilter);
+    const url = resolver.buildUrl(window.location.origin, subjectId, ids, { status: 'not_resolved', examBoards: prefs.examBoards, numberAlternatives: prefs.numberAlternatives });
+    const prefsLabel = resolver.describePrefs ? resolver.describePrefs(prefs.examBoards, prefs.numberAlternatives) : '';
+    if (bannerText && prefsLabel) bannerText = `${bannerText} • ${prefsLabel}`;
+    if (lastFilterDiagnosticLog) { lastFilterDiagnosticLog.examBoards = prefs.examBoards; lastFilterDiagnosticLog.numberAlternatives = prefs.numberAlternatives; lastFilterDiagnosticLog.prefsSource = prefs.source; lastFilterDiagnosticLog.url = url; }
     try {
       if (isExtensionContextValid() && chrome?.storage?.local) {
         await new Promise((res) => {
@@ -3177,7 +3201,12 @@
     if (!box || !titleEl || !listEl) return;
 
     pendingResolverResult = res;
-    const alts = Array.isArray(res?.alternatives) ? res.alternatives : [];
+    let alts = Array.isArray(res?.alternatives) ? res.alternatives : [];
+    let fromPicks = false;
+    if (alts.length === 0 && Array.isArray(res?.picks) && res.picks.length > 0) {
+      alts = res.picks.map(p => ({ id: p.id, name: p.name, path: p.path }));
+      fromPicks = true;
+    }
     const subjName = res?.subject?.name || filterCtx?.subject || '';
 
     if (alts.length === 0) {
@@ -3195,7 +3224,7 @@
         const fullPath = Array.isArray(alt.path) && alt.path.length > 0 ? alt.path.join(' › ') : alt.name;
         return `
           <label style="display:flex;align-items:flex-start;gap:6px;padding:4px 6px;border-radius:6px;background:rgba(15,23,42,0.7);border:1px solid rgba(255,255,255,0.08);cursor:pointer;">
-            <input type="checkbox" data-subtopic-id="${Number(alt.id)}" data-subject-id="${Number(res?.subject?.id || 0)}" ${idx === 0 && alts.length === 1 ? 'checked' : ''} style="margin-top:2px;flex-shrink:0;" />
+            <input type="checkbox" data-subtopic-id="${Number(alt.id)}" data-subject-id="${Number(res?.subject?.id || 0)}" ${(fromPicks || (idx === 0 && alts.length === 1)) ? 'checked' : ''} style="margin-top:2px;flex-shrink:0;" />
             <span style="display:flex;flex-direction:column;gap:1px;line-height:1.25;">
               <strong style="color:#f8fafc;font-size:10px;">${escapeHtml(alt.name)}</strong>
               <span style="color:#94a3b8;font-size:9px;">${escapeHtml(fullPath)}</span>
@@ -4188,7 +4217,9 @@
       topic: displayTarget,
       fallbackTopic,
       subtopics: effectiveSubtopics,
-      rawIndexText
+      rawIndexText,
+      examBoards: Array.isArray(filterObj.examBoards) ? filterObj.examBoards : undefined,
+      numberAlternatives: Array.isArray(filterObj.numberAlternatives) ? filterObj.numberAlternatives : undefined
     };
     const resolverBox = document.getElementById('qg-hud-resolver-box');
     if (resolverBox) resolverBox.style.display = 'none';
@@ -4203,7 +4234,7 @@
       const idMemHit = await loadFilterIdMemory(subject || inferredSubject, effectiveLessons, fallbackTopic);
       if (idMemHit && idMemHit.subjectId && Array.isArray(idMemHit.ids) && idMemHit.ids.length > 0) {
         lastFilterDiagnosticLog = {
-          version: '1.4.0',
+          version: '1.5.0',
           timestamp: new Date().toISOString(),
           geradoEm: cachedCaveiraTreeGeradoEm || '',
           mode: 'id-memory',
@@ -4224,7 +4255,7 @@
       const tree = resolver ? await loadCaveiraTree() : null;
       if (!resolver || !tree) {
         lastFilterDiagnosticLog = {
-          version: '1.4.0',
+          version: '1.5.0',
           timestamp: new Date().toISOString(),
           geradoEm: cachedCaveiraTreeGeradoEm || '',
           mode: 'resolver-unavailable',
@@ -4243,13 +4274,15 @@
       });
 
       lastFilterDiagnosticLog = {
-        version: '1.4.0',
+        version: '1.5.0',
         timestamp: new Date().toISOString(),
         geradoEm: cachedCaveiraTreeGeradoEm || '',
         mode: 'resolver-id',
         input: { rawSubject, rawLessons, rawFallbackTopic, rawSubtopicsCount: rawSubtopicsInput.length, effectiveSubtopics },
         resolvedSubject: res.subject ? { id: res.subject.id, name: res.subject.name } : null,
-        anchor: res.log?.anchor || null,
+        anchor: res.anchor || null,
+        anchorsRanking: res.log?.anchors || [],
+        reason_detail: res.reason || '',
         confidence: res.confidence,
         anchorAmbiguous: Boolean(res.anchorAmbiguous),
         reason: res.reason,
@@ -4322,7 +4355,7 @@
       : subject;
 
     lastFilterDiagnosticLog = {
-      version: '1.4.0',
+      version: '1.5.0',
       timestamp: new Date().toISOString(),
       input: {
         rawSubject,

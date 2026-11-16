@@ -130,7 +130,7 @@
   <div class="header">
     <div class="logo-badge">💀</div>
     <div class="title">
-      <h1>QG da PRF • Caveira <span id="ext-version" style="font-size:10px;color:#a1a1aa;opacity:0.9;">v1.4.0</span></h1>
+      <h1>QG da PRF • Caveira <span id="ext-version" style="font-size:10px;color:#a1a1aa;opacity:0.9;">v1.5.0</span></h1>
       <p>Rastreador de Questões</p>
     </div>
   </div>
@@ -186,6 +186,20 @@
         </div>
       </div>
     </div>
+  </div>
+
+  <div class="stats-card" id="prefs-card">
+    <div style="font-size:10px;font-weight:700;color:#94a3b8;text-transform:uppercase;margin-bottom:8px;">Filtros padrão das questões</div>
+    <label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;margin-bottom:4px;"><input type="checkbox" class="pref-board" value="cebraspe"> CEBRASPE</label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;margin-bottom:4px;"><input type="checkbox" class="pref-board" value="caveira_ineditas"> Caveira — Inéditas</label>
+    <label style="display:flex;align-items:center;gap:6px;font-size:11px;font-weight:700;margin-bottom:8px;"><input type="checkbox" class="pref-board" value="caveira_adaptadas"> Caveira — Adaptadas</label>
+    <select id="pref-alts" style="width:100%;background:#1a1b22;color:#fff;border:1px solid rgba(255,255,255,0.12);border-radius:8px;padding:6px;font-size:11px;font-weight:700;">
+      <option value="">Qualquer nº de alternativas</option>
+      <option value="2">Certo/Errado (2)</option>
+      <option value="4">4 alternativas</option>
+      <option value="5">5 alternativas</option>
+    </select>
+    <p style="font-size:9px;color:#71717a;margin-top:6px;font-weight:600;">Usado quando o site não enviar a escolha.</p>
   </div>
 
   <button class="btn btn-primary" id="btn-open-qg">

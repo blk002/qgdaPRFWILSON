@@ -7,6 +7,8 @@ const GOAL_KEY = 'qg_caveira_daily_goal';
 const ACTIVE_USER_KEY = 'qg_active_user_id';
 const ACTIVE_USER_LABEL_KEY = 'qg_active_user_label';
 const USER_BUCKETS_KEY = 'qg_caveira_user_buckets';
+const DEFAULT_PREFS_KEY = 'qg_caveira_default_prefs';
+const FIRST_PREFS = { examBoards: ['cebraspe', 'caveira_ineditas', 'caveira_adaptadas'], numberAlternatives: [2] };
 
 function renderAccountStatus(activeUserId, activeUserLabel) {
   const pill = document.getElementById('account-status-pill');
@@ -183,6 +185,28 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     });
   }
+
+
+  // Filtros padrão (banca / nº de alternativas)
+  (function initPrefs() {
+    const boxes = Array.from(document.querySelectorAll('.pref-board'));
+    const sel = document.getElementById('pref-alts');
+    if (!boxes.length || !sel) return;
+    const render = (p) => {
+      boxes.forEach(b => { b.checked = (p.examBoards || []).includes(b.value); });
+      sel.value = (p.numberAlternatives && p.numberAlternatives[0]) ? String(p.numberAlternatives[0]) : '';
+    };
+    const save = () => {
+      const p = {
+        examBoards: boxes.filter(b => b.checked).map(b => b.value),
+        numberAlternatives: sel.value ? [Number(sel.value)] : []
+      };
+      chrome.storage.local.set({ [DEFAULT_PREFS_KEY]: p });
+    };
+    chrome.storage.local.get([DEFAULT_PREFS_KEY], (r) => render(r[DEFAULT_PREFS_KEY] || FIRST_PREFS));
+    boxes.forEach(b => b.addEventListener('change', save));
+    sel.addEventListener('change', save);
+  })();
 
   // Botão Abrir QG da PRF
   document.getElementById('btn-open-qg').addEventListener('click', async () => {
