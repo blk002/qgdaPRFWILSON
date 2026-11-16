@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.3.5 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.4.0 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -20,6 +20,8 @@
   const PENDING_FILTER_KEY = 'qg_pending_caveira_filter';
   const COURSE_INDEX_CACHE_KEY = 'qg_caveira_course_index_cache';
   const FILTER_CORRECTION_MEMORY_KEY = 'qg_caveira_filter_memory';
+  const FILTER_ID_MEMORY_KEY = 'qg_caveira_filter_id_memory_v1';
+  const LAST_FILTER_DIAG_KEY = 'qg_caveira_last_filter_diag';
   const SUBJECT_TREE_CACHE_KEY = 'qg_caveira_subject_tree_cache';
   const MAX_BUCKET_QUESTIONS = 1500;
   let cachedDailyGoal = 50;
@@ -29,6 +31,9 @@
   let isApplyingFilter = false;
   let filterStatusMessage = '';
   let lastFilterDiagnosticLog = null;
+  let cachedCaveiraTree = null;
+  let cachedCaveiraTreeGeradoEm = '';
+  let pendingResolverResult = null;
   let lastCapturedCourseSignature = '';
   let currentCourseIndexStatus = null;
   const peekedCourseUrls = new Set();
@@ -177,11 +182,21 @@
   function loadInitialState() {
     if (!isExtensionContextValid()) return;
     try {
-      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, GOAL_KEY, ACTIVE_USER_KEY, ACTIVE_USER_LABEL_KEY, PENDING_FILTER_KEY], (res) => {
+      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, GOAL_KEY, ACTIVE_USER_KEY, ACTIVE_USER_LABEL_KEY, PENDING_FILTER_KEY, LAST_FILTER_DIAG_KEY], (res) => {
         if (chrome.runtime.lastError || isDestroyed) return;
         cachedActiveUserId = res?.[ACTIVE_USER_KEY] || null;
         cachedActiveUserLabel = res?.[ACTIVE_USER_LABEL_KEY] || '';
         updateHudUser();
+        const savedDiag = res?.[LAST_FILTER_DIAG_KEY];
+        if (savedDiag && savedDiag.savedAt && (Date.now() - savedDiag.savedAt) < 25000) {
+          if (savedDiag.diagLog) lastFilterDiagnosticLog = savedDiag.diagLog;
+          if (savedDiag.activePracticeFilter) activePracticeFilter = savedDiag.activePracticeFilter;
+          if (savedDiag.bannerText) {
+            filterStatusMessage = savedDiag.bannerText;
+            renderFilterBanner(savedDiag.bannerText);
+          }
+          chrome.storage.local.remove([LAST_FILTER_DIAG_KEY]);
+        }
         const pendingFilter = res?.[PENDING_FILTER_KEY];
         if (!isCoursePage() && pendingFilter && (pendingFilter.topic || (Array.isArray(pendingFilter.lessons) && pendingFilter.lessons.length > 0)) && (Date.now() - (pendingFilter.createdAt || 0)) < 180000) {
           setTimeout(() => applyCaveiraPracticeFilter(pendingFilter), 900);
@@ -329,6 +344,15 @@
         <button type="button" id="qg-btn-close-filter" style="background:none;color:#94a3b8;border:none;font-size:11px;cursor:pointer;padding:0 2px;flex-shrink:0;" title="Fechar aviso">✕</button>
       </div>
 
+      <div id="qg-hud-resolver-box" style="display:none;flex-direction:column;gap:6px;padding:8px 14px;background:rgba(245,158,11,0.12);border-bottom:1px solid rgba(245,158,11,0.35);font-size:10px;color:#fde68a;">
+        <div id="qg-hud-resolver-title" style="font-weight:800;line-height:1.3;">⚠️ Selecione o assunto correto:</div>
+        <div id="qg-hud-resolver-list" style="display:flex;flex-direction:column;gap:4px;max-height:150px;overflow-y:auto;"></div>
+        <div style="display:flex;align-items:center;gap:6px;margin-top:2px;">
+          <button type="button" id="qg-btn-apply-alt" style="background:#10b981;color:#052e16;border:none;border-radius:6px;padding:4px 10px;font-size:10px;font-weight:800;cursor:pointer;flex:1;">Filtrar</button>
+          <button type="button" id="qg-btn-legacy-dom" style="background:rgba(15,23,42,0.85);color:#cbd5e1;border:1px solid rgba(148,163,184,0.35);border-radius:6px;padding:4px 8px;font-size:9px;font-weight:700;cursor:pointer;" title="Usar preenchimento antigo via dropdown">Tentar modo antigo</button>
+        </div>
+      </div>
+
       <div class="qg-hud-body">
         <div class="qg-hud-stats-grid">
           <div class="qg-hud-stat-box">
@@ -449,8 +473,53 @@
     hud.querySelector('#qg-btn-close-filter')?.addEventListener('click', (e) => {
       e.stopPropagation();
       activePracticeFilter = null;
+      pendingResolverResult = null;
       filterStatusMessage = '';
       renderFilterBanner('');
+      const box = hud.querySelector('#qg-hud-resolver-box');
+      if (box) box.style.display = 'none';
+    });
+
+    hud.querySelector('#qg-btn-apply-alt')?.addEventListener('click', async (e) => {
+      e.stopPropagation();
+      const box = hud.querySelector('#qg-hud-resolver-box');
+      if (!box || !pendingResolverResult) return;
+      const checked = Array.from(box.querySelectorAll('input[type="checkbox"]:checked'))
+        .map(cb => Number(cb.getAttribute('data-subtopic-id')))
+        .filter(n => Number.isFinite(n) && n > 0);
+      if (checked.length === 0) return;
+
+      const subjId = pendingResolverResult.subject?.id || Number(box.querySelector('input[type="checkbox"]:checked')?.getAttribute('data-subject-id'));
+      if (!subjId) return;
+
+      const selectedAlts = (pendingResolverResult.alternatives || []).filter(a => checked.includes(a.id));
+      const picks = selectedAlts.map(a => ({ id: a.id, name: a.name, path: a.path || [a.name] }));
+
+      if (activePracticeFilter) {
+        saveFilterIdMemory(activePracticeFilter, {
+          subjectId: subjId,
+          subjectName: pendingResolverResult.subject?.name || activePracticeFilter.subject || '',
+          ids: checked,
+          picks
+        });
+      }
+      if (lastFilterDiagnosticLog) {
+        lastFilterDiagnosticLog.manualSelection = { subjectId: subjId, ids: checked, picks };
+        lastFilterDiagnosticLog.ids = checked;
+        lastFilterDiagnosticLog.picks = picks;
+      }
+      box.style.display = 'none';
+      const summary = [pendingResolverResult.subject?.name || activePracticeFilter?.subject, activePracticeFilter?.topic].filter(Boolean).join(' • ');
+      await navigateToCaveiraDeepLink(subjId, checked, `✅ Filtro aplicado (seleção manual): ${summary}`);
+    });
+
+    hud.querySelector('#qg-btn-legacy-dom')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const box = hud.querySelector('#qg-hud-resolver-box');
+      if (box) box.style.display = 'none';
+      if (activePracticeFilter) {
+        applyCaveiraPracticeFilterLegacyDom(activePracticeFilter);
+      }
     });
 
     const btnMin = hud.querySelector('#qg-btn-min');
@@ -2938,6 +3007,206 @@
     } catch (_) {}
   }
 
+  async function loadCaveiraTree() {
+    if (cachedCaveiraTree) return cachedCaveiraTree;
+    const resolver = (typeof globalThis !== 'undefined' && globalThis.QGCaveiraResolver) ? globalThis.QGCaveiraResolver : null;
+    if (!resolver || !isExtensionContextValid() || !chrome?.runtime?.getURL) return null;
+    try {
+      const url = chrome.runtime.getURL('caveira_arvore.json');
+      const resp = await fetch(url);
+      if (!resp.ok) return null;
+      const json = await resp.json();
+      cachedCaveiraTreeGeradoEm = String(json?.geradoEm || '');
+      cachedCaveiraTree = resolver.loadTree(json);
+      return cachedCaveiraTree;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  function buildFilterIdMemoryKey(subject, lessonsList, fallbackTopic) {
+    const subjNorm = normalizeCourseIndexKey(subject || '');
+    const lessonsNorm = (Array.isArray(lessonsList) ? lessonsList : []).map(normalizeCourseIndexKey).filter(Boolean).join('|');
+    const topicNorm = normalizeCourseIndexKey(fallbackTopic || '');
+    return `${subjNorm}::${lessonsNorm}::${topicNorm}`;
+  }
+
+  function loadFilterIdMemory(subject, lessonsList, fallbackTopic) {
+    return new Promise((resolve) => {
+      try {
+        if (!isExtensionContextValid() || !chrome?.storage?.local) {
+          resolve(null);
+          return;
+        }
+        const primaryKey = buildFilterIdMemoryKey(subject, lessonsList, fallbackTopic);
+        const fallbackKey = buildFilterIdMemoryKey(subject, lessonsList, '');
+        chrome.storage.local.get([FILTER_ID_MEMORY_KEY], (res) => {
+          if (chrome.runtime?.lastError) {
+            resolve(null);
+            return;
+          }
+          const store = (res && res[FILTER_ID_MEMORY_KEY] && typeof res[FILTER_ID_MEMORY_KEY] === 'object')
+            ? res[FILTER_ID_MEMORY_KEY]
+            : {};
+          const entry = store[primaryKey] || store[fallbackKey] || null;
+          if (entry && entry.subjectId && Array.isArray(entry.ids) && entry.ids.length > 0) {
+            resolve({ key: store[primaryKey] ? primaryKey : fallbackKey, ...entry });
+            return;
+          }
+          resolve(null);
+        });
+      } catch (_) {
+        resolve(null);
+      }
+    });
+  }
+
+  function saveFilterIdMemory(filterCtx, data) {
+    try {
+      if (!isExtensionContextValid() || !chrome?.storage?.local || !filterCtx || !data) return;
+      const subjectId = Number(data.subjectId);
+      const ids = Array.isArray(data.ids) ? data.ids.map(Number).filter(n => Number.isFinite(n) && n > 0) : [];
+      if (!subjectId || ids.length === 0) return;
+
+      const key = buildFilterIdMemoryKey(
+        filterCtx.subject || data.subjectName || '',
+        filterCtx.lessons || [],
+        filterCtx.fallbackTopic || ''
+      );
+      chrome.storage.local.get([FILTER_ID_MEMORY_KEY], (res) => {
+        if (chrome.runtime?.lastError) return;
+        const store = (res && res[FILTER_ID_MEMORY_KEY] && typeof res[FILTER_ID_MEMORY_KEY] === 'object')
+          ? { ...res[FILTER_ID_MEMORY_KEY] }
+          : {};
+        store[key] = {
+          subjectId,
+          subjectName: data.subjectName || filterCtx.subject || '',
+          ids,
+          picks: Array.isArray(data.picks) ? data.picks : [],
+          lessonTitle: filterCtx.topic || filterCtx.fallbackTopic || '',
+          updatedAt: Date.now()
+        };
+        const entries = Object.entries(store);
+        const payload = entries.length > 400
+          ? Object.fromEntries(entries.sort((a, b) => (b[1]?.updatedAt || 0) - (a[1]?.updatedAt || 0)).slice(0, 400))
+          : store;
+        chrome.storage.local.set({ [FILTER_ID_MEMORY_KEY]: payload }, () => {
+          void chrome.runtime?.lastError;
+        });
+      });
+    } catch (_) {}
+  }
+
+  async function resolveIdsFromUrlOrDom(appliedDom) {
+    try {
+      const params = new URLSearchParams(window.location.search || '');
+      const rawSubj = params.get('subject_ids') || '';
+      const rawIds = params.get('subtopic_ids') || '';
+      const subjectId = Number(rawSubj.split(',')[0]);
+      const urlIds = rawIds.split(',').map(s => Number(s.trim())).filter(n => Number.isFinite(n) && n > 0);
+      if (subjectId && urlIds.length > 0) {
+        const tree = await loadCaveiraTree();
+        const subjObj = tree?.subjects?.get(subjectId);
+        const picks = urlIds.map(id => {
+          const n = subjObj?.byId?.get(id);
+          return n ? { id, name: n.name, path: n.path || [n.name] } : { id, name: String(id), path: [] };
+        });
+        return { subjectId, subjectName: subjObj?.name || appliedDom?.disciplina || '', ids: urlIds, picks };
+      }
+
+      if (appliedDom && appliedDom.assuntos && appliedDom.assuntos.length > 0) {
+        const tree = await loadCaveiraTree();
+        if (tree) {
+          const resolver = globalThis.QGCaveiraResolver;
+          const discNorm = normalizeCourseIndexKey(appliedDom.disciplina || '');
+          let subjObj = null;
+          for (const s of tree.subjects.values()) {
+            if (normalizeCourseIndexKey(s.name) === discNorm) {
+              subjObj = s;
+              break;
+            }
+          }
+          if (!subjObj && resolver) {
+            const tempRes = resolver.resolveLesson(tree, { subjectName: appliedDom.disciplina || '', lessons: [], topic: '', subtopics: [] });
+            if (tempRes?.subject?.id) subjObj = tree.subjects.get(tempRes.subject.id) || null;
+          }
+          if (subjObj) {
+            const picks = [];
+            for (const label of appliedDom.assuntos) {
+              const lNorm = normalizeCourseIndexKey(label);
+              const found = subjObj.nodes.find(n => normalizeCourseIndexKey(n.name) === lNorm);
+              if (found) picks.push({ id: found.id, name: found.name, path: found.path || [found.name] });
+            }
+            if (picks.length > 0) {
+              return { subjectId: subjObj.id, subjectName: subjObj.name, ids: picks.map(p => p.id), picks };
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  async function navigateToCaveiraDeepLink(subjectId, ids, bannerText) {
+    const resolver = (typeof globalThis !== 'undefined' && globalThis.QGCaveiraResolver) ? globalThis.QGCaveiraResolver : null;
+    if (!resolver || !subjectId || !Array.isArray(ids) || ids.length === 0) return false;
+    const url = resolver.buildUrl(window.location.origin, subjectId, ids, 'not_resolved');
+    try {
+      if (isExtensionContextValid() && chrome?.storage?.local) {
+        await new Promise((res) => {
+          chrome.storage.local.set({
+            [LAST_FILTER_DIAG_KEY]: {
+              savedAt: Date.now(),
+              diagLog: lastFilterDiagnosticLog,
+              activePracticeFilter,
+              bannerText: bannerText || ''
+            }
+          }, () => res());
+        });
+      }
+    } catch (_) {}
+    if (bannerText) renderFilterBanner(bannerText);
+    window.location.assign(url);
+    return true;
+  }
+
+  function renderResolverAlternativesBox(res, filterCtx) {
+    const box = document.getElementById('qg-hud-resolver-box');
+    const titleEl = document.getElementById('qg-hud-resolver-title');
+    const listEl = document.getElementById('qg-hud-resolver-list');
+    if (!box || !titleEl || !listEl) return;
+
+    pendingResolverResult = res;
+    const alts = Array.isArray(res?.alternatives) ? res.alternatives : [];
+    const subjName = res?.subject?.name || filterCtx?.subject || '';
+
+    if (alts.length === 0) {
+      titleEl.textContent = `⚠️ Não foi possível decidir automaticamente${subjName ? ` (${subjName})` : ''}.`;
+      listEl.innerHTML = `<div style="color:#cbd5e1;font-size:10px;">Nenhuma alternativa segura encontrada para "${escapeHtml(filterCtx?.topic || '')}".</div>`;
+      const applyAltBtn = box.querySelector('#qg-btn-apply-alt');
+      if (applyAltBtn) applyAltBtn.style.display = 'none';
+    } else {
+      const applyAltBtn = box.querySelector('#qg-btn-apply-alt');
+      if (applyAltBtn) applyAltBtn.style.display = 'block';
+      titleEl.textContent = res?.anchorAmbiguous
+        ? `⚠️ Múltiplas pastas compatíveis (${subjName}). Escolha:`
+        : `⚠️ Confiança ${res?.confidence || 'baixa'} (${subjName}). Escolha:`;
+      listEl.innerHTML = alts.map((alt, idx) => {
+        const fullPath = Array.isArray(alt.path) && alt.path.length > 0 ? alt.path.join(' › ') : alt.name;
+        return `
+          <label style="display:flex;align-items:flex-start;gap:6px;padding:4px 6px;border-radius:6px;background:rgba(15,23,42,0.7);border:1px solid rgba(255,255,255,0.08);cursor:pointer;">
+            <input type="checkbox" data-subtopic-id="${Number(alt.id)}" data-subject-id="${Number(res?.subject?.id || 0)}" ${idx === 0 && alts.length === 1 ? 'checked' : ''} style="margin-top:2px;flex-shrink:0;" />
+            <span style="display:flex;flex-direction:column;gap:1px;line-height:1.25;">
+              <strong style="color:#f8fafc;font-size:10px;">${escapeHtml(alt.name)}</strong>
+              <span style="color:#94a3b8;font-size:9px;">${escapeHtml(fullPath)}</span>
+            </span>
+          </label>
+        `;
+      }).join('');
+    }
+    box.style.display = 'flex';
+  }
+
   function setupManualFilterCorrectionListener() {
     if (typeof document === 'undefined' || !document.addEventListener) return;
     const onDocClick = (e) => {
@@ -2951,21 +3220,26 @@
       if (!allowed.includes(txt)) return;
 
       const ctxSnapshot = { ...activePracticeFilter };
-      setTimeout(() => {
+      setTimeout(async () => {
         if (isDestroyed || isApplyingFilter) return;
         const applied = readAppliedFiltersFromDom();
-        if (applied.assuntos && applied.assuntos.length > 0) {
-          saveFilterCorrectionMemory(ctxSnapshot, applied);
+        const resolvedIds = await resolveIdsFromUrlOrDom(applied);
+        if (resolvedIds && resolvedIds.subjectId && resolvedIds.ids.length > 0) {
+          saveFilterIdMemory(ctxSnapshot, resolvedIds);
           if (lastFilterDiagnosticLog) {
             lastFilterDiagnosticLog.manualCorrectionSaved = {
               savedAt: new Date().toISOString(),
-              disciplina: applied.disciplina,
-              assuntos: applied.assuntos
+              subjectId: resolvedIds.subjectId,
+              ids: resolvedIds.ids,
+              picks: resolvedIds.picks
             };
           }
+          renderFilterBanner(`💾 Correção memorizada (${resolvedIds.ids.length} ID(s)): ${ctxSnapshot.topic || ctxSnapshot.subject}`);
+        } else if (applied.assuntos && applied.assuntos.length > 0) {
+          saveFilterCorrectionMemory(ctxSnapshot, applied);
           renderFilterBanner(`💾 Correção memorizada (${applied.assuntos.length} assunto(s)): ${ctxSnapshot.topic || ctxSnapshot.subject}`);
         }
-      }, 380);
+      }, 450);
     };
     document.addEventListener('click', onDocClick, true);
     window.addEventListener('qg-caveira-teardown', () => {
@@ -3329,8 +3603,8 @@
 
     // 1A-bis. Âncora Nível A (Título da aula / tópico via BM25 na árvore cacheada)
     const subjectExcludeTokens = new Set();
-    if (treeMatcher) {
-      const subjectTokensSources = [subjectName, fallbackTopic, ...(subjectName ? getSubjectSearchTerms(subjectName) : [])].filter(Boolean);
+    if (treeMatcher && subjectName) {
+      const subjectTokensSources = [subjectName, ...getSubjectSearchTerms(subjectName)].filter(Boolean);
       for (const src of subjectTokensSources) {
         treeMatcher.canon(src).tokens.forEach(t => subjectExcludeTokens.add(t));
       }
@@ -3341,7 +3615,13 @@
       const anchorQueries = [...validLessons, fallbackTopic].filter(Boolean);
       for (const rawAnchorQ of anchorQueries) {
         if (isDestroyed) break;
-        const anchorQ = stripSubjectFromLessonTitle(rawAnchorQ, subjectName) || rawAnchorQ;
+        const cleanedAnchor = (stripSubjectFromLessonTitle(rawAnchorQ, subjectName) || rawAnchorQ)
+          .replace(/\((?:aula|parte|bloco|m[oó]dulo)[^)]*\)/gi, ' ')
+          .replace(/\b(?:aula|parte|bloco|m[oó]dulo)\s*\d+\b/gi, ' ')
+          .replace(/\s*[-–—:|]+\s*$/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        const anchorQ = cleanedAnchor || rawAnchorQ;
         const ranked = treeMatcher.scoreTreeNodesBm25(anchorQ, bm25Index, {
           excludeNorms: selectedOptionNorms,
           excludeTokens: subjectExcludeTokens
@@ -3901,6 +4181,140 @@
       }
     }
 
+    isApplyingFilter = true;
+    activePracticeFilter = {
+      subject: subject || inferredSubject,
+      lessons: effectiveLessons,
+      topic: displayTarget,
+      fallbackTopic,
+      subtopics: effectiveSubtopics,
+      rawIndexText
+    };
+    const resolverBox = document.getElementById('qg-hud-resolver-box');
+    if (resolverBox) resolverBox.style.display = 'none';
+    renderFilterBanner('⏳ Resolvendo filtro por IDs...');
+
+    try {
+      chrome.storage.local.remove([PENDING_FILTER_KEY]);
+    } catch (_) {}
+
+    try {
+      // 1. Consultar memória de correções por ID ANTES do resolver
+      const idMemHit = await loadFilterIdMemory(subject || inferredSubject, effectiveLessons, fallbackTopic);
+      if (idMemHit && idMemHit.subjectId && Array.isArray(idMemHit.ids) && idMemHit.ids.length > 0) {
+        lastFilterDiagnosticLog = {
+          version: '1.4.0',
+          timestamp: new Date().toISOString(),
+          geradoEm: cachedCaveiraTreeGeradoEm || '',
+          mode: 'id-memory',
+          input: { rawSubject, rawLessons, rawFallbackTopic, rawSubtopicsCount: rawSubtopicsInput.length },
+          resolvedSubject: { id: idMemHit.subjectId, name: idMemHit.subjectName || subject || '' },
+          confidence: 'alta',
+          reason: 'memória de correções por ID',
+          ids: idMemHit.ids,
+          picks: idMemHit.picks || []
+        };
+        const summary = [idMemHit.subjectName || subject, displayTarget].filter(Boolean).join(' • ');
+        await navigateToCaveiraDeepLink(idMemHit.subjectId, idMemHit.ids, `✅ Filtro aplicado (💾 Memória IDs): ${summary}`);
+        return;
+      }
+
+      // 2. Carregar caveira_arvore.json e chamar QGCaveiraResolver.resolveLesson
+      const resolver = (typeof globalThis !== 'undefined' && globalThis.QGCaveiraResolver) ? globalThis.QGCaveiraResolver : null;
+      const tree = resolver ? await loadCaveiraTree() : null;
+      if (!resolver || !tree) {
+        lastFilterDiagnosticLog = {
+          version: '1.4.0',
+          timestamp: new Date().toISOString(),
+          geradoEm: cachedCaveiraTreeGeradoEm || '',
+          mode: 'resolver-unavailable',
+          reason: !resolver ? 'QGCaveiraResolver não carregado' : 'Falha ao carregar caveira_arvore.json'
+        };
+        renderResolverAlternativesBox({ subject: null, alternatives: [], confidence: 'nenhuma', reason: lastFilterDiagnosticLog.reason }, activePracticeFilter);
+        renderFilterBanner(`⚠️ Árvore indisponível — tente o modo antigo`);
+        return;
+      }
+
+      const res = resolver.resolveLesson(tree, {
+        subjectName: subject || inferredSubject,
+        lessons: effectiveLessons,
+        topic: fallbackTopic,
+        subtopics: effectiveSubtopics
+      });
+
+      lastFilterDiagnosticLog = {
+        version: '1.4.0',
+        timestamp: new Date().toISOString(),
+        geradoEm: cachedCaveiraTreeGeradoEm || '',
+        mode: 'resolver-id',
+        input: { rawSubject, rawLessons, rawFallbackTopic, rawSubtopicsCount: rawSubtopicsInput.length, effectiveSubtopics },
+        resolvedSubject: res.subject ? { id: res.subject.id, name: res.subject.name } : null,
+        anchor: res.log?.anchor || null,
+        confidence: res.confidence,
+        anchorAmbiguous: Boolean(res.anchorAmbiguous),
+        reason: res.reason,
+        ids: res.ids || [],
+        picks: (res.picks || []).map(p => ({ id: p.id, name: p.name, path: p.path })),
+        alternatives: (res.alternatives || []).map(a => ({ id: a.id, name: a.name, path: a.path })),
+        subtopicsLog: res.log?.subtopics || []
+      };
+
+      const canAutoNavigate =
+        (res.confidence === 'alta' || res.confidence === 'media') &&
+        !res.anchorAmbiguous &&
+        Array.isArray(res.ids) &&
+        res.ids.length > 0 &&
+        res.subject &&
+        res.subject.id;
+
+      if (canAutoNavigate) {
+        const summary = [res.subject.name, displayTarget].filter(Boolean).join(' • ');
+        const tag = `${res.ids.length} assunto(s) • ${res.confidence}`;
+        await navigateToCaveiraDeepLink(res.subject.id, res.ids, `✅ Filtro aplicado (${tag}): ${summary}`);
+        return;
+      }
+
+      // 3. Confiança baixa / nenhuma / âncora ambígua -> exibe seletor de alternativas no HUD
+      renderResolverAlternativesBox(res, activePracticeFilter);
+      renderFilterBanner(`⚠️ Confirme no HUD (${res.confidence}${res.anchorAmbiguous ? ' • ambíguo' : ''}): ${displayTarget || res.subject?.name || ''}`);
+    } finally {
+      isApplyingFilter = false;
+    }
+  }
+
+  async function applyCaveiraPracticeFilterLegacyDom(filterObj) {
+    if (isDestroyed || !filterObj || isApplyingFilter) return;
+    const rawSubject = String(filterObj.subject || '').trim();
+    const lessons = Array.isArray(filterObj.lessons) ? filterObj.lessons.map(l => String(l || '').trim()).filter(Boolean) : [];
+    const topic = String(filterObj.topic || '').trim();
+    const rawFallbackTopic = String(filterObj.fallbackTopic || topic || '').trim();
+    const rawLessons = lessons.length > 0 ? lessons : (topic ? [topic] : []);
+    const inferredSubject = inferSubjectFromLessons(rawLessons, rawFallbackTopic);
+    const subject = (!rawSubject || isGenericSubjectName(rawSubject)) && inferredSubject
+      ? inferredSubject
+      : rawSubject;
+    const effectiveLessons = rawLessons.map(l => stripSubjectFromLessonTitle(l, subject || inferredSubject)).filter(Boolean);
+    const fallbackTopic = stripSubjectFromLessonTitle(rawFallbackTopic, subject || inferredSubject) || rawFallbackTopic;
+    const displayTarget = effectiveLessons.join(' • ') || fallbackTopic;
+    if (!subject && !displayTarget) return;
+
+    const rawIndexText = String(filterObj.rawIndexText || '').trim();
+    const rawSubtopicsInput = Array.isArray(filterObj.subtopics)
+      ? filterObj.subtopics.map(s => String(s || '').trim()).filter(Boolean)
+      : [];
+
+    const sourceTextForParse = rawIndexText || rawSubtopicsInput.join('\n');
+    let effectiveSubtopics = sourceTextForParse
+      ? parseCourseIndexSubtopics(sourceTextForParse, [subject, inferredSubject, fallbackTopic, ...effectiveLessons, ...rawLessons])
+      : [];
+
+    if (effectiveSubtopics.length === 0 && !rawIndexText) {
+      const cached = await resolveSubtopicsFromCourseCache(rawLessons, fallbackTopic, subject || inferredSubject);
+      if (cached.subtopics.length > 0) {
+        effectiveSubtopics = cached.subtopics;
+      }
+    }
+
     const filterStartedAt = Date.now();
     const memoryHit = await loadFilterCorrectionMemory(subject || inferredSubject, effectiveLessons, fallbackTopic);
     const effectiveSubjectForFilter = (memoryHit && memoryHit.subject && (!subject || isGenericSubjectName(subject)))
@@ -3908,7 +4322,7 @@
       : subject;
 
     lastFilterDiagnosticLog = {
-      version: '1.3.5',
+      version: '1.4.0',
       timestamp: new Date().toISOString(),
       input: {
         rawSubject,
