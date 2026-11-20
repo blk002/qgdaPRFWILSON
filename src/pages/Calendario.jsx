@@ -600,7 +600,76 @@ export default function Calendario() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row items-start gap-5 lg:gap-6 w-full pb-10 fade-in">
+    <div className="flex flex-col items-stretch gap-5 w-full pb-10 fade-in">
+      {/* Painel Lateral: Fim das Disciplinas & Transições */}
+      <div className="w-full bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 sm:p-5 flex flex-col shrink-0 dark:bg-slate-900 dark:border-slate-800">
+        <h3 className="text-base md:text-lg font-bold text-slate-800 mb-3 flex items-center gap-2 border-b border-slate-100 pb-3 dark:text-slate-100 dark:border-slate-800">
+          <BookOpen className="text-blue-600 w-5 h-5" /> Fim das Disciplinas
+        </h3>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
+          {subjectEstimates.map(sub => {
+            const totalClasses = (sub.topics || []).reduce((acc, t) => acc + (t.total || 0), 0);
+            const completedClasses = Math.max(0, totalClasses - sub.remaining);
+            const pct = totalClasses > 0 ? Math.round((completedClasses / totalClasses) * 100) : 0;
+            const currentSpeed = Number(sub.speed) || 1;
+            const currentTimeGoal = Number(sub.timeGoalMinutes) || 0;
+
+            const calFinish = calCompletionDates[sub.id];
+            const displayDateStr = calFinish ? calFinish.dateStr : sub.dateStr;
+
+            return (
+              <div key={sub.id} className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col gap-2 hover:border-blue-300 dark:hover:border-blue-900 transition-all bg-slate-50/70 dark:bg-slate-950/70 shadow-sm">
+                <div className="flex justify-between items-start gap-1">
+                  <div className="flex items-center gap-1.5 flex-wrap">
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-md tracking-wider uppercase ${sub.color}`}>{sub.name}</span>
+                    {currentSpeed > 1 && (
+                      <span className="text-[9px] font-black bg-blue-100 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-900 flex items-center gap-0.5" title={`Aceleração de vídeo: ${currentSpeed}x`}>
+                        <Zap className="w-2.5 h-2.5 text-yellow-500 fill-yellow-500" /> {currentSpeed}x
+                      </span>
+                    )}
+                    {currentTimeGoal > 0 && (
+                      <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-900 flex items-center gap-0.5" title={`Meta por bloco no ciclo: ${currentTimeGoal} min`}>
+                        <Target className="w-2.5 h-2.5" /> {formatMinutesToFriendly(currentTimeGoal)}
+                      </span>
+                    )}
+                  </div>
+                  {sub.remaining === 0 ? (
+                    <span className="flex items-center gap-1 text-xs font-black text-emerald-600"><CheckCircle className="w-3.5 h-3.5" /> Concluído</span>
+                  ) : (
+                    <span className="text-sm font-black text-blue-600 dark:text-blue-400 font-mono tracking-tight shrink-0">{displayDateStr}</span>
+                  )}
+                </div>
+
+                {sub.remaining > 0 && (
+                  <>
+                    <div className="flex justify-between items-center text-xs text-slate-500 font-medium">
+                      <span>{sub.remaining} aulas restantes</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300">{pct}%</span>
+                    </div>
+                    <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                      <div className="bg-blue-600 h-1.5 rounded-full transition-all duration-300" style={{ width: `${pct}%` }}></div>
+                    </div>
+
+                    <div className="mt-1 pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between text-[11px]">
+                      <button
+                        type="button"
+                        onClick={() => handleOpenTransitionModal(sub)}
+                        className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-bold"
+                      >
+                        <Sparkles className="w-3 h-3 text-amber-500" /> Regra ao concluir...
+                      </button>
+                      <span className="text-[10px] text-slate-400 font-medium">
+                        {sub.onCompleteAction === 'replace' ? '🔄 Substituir' : sub.onCompleteAction === 'double_remaining' ? '⚡ Dobrar Dia' : '✅ Encerrar ao Fim'}
+                      </span>
+                    </div>
+                  </>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      </div>
+
       <div className="flex-1 min-w-0 w-full bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 sm:p-6 overflow-hidden dark:bg-slate-900 dark:border-slate-800">
         
         {/* Banner de Previsão de Término */}
@@ -794,74 +863,6 @@ export default function Calendario() {
         </div>
       </div>
 
-      {/* Painel Lateral: Fim das Disciplinas & Transições */}
-      <div className="w-full lg:w-72 xl:w-80 bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 sm:p-5 flex flex-col shrink-0 dark:bg-slate-900 dark:border-slate-800">
-        <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3 dark:text-slate-100 dark:border-slate-800">
-          <BookOpen className="text-blue-600 w-5 h-5" /> Fim das Disciplinas
-        </h3>
-        <div className="flex flex-col gap-3">
-          {subjectEstimates.map(sub => {
-            const totalClasses = (sub.topics || []).reduce((acc, t) => acc + (t.total || 0), 0);
-            const completedClasses = Math.max(0, totalClasses - sub.remaining);
-            const pct = totalClasses > 0 ? Math.round((completedClasses / totalClasses) * 100) : 0;
-            const currentSpeed = Number(sub.speed) || 1;
-            const currentTimeGoal = Number(sub.timeGoalMinutes) || 0;
-
-            const calFinish = calCompletionDates[sub.id];
-            const displayDateStr = calFinish ? calFinish.dateStr : sub.dateStr;
-
-            return (
-              <div key={sub.id} className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col gap-2 hover:border-blue-300 dark:hover:border-blue-900 transition-all bg-slate-50/70 dark:bg-slate-950/70 shadow-sm">
-                <div className="flex justify-between items-start gap-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-md tracking-wider uppercase ${sub.color}`}>{sub.name}</span>
-                    {currentSpeed > 1 && (
-                      <span className="text-[9px] font-black bg-blue-100 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-900 flex items-center gap-0.5" title={`Aceleração de vídeo: ${currentSpeed}x`}>
-                        <Zap className="w-2.5 h-2.5 text-yellow-500 fill-yellow-500" /> {currentSpeed}x
-                      </span>
-                    )}
-                    {currentTimeGoal > 0 && (
-                      <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-900 flex items-center gap-0.5" title={`Meta por bloco no ciclo: ${currentTimeGoal} min`}>
-                        <Target className="w-2.5 h-2.5" /> {formatMinutesToFriendly(currentTimeGoal)}
-                      </span>
-                    )}
-                  </div>
-                  {sub.remaining === 0 ? (
-                    <span className="flex items-center gap-1 text-xs font-black text-emerald-600"><CheckCircle className="w-3.5 h-3.5" /> Concluído</span>
-                  ) : (
-                    <span className="text-sm font-black text-blue-600 dark:text-blue-400 font-mono tracking-tight shrink-0">{displayDateStr}</span>
-                  )}
-                </div>
-
-                {sub.remaining > 0 && (
-                  <>
-                    <div className="flex justify-between items-center text-xs text-slate-500 font-medium">
-                      <span>{sub.remaining} aulas restantes</span>
-                      <span className="font-bold text-slate-700 dark:text-slate-300">{pct}%</span>
-                    </div>
-                    <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
-                      <div className="bg-blue-600 h-1.5 rounded-full transition-all duration-300" style={{ width: `${pct}%` }}></div>
-                    </div>
-
-                    <div className="mt-1 pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between text-[11px]">
-                      <button
-                        type="button"
-                        onClick={() => handleOpenTransitionModal(sub)}
-                        className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-bold"
-                      >
-                        <Sparkles className="w-3 h-3 text-amber-500" /> Regra ao concluir...
-                      </button>
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        {sub.onCompleteAction === 'replace' ? '🔄 Substituir' : sub.onCompleteAction === 'double_remaining' ? '⚡ Dobrar Dia' : '✅ Encerrar ao Fim'}
-                      </span>
-                    </div>
-                  </>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
       {/* MODAL: GERENCIADOR DE DIA DO CALENDÁRIO */}
       {managingDay && createPortal(
