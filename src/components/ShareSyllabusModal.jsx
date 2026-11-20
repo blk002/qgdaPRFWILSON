@@ -587,7 +587,7 @@ ${code}
               </div>
 
               {/* Resumo Operacional */}
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-[#020617] border border-slate-800 p-3 rounded-xl text-center">
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 bg-slate-950 border border-slate-800 p-3 rounded-xl text-center">
                 <div>
                   <span className="text-[9px] font-black text-slate-500 uppercase block">Disciplinas</span>
                   <span className="text-base font-black text-white">{exportStats.subjectsCount}</span>
@@ -696,7 +696,7 @@ ${code}
                   onChange={(e) => setImportInputText(e.target.value)}
                   placeholder="Cole aqui o código de compartilhamento (começa com QGPRF-GRADE-...) ou o conteúdo do arquivo .json..."
                   rows={4}
-                  className="w-full bg-[#020617] border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors resize-none"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 text-xs font-mono text-slate-200 focus:outline-none focus:border-emerald-500 transition-colors resize-none"
                 />
 
                 {fileError && (
@@ -719,7 +719,7 @@ ${code}
                     </span>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2 bg-[#020617] p-2.5 rounded-lg border border-slate-800 text-center">
+                  <div className="grid grid-cols-3 gap-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-center">
                     <div>
                       <span className="text-[9px] font-black text-slate-500 uppercase block">Assuntos</span>
                       <span className="text-sm font-black text-white">{importStats.topicsCount}</span>

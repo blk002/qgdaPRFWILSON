@@ -203,12 +203,12 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
       initial={{ scale: inline ? 0.99 : 0.95, opacity: 0 }}
       animate={{ scale: 1, opacity: 1 }}
       exit={{ scale: inline ? 0.99 : 0.95, opacity: 0 }}
-      className={`bg-white dark:bg-[#1E2022] border border-slate-200 dark:border-[#383D43] rounded-3xl shadow-2xl w-full p-5 sm:p-7 flex flex-col font-sans ${
+      className={`bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-3xl shadow-2xl w-full p-5 sm:p-7 flex flex-col font-sans ${
         inline ? '' : 'max-w-2xl max-h-[92vh] overflow-y-auto custom-scrollbar'
       }`}
     >
         {/* Cabeçalho do Card de Revisão */}
-        <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-slate-100 dark:border-[#2E3236]">
+        <div className="flex items-center justify-between pb-3.5 mb-4 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2.5 flex-wrap">
             <span className="bg-purple-600/15 text-purple-400 border border-purple-500/25 text-xs font-black uppercase px-2.5 py-1 rounded-lg flex items-center gap-1.5">
               <BrainCircuit className="w-3.5 h-3.5" /> FSRS • Refazer Questão
@@ -216,7 +216,7 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
             <span className="font-mono text-xs font-black text-blue-400 bg-blue-500/10 border border-blue-500/20 px-2.5 py-1 rounded-lg">
               {qData.id || review.id}
             </span>
-            <span className="text-[11px] font-bold text-slate-400 bg-slate-100 dark:bg-[#26292C] px-2.5 py-1 rounded-lg">
+            <span className="text-[11px] font-bold text-slate-400 bg-slate-100 dark:bg-slate-850 px-2.5 py-1 rounded-lg">
               {qData.canonicalSubject || qData.subject || 'PRF'}
             </span>
             {qData.hit && qData.confidence === 'chute' ? (
@@ -249,12 +249,12 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
         </div>
 
         {/* Trilha do Assunto */}
-        <p className="text-xs font-normal normal-case text-slate-500 dark:text-[#A0AAB2] mb-3">
+        <p className="text-xs font-normal normal-case text-slate-500 dark:text-slate-400 mb-3">
           📂 {qData.subject} {qData.topic && qData.topic !== qData.subject ? `➔ ${qData.topic}` : ''}
         </p>
 
         {/* Enunciado da Questão */}
-        <div className="text-[15px] sm:text-[16px] font-medium text-slate-800 dark:text-[#F1F5F9] leading-[1.6] bg-slate-50 dark:bg-[#26292C] p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-[#34383D] mb-5">
+        <div className="text-[15px] sm:text-[16px] font-medium text-slate-800 dark:text-slate-100 leading-[1.6] bg-slate-50 dark:bg-slate-850 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 mb-5">
           {qData.content || 'Sem texto de enunciado cadastrado.'}
         </div>
 
@@ -272,7 +272,7 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
                 { letter: 'E', label: 'Errado' }
               ].map(opt => {
                 const isSelected = selectedChoice === opt.letter;
-                let btnStyle = 'border-slate-200 dark:border-[#383D43] bg-slate-50 dark:bg-[#26292C] hover:border-slate-400';
+                let btnStyle = 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 hover:border-slate-400';
 
                 if (hasSubmitted) {
                   if (opt.letter === correctChoice) {
@@ -304,7 +304,7 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
             <div className="space-y-2">
               {qData.alternatives.map(alt => {
                 const isSelected = selectedChoice === alt.letter;
-                let btnStyle = 'border-slate-200 dark:border-[#383D43] bg-slate-50 dark:bg-[#26292C] hover:border-slate-400 text-slate-700 dark:text-[#E2E8F0]';
+                let btnStyle = 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 hover:border-slate-400 text-slate-700 dark:text-slate-200';
 
                 if (hasSubmitted) {
                   if (alt.letter === correctChoice) {
@@ -336,7 +336,7 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
             <div className="grid grid-cols-5 gap-2.5">
               {['A', 'B', 'C', 'D', 'E'].map(letter => {
                 const isSelected = selectedChoice === letter;
-                let btnStyle = 'border-slate-200 dark:border-[#383D43] bg-slate-50 dark:bg-[#26292C] hover:border-slate-400 text-slate-700 dark:text-[#E2E8F0]';
+                let btnStyle = 'border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 hover:border-slate-400 text-slate-700 dark:text-slate-200';
 
                 if (hasSubmitted) {
                   if (letter === correctChoice) {

@@ -615,8 +615,8 @@ export default function Ciclo() {
               if (week !== weekOffset) return null;
 
               return (
-                <div id={`cycle-day-${dayIndex}`} key={dayIndex} className={`flex-1 min-w-[290px] sm:min-w-[310px] md:min-w-[325px] max-w-[380px] flex flex-col rounded-2xl border-2 transition-all mt-2 ${
-                    isToday ? 'border-blue-500 bg-slate-50 shadow-xl ring-4 ring-blue-50 relative dark:bg-slate-900 dark:border-blue-500 dark:ring-blue-900/30' : 'border-slate-200 bg-white opacity-80 hover:opacity-100 scale-[0.99] hover:scale-100 dark:border-slate-800 dark:bg-slate-950'
+                <div id={`cycle-day-${dayIndex}`} key={dayIndex} className={`flex-1 min-w-[290px] sm:min-w-[310px] md:min-w-[325px] max-w-[380px] flex flex-col rounded-2xl border transition-all mt-2 ${
+                    isToday ? 'border-blue-500/80 bg-slate-50 shadow-xl ring-4 ring-blue-500/10 relative dark:bg-slate-900 dark:border-blue-500/80 dark:ring-blue-500/10' : 'border-slate-200/80 bg-white opacity-90 hover:opacity-100 dark:border-slate-800 dark:bg-slate-900/70'
                 }`}>
                   {isToday && (
                      <div className="absolute -top-3.5 sm:-top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white text-[10px] sm:text-xs font-black uppercase tracking-wider px-3 sm:px-4 py-1.5 rounded-full shadow-md z-10 border-2 border-white dark:border-slate-900 whitespace-nowrap">
@@ -624,7 +624,7 @@ export default function Ciclo() {
                      </div>
                   )}
 
-                  <div className={`p-3 sm:p-4 text-center border-b-2 flex flex-col gap-1 rounded-t-xl ${isToday ? 'border-blue-200 bg-blue-100/40 pt-5 sm:pt-6 dark:border-blue-900/50 dark:bg-blue-950/30' : 'border-slate-100 bg-slate-50/70 dark:border-slate-800/80 dark:bg-slate-900/40'}`}>
+                  <div className={`p-3 sm:p-4 text-center border-b flex flex-col gap-1 rounded-t-2xl ${isToday ? 'border-blue-200 bg-blue-100/40 pt-5 sm:pt-6 dark:border-blue-500/25 dark:bg-blue-950/35' : 'border-slate-100 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-950/50'}`}>
                     <span className={`text-[10px] sm:text-xs font-black uppercase tracking-widest ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-400'}`}>
                       {dateInfo.title} • {dateInfo.dateStr}
                     </span>

@@ -618,7 +618,7 @@ export default function RaioXCaveira() {
     <div className="fade-in w-full pb-12 font-sans space-y-4">
 
       {/* 1. BARRA EXECUTIVA DE COMANDO + SELETOR DE BLOCOS INTEGRADO */}
-      <div className="glass-card rounded-2xl p-4 border border-slate-200 dark:border-[#2E3236] shadow-lg space-y-3.5">
+      <div className="glass-card rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-lg space-y-3.5">
         <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
           {/* Título e Status da Extensão */}
           <div className="flex items-center gap-3">
@@ -639,7 +639,7 @@ export default function RaioXCaveira() {
                   {extensionDetected ? 'Sincronizado' : 'Extensão Offline'}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-[#A0AAB2]">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
                 Diagnóstico tático de questões, disciplinas, artigos de lei e caderno de erros.
               </p>
             </div>
@@ -665,7 +665,7 @@ export default function RaioXCaveira() {
 
             <button
               onClick={() => setShowImportModal(true)}
-              className="flex items-center gap-1.5 bg-slate-100 dark:bg-[#26292C] hover:bg-slate-200 dark:hover:bg-[#32363A] text-slate-700 dark:text-slate-200 font-bold text-xs uppercase px-3 py-1.5 rounded-xl border border-slate-200 dark:border-[#383C42] transition-all cursor-pointer"
+              className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-850 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs uppercase px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
               title="Importar questões via JSON"
             >
               <Upload className="w-3.5 h-3.5" /> Importar
@@ -690,7 +690,7 @@ export default function RaioXCaveira() {
         </div>
 
         {/* SELETOR DE BLOCOS DO EDITAL PRF (INTEGRADO E CONCISO) */}
-        <div className="pt-3 border-t border-slate-200/70 dark:border-[#2E3236] flex flex-wrap items-center justify-between gap-2">
+        <div className="pt-3 border-t border-slate-200/70 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
@@ -702,7 +702,7 @@ export default function RaioXCaveira() {
               className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer border ${
                 selectedBloco === 'all'
                   ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
-                  : 'bg-slate-100 dark:bg-[#1E2022] text-slate-600 dark:text-[#A0AAB2] border-slate-200 dark:border-[#32363A] hover:text-white'
+                  : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:text-white'
               }`}
             >
               Todos os Blocos ({enrichedQuestions.length})
@@ -722,7 +722,7 @@ export default function RaioXCaveira() {
                   className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-2 ${
                     isSelected
                       ? b.activeClass
-                      : 'bg-slate-100 dark:bg-[#1E2022] text-slate-700 dark:text-[#F1F5F9] border-slate-200 dark:border-[#32363A] hover:border-slate-500'
+                      : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-100 border-slate-200 dark:border-slate-800 hover:border-slate-500'
                   }`}
                 >
                   <span className="uppercase">{b.title}</span>
@@ -730,7 +730,7 @@ export default function RaioXCaveira() {
                     isSelected
                       ? 'bg-black/20 text-current'
                       : b.total === 0
-                      ? 'bg-slate-200 dark:bg-[#26292C] text-slate-400'
+                      ? 'bg-slate-200 dark:bg-slate-850 text-slate-400'
                       : b.grossRate >= 75
                       ? 'bg-emerald-500/15 text-emerald-400'
                       : b.grossRate >= 50
@@ -780,7 +780,7 @@ export default function RaioXCaveira() {
         return (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* CARD 1 (ESQUERDA): GRÁFICO CIRCULAR DE DESEMPENHO */}
-            <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-[#2E3236] flex flex-col items-center justify-between min-h-[250px]">
+            <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-between min-h-[250px]">
               {/* Gráfico Donut com texto central */}
               <div className="relative flex items-center justify-center my-auto py-1">
                 <svg width="180" height="180" viewBox="0 0 160 160" className="transform -rotate-90">
@@ -792,7 +792,7 @@ export default function RaioXCaveira() {
                     fill="transparent"
                     stroke="currentColor"
                     strokeWidth="9"
-                    className="text-slate-100 dark:text-[#25282C]"
+                    className="text-slate-100 dark:text-slate-800"
                   />
                   {/* Arco de Acertos (Teal / Ciano) */}
                   {hitLength > 0 && (
@@ -838,7 +838,7 @@ export default function RaioXCaveira() {
               </div>
 
               {/* Legenda inferior (Acertos & Erros alinhados à esquerda) */}
-              <div className="w-full pt-3 mt-1 border-t border-slate-200/60 dark:border-[#2E3236] flex flex-col items-start justify-center gap-1.5 pl-8 sm:pl-12 text-xs sm:text-sm font-semibold">
+              <div className="w-full pt-3 mt-1 border-t border-slate-200/60 dark:border-slate-800 flex flex-col items-start justify-center gap-1.5 pl-8 sm:pl-12 text-xs sm:text-sm font-semibold">
                 <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
                   <span className="w-2.5 h-2.5 rounded-full bg-[#0891b2] dark:bg-[#06b6d4] shrink-0" />
                   <span>{hitPercent}% {stats.hits} acertos</span>
@@ -851,7 +851,7 @@ export default function RaioXCaveira() {
             </div>
 
             {/* CARD 2 (DIREITA): MÉTRICAS DETALHADAS */}
-            <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-[#2E3236] flex flex-col justify-between min-h-[250px] space-y-3">
+            <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800 flex flex-col justify-between min-h-[250px] space-y-3">
               {/* Topo: QUESTÕES RESPONDIDAS */}
               <div className="text-center py-1">
                 <span className="block text-xs sm:text-sm font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
@@ -863,7 +863,7 @@ export default function RaioXCaveira() {
               </div>
 
               {/* Meio: ACERTOS | ERROS */}
-              <div className="grid grid-cols-2 gap-3 text-center py-3 border-y border-slate-200/60 dark:border-[#2E3236]">
+              <div className="grid grid-cols-2 gap-3 text-center py-3 border-y border-slate-200/60 dark:border-slate-800">
                 <div>
                   <span className="block text-xs sm:text-sm font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
                     ACERTOS
@@ -907,15 +907,15 @@ export default function RaioXCaveira() {
       })()}
 
       {/* 2.5. RELATÓRIO TÁTICO: ASSUNTOS MAIS ERRADOS (ZONA CRÍTICA) & MAIS ACERTADOS (ZONA BLINDADA) */}
-      <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] space-y-4">
+      <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 space-y-4">
         {/* Cabeçalho do Relatório de Assuntos */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-200/70 dark:border-[#2E3236]">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-200/70 dark:border-slate-800">
           <div>
             <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
               <Skull className="w-4 h-4 text-red-500" />
               Relatório de Assuntos: Mais Errados vs Mais Acertados
             </h2>
-            <p className="text-xs text-slate-500 dark:text-[#A0AAB2] mt-0.5">
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
               Mapeamento tático de vulnerabilidades e pontos fortes para a PRF com base no histórico geral e no Duelo FPS 3D.
             </p>
           </div>
@@ -928,7 +928,7 @@ export default function RaioXCaveira() {
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
                 topicReportScope === 'all'
                   ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
-                  : 'bg-slate-100 dark:bg-[#1E2022] text-slate-600 dark:text-[#A0AAB2] border-slate-200 dark:border-[#32363A] hover:text-white'
+                  : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:text-white'
               }`}
             >
               Todos os Assuntos ({enrichedQuestions.length})
@@ -940,7 +940,7 @@ export default function RaioXCaveira() {
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
                 topicReportScope === 'fps'
                   ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-sm'
-                  : 'bg-slate-100 dark:bg-[#1E2022] text-slate-700 dark:text-[#F1F5F9] border-slate-200 dark:border-[#32363A] hover:border-amber-400'
+                  : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-100 border-slate-200 dark:border-slate-800 hover:border-amber-400'
               }`}
             >
               <Crosshair className="w-3.5 h-3.5" />
@@ -953,7 +953,7 @@ export default function RaioXCaveira() {
               className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
                 topicReportScope === 'bloco2'
                   ? 'bg-amber-600 text-white border-amber-500 shadow-sm'
-                  : 'bg-slate-100 dark:bg-[#1E2022] text-slate-700 dark:text-[#F1F5F9] border-slate-200 dark:border-[#32363A] hover:text-white'
+                  : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-100 border-slate-200 dark:border-slate-800 hover:text-white'
               }`}
             >
               Bloco II: Trânsito ({topicRankings.bloco2Count})
@@ -963,7 +963,7 @@ export default function RaioXCaveira() {
 
         {/* Resumo Rápido dos Indicadores */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#1A1C1E] border border-slate-200 dark:border-[#2E3236] text-center">
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-center">
             <span className="text-[10px] sm:text-xs font-bold uppercase text-slate-400 block">Itens no Filtro</span>
             <span className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white mt-0.5 block">
               {topicRankings.totalScoped}
@@ -984,7 +984,7 @@ export default function RaioXCaveira() {
             </span>
           </div>
 
-          <div className="p-3 rounded-xl bg-slate-50 dark:bg-[#1A1C1E] border border-slate-200 dark:border-[#2E3236] text-center flex flex-col justify-center items-center">
+          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-center flex flex-col justify-center items-center">
             <a
               href="#/duelo"
               className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20"
@@ -998,8 +998,8 @@ export default function RaioXCaveira() {
         {/* Duas Colunas: Mais Errados vs Mais Acertados */}
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* COLUNA ESQUERDA: ASSUNTOS MAIS ERRADOS (ZONA CRÍTICA) */}
-          <div className="p-4 rounded-2xl bg-white dark:bg-[#1A1C1E] border border-red-500/25 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-[#2E3236]">
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-red-500/25 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
               <h3 className="text-xs sm:text-sm font-black uppercase text-red-500 dark:text-red-400 flex items-center gap-2">
                 <TrendingDown className="w-4 h-4" />
                 Zona Crítica: Assuntos Mais Errados ({topicRankings.mostErrored.length})
@@ -1018,7 +1018,7 @@ export default function RaioXCaveira() {
                 {topicRankings.mostErrored.slice(0, 15).map((t, idx) => (
                   <div
                     key={t.key}
-                    className="p-3 rounded-xl bg-slate-50 dark:bg-[#202326] border border-red-500/20 hover:border-red-500/40 transition-all space-y-2"
+                    className="p-3 rounded-xl bg-slate-50 dark:bg-slate-850 border border-red-500/20 hover:border-red-500/40 transition-all space-y-2"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
@@ -1082,8 +1082,8 @@ export default function RaioXCaveira() {
           </div>
 
           {/* COLUNA DIREITA: ASSUNTOS MAIS ACERTADOS (ZONA BLINDADA) */}
-          <div className="p-4 rounded-2xl bg-white dark:bg-[#1A1C1E] border border-emerald-500/25 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-[#2E3236]">
+          <div className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-emerald-500/25 space-y-3">
+            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
               <h3 className="text-xs sm:text-sm font-black uppercase text-emerald-500 dark:text-emerald-400 flex items-center gap-2">
                 <TrendingUp className="w-4 h-4" />
                 Zona Blindada: Assuntos Mais Acertados ({topicRankings.mostHit.length})
@@ -1102,7 +1102,7 @@ export default function RaioXCaveira() {
                 {topicRankings.mostHit.slice(0, 15).map((t, idx) => (
                   <div
                     key={t.key}
-                    className="p-3 rounded-xl bg-slate-50 dark:bg-[#202326] border border-emerald-500/20 hover:border-emerald-500/40 transition-all space-y-2"
+                    className="p-3 rounded-xl bg-slate-50 dark:bg-slate-850 border border-emerald-500/20 hover:border-emerald-500/40 transition-all space-y-2"
                   >
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-2 min-w-0">
@@ -1171,14 +1171,14 @@ export default function RaioXCaveira() {
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
 
         {/* COLUNA ESQUERDA: DESEMPENHO POR DISCIPLINA (LISTA HORIZONTAL DE ALTA LEITURA) */}
-        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] flex flex-col justify-between">
+        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-200/70 dark:border-[#2E3236]">
+            <div className="flex items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-200/70 dark:border-slate-800">
               <div>
                 <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-blue-400" /> Desempenho por Disciplina ({subjectGroups.length})
                 </h2>
-                <p className="text-xs text-slate-500 dark:text-[#A0AAB2]">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   Ordenado da matéria mais crítica para a mais forte. Clique para ver os tópicos.
                 </p>
               </div>
@@ -1216,23 +1216,23 @@ export default function RaioXCaveira() {
                       key={sub.name}
                       className={`rounded-xl border transition-all overflow-hidden ${
                         isFiltered
-                          ? 'border-blue-500 bg-blue-500/5 dark:bg-[#1E2229]'
+                          ? 'border-blue-500 bg-blue-500/5 dark:bg-slate-900'
                           : sub.status === 'vulnerabilidade'
-                          ? 'border-red-500/25 bg-white dark:bg-[#1E2022]'
-                          : 'border-slate-200 dark:border-[#32363A] bg-white dark:bg-[#1E2022]'
+                          ? 'border-red-500/25 bg-white dark:bg-slate-900'
+                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900'
                       }`}
                     >
                       {/* Linha Principal da Disciplina */}
                       <div
                         onClick={() => setExpandedSubject(isExpanded ? null : sub.name)}
-                        className="p-3 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-[#26292C]/70 transition-colors flex flex-col gap-2"
+                        className="p-3 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-850/70 transition-colors flex flex-col gap-2"
                       >
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2 min-w-0">
                             <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border shrink-0 ${blocoMeta.badgeClass}`}>
                               {blocoMeta.short}
                             </span>
-                            <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-[#F1F5F9] truncate">
+                            <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
                               {sub.name}
                             </h3>
                           </div>
@@ -1259,7 +1259,7 @@ export default function RaioXCaveira() {
                               className={`text-[10px] font-bold uppercase px-2 py-1 rounded-lg border transition-all cursor-pointer ${
                                 isFiltered
                                   ? 'bg-blue-600 text-white border-blue-500'
-                                  : 'bg-slate-100 dark:bg-[#26292C] text-slate-400 border-slate-300 dark:border-[#383C42] hover:text-white'
+                                  : 'bg-slate-100 dark:bg-slate-850 text-slate-400 border-slate-300 dark:border-slate-700 hover:text-white'
                               }`}
                             >
                               {isFiltered ? '✓ Ativo' : 'Filtrar'}
@@ -1272,7 +1272,7 @@ export default function RaioXCaveira() {
                         </div>
 
                         {/* Barra de Progresso Limpa */}
-                        <div className="w-full bg-slate-200 dark:bg-[#26292C] h-1.5 rounded-full overflow-hidden">
+                        <div className="w-full bg-slate-200 dark:bg-slate-850 h-1.5 rounded-full overflow-hidden">
                           <div
                             className={`h-full rounded-full transition-all ${
                               sub.grossPercent >= 75 ? 'bg-emerald-500' : sub.grossPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'
@@ -1289,7 +1289,7 @@ export default function RaioXCaveira() {
                             initial={{ height: 0, opacity: 0 }}
                             animate={{ height: 'auto', opacity: 1 }}
                             exit={{ height: 0, opacity: 0 }}
-                            className="border-t border-slate-200 dark:border-[#2E3236] p-3 bg-slate-50 dark:bg-[#17191B] space-y-1.5"
+                            className="border-t border-slate-200 dark:border-slate-800 p-3 bg-slate-50 dark:bg-slate-950 space-y-1.5"
                           >
                             <div className="flex items-center justify-between mb-1">
                               <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
@@ -1318,10 +1318,10 @@ export default function RaioXCaveira() {
                                   className={`px-3 py-2 rounded-lg border flex items-center justify-between gap-3 cursor-pointer transition-all ${
                                     isTopicActive
                                       ? 'bg-blue-500/15 border-blue-500 text-white'
-                                      : 'bg-white dark:bg-[#1E2022] border-slate-200 dark:border-[#2E3236] hover:border-slate-500'
+                                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-500'
                                   }`}
                                 >
-                                  <span className="text-xs font-medium text-slate-700 dark:text-[#F1F5F9] leading-snug">
+                                  <span className="text-xs font-medium text-slate-700 dark:text-slate-100 leading-snug">
                                     {topic.name}
                                   </span>
                                   <div className="flex items-center gap-2.5 shrink-0 text-xs">
@@ -1349,14 +1349,14 @@ export default function RaioXCaveira() {
         </div>
 
         {/* COLUNA DIREITA: RADAR DE LEI SECA (LISTA HORIZONTAL SEM TRUNCAMENTO) */}
-        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] flex flex-col justify-between">
+        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
           <div>
-            <div className="flex items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-200/70 dark:border-[#2E3236]">
+            <div className="flex items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-200/70 dark:border-slate-800">
               <div>
                 <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
                   <Scale className="w-4 h-4 text-amber-400" /> Radar de Lei Seca ({legalRadarList.length})
                 </h2>
-                <p className="text-xs text-slate-500 dark:text-[#A0AAB2]">
+                <p className="text-xs text-slate-500 dark:text-slate-400">
                   Leis, artigos e súmulas mais cobrados ou errados. Clique para filtrar o Caderno.
                 </p>
               </div>
@@ -1393,8 +1393,8 @@ export default function RaioXCaveira() {
                         isSelected
                           ? 'bg-amber-500/15 border-amber-400 ring-1 ring-amber-500/30'
                           : hasErrors
-                          ? 'bg-white dark:bg-[#1E2022] border-red-500/25 hover:border-red-400/60'
-                          : 'bg-white dark:bg-[#1E2022] border-slate-200 dark:border-[#32363A] hover:border-slate-500'
+                          ? 'bg-white dark:bg-slate-900 border-red-500/25 hover:border-red-400/60'
+                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-500'
                       }`}
                     >
                       <div className="flex items-center gap-2.5 min-w-0">
@@ -1402,7 +1402,7 @@ export default function RaioXCaveira() {
                           #{idx + 1}
                         </span>
                         <div className="min-w-0">
-                          <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-[#F1F5F9] block leading-snug">
+                          <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 block leading-snug">
                             {dev.label}
                           </span>
                           <span className="text-[10px] font-semibold uppercase text-slate-400">
@@ -1437,13 +1437,13 @@ export default function RaioXCaveira() {
       </div>
 
       {/* 4. CADERNO DE QUESTÕES (LAYOUT LIMPO, ESCANEÁVEL E SEM POLUIÇÃO VISUAL) */}
-      <div id="caderno-questoes" className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-[#2E3236] space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-200/70 dark:border-[#2E3236]">
+      <div id="caderno-questoes" className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 space-y-4">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-200/70 dark:border-slate-800">
           <div>
             <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-purple-400" /> Caderno Tático de Questões ({filteredQuestions.length})
             </h2>
-            <p className="text-xs text-slate-500 dark:text-[#A0AAB2]">
+            <p className="text-xs text-slate-500 dark:text-slate-400">
               Enunciados completos, revisão de erros, bizus pessoais e envio para o FSRS.
             </p>
           </div>
@@ -1457,7 +1457,7 @@ export default function RaioXCaveira() {
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 placeholder="Buscar código, lei ou palavra-chave..."
-                className="w-full bg-slate-100 dark:bg-[#1E2022] border border-slate-200 dark:border-[#32363A] rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium text-slate-800 dark:text-[#F1F5F9] outline-none focus:border-purple-500"
+                className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium text-slate-800 dark:text-slate-100 outline-none focus:border-purple-500"
               />
             </div>
 
@@ -1474,7 +1474,7 @@ export default function RaioXCaveira() {
                 className={`px-3 py-1.5 rounded-xl font-bold text-xs uppercase transition-all cursor-pointer border ${
                   filterType === f.id
                     ? 'bg-purple-600 text-white border-purple-500 shadow-sm'
-                    : 'bg-slate-100 dark:bg-[#1E2022] text-slate-500 dark:text-[#A0AAB2] border-slate-200 dark:border-[#32363A] hover:text-white'
+                    : 'bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:text-white'
                 }`}
               >
                 {f.label}
@@ -1485,7 +1485,7 @@ export default function RaioXCaveira() {
 
         {/* Badges de Filtros Específicos Ativos */}
         {(selectedSubject !== 'all' || selectedTopic !== 'all' || selectedLegalDevice) && (
-          <div className="flex flex-wrap items-center gap-2 bg-slate-100 dark:bg-[#191B1D] p-2.5 rounded-xl border border-slate-200 dark:border-[#2E3236]">
+          <div className="flex flex-wrap items-center gap-2 bg-slate-100 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
             <span className="text-[11px] font-bold uppercase text-slate-400">Filtrando por:</span>
             {selectedSubject !== 'all' && (
               <span className="px-2.5 py-1 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-300 text-xs font-bold flex items-center gap-1.5">
@@ -1525,7 +1525,7 @@ export default function RaioXCaveira() {
               return (
                 <div
                   key={q.id + (q.timestamp || '')}
-                  className={`rounded-2xl border transition-all overflow-hidden bg-white dark:bg-[#1E2022] border-slate-200 dark:border-[#32363A] border-l-4 ${
+                  className={`rounded-2xl border transition-all overflow-hidden bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 border-l-4 ${
                     q.hit ? 'border-l-emerald-500' : 'border-l-red-500'
                   }`}
                 >
@@ -1539,7 +1539,7 @@ export default function RaioXCaveira() {
                           {q.hit ? '✓ Acerto' : '✗ Erro'}
                         </span>
 
-                        <span className="font-mono text-xs font-black text-white bg-slate-800 dark:bg-[#26292C] border border-slate-700 dark:border-[#383C42] px-2 py-0.5 rounded-md">
+                        <span className="font-mono text-xs font-black text-white bg-slate-800 dark:bg-slate-850 border border-slate-700 dark:border-slate-700 px-2 py-0.5 rounded-md">
                           {q.id}
                         </span>
 
@@ -1547,12 +1547,12 @@ export default function RaioXCaveira() {
                           {blocoMeta.short}
                         </span>
 
-                        <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-[#F1F5F9]">
+                        <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">
                           {q.canonicalSubject}
                         </span>
 
                         {cleanTopic && (
-                          <span className="text-xs text-slate-500 dark:text-[#A0AAB2] truncate max-w-md" title={cleanTopic}>
+                          <span className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-md" title={cleanTopic}>
                             ➔ {cleanTopic}
                           </span>
                         )}
@@ -1560,7 +1560,7 @@ export default function RaioXCaveira() {
 
                       {/* Direita: Gabarito + Tempo + Ações */}
                       <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                        <div className="text-xs font-semibold bg-slate-100 dark:bg-[#26292C] border border-slate-200 dark:border-[#383C42] px-2.5 py-1 rounded-lg">
+                        <div className="text-xs font-semibold bg-slate-100 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-lg">
                           <span className="text-slate-400">Marcou: </span>
                           <strong className={q.hit ? 'text-emerald-400' : 'text-red-400'}>{q.userChoice || '?'}</strong>
                           <span className="text-slate-600 mx-1.5">|</span>
@@ -1568,7 +1568,7 @@ export default function RaioXCaveira() {
                           <strong className="text-emerald-400">{q.correctChoice || '?'}</strong>
                         </div>
 
-                        <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 dark:bg-[#26292C] px-2 py-1 rounded-lg">
+                        <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-850 px-2 py-1 rounded-lg">
                           ⏱️ {q.durationSeconds}s
                         </span>
 
@@ -1581,7 +1581,7 @@ export default function RaioXCaveira() {
                           className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
                             q.userNote
                               ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                              : 'bg-slate-100 dark:bg-[#26292C] text-slate-400 border-slate-200 dark:border-[#383C42] hover:text-amber-400'
+                              : 'bg-slate-100 dark:bg-slate-850 text-slate-400 border-slate-200 dark:border-slate-700 hover:text-amber-400'
                           }`}
                           title="Adicionar ou editar Bizu Tático"
                         >
@@ -1613,7 +1613,7 @@ export default function RaioXCaveira() {
                     </div>
 
                     {/* Enunciado de Alta Legibilidade */}
-                    <div className="text-[15px] font-medium text-slate-800 dark:text-[#F1F5F9] leading-relaxed bg-slate-50 dark:bg-[#26292C] p-3.5 sm:p-4 rounded-xl border border-slate-200/70 dark:border-[#34383D]">
+                    <div className="text-[15px] font-medium text-slate-800 dark:text-slate-100 leading-relaxed bg-slate-50 dark:bg-slate-850 p-3.5 sm:p-4 rounded-xl border border-slate-200/70 dark:border-slate-800">
                       {q.content}
                     </div>
 
@@ -1642,7 +1642,7 @@ export default function RaioXCaveira() {
                           value={noteDraft}
                           onChange={(e) => setNoteDraft(e.target.value)}
                           placeholder="Anote a pegadinha, artigo de lei ou mnemônico desta questão..."
-                          className="flex-1 bg-slate-100 dark:bg-[#26292C] border border-amber-500/40 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-800 dark:text-[#F1F5F9] outline-none"
+                          className="flex-1 bg-slate-100 dark:bg-slate-850 border border-amber-500/40 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-800 dark:text-slate-100 outline-none"
                         />
                         <button
                           type="button"
@@ -1655,7 +1655,7 @@ export default function RaioXCaveira() {
                     )}
 
                     {/* Barra Inferior Unificada: Classificação Tática + Botão de Comentário do Professor */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/60 dark:border-[#2E3236]">
+                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-800">
                       <div className="flex flex-wrap items-center gap-3">
                         {/* Seletor Único de Confiança */}
                         <div className="flex items-center gap-1">
@@ -1675,7 +1675,7 @@ export default function RaioXCaveira() {
                               className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                                 (q.confidence || 'sabia') === c.id
                                   ? 'bg-sky-500 text-slate-950 shadow-sm'
-                                  : 'bg-slate-100 dark:bg-[#26292C] text-slate-500 dark:text-[#A0AAB2] hover:text-white'
+                                  : 'bg-slate-100 dark:bg-slate-850 text-slate-500 dark:text-slate-400 hover:text-white'
                               }`}
                             >
                               {c.label}
@@ -1699,7 +1699,7 @@ export default function RaioXCaveira() {
                                 className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
                                   (q.errorReason || 'conteudo') === r.id
                                     ? 'bg-red-500 text-white shadow-sm'
-                                    : 'bg-slate-100 dark:bg-[#26292C] text-slate-500 dark:text-[#A0AAB2] hover:text-white'
+                                    : 'bg-slate-100 dark:bg-slate-850 text-slate-500 dark:text-slate-400 hover:text-white'
                                 }`}
                               >
                                 {r.label}

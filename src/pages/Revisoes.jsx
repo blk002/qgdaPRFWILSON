@@ -290,7 +290,7 @@ export default function Revisoes() {
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
                     isSelected
                       ? tab.activeClass
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-[#1E2022] dark:text-slate-300 dark:border-[#34383D] dark:hover:bg-[#26292C]'
+                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-850'
                   }`}
                 >
                   <span>{tab.label}</span>
@@ -337,7 +337,7 @@ export default function Revisoes() {
           )}
 
           {!activeRev && (
-            <div className="bg-white dark:bg-[#1E2022] border border-slate-200 dark:border-[#34383D] rounded-2xl p-6 text-center mb-8">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 text-center mb-8">
               <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
                 Nenhum cartão pendente neste filtro.
               </p>
@@ -353,7 +353,7 @@ export default function Revisoes() {
           {activeRev && (
             <div className="max-w-3xl mx-auto mb-8">
               {/* Barra de Progresso e Navegação 1 por 1 */}
-              <div className="bg-white dark:bg-[#1E2022] border border-slate-200 dark:border-[#34383D] rounded-2xl p-3.5 sm:p-4 mb-4 shadow-sm flex flex-col gap-3">
+              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 sm:p-4 mb-4 shadow-sm flex flex-col gap-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
                   <div className="flex items-center gap-2">
                     <span className="text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-400 border border-purple-500/25">
@@ -368,21 +368,21 @@ export default function Revisoes() {
                     <button
                       disabled={safeCardIdx <= 0}
                       onClick={() => setCurrentCardIdx(Math.max(0, safeCardIdx - 1))}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-[#383D43] bg-slate-50 dark:bg-[#26292C] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#303438] disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 cursor-pointer transition-colors"
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 cursor-pointer transition-colors"
                     >
                       <ChevronLeft className="w-4 h-4" /> Anterior
                     </button>
                     <button
                       disabled={safeCardIdx >= filteredDueToday.length - 1}
                       onClick={() => setCurrentCardIdx(Math.min(filteredDueToday.length - 1, safeCardIdx + 1))}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-[#383D43] bg-slate-50 dark:bg-[#26292C] text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-[#303438] disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 cursor-pointer transition-colors"
+                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 cursor-pointer transition-colors"
                     >
                       Próximo <ChevronRight className="w-4 h-4" />
                     </button>
                   </div>
                 </div>
 
-                <div className="w-full h-2 bg-slate-100 dark:bg-[#26292C] rounded-full overflow-hidden">
+                <div className="w-full h-2 bg-slate-100 dark:bg-slate-850 rounded-full overflow-hidden">
                   <div
                     className="h-full bg-gradient-to-r from-purple-600 to-blue-500 transition-all duration-300"
                     style={{ width: `${Math.round(((safeCardIdx + 1) / filteredDueToday.length) * 100)}%` }}
@@ -405,7 +405,7 @@ export default function Revisoes() {
 
                 const thermo = getThermometer(activeRev.lastPerformance);
                 return (
-                  <div key={activeRev.id} className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xl flex flex-col justify-between dark:bg-[#1E2022] dark:border-[#383D43]">
+                  <div key={activeRev.id} className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xl flex flex-col justify-between dark:bg-slate-900 dark:border-slate-700">
                     <div>
                       <div className="flex justify-between items-start gap-2 mb-4">
                         <span className={`text-xs font-black px-3 py-1 rounded-lg uppercase border leading-tight ${meta.color}`}>
@@ -429,12 +429,12 @@ export default function Revisoes() {
                       </h4>
 
                       {activeRev.notes && (
-                        <div className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-[#26292C] p-4 rounded-2xl border border-slate-200/80 dark:border-[#34383D] mb-4 whitespace-pre-line">
+                        <div className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 mb-4 whitespace-pre-line">
                           {activeRev.notes}
                         </div>
                       )}
 
-                      <div className="flex items-center justify-between text-xs text-slate-400 font-bold bg-slate-50 p-3 rounded-xl border border-slate-100 dark:bg-[#26292C] dark:border-[#34383D]">
+                      <div className="flex items-center justify-between text-xs text-slate-400 font-bold bg-slate-50 p-3 rounded-xl border border-slate-100 dark:bg-slate-850 dark:border-slate-800">
                         <div className="flex items-center gap-2">
                           <Clock className="w-4 h-4 text-blue-400" />
                           <span>Intervalo Atual: <strong className="text-blue-500">{activeRev.interval} {activeRev.interval === 1 ? 'dia' : 'dias'}</strong></span>
@@ -468,7 +468,7 @@ export default function Revisoes() {
       {/* PAINEL #13: PREVISÃO DE CARGA FSRS (7 DIAS) + ADIANTAMENTO TÁTICO + CURVA DE ESQUECIMENTO */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
         {/* Previsão de 7 Dias + Adiantamento Tático */}
-        <div className="lg:col-span-7 bg-white dark:bg-[#1E2022] rounded-2xl shadow-lg border border-slate-200 dark:border-[#34383D] p-4 sm:p-5 flex flex-col justify-between">
+        <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 p-4 sm:p-5 flex flex-col justify-between">
           <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
             <div>
               <h3 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
@@ -487,14 +487,14 @@ export default function Revisoes() {
               return (
                 <div
                   key={day.dateStr}
-                  className="flex flex-col items-center bg-slate-50 dark:bg-[#26292C] border border-slate-200/80 dark:border-[#34383D] rounded-xl p-2 transition-all"
+                  className="flex flex-col items-center bg-slate-50 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 rounded-xl p-2 transition-all"
                 >
                   <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 truncate max-w-full">
                     {day.offset === 1 ? 'Amanhã' : day.label.split(' ')[0]}
                   </span>
                   <span className="text-[10px] font-mono text-slate-400 mb-2">{day.shortDate}</span>
 
-                  <div className="w-full h-24 bg-slate-200/60 dark:bg-[#1E2022] rounded-lg flex flex-col justify-end p-1 overflow-hidden relative">
+                  <div className="w-full h-24 bg-slate-200/60 dark:bg-slate-900 rounded-lg flex flex-col justify-end p-1 overflow-hidden relative">
                     <div
                       className={`w-full rounded-md transition-all duration-300 ${
                         day.total === 0
@@ -530,7 +530,7 @@ export default function Revisoes() {
         </div>
 
         {/* Curva de Esquecimento de Ebbinghaus / FSRS */}
-        <div className="lg:col-span-5 bg-white dark:bg-[#1E2022] rounded-2xl shadow-lg border border-slate-200 dark:border-[#34383D] p-4 sm:p-5 flex flex-col justify-between">
+        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 p-4 sm:p-5 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between gap-2 mb-1">
               <h3 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
@@ -557,7 +557,7 @@ export default function Revisoes() {
                       {pt.retention}% de retenção estimada
                     </span>
                   </div>
-                  <div className="w-full h-2.5 bg-slate-100 dark:bg-[#26292C] rounded-full overflow-hidden relative">
+                  <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-850 rounded-full overflow-hidden relative">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
                         isAboveTarget ? 'bg-emerald-500' : isWarning ? 'bg-amber-500' : 'bg-red-500'
@@ -570,7 +570,7 @@ export default function Revisoes() {
             })}
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-[#2E3236] flex items-center justify-between text-[11px] text-slate-400">
+          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
             <span>🎯 Gatilho ideal de revisão: <strong>90%</strong></span>
             <span>🃏 Cartões monitorados: <strong>{reviews.length}</strong></span>
           </div>

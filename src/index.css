@@ -6,24 +6,24 @@
   --font-sans: 'Inter', 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-display: 'Inter', 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   
-  /* Paleta Cinza Chumbo Suave (inspirada na tela de resolução para zero fadiga ocular / halation) */
-  --color-slate-950: #141618; /* Fundo principal em cinza chumbo escuro suave */
-  --color-slate-900: #1E2022; /* Superfície de cards principais (#1E2022) */
-  --color-slate-850: #26292C; /* Superfície interna / caixa de enunciado (#26292C) */
-  --color-slate-800: #2E3236; /* Bordas e divisores suaves */
-  --color-slate-700: #3B4045; /* Bordas hover e seleções secundárias */
-  --color-slate-600: #525860;
-  --color-slate-500: #78828C;
-  --color-slate-400: #A0AAB2; /* Texto secundário / trilha de assunto (#A0AAB2) */
+  /* Paleta Obsidian Carbon (Dark Mode Executivo de Alta Precisão) */
+  --color-slate-950: #090B10; /* Canvas principal */
+  --color-slate-900: #11151E; /* Superfície de cards e sidebar */
+  --color-slate-850: #161B26; /* Superfície aninhada / inputs / subcards */
+  --color-slate-800: #1E2534; /* Bordas hairline refinadas e divisores */
+  --color-slate-700: #2C3548; /* Bordas hover e controles interativos */
+  --color-slate-600: #475569;
+  --color-slate-500: #64748B;
+  --color-slate-400: #94A3B8;
   --color-slate-300: #CBD5E1;
   --color-slate-200: #E2E8F0;
-  --color-slate-100: #F1F5F9; /* Branco suave (#F1F5F9) */
+  --color-slate-100: #F1F5F9;
   --color-slate-50: #F8FAFC;
 
   /* Paleta Tática Neutra */
-  --color-tactical-blue: #1E2022;
-  --color-tactical-slate: #26292C;
-  --color-tactical-dark: #141618;
+  --color-tactical-blue: #11151E;
+  --color-tactical-slate: #161B26;
+  --color-tactical-dark: #090B10;
 
   --color-blue-50: var(--theme-blue-50, #eff6ff);
   --color-blue-100: var(--theme-blue-100, #dbeafe);
@@ -61,15 +61,23 @@
 }
 
 .dark .tactical-grid {
-  background-size: 40px 40px;
+  background-size: 48px 48px;
   background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+    linear-gradient(to right, rgba(148, 163, 184, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(148, 163, 184, 0.03) 1px, transparent 1px);
+}
+
+.tabular-nums {
+  font-variant-numeric: tabular-nums;
 }
 
 /* Glassmorphism Styles */
 .glass-card {
-  @apply bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800 shadow-sm dark:shadow-xl dark:shadow-black/30 transition-all duration-200;
+  @apply bg-white/95 dark:bg-slate-900/95 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800 shadow-sm transition-all duration-200;
+}
+
+.dark .glass-card {
+  box-shadow: inset 0 1px 0 0 rgba(255, 255, 255, 0.05), 0 14px 32px -12px rgba(0, 0, 0, 0.65);
 }
 
 .glass-card-hover {
@@ -98,7 +106,7 @@
 
 :where(.dark, .dark *) .custom-scrollbar-x,
 .dark .custom-scrollbar-x {
-  scrollbar-color: #52525b #08080a;
+  scrollbar-color: #2C3548 #090B10;
 }
 
 .custom-scrollbar-x::-webkit-scrollbar {
@@ -113,8 +121,8 @@
 
 :where(.dark, .dark *) .custom-scrollbar-x::-webkit-scrollbar-track,
 .dark .custom-scrollbar-x::-webkit-scrollbar-track {
-  background: #08080a;
-  border: 1px solid rgba(255, 255, 255, 0.08);
+  background: #090B10;
+  border: 1px solid #1E2534;
 }
 
 .custom-scrollbar-x::-webkit-scrollbar-thumb {
@@ -134,14 +142,14 @@
 
 :where(.dark, .dark *) .custom-scrollbar-x::-webkit-scrollbar-thumb,
 .dark .custom-scrollbar-x::-webkit-scrollbar-thumb {
-  background: #3f3f46;
-  border: 2px solid #08080a;
+  background: #2C3548;
+  border: 2px solid #090B10;
 }
 
 :where(.dark, .dark *) .custom-scrollbar-x::-webkit-scrollbar-thumb:hover,
 .dark .custom-scrollbar-x::-webkit-scrollbar-thumb:hover {
-  background: #52525b;
-  box-shadow: 0 0 10px rgba(255, 255, 255, 0.15);
+  background: #3B82F6;
+  box-shadow: 0 0 10px rgba(59, 130, 246, 0.25);
 }
 
 /* Hidden scrollbars but maintaining functionality */

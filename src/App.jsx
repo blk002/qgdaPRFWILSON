@@ -463,49 +463,54 @@ export default function App() {
       {/* Tactical background gradient and grid */}
       <div className="fixed inset-0 tactical-grid pointer-events-none -z-20"></div>
       {isDarkMode && (
-        <div className="fixed top-0 left-1/3 w-[500px] h-[500px] bg-white/[0.01] rounded-full blur-[140px] pointer-events-none -z-10 pulse-bg-glow"></div>
+        <div className="fixed inset-0 bg-[radial-gradient(ellipse_75%_45%_at_55%_-15%,rgba(59,130,246,0.14),transparent_70%)] pointer-events-none -z-10"></div>
       )}
       <Toaster position="top-right" richColors closeButton />
       <TacticalCountdownBanner />
 
       {/* MENU LATERAL ESQUERDO (DESKTOP) */}
-      <aside className={`hidden md:flex flex-col fixed inset-y-0 left-0 w-60 z-50 border-r transition-colors ${
+      <aside className={`hidden md:flex flex-col fixed inset-y-0 left-0 w-64 z-50 border-r transition-colors ${
         isDarkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200/80'
       } backdrop-blur-xl`}>
         {/* Logo / Topo */}
-        <div className="px-4 py-4 border-b border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-2.5">
-            <div className="p-2 bg-blue-600/10 dark:bg-blue-500/15 rounded-xl border border-blue-500/20 shadow-[0_0_15px_rgba(59,130,246,0.15)]">
+        <div className="px-4 py-4 border-b border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
+          <Link to="/" className="flex items-center gap-3">
+            <div className="p-2 bg-gradient-to-br from-blue-600/20 to-amber-500/15 rounded-xl border border-blue-500/25 shadow-[0_0_15px_rgba(59,130,246,0.12)]">
               <Award className="text-blue-600 dark:text-blue-400 w-5 h-5" />
             </div>
-            <div className="flex items-center gap-2">
-              <h1 className="text-base font-black tracking-wider text-slate-800 dark:text-white uppercase leading-none">
-                QG DA PRF
-              </h1>
-              {isSyncing && <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
+            <div className="min-w-0">
+              <div className="flex items-center gap-2">
+                <h1 className="text-base font-black tracking-wider text-slate-800 dark:text-white uppercase leading-none">
+                  QG DA PRF
+                </h1>
+                {isSyncing && <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
+              </div>
+              <span className="text-[10px] font-semibold tracking-widest uppercase text-slate-400 dark:text-slate-500 block mt-0.5">
+                Centro de Comando
+              </span>
             </div>
           </Link>
         </div>
 
         {/* Card Compacto de Patente & Moedas */}
-        <div className="px-3 py-3 border-b border-slate-200/60 dark:border-slate-800/80 space-y-2">
-          <div className={`flex items-center justify-between bg-slate-100 dark:bg-slate-800/70 px-3 py-2 rounded-xl border border-slate-200 dark:border-slate-800 ${getCurrentPatente().color}`}>
-            <div className="flex items-center gap-2 min-w-0">
+        <div className="px-3 py-3 border-b border-slate-200/60 dark:border-slate-800 space-y-2">
+          <div className={`flex items-center justify-between bg-slate-100/90 dark:bg-slate-950/70 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 ${getCurrentPatente().color}`}>
+            <div className="flex items-center gap-2.5 min-w-0">
               <span className="text-base leading-none shrink-0">{getCurrentPatente().icon}</span>
               <div className="min-w-0">
-                <span className="text-[10px] font-black uppercase tracking-wider block truncate">{getCurrentPatente().name}</span>
-                <div className="w-20 bg-slate-200 dark:bg-slate-700 rounded-full h-1 mt-1 overflow-hidden">
+                <span className="text-[11px] font-bold uppercase tracking-wider block truncate">{getCurrentPatente().name}</span>
+                <div className="w-24 bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 mt-1 overflow-hidden">
                   <div
-                    className="bg-current h-full transition-all duration-1000"
+                    className="bg-gradient-to-r from-blue-500 to-cyan-400 h-full transition-all duration-1000"
                     style={{ width: `${Math.min(100, (userStats.xp % 1000) / 10)}%` }}
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center gap-1 bg-yellow-500/10 dark:bg-yellow-500/15 px-2 py-1 rounded-lg border border-yellow-500/20 shrink-0">
-              <Coins className="text-yellow-600 dark:text-yellow-400 w-3.5 h-3.5" />
-              <span className="font-black text-xs text-yellow-600 dark:text-yellow-400">{coins}</span>
+            <div className="flex items-center gap-1 bg-amber-500/10 dark:bg-amber-500/15 px-2 py-1 rounded-lg border border-amber-500/20 shrink-0">
+              <Coins className="text-amber-600 dark:text-amber-400 w-3.5 h-3.5" />
+              <span className="font-bold text-xs tabular-nums text-amber-600 dark:text-amber-400">{coins}</span>
             </div>
           </div>
         </div>
@@ -516,10 +521,10 @@ export default function App() {
             <NavLink
               key={tab.id}
               to={tab.id}
-              className={({ isActive }) => `flex items-center justify-between py-2.5 px-3 rounded-xl transition-all duration-200 text-xs font-black uppercase tracking-tight cursor-pointer ${
+              className={({ isActive }) => `flex items-center justify-between py-2.5 px-3 rounded-xl transition-all duration-200 text-[13px] font-semibold tracking-tight cursor-pointer ${
                 isActive
-                  ? 'bg-blue-600 dark:bg-blue-500 text-white shadow-md shadow-blue-500/20'
-                  : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-100 hover:bg-slate-100 dark:hover:bg-slate-800/60'
+                  ? 'bg-blue-600 text-white shadow-sm border border-transparent dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/30 dark:shadow-none'
+                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-slate-100 border border-transparent'
               }`}
             >
               <div className="flex items-center gap-2.5 min-w-0">
@@ -634,16 +639,16 @@ export default function App() {
             </div>
           </div>
 
-          <nav className={`px-3 overflow-x-auto no-scrollbar border-t ${isDarkMode ? 'border-slate-800/80 bg-slate-950/20' : 'border-slate-200/50 bg-slate-50/50'}`}>
+          <nav className={`px-3 overflow-x-auto no-scrollbar border-t ${isDarkMode ? 'border-slate-800 bg-slate-950/40' : 'border-slate-200/60 bg-slate-50/70'}`}>
             <div className="flex gap-1.5 py-2 min-w-max">
               {tabs.map(tab => (
                 <NavLink
                   key={tab.id}
                   to={tab.id}
-                  className={({ isActive }) => `flex items-center gap-1.5 py-1.5 px-2.5 rounded-xl transition-all whitespace-nowrap text-[11px] font-black uppercase tracking-tight ${
+                  className={({ isActive }) => `flex items-center gap-1.5 py-1.5 px-2.5 rounded-xl transition-all whitespace-nowrap text-xs font-semibold tracking-tight ${
                     isActive
-                      ? 'bg-blue-600 text-white shadow-sm'
-                      : 'text-slate-500 dark:text-slate-400'
+                      ? 'bg-blue-600 text-white shadow-sm dark:bg-blue-500/15 dark:text-blue-400 dark:border dark:border-blue-500/30 dark:shadow-none'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 border border-transparent'
                   }`}
                 >
                   <tab.icon className="w-3.5 h-3.5" />
@@ -661,7 +666,7 @@ export default function App() {
       </header>
 
       {/* ÁREA DE CONTEÚDO PRINCIPAL */}
-      <div className="flex-1 md:pl-60 min-w-0 w-full">
+      <div className="flex-1 md:pl-64 min-w-0 w-full">
         <main className="w-full max-w-[1480px] mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 pb-28 sm:pb-24">
           <AnimatePresence mode="wait">
             <motion.div

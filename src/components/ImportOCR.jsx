@@ -374,11 +374,11 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" onClick={onClose}>
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
       <div
-        className="relative bg-[#0f172a] border border-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+        className="relative bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-gradient-to-r from-[#0f172a] to-[#1e293b]">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-gradient-to-r from-slate-900 to-slate-800">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
               <Camera className="w-5 h-5 text-white" />
@@ -429,7 +429,7 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
                         onChange={(e) => setApiKey(e.target.value)}
                         onPaste={(e) => e.stopPropagation()}
                         placeholder="AIza..."
-                        className="w-full bg-[#020617] border border-slate-700 rounded-xl px-4 py-3 font-mono text-sm text-white focus:border-blue-500 outline-none pr-10"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 font-mono text-sm text-white focus:border-blue-500 outline-none pr-10"
                       />
                       <button
                         onClick={() => setShowKey(v => !v)}
@@ -483,7 +483,7 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
                   <select
                     value={selectedSubjectId}
                     onChange={(e) => setSelectedSubjectId(e.target.value)}
-                    className="w-full bg-[#020617] border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-blue-500 outline-none transition-all"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-blue-500 outline-none transition-all"
                   >
                     <option value="">— Selecione uma disciplina —</option>
                     {Object.values(subjects || {}).map(sub => (
@@ -496,7 +496,7 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
                     value={newSubjectName}
                     onChange={(e) => setNewSubjectName(e.target.value.toUpperCase())}
                     onPaste={(e) => e.stopPropagation()}
-                    className="w-full bg-[#020617] border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-emerald-500 outline-none"
+                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-emerald-500 outline-none"
                     placeholder="NOME DA DISCIPLINA..."
                   />
                 )}
@@ -660,7 +660,7 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-800 bg-[#0f172a]">
+        <div className="px-6 py-4 border-t border-slate-800 bg-slate-900">
           {step === 'upload' && (
             <button
               onClick={processImage}

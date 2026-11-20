@@ -313,11 +313,11 @@ Retorne SOMENTE um objeto JSON válido (sem blocos de código markdown, sem text
     <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4 overflow-y-auto" onClick={onClose}>
       <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
       <div
-        className="relative bg-[#0f172a] border border-slate-800 rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-hidden flex flex-col"
+        className="relative bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-xl max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-gradient-to-r from-[#0f172a] to-[#1e293b] shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-gradient-to-r from-slate-900 to-slate-800 shrink-0">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-violet-500 to-indigo-500 flex items-center justify-center shadow-lg shadow-violet-500/20">
               <Camera className="w-5 h-5 text-white" />
@@ -360,7 +360,7 @@ Retorne SOMENTE um objeto JSON válido (sem blocos de código markdown, sem text
                         onChange={(e) => setApiKey(e.target.value)}
                         onPaste={(e) => e.stopPropagation()}
                         placeholder="AIza..."
-                        className="w-full bg-[#020617] border border-slate-700 rounded-xl px-4 py-2.5 font-mono text-sm text-white focus:border-violet-500 outline-none pr-10"
+                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-2.5 font-mono text-sm text-white focus:border-violet-500 outline-none pr-10"
                       />
                       <button onClick={() => setShowKey(v => !v)} className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white">
                         {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -496,7 +496,7 @@ Retorne SOMENTE um objeto JSON válido (sem blocos de código markdown, sem text
                     onChange={(e) => setDetectedTopicName(e.target.value.toUpperCase())}
                     onPaste={(e) => e.stopPropagation()}
                     placeholder="NOME DO ASSUNTO (EX: ORTOGRAFIA E SEMÂNTICA)..."
-                    className="w-full bg-[#020617] border border-violet-700/60 focus:border-violet-400 rounded-lg px-3 py-2 text-xs font-black text-white uppercase outline-none transition-all placeholder:text-slate-600"
+                    className="w-full bg-slate-950 border border-violet-700/60 focus:border-violet-400 rounded-lg px-3 py-2 text-xs font-black text-white uppercase outline-none transition-all placeholder:text-slate-600"
                   />
                 </div>
                 <p className="text-[10px] text-slate-400 leading-relaxed">

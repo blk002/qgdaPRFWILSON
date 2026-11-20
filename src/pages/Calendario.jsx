@@ -567,7 +567,7 @@ export default function Calendario() {
       <div className="flex-1 min-w-0 w-full bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 sm:p-6 overflow-hidden dark:bg-slate-900 dark:border-slate-800">
         
         {/* Banner de Previsão de Término */}
-        <div className={`text-white p-4 sm:p-5 rounded-2xl shadow-md mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-colors ${(estimatedDate.isLate && !examDateNotSet) ? 'bg-gradient-to-r from-red-600 to-rose-700 border border-red-500/40' : 'bg-gradient-to-r from-blue-600 to-blue-800'}`}>
+        <div className={`text-white p-4 sm:p-5 rounded-2xl shadow-md mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-colors ${(estimatedDate.isLate && !examDateNotSet) ? 'bg-gradient-to-r from-red-600 to-rose-700 dark:from-red-950/90 dark:via-rose-950/90 dark:to-slate-900 border border-red-500/40' : 'bg-gradient-to-r from-blue-600 to-indigo-700 dark:from-slate-900 dark:via-[#141F36] dark:to-blue-950/90 dark:border dark:border-blue-500/25'}`}>
           <div className="flex items-center gap-3 min-w-0">
             <div className="bg-white/20 p-2 rounded-full shrink-0 dark:bg-slate-900">
               <Trophy className="w-5 h-5 md:w-6 md:h-6 text-yellow-300" />
@@ -638,7 +638,7 @@ export default function Calendario() {
               {diasSemana.map(dia => <div key={dia} className="text-center font-bold text-slate-400 text-xs sm:text-sm">{dia}</div>)}
             </div>
             <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
-              {blanks.map((_, i) => <div key={`blank-${i}`} className="min-h-[6rem] md:min-h-[8.25rem] bg-slate-50/50 rounded-lg dark:bg-slate-950/60"></div>)}
+              {blanks.map((_, i) => <div key={`blank-${i}`} className="min-h-[6rem] md:min-h-[8.25rem] bg-slate-50/50 rounded-lg dark:bg-slate-950/30"></div>)}
               {days.map(day => {
                 const cellDateObj = new Date(year, month, day);
                 const cellTime = cellDateObj.getTime();
@@ -648,10 +648,10 @@ export default function Calendario() {
                 const isPast = diffDays < 0;
 
                 let bgClass = isPast 
-                  ? "bg-slate-50/80 text-slate-400 border border-slate-200/40 dark:bg-slate-900/40 dark:border-slate-800/40 dark:text-slate-500 cursor-default" 
+                  ? "bg-slate-50/80 text-slate-400 border border-slate-200/40 dark:bg-slate-950/40 dark:border-slate-800/40 dark:text-slate-600 cursor-default" 
                   : isTodayReal 
-                    ? "bg-blue-50 border-2 border-blue-500 shadow-sm text-blue-700 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300 cursor-pointer hover:ring-2 hover:ring-blue-400 hover:shadow-md" 
-                    : "bg-white border border-slate-200/80 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 cursor-pointer hover:ring-2 hover:ring-blue-400 hover:shadow-md";
+                    ? "bg-blue-50 border-2 border-blue-500 shadow-sm text-blue-700 dark:bg-blue-950/35 dark:border-blue-500/80 dark:text-blue-300 cursor-pointer hover:ring-2 hover:ring-blue-400/50 hover:shadow-md" 
+                    : "bg-white border border-slate-200/80 hover:bg-slate-50 dark:hover:bg-slate-900/90 text-slate-700 dark:bg-slate-950/80 dark:border-slate-800 dark:text-slate-300 cursor-pointer hover:border-blue-400 dark:hover:border-blue-500/50 hover:shadow-md";
 
                 const cellDateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isOverridden = !isPast && Boolean(calendarOverrides && calendarOverrides[cellDateKey]);

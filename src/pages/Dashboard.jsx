@@ -224,10 +224,10 @@ export default function Dashboard() {
       
       {/* CABEÇALHO */}
       <section className="relative mb-6">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-600/20 to-purple-600/20 blur-3xl rounded-3xl -z-10"></div>
+        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-transparent to-amber-500/5 blur-2xl rounded-3xl -z-10"></div>
         <div className="glass-card rounded-2xl p-5 sm:p-6 flex flex-col md:flex-row items-center gap-6">
                   <div className="relative group cursor-pointer" onClick={() => setIsAvatarModalOpen(true)}>
-            <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-4 border-blue-500 shadow-[0_0_30px_rgba(59,130,246,0.3)] relative z-10 bg-slate-800 transition-all duration-300 group-hover:scale-105 group-hover:border-purple-500">
+            <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-2 border-blue-500/70 ring-4 ring-blue-500/15 shadow-lg relative z-10 bg-slate-800 transition-all duration-300 group-hover:scale-105 group-hover:border-blue-400">
                {userStats.avatar ? (
                  <img src={assetUrl(userStats.avatar)} alt="Avatar" className="w-full h-full object-cover" />
                ) : (
@@ -239,8 +239,8 @@ export default function Dashboard() {
                  <span className="text-white text-xs font-black uppercase tracking-wider">Alterar</span>
                </div>
             </div>
-            <div className="absolute -bottom-2 -right-2 bg-blue-600 text-white p-2.5 rounded-2xl shadow-lg border-2 border-white dark:border-slate-900 z-20 group-hover:bg-purple-700 transition-colors">
-              <ShieldCheck className="w-6 h-6" />
+            <div className="absolute -bottom-1 -right-1 bg-blue-600 text-white p-2 rounded-xl shadow-lg border-2 border-white dark:border-slate-900 z-20 group-hover:bg-blue-500 transition-colors">
+              <ShieldCheck className="w-5 h-5" />
             </div>
           </div>
 
@@ -265,14 +265,14 @@ export default function Dashboard() {
                   </button>
                 </div>
               )}
-              <span className={`text-sm font-black px-3 py-1 rounded-lg uppercase tracking-widest bg-slate-100 dark:bg-slate-800 ${patenteAtual.color}`}>{patenteAtual.name}</span>
+              <span className={`text-xs font-bold px-3 py-1 rounded-lg uppercase tracking-widest bg-slate-100 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 ${patenteAtual.color}`}>{patenteAtual.name}</span>
             </div>
             
             <div className="flex flex-wrap justify-center md:justify-start gap-3 mb-5">
-              <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-mono text-xs bg-slate-100 dark:bg-slate-800/50 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-700/50">
+              <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-mono text-xs bg-slate-100 dark:bg-slate-850 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-800">
                 <Target className="w-3.5 h-3.5" /> ID: {enrollmentId}
               </div>
-              <div className="flex items-center gap-1.5 text-orange-500 font-black text-xs bg-orange-50 dark:bg-orange-900/20 px-3 py-1 rounded-full border border-orange-200 dark:border-orange-900/50">
+              <div className="flex items-center gap-1.5 text-orange-500 font-bold text-xs bg-orange-50 dark:bg-orange-500/10 px-3 py-1 rounded-full border border-orange-200 dark:border-orange-500/25">
                 <Flame className="w-3.5 h-3.5 fill-current" /> OFENSIVA: {effectiveStreak} DIAS
               </div>
             </div>
@@ -280,12 +280,12 @@ export default function Dashboard() {
             <div className="max-w-xl mx-auto md:mx-0">
               <div className="flex justify-between items-end mb-2">
                 <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em]">Evolução de Carreira</span>
-                <span className="text-sm font-black text-slate-700 dark:text-slate-200">{userStats.xp.toLocaleString()} <span className="text-slate-400">XP</span></span>
+                <span className="text-sm font-black tabular-nums text-slate-700 dark:text-slate-200">{userStats.xp.toLocaleString()} <span className="text-slate-400">XP</span></span>
               </div>
-              <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-3.5 p-0.5 border border-slate-300 dark:border-slate-700 shadow-inner">
+              <div className="w-full bg-slate-200 dark:bg-slate-950 rounded-full h-3 p-0.5 border border-slate-300 dark:border-slate-800 shadow-inner">
                 <motion.div initial={{ width: 0 }} animate={{ width: `${progressToNext}%` }}
                   transition={{ duration: 1.5, ease: "easeOut" }}
-                  className="bg-gradient-to-r from-blue-600 via-indigo-500 to-blue-400 h-full rounded-full relative shadow-[0_0_15px_rgba(59,130,246,0.5)]">
+                  className="bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-400 h-full rounded-full relative">
                    <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent rounded-full"></div>
                 </motion.div>
               </div>
@@ -296,15 +296,15 @@ export default function Dashboard() {
           </div>
 
           <div className="grid grid-cols-2 gap-3 w-full md:w-auto">
-            <div className="bg-yellow-50 dark:bg-yellow-900/10 border border-yellow-200 dark:border-yellow-900/30 p-4 rounded-2xl flex flex-col items-center justify-center min-w-[120px]">
-               <Coins className="text-yellow-600 w-6 h-6 mb-1" />
-               <span className="text-2xl font-black text-yellow-700 dark:text-yellow-500 leading-none">{coins}</span>
-               <span className="text-[11px] font-bold text-yellow-600/80 uppercase mt-1">Moedas</span>
+            <div className="bg-amber-50/80 dark:bg-slate-950/70 border border-amber-200 dark:border-slate-800 p-4 rounded-2xl flex flex-col items-center justify-center min-w-[120px]">
+               <Coins className="text-amber-500 w-6 h-6 mb-1.5" />
+               <span className="text-2xl font-black tabular-nums text-amber-600 dark:text-amber-400 leading-none">{coins}</span>
+               <span className="text-[11px] font-bold text-amber-700/70 dark:text-slate-400 uppercase mt-1">Moedas</span>
             </div>
-            <div className="bg-emerald-50 dark:bg-emerald-900/10 border border-emerald-200 dark:border-emerald-900/30 p-4 rounded-2xl flex flex-col items-center justify-center min-w-[120px]">
-               <CheckCircle className="text-emerald-600 w-6 h-6 mb-1" />
-               <span className="text-2xl font-black text-emerald-700 dark:text-emerald-500 leading-none">{completionPercent}%</span>
-               <span className="text-[11px] font-bold text-emerald-600/80 uppercase mt-1">Edital</span>
+            <div className="bg-emerald-50/80 dark:bg-slate-950/70 border border-emerald-200 dark:border-slate-800 p-4 rounded-2xl flex flex-col items-center justify-center min-w-[120px]">
+               <CheckCircle className="text-emerald-500 w-6 h-6 mb-1.5" />
+               <span className="text-2xl font-black tabular-nums text-emerald-600 dark:text-emerald-400 leading-none">{completionPercent}%</span>
+               <span className="text-[11px] font-bold text-emerald-700/70 dark:text-slate-400 uppercase mt-1">Edital</span>
             </div>
           </div>
         </div>
@@ -317,12 +317,14 @@ export default function Dashboard() {
           const Icon = kpi.icon;
           return (
             <motion.div key={kpi.label} variants={fadeUp}
-              className={`glass-card rounded-2xl p-5 flex flex-col gap-2 hover:scale-[1.02] hover:-translate-y-0.5 transition-all duration-200 ${kpi.glow}`}>
+              className="glass-card rounded-2xl p-5 flex flex-col gap-2.5 hover:-translate-y-0.5 hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{kpi.label}</span>
-                <Icon className={`w-4 h-4 ${kpi.color}`} />
+                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-850 border border-slate-200/70 dark:border-slate-800 flex items-center justify-center">
+                  <Icon className={`w-4 h-4 ${kpi.color}`} />
+                </div>
               </div>
-              <span className={`text-3xl font-black leading-none ${kpi.color}`}>{kpi.value}</span>
+              <span className={`text-3xl font-black tabular-nums leading-none ${kpi.color}`}>{kpi.value}</span>
               <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">{kpi.sub}</span>
             </motion.div>
           );
@@ -330,12 +332,12 @@ export default function Dashboard() {
       </motion.div>
 
       {/* GRÁFICO XP SEMANAL */}
-      <div className="glass-card rounded-2xl px-5 py-4 mb-6 glow-blue">
+      <div className="glass-card rounded-2xl px-5 py-4 mb-6">
         <div className="flex items-center justify-between mb-2">
           <h3 className="font-black text-slate-800 dark:text-white uppercase text-xs flex items-center gap-2">
             <Zap className="w-3.5 h-3.5 text-blue-500" /> XP por Dia — Últimos 7 Dias
           </h3>
-          <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold">
+          <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold tabular-nums">
             Semana: <span className="text-blue-500 dark:text-blue-400 font-black">{xpThisWeek.toLocaleString()} XP</span>
           </span>
         </div>
@@ -346,9 +348,9 @@ export default function Dashboard() {
         
         {/* COLUNA CENTRAL */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="glass-card rounded-2xl p-6 sm:p-8 overflow-hidden glow-purple">
+          <div className="glass-card rounded-2xl p-6 sm:p-8 overflow-hidden">
             <h3 className="font-black text-slate-800 dark:text-white uppercase text-base mb-8 flex items-center gap-3">
-              <Trophy className="w-6 h-6 text-yellow-500" /> Jornada de Promoções
+              <Trophy className="w-5 h-5 text-amber-500" /> Jornada de Promoções
             </h3>
             <div className="relative flex justify-between items-center sm:px-4">
                <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-200 dark:bg-slate-800 -translate-y-1/2 z-0"></div>
@@ -375,84 +377,84 @@ export default function Dashboard() {
           </div>
 
           {/* CONTRATOS DIÁRIOS */}
-          <div className="glass-card rounded-2xl border-2 border-emerald-500/20 dark:border-emerald-500/15 p-6 sm:p-8 relative overflow-hidden glow-emerald">
+          <div className="glass-card rounded-2xl p-6 sm:p-8 relative overflow-hidden">
             <h3 className="font-black text-slate-800 dark:text-white uppercase text-base mb-6 flex items-center justify-between">
-              <span className="flex items-center gap-3"><Activity className="w-6 h-6 text-emerald-500" /> Contratos Diários do Agente</span>
-              <span className="text-[11px] bg-emerald-600/20 text-emerald-600 dark:text-emerald-400 px-3 py-1 rounded-full border border-emerald-600/30 font-black">DIÁRIO</span>
+              <span className="flex items-center gap-3"><Activity className="w-5 h-5 text-emerald-500" /> Contratos Diários do Agente</span>
+              <span className="text-[11px] bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/25 font-bold">DIÁRIO</span>
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                {dailyMissions.map(mission => (
                  <div key={mission.id} className={`p-5 rounded-2xl border transition-all relative overflow-hidden flex flex-col justify-between ${
                    mission.claimed 
-                     ? 'bg-slate-100/50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 opacity-60' 
+                     ? 'bg-slate-100/60 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 opacity-60' 
                      : mission.completed 
-                       ? 'bg-emerald-500/10 border-emerald-500 dark:border-emerald-500/40 shadow-[0_0_15px_rgba(16,185,129,0.15)]' 
-                       : 'bg-white/50 dark:bg-slate-800/20 border-slate-200/60 dark:border-slate-800/60 hover:border-slate-300 dark:hover:border-slate-700'
+                       ? 'bg-emerald-500/10 border-emerald-500/60 dark:border-emerald-500/40' 
+                       : 'bg-slate-50/70 dark:bg-slate-850/70 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                  }`}>
                     <div className="relative z-10 flex-1">
                       <div className="flex items-center gap-2 mb-1.5">
                         <CheckCircle className={`w-4 h-4 flex-shrink-0 ${mission.completed ? 'text-emerald-500' : 'text-slate-400'}`} />
-                        <h4 className={`text-xs font-black uppercase tracking-tight leading-tight ${mission.completed ? 'text-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>{mission.title}</h4>
+                        <h4 className={`text-xs font-black uppercase tracking-tight leading-tight ${mission.completed ? 'text-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-200'}`}>{mission.title}</h4>
                       </div>
                       <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold leading-snug mb-4 min-h-[32px]">{mission.description}</p>
                       
                       {/* Barra de Progresso */}
-                      <div className="w-full bg-slate-200 dark:bg-slate-700/50 rounded-full h-1.5 mb-2 overflow-hidden">
+                      <div className="w-full bg-slate-200 dark:bg-slate-950 rounded-full h-1.5 mb-2 overflow-hidden">
                         <div className={`h-full transition-all duration-300 ${mission.completed ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${Math.min(100, (mission.current / mission.goal) * 100)}%` }}></div>
                       </div>
-                      <div className="flex justify-between items-center text-[11px] text-slate-500 dark:text-slate-400 mb-4 font-semibold">
+                      <div className="flex justify-between items-center text-[11px] text-slate-500 dark:text-slate-400 mb-4 font-semibold tabular-nums">
                         <span>Progresso:</span>
                         <span>{mission.current} / {mission.goal} {mission.type === 'minutes' ? 'min' : ''}</span>
                       </div>
                     </div>
                     
-                    <div className="relative z-10 flex items-center justify-between mt-auto pt-2 border-t border-slate-200 dark:border-slate-800/50">
+                    <div className="relative z-10 flex items-center justify-between mt-auto pt-2 border-t border-slate-200 dark:border-slate-800">
                       <div className="flex flex-col gap-1">
-                         <div className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-600/10 px-2 py-0.5 rounded border border-emerald-600/20 w-fit">+{mission.xpReward} XP</div>
-                         <div className="flex items-center gap-1 text-[10px] font-black text-yellow-600 dark:text-yellow-500 bg-yellow-600/10 px-2 py-0.5 rounded border border-yellow-600/20 w-fit">+{mission.coinReward} <Coins className="w-2.5 h-2.5" /></div>
+                         <div className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 w-fit">+{mission.xpReward} XP</div>
+                         <div className="flex items-center gap-1 text-[10px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 w-fit">+{mission.coinReward} <Coins className="w-2.5 h-2.5" /></div>
                       </div>
                       {mission.completed && !mission.claimed && (
                         <button onClick={() => claimDailyMissionReward(mission.id)}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] px-3 py-1.5 rounded-lg shadow-lg transition-all hover:scale-105 active:scale-95 cursor-pointer">
+                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] px-3 py-1.5 rounded-lg shadow-sm transition-all hover:-translate-y-0.5 cursor-pointer">
                           RESGATAR
                         </button>
                       )}
                     </div>
-                    {mission.claimed && <div className="absolute inset-0 bg-slate-950/40 backdrop-blur-[1px] flex items-center justify-center z-20"><div className="rotate-12 text-[11px] font-black text-emerald-500 border-2 border-emerald-500/50 px-3 py-1.5 rounded uppercase bg-slate-950 shadow-lg">Contrato Concluído</div></div>}
+                    {mission.claimed && <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-[1px] flex items-center justify-center z-20"><div className="rotate-12 text-[11px] font-black text-emerald-400 border-2 border-emerald-500/50 px-3 py-1.5 rounded uppercase bg-slate-950 shadow-lg">Contrato Concluído</div></div>}
                  </div>
                ))}
             </div>
           </div>
 
-          <div className="glass-card rounded-2xl border-2 border-blue-500/20 dark:border-blue-500/15 p-6 sm:p-8 relative overflow-hidden glow-blue">
+          <div className="glass-card rounded-2xl p-6 sm:p-8 relative overflow-hidden">
             <h3 className="font-black text-slate-800 dark:text-white uppercase text-base mb-6 flex items-center justify-between">
-              <span className="flex items-center gap-3"><Activity className="w-6 h-6 text-blue-500" /> Contratos Operacionais da Semana</span>
-              <span className="text-[11px] bg-blue-600/20 text-blue-600 dark:text-blue-400 px-3 py-1 rounded-full border border-blue-600/30 font-black">ATIVAS</span>
+              <span className="flex items-center gap-3"><Activity className="w-5 h-5 text-blue-500" /> Contratos Operacionais da Semana</span>
+              <span className="text-[11px] bg-blue-500/15 text-blue-600 dark:text-blue-400 px-3 py-1 rounded-full border border-blue-500/25 font-bold">ATIVAS</span>
             </h3>
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                {weeklyMissions.map(mission => (
                  <div key={mission.id} className={`p-5 rounded-2xl border transition-all relative overflow-hidden ${
                    mission.claimed 
-                     ? 'bg-slate-100/50 dark:bg-slate-950/50 border-slate-200 dark:border-slate-800 opacity-60' 
+                     ? 'bg-slate-100/60 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 opacity-60' 
                      : mission.completed 
-                       ? 'bg-blue-500/10 border-blue-500 dark:border-blue-500/40 shadow-[0_0_15px_rgba(59,130,246,0.15)]' 
-                       : 'bg-white/50 dark:bg-slate-800/20 border-slate-200/60 dark:border-slate-800/60 hover:border-slate-300 dark:hover:border-slate-700'
+                       ? 'bg-blue-500/10 border-blue-500/60 dark:border-blue-500/40' 
+                       : 'bg-slate-50/70 dark:bg-slate-850/70 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
                  }`}>
                     <div className="flex justify-between items-start relative z-10">
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <CheckCircle className={`w-4 h-4 ${mission.completed ? 'text-blue-500' : 'text-slate-400'}`} />
-                          <h4 className={`text-sm font-black uppercase tracking-tight ${mission.completed ? 'text-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-300'}`}>{mission.title}</h4>
+                          <h4 className={`text-sm font-black uppercase tracking-tight ${mission.completed ? 'text-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-200'}`}>{mission.title}</h4>
                         </div>
                         <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold leading-snug mb-4">{mission.description}</p>
                         <div className="flex items-center gap-2.5">
-                           <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-600/10 px-2 py-0.5 rounded border border-blue-600/20">+{mission.xpReward} XP</div>
-                           <div className="flex items-center gap-1 text-[10px] font-black text-yellow-600 dark:text-yellow-500 bg-yellow-600/10 px-2 py-0.5 rounded border border-yellow-600/20">+{mission.coinReward} <Coins className="w-3 h-3" /></div>
+                           <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">+{mission.xpReward} XP</div>
+                           <div className="flex items-center gap-1 text-[10px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">+{mission.coinReward} <Coins className="w-3 h-3" /></div>
                         </div>
                       </div>
                       {mission.completed && !mission.claimed && (
                         <button onClick={() => claimMissionReward(mission.id)}
-                          className="absolute bottom-4 right-4 bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] px-4 py-2 rounded-xl shadow-lg transition-all hover:scale-105 active:scale-95 cursor-pointer">
+                          className="absolute bottom-4 right-4 bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] px-4 py-2 rounded-xl shadow-sm transition-all hover:-translate-y-0.5 cursor-pointer">
                           RESGATAR
                         </button>
                       )}
@@ -469,19 +471,19 @@ export default function Dashboard() {
           {/* WIDGET K9 COMPANHEIRO */}
           <div 
             onClick={() => navigate('/pet')}
-            className="glass-card rounded-2xl p-6 border border-blue-500/20 hover:border-blue-500/50 transition-all cursor-pointer group glow-blue relative overflow-hidden"
+            className="glass-card rounded-2xl p-6 hover:border-blue-500/40 transition-all cursor-pointer group relative overflow-hidden"
           >
             <div className="flex items-center justify-between mb-3">
               <span className="text-[11px] font-black uppercase tracking-widest text-blue-500 flex items-center gap-1.5">
                 <Dog className="w-4 h-4" /> Mascote K9
               </span>
-              <span className="text-[11px] font-black bg-blue-500/10 text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-500/20 uppercase">
+              <span className="text-[11px] font-bold bg-blue-500/10 text-blue-500 dark:text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-500/20 uppercase">
                 Nível {petData?.level || 1}
               </span>
             </div>
 
             <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-700 flex items-center justify-center text-3xl shadow-lg border border-amber-400/30 group-hover:scale-110 transition-transform shrink-0">
+              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-700 flex items-center justify-center text-3xl shadow-md border border-amber-400/30 group-hover:scale-105 transition-transform shrink-0">
                 🐕
               </div>
               <div className="flex-1 min-w-0">
@@ -497,35 +499,35 @@ export default function Dashboard() {
                 </p>
 
                 <div className="flex items-center gap-2 mt-2">
-                  <div className="flex-1 bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                  <div className="flex-1 bg-slate-200 dark:bg-slate-950 rounded-full h-1.5 overflow-hidden">
                     <div 
                       className="bg-gradient-to-r from-blue-500 to-emerald-400 h-full rounded-full transition-all" 
                       style={{ width: `${Math.round(((petData?.hunger ?? 100) + (petData?.energy ?? 100) + (petData?.hygiene ?? 100) + (petData?.fun ?? 100)) / 4)}%` }} 
                     />
                   </div>
-                  <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 shrink-0">
+                  <span className="text-[11px] font-black tabular-nums text-slate-500 dark:text-slate-400 shrink-0">
                     {Math.round(((petData?.hunger ?? 100) + (petData?.energy ?? 100) + (petData?.hygiene ?? 100) + (petData?.fun ?? 100)) / 4)}%
                   </span>
                 </div>
               </div>
             </div>
           </div>
-          <div className="glass-card rounded-2xl p-6 sm:p-7 glow-purple">
+          <div className="glass-card rounded-2xl p-6 sm:p-7">
              <h3 className="font-black text-slate-800 dark:text-white uppercase text-sm mb-6 flex items-center gap-3">
-               <ShieldCheck className="w-5 h-5 text-purple-500" /> Vitrine de Honra
+               <ShieldCheck className="w-5 h-5 text-blue-500" /> Vitrine de Honra
              </h3>
              <div className="grid grid-cols-2 gap-4">
                 {MEDALHAS.map(medal => {
                   const isUnlocked = userStats.medals.includes(medal.id);
                   return (
-                    <div key={medal.id} className={`p-4 rounded-2xl border text-center transition-all hover:scale-[1.03] ${
+                    <div key={medal.id} className={`p-4 rounded-2xl border text-center transition-all hover:-translate-y-0.5 ${
                       isUnlocked 
-                        ? 'bg-white/50 dark:bg-slate-800/20 border-blue-500/20 dark:border-blue-500/10 shadow-[0_0_10px_rgba(59,130,246,0.05)]' 
-                        : 'bg-slate-100/20 dark:bg-slate-950 border-slate-200/50 dark:border-slate-800/50 opacity-30'
+                        ? 'bg-slate-50/80 dark:bg-slate-850/80 border-blue-500/25 dark:border-slate-700/80' 
+                        : 'bg-slate-100/30 dark:bg-slate-950/60 border-slate-200/50 dark:border-slate-800/50 opacity-35'
                     }`}>
                        <div className="relative w-full aspect-square mb-3 flex items-center justify-center">
                           {isUnlocked ? (
-                            <motion.img whileHover={{ scale: 1.15, rotate: 5 }} src={assetUrl(medal.icon)} alt={medal.title}
+                            <motion.img whileHover={{ scale: 1.1, rotate: 4 }} src={assetUrl(medal.icon)} alt={medal.title}
                               className="w-full h-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.3)]"
                               onError={e => { e.target.src = 'https://cdn-icons-png.flaticon.com/512/190/190411.png' }} />
                           ) : (
@@ -540,10 +542,10 @@ export default function Dashboard() {
              </div>
           </div>
 
-          <div className={`glass-card rounded-2xl p-6 relative overflow-hidden hover:scale-[1.01] transition-all duration-300 ${
+          <div className={`glass-card rounded-2xl p-6 relative overflow-hidden transition-all duration-200 ${
             estimatedDate.isLate 
-              ? 'bg-red-500/5 border-red-500/25 shadow-[0_0_20px_rgba(239,68,68,0.12)]' 
-              : 'bg-blue-500/5 border-blue-500/25 glow-blue'
+              ? 'border-red-500/30 dark:border-red-500/30' 
+              : 'border-blue-500/25 dark:border-slate-800'
           }`}>
              <div className="relative z-10">
                 <div className="flex items-center gap-3 mb-4">
@@ -552,10 +554,10 @@ export default function Dashboard() {
                    </div>
                    <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-none">Status de Edital</span>
                 </div>
-                <h2 className={`text-2xl font-black mb-1 ${estimatedDate.isLate ? 'text-red-500' : 'text-blue-500'}`}>{estimatedDate.full}</h2>
+                <h2 className={`text-2xl font-black mb-1 ${estimatedDate.isLate ? 'text-red-500' : 'text-blue-500 dark:text-blue-400'}`}>{estimatedDate.full}</h2>
                 <div className="flex flex-col gap-1">
                    <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Prova: {estimatedDate.examDateFormatted}</span>
-                   {estimatedDate.isLate && <span className="text-[11px] font-black text-red-600 dark:text-red-400 bg-red-600/10 px-2 py-0.5 rounded w-fit uppercase mt-1">⚠️ ATENÇÃO AO CRONOGRAMA</span>}
+                   {estimatedDate.isLate && <span className="text-[11px] font-black text-red-600 dark:text-red-400 bg-red-500/10 px-2 py-0.5 rounded w-fit uppercase mt-1">⚠️ ATENÇÃO AO CRONOGRAMA</span>}
                 </div>
              </div>
              <div className={`absolute -bottom-10 -right-10 w-28 h-28 ${estimatedDate.isLate ? 'text-red-600/10' : 'text-blue-600/10'}`}>
