@@ -447,6 +447,43 @@ export default function Calendario() {
     setSaveMode('future'); // padrão: aplicar desta data para o futuro (sem alterar o passado)
   };
 
+  // Navegação entre dias dentro do gerenciador (setas na tela e teclado ← →)
+  const canGoPrevDay = Boolean(managingDay) && Math.round((managingDay.dateObj.getTime() - todayDateObj.getTime()) / (1000 * 60 * 60 * 24)) > 0;
+
+  const navigateManagedDay = (delta) => {
+    if (!managingDay) return;
+    const d = managingDay.dateObj;
+    const target = new Date(d.getFullYear(), d.getMonth(), d.getDate() + delta);
+    if (target.getTime() < todayDateObj.getTime()) return;
+    const key = `${target.getFullYear()}-${String(target.getMonth() + 1).padStart(2, '0')}-${String(target.getDate()).padStart(2, '0')}`;
+    handleOpenDayManager(target, key);
+    if (target.getFullYear() !== year || target.getMonth() !== month) {
+      setCalendarDate(new Date(target.getFullYear(), target.getMonth(), 1));
+    }
+  };
+
+  const navigateManagedDayRef = React.useRef(navigateManagedDay);
+  navigateManagedDayRef.current = navigateManagedDay;
+
+  useEffect(() => {
+    if (!managingDay) return undefined;
+    const onKeyDown = (e) => {
+      const tag = (e.target?.tagName || '').toLowerCase();
+      if (tag === 'input' || tag === 'textarea' || tag === 'select' || e.target?.isContentEditable) return;
+      if (e.key === 'ArrowRight') {
+        e.preventDefault();
+        navigateManagedDayRef.current(1);
+      } else if (e.key === 'ArrowLeft') {
+        e.preventDefault();
+        navigateManagedDayRef.current(-1);
+      } else if (e.key === 'Escape') {
+        setManagingDay(null);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [managingDay]);
+
   const handleSaveDayManager = () => {
     if (!managingDay) return;
     const { dateKey, dayOfWeek, weekIndex } = managingDay;
@@ -838,12 +875,34 @@ export default function Calendario() {
             </button>
 
             <div>
-              <div className="flex items-center gap-2 mb-1">
-                <CalendarIcon className="w-5 h-5 text-blue-600" />
-                <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">
-                  Gerenciar Dia: {managingDay.dateKey} ({diasSemanaFull[managingDay.dateObj.getDay()]})
-                </h3>
+              <div className="flex items-center gap-2 mb-1 pr-8">
+                <button
+                  type="button"
+                  onClick={() => navigateManagedDay(-1)}
+                  disabled={!canGoPrevDay}
+                  title="Dia anterior (←)"
+                  aria-label="Dia anterior"
+                  className="h-8 w-8 shrink-0 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                >
+                  <ChevronLeft className="w-4 h-4" />
+                </button>
+                <div className="flex-1 min-w-0 flex items-center justify-center gap-2">
+                  <CalendarIcon className="w-5 h-5 text-blue-600 shrink-0" />
+                  <h3 className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 text-center">
+                    {managingDay.dateKey} ({diasSemanaFull[managingDay.dateObj.getDay()]})
+                  </h3>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => navigateManagedDay(1)}
+                  title="Próximo dia (→)"
+                  aria-label="Próximo dia"
+                  className="h-8 w-8 shrink-0 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                >
+                  <ChevronRight className="w-4 h-4" />
+                </button>
               </div>
+              <p className="text-[11px] text-center text-slate-400 dark:text-slate-500 mb-1">Use as setas ← → do teclado para trocar de dia (alterações não salvas deste dia são descartadas)</p>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Ajuste os blocos deste dia e decida se a alteração se aplica apenas a esta data ou se torna o novo padrão para o futuro.
               </p>
