@@ -41,7 +41,7 @@ if ('serviceWorker' in navigator) {
     }
   } else {
     // Limpa caches antigos mantendo apenas o cache da versão atual
-    const expectedCache = `qg-prf-cache-${APP_VERSION.split('.')[0]}`;
+    const expectedCache = `qg-prf-cache-${APP_VERSION.replace('.', '-')}`;
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {

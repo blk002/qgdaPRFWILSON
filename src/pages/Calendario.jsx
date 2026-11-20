@@ -17,7 +17,9 @@ import {
   X, 
   Zap, 
   Target,
-  Pin
+  Pin,
+  AlertTriangle,
+  Loader2
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { toast } from 'sonner';
@@ -65,7 +67,8 @@ export default function Calendario() {
     removeDayOverride,
     futureScheduleRules = [],
     addFutureScheduleRule,
-    updateSubject
+    updateSubject,
+    executeSelectiveReset
   } = useStore();
 
   // Limpeza automática de regras sem versão v:2 de versões anteriores
@@ -83,6 +86,11 @@ export default function Calendario() {
   const [daySlots, setDaySlots] = useState([]);
   const [daySlotCounts, setDaySlotCounts] = useState([]);
   const [saveMode, setSaveMode] = useState('future'); // 'single' | 'future' | 'all'
+
+  // Estado do Modal de Redefinição do Calendário
+  const [showResetCalendarModal, setShowResetCalendarModal] = useState(false);
+  const [resetMode, setResetMode] = useState('overrides'); // 'overrides' | 'clear_all' | 'reset_progress'
+  const [isResettingCalendar, setIsResettingCalendar] = useState(false);
 
   // Estado do Modal de Transição de Matéria
   const [editingTransitionSub, setEditingTransitionSub] = useState(null);
@@ -196,10 +204,11 @@ export default function Calendario() {
   const getDaySubjectsForDate = (cellDateObj, dateKey) => getDayScheduleForDate(cellDateObj, dateKey).daySubjects;
 
   // 3. Simulação dos 730 dias para sincronização e previsão de término das disciplinas (memoizada)
-  const { futureSchedule, calCompletionDates, remainingLessonsQueue } = useMemo(() => {
-  const futureSchedule = {}; // dateKey -> array of { id, count, isLast, isTransitioned }
+  const { futureSchedule, calCompletionDates, remainingLessonsQueue, initialSubjectQueues } = useMemo(() => {
+  const futureSchedule = {}; // dateKey -> array of { id, count, isLast, isTransitioned, lessons }
   const calCompletionDates = {}; // subjectId -> { dayOffset, dateStr, dateObj }
   const remainingLessonsQueue = {};
+  const initialSubjectQueues = {};
 
   Object.values(subjects || {}).forEach(sub => {
     const spd = Math.max(0.5, Number(sub.speed) || 1);
@@ -211,10 +220,25 @@ export default function Calendario() {
         const lesson = topicLessonsArr[idx];
         const origSec = parseDurationToSeconds(lesson?.duration);
         const mins = (origSec > 0 ? origSec : 3600) / 60;
-        q.push({ duration: lesson?.duration, durationMins: mins, accelMins: mins / spd });
+        const rawName = typeof lesson?.name === 'string' ? lesson.name.trim() : '';
+        const isGeneric = !rawName || /^(aula|v[ií]deo)\s*0*\d+$/i.test(rawName);
+        const fallbackLabel = rawName || `Aula ${idx + 1}`;
+        const displayName = isGeneric
+          ? (t.name ? `${t.name} - ${fallbackLabel}` : fallbackLabel)
+          : rawName;
+        q.push({
+          name: displayName,
+          rawName: fallbackLabel,
+          topicName: t.name || '',
+          lessonNumber: idx + 1,
+          duration: lesson?.duration || '',
+          durationMins: mins,
+          accelMins: mins / spd
+        });
       }
     });
     remainingLessonsQueue[sub.id] = q;
+    initialSubjectQueues[sub.id] = [...q];
   });
 
   for (let i = 0; i < 730; i++) {
@@ -273,7 +297,7 @@ export default function Calendario() {
 
         const suggestion = calculateLessonsForGoal(q, 0, spd, goalMin, q.length, lessonsN);
         const consumed = Math.min(q.length, Math.max(1, suggestion.count || 1));
-        q.splice(0, consumed);
+        const consumedLessons = q.splice(0, consumed);
 
         const isLast = q.length === 0;
         scheduledThisDay.push({ 
@@ -281,7 +305,8 @@ export default function Calendario() {
           isLast, 
           count: consumed,
           customCount: customSlotLessons,
-          isTransitioned: wasTransitioned
+          isTransitioned: wasTransitioned,
+          lessons: consumedLessons
         });
 
         if (isLast && !calCompletionDates[effectiveSubId]) {
@@ -298,9 +323,45 @@ export default function Calendario() {
     futureSchedule[simDateKey] = scheduledThisDay;
   }
 
-  return { futureSchedule, calCompletionDates, remainingLessonsQueue };
+  return { futureSchedule, calCompletionDates, remainingLessonsQueue, initialSubjectQueues };
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [subjects, cycle, cycleSlotCounts, cycleScheduleType, cycleWeekStart, currentDayIndex, completedToday, calendarOverrides, calendarOverrideCounts, futureScheduleRules, subjectTimeGoal, todayKey, getDayScheduleForDate, todayDateObj]);
+
+  // Prévia dinâmica das aulas previstas para cada bloco no modal "Gerenciar Dia"
+  const managingDayPreviewLessons = useMemo(() => {
+    if (!managingDay) return [];
+    const consumedBeforeDate = {};
+    Object.entries(futureSchedule || {}).forEach(([dKey, items]) => {
+      if (dKey < managingDay.dateKey && Array.isArray(items)) {
+        items.forEach(item => {
+          consumedBeforeDate[item.id] = (consumedBeforeDate[item.id] || 0) + (item.count || 0);
+        });
+      }
+    });
+
+    const sameDayOffset = {};
+    return (daySlots || []).map((subId, idx) => {
+      const sub = subjects?.[subId];
+      const fullQueue = initialSubjectQueues?.[subId] || [];
+      const startOffset = (consumedBeforeDate[subId] || 0) + (sameDayOffset[subId] || 0);
+      const remainingQueue = fullQueue.slice(startOffset);
+
+      if (!sub || remainingQueue.length === 0) {
+        return [];
+      }
+
+      const spd = Math.max(0.5, Number(sub.speed) || 1);
+      const customSlotLessons = Math.floor(Number(daySlotCounts?.[idx]) || 0);
+      const lessonsN = customSlotLessons > 0 ? customSlotLessons : Math.floor(Number(sub.lessonsPerBlock) || 0);
+      const goalMin = customSlotLessons > 0 ? 0 : (Number(sub.timeGoalMinutes || subjectTimeGoal?.[subId]) || 0);
+
+      const suggestion = calculateLessonsForGoal(remainingQueue, 0, spd, goalMin, remainingQueue.length, lessonsN);
+      const consumed = Math.min(remainingQueue.length, Math.max(1, suggestion.count || 1));
+      const pickedLessons = remainingQueue.slice(0, consumed);
+      sameDayOffset[subId] = (sameDayOffset[subId] || 0) + consumed;
+      return pickedLessons;
+    });
+  }, [managingDay, futureSchedule, daySlots, daySlotCounts, subjects, initialSubjectQueues, subjectTimeGoal]);
 
   // Botão tático para fixar e limpar quaisquer extensões fantasmas (+3ª) ou regras antigas
   const handleFixCalendar = () => {
@@ -311,6 +372,41 @@ export default function Calendario() {
       calendarOverrideCounts: {}
     });
     toast.success("Calendário 100% fixado no padrão do seu ciclo semanal!");
+  };
+
+  // Handler do Modal de Redefinição do Calendário
+  const handleConfirmResetCalendar = async () => {
+    setIsResettingCalendar(true);
+    try {
+      const todayStr = getLocalDateStr ? getLocalDateStr() : '';
+      if (resetMode === 'overrides') {
+        useStore.setState({
+          scheduleExtensions: [],
+          futureScheduleRules: [],
+          calendarOverrides: {},
+          calendarOverrideCounts: {},
+          cycleCarryoverOffset: 0,
+          ...(todayStr ? { lastCarryoverCheckDate: todayStr } : {})
+        });
+        toast.success("Calendário redefinido para o padrão do ciclo semanal!");
+      } else if (resetMode === 'clear_all') {
+        if (executeSelectiveReset) {
+          await executeSelectiveReset({ calendarSchedule: true });
+        }
+        toast.success("Grade do calendário e do ciclo zerada! Suas disciplinas foram mantidas.");
+      } else if (resetMode === 'reset_progress') {
+        if (executeSelectiveReset) {
+          await executeSelectiveReset({ watchedLessons: true });
+        }
+        toast.success("Progresso das aulas reiniciado! O calendário voltou para a Aula 1.");
+      }
+      setShowResetCalendarModal(false);
+    } catch (err) {
+      console.error("Erro ao redefinir calendário:", err);
+      toast.error("Ocorreu um erro ao redefinir o calendário.");
+    } finally {
+      setIsResettingCalendar(false);
+    }
   };
 
   // Handlers do Gerenciador de Dia
@@ -505,7 +601,7 @@ export default function Calendario() {
 
         {/* Cabeçalho do Mês no Calendário */}
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <h2 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2 dark:text-slate-100">
               <CalendarIcon className="text-blue-600 w-5 h-5 sm:w-6 sm:h-6" /> {mesesNomes[month]} {year}
             </h2>
@@ -515,6 +611,17 @@ export default function Calendario() {
               title="Fixar a grade semanal e remover quaisquer extensões ou regras que alteravam a programação"
             >
               <Pin className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> Grade Semanal Fixa
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setResetMode('overrides');
+                setShowResetCalendarModal(true);
+              }}
+              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800/80 dark:hover:bg-red-900/60 flex items-center gap-1 shadow-sm hover:scale-105 transition-all cursor-pointer"
+              title="Redefinir programação, edições manuais ou progresso das aulas no calendário"
+            >
+              <RotateCcw className="w-3.5 h-3.5 text-red-600 dark:text-red-400" /> Redefinir
             </button>
           </div>
           <div className="flex gap-1 sm:gap-2 items-center">
@@ -566,7 +673,7 @@ export default function Calendario() {
                   <div 
                     key={day} 
                     onClick={() => !isPast && handleOpenDayManager(cellDateObj, cellDateKey)}
-                    className={`min-h-[5.5rem] md:min-h-[7.5rem] p-1 sm:p-1.5 rounded-md flex flex-col transition-all group ${bgClass}`}
+                    className={`min-h-[5.5rem] md:min-h-[7.5rem] min-w-0 p-1 sm:p-1.5 rounded-md flex flex-col transition-all group ${bgClass}`}
                     title={isPast ? "Dia já concluído / passado" : "Clique para gerenciar matérias deste dia"}
                   >
                     <div className="flex justify-between items-start mb-1 gap-0.5">
@@ -583,36 +690,59 @@ export default function Calendario() {
                     </div>
                     
                     {dayItemsToRender.length > 0 && (
-                      <div className="flex flex-col gap-0.5 sm:gap-1 pb-1 mt-auto">
+                      <div className="flex flex-col gap-0.5 sm:gap-1 pb-1 mt-auto min-w-0">
                         {dayItemsToRender.map((item, idx) => {
                           const sub = subjects[item.id];
                           if (!sub) return null;
+                          const lessonsList = Array.isArray(item.lessons) ? item.lessons : [];
+                          const blockTooltip = lessonsList.length > 0
+                            ? `${sub.name}: ${lessonsList.map(l => l.name).join(' • ')}`
+                            : sub.name;
                           return (
-                            <div key={idx} className={`flex items-center justify-between text-[10px] sm:text-[12px] font-bold px-1 sm:px-1.5 py-0.5 rounded-sm leading-tight mb-0.5 ${sub.color}`}>
-                              <span className="truncate flex-1">
-                                {sub.name}
-                                {item.isTransitioned && (
-                                  <span className="opacity-80 text-[8px] font-black uppercase tracking-tight ml-1 bg-black/20 dark:bg-white/20 px-1 py-0.2 rounded">
-                                    SUBST.
+                            <div
+                              key={idx}
+                              title={blockTooltip}
+                              className={`flex flex-col min-w-0 text-[10px] sm:text-[12px] font-bold px-1 sm:px-1.5 py-0.5 rounded-sm leading-tight mb-0.5 ${sub.color}`}
+                            >
+                              <div className="flex items-center justify-between gap-0.5 min-w-0">
+                                <span className="truncate flex-1 min-w-0">
+                                  {sub.name}
+                                  {item.isTransitioned && (
+                                    <span className="opacity-80 text-[8px] font-black uppercase tracking-tight ml-1 bg-black/20 dark:bg-white/20 px-1 py-0.2 rounded">
+                                      SUBST.
+                                    </span>
+                                  )}
+                                </span>
+                                {item.count >= 1 && (
+                                  <span
+                                    className="ml-1 px-1 py-0.2 rounded text-[8px] sm:text-[9px] font-black bg-black/25 dark:bg-white/20 shrink-0"
+                                    title={`${item.count} ${item.count === 1 ? 'aula prevista' : 'aulas previstas'} neste bloco`}
+                                  >
+                                    {item.count}a
                                   </span>
                                 )}
-                              </span>
-                              {(item.count > 1 || item.customCount > 0) && (
-                                <span
-                                  className="ml-1 px-1 py-0.2 rounded text-[8px] sm:text-[9px] font-black bg-black/25 dark:bg-white/20 shrink-0"
-                                  title={`${item.count} ${item.count === 1 ? 'aula prevista' : 'aulas previstas'} neste bloco`}
-                                >
-                                  {item.count}a
-                                </span>
-                              )}
-                              {item.isLast && (
-                                <span title={`Conclusão prevista de ${sub.name}!`} className="flex items-center ml-0.5 shrink-0">
-                                  <svg className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 animate-bounce" viewBox="0 0 24 24" fill="none">
-                                    <path d="M12 2L22 20H2L12 2Z" fill="white" stroke="#E81C23" strokeWidth="3" strokeLinejoin="round"/>
-                                    <path d="M12 8V14" stroke="#1A1A1A" strokeWidth="2.5" strokeLinecap="round"/>
-                                    <circle cx="12" cy="17.5" r="1.5" fill="#1A1A1A"/>
-                                  </svg>
-                                </span>
+                                {item.isLast && (
+                                  <span title={`Conclusão prevista de ${sub.name}!`} className="flex items-center ml-0.5 shrink-0">
+                                    <svg className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 animate-bounce" viewBox="0 0 24 24" fill="none">
+                                      <path d="M12 2L22 20H2L12 2Z" fill="white" stroke="#E81C23" strokeWidth="3" strokeLinejoin="round"/>
+                                      <path d="M12 8V14" stroke="#1A1A1A" strokeWidth="2.5" strokeLinecap="round"/>
+                                      <circle cx="12" cy="17.5" r="1.5" fill="#1A1A1A"/>
+                                    </svg>
+                                  </span>
+                                )}
+                              </div>
+                              {lessonsList.length > 0 && (
+                                <div className="mt-0.5 pt-0.5 border-t border-black/15 dark:border-white/15 flex flex-col gap-0.5 min-w-0">
+                                  {lessonsList.map((les, lIdx) => (
+                                    <span
+                                      key={lIdx}
+                                      className="text-[9px] sm:text-[10px] font-medium leading-tight truncate opacity-95"
+                                      title={les.topicName && !les.name.includes(les.topicName) ? `${les.topicName} • ${les.name}${les.duration ? ` (${les.duration})` : ''}` : `${les.name}${les.duration ? ` (${les.duration})` : ''}`}
+                                    >
+                                      • {les.name}
+                                    </span>
+                                  ))}
+                                </div>
                               )}
                             </div>
                           );
@@ -833,6 +963,48 @@ export default function Calendario() {
                           </div>
                         </div>
                       </div>
+
+                      {/* Prévia das Aulas Previstas neste Bloco */}
+                      {(() => {
+                        const previewLessons = managingDayPreviewLessons[idx] || [];
+                        return (
+                          <div className="pl-8 pr-1 pt-1.5 border-t border-slate-200/70 dark:border-slate-700/60">
+                            <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
+                              Aulas previstas neste bloco ({previewLessons.length}):
+                            </span>
+                            {previewLessons.length > 0 ? (
+                              <div className="flex flex-col gap-1 max-h-28 overflow-y-auto custom-scrollbar pr-1">
+                                {previewLessons.map((les, lIdx) => (
+                                  <div
+                                    key={lIdx}
+                                    className="flex items-center justify-between gap-2 text-[11px] bg-white dark:bg-slate-900/90 px-2 py-1 rounded-lg border border-slate-200/80 dark:border-slate-700/80"
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <p className="font-bold text-slate-700 dark:text-slate-200 truncate" title={les.name}>
+                                        {les.name}
+                                      </p>
+                                      {les.topicName && !les.name.includes(les.topicName) && (
+                                        <p className="text-[9px] text-slate-400 dark:text-slate-500 truncate" title={les.topicName}>
+                                          {les.topicName}
+                                        </p>
+                                      )}
+                                    </div>
+                                    {les.duration && les.duration !== '00:00' && (
+                                      <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-slate-400 shrink-0">
+                                        {les.duration}
+                                      </span>
+                                    )}
+                                  </div>
+                                ))}
+                              </div>
+                            ) : (
+                              <p className="text-[11px] italic text-amber-600 dark:text-amber-400">
+                                Todas as aulas desta disciplina já foram concluídas antes desta data.
+                              </p>
+                            )}
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })
@@ -943,15 +1115,31 @@ export default function Calendario() {
                     : `Salvar Apenas neste Dia (${managingDay.dateKey})`}
               </button>
 
-              {managingDay.isCustomized && (
-                <button
-                  type="button"
-                  onClick={handleResetDayToDefault}
-                  className="w-full py-2 text-slate-500 hover:text-red-500 text-xs font-bold transition-colors flex items-center justify-center gap-1"
-                >
-                  <RotateCcw className="w-3.5 h-3.5" /> Restaurar Padrão do Ciclo Semanal
-                </button>
-              )}
+              <div className="flex flex-wrap items-center gap-2">
+                {daySlots.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDaySlots([]);
+                      setDaySlotCounts([]);
+                      toast.info('Blocos removidos. Clique no botão de salvar acima para confirmar este dia livre.');
+                    }}
+                    className="flex-1 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-800 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" /> Limpar / Redefinir Dia
+                  </button>
+                )}
+
+                {managingDay.isCustomized && (
+                  <button
+                    type="button"
+                    onClick={handleResetDayToDefault}
+                    className="flex-1 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-red-500 hover:border-red-300 dark:hover:border-red-800 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  >
+                    <RotateCcw className="w-3.5 h-3.5" /> Restaurar Padrão do Ciclo
+                  </button>
+                )}
+              </div>
             </div>
           </div>
         </div>,
@@ -1057,6 +1245,142 @@ export default function Calendario() {
                 className="px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white text-xs font-bold rounded-xl shadow-md transition-colors"
               >
                 Salvar Regra
+              </button>
+            </div>
+          </div>
+        </div>,
+        document.body
+      )}
+
+      {/* MODAL: REDEFINIR CALENDÁRIO */}
+      {showResetCalendarModal && createPortal(
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
+            <button
+              type="button"
+              onClick={() => !isResettingCalendar && setShowResetCalendarModal(false)}
+              disabled={isResettingCalendar}
+              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-40"
+            >
+              <X className="w-5 h-5" />
+            </button>
+
+            <div>
+              <div className="flex items-center gap-2 mb-1">
+                <div className="p-2 rounded-xl bg-red-100 dark:bg-red-950/60 border border-red-200 dark:border-red-800/70 text-red-600 dark:text-red-400">
+                  <RotateCcw className="w-5 h-5" />
+                </div>
+                <div>
+                  <h3 className="text-lg font-black text-slate-800 dark:text-slate-100">
+                    Redefinir Calendário
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Escolha o que deseja redefinir no seu planejamento do calendário.
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex flex-col gap-2.5">
+              <label className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${resetMode === 'overrides' ? 'bg-blue-50 border-blue-500 dark:bg-blue-950/40 dark:border-blue-600' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'}`}>
+                <input
+                  type="radio"
+                  name="resetCalendarMode"
+                  value="overrides"
+                  checked={resetMode === 'overrides'}
+                  onChange={() => setResetMode('overrides')}
+                  className="mt-1"
+                />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                    📌 Restaurar Padrão do Ciclo Semanal (Limpar Edições do Calendário)
+                  </span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                    Remove personalizações manuais de dias avulsos, regras futuras e deslocamentos de reposição, voltando ao ciclo semanal base.
+                  </span>
+                </div>
+              </label>
+
+              <label className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${resetMode === 'clear_all' ? 'bg-red-50 border-red-500 dark:bg-red-950/40 dark:border-red-600' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'}`}>
+                <input
+                  type="radio"
+                  name="resetCalendarMode"
+                  value="clear_all"
+                  checked={resetMode === 'clear_all'}
+                  onChange={() => setResetMode('clear_all')}
+                  className="mt-1"
+                />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                    🗑️ Zerar Toda a Grade do Calendário e Ciclo (Limpar Todos os Dias)
+                  </span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                    Remove todas as matérias agendadas nos dias do calendário e do ciclo semanal, <strong>mantendo intactas</strong> todas as matérias e aulas em &quot;Minhas Disciplinas&quot;.
+                  </span>
+                </div>
+              </label>
+
+              <label className={`p-3.5 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${resetMode === 'reset_progress' ? 'bg-amber-50 border-amber-500 dark:bg-amber-950/40 dark:border-amber-600' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'}`}>
+                <input
+                  type="radio"
+                  name="resetCalendarMode"
+                  value="reset_progress"
+                  checked={resetMode === 'reset_progress'}
+                  onChange={() => setResetMode('reset_progress')}
+                  className="mt-1"
+                />
+                <div className="flex flex-col gap-0.5">
+                  <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                    🔄 Reiniciar Aulas no Calendário (Voltar para a Aula 1)
+                  </span>
+                  <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                    Desmarca as aulas concluídas para que o calendário reprograme todas as matérias desde a primeira aula, mantendo a grade e as disciplinas.
+                  </span>
+                </div>
+              </label>
+            </div>
+
+            {resetMode !== 'overrides' && (
+              <div className="p-3 rounded-xl bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800/70 flex items-start gap-2 text-[11px] text-amber-800 dark:text-amber-300">
+                <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5 text-amber-500" />
+                <span>
+                  {resetMode === 'clear_all'
+                    ? 'Atenção: todos os blocos do calendário e do ciclo semanal ficarão vazios para você montar do zero.'
+                    : 'Atenção: o progresso de aulas concluídas será zerado e sincronizado com a nuvem.'}
+                </span>
+              </div>
+            )}
+
+            <div className="flex justify-end gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <button
+                type="button"
+                onClick={() => setShowResetCalendarModal(false)}
+                disabled={isResettingCalendar}
+                className="px-4 py-2 text-xs font-bold text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer disabled:opacity-40"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmResetCalendar}
+                disabled={isResettingCalendar}
+                className={`px-4 py-2 text-white text-xs font-bold rounded-xl shadow-md transition-colors flex items-center gap-1.5 cursor-pointer disabled:opacity-50 ${
+                  resetMode === 'clear_all'
+                    ? 'bg-red-600 hover:bg-red-700'
+                    : resetMode === 'reset_progress'
+                      ? 'bg-amber-600 hover:bg-amber-700'
+                      : 'bg-blue-600 hover:bg-blue-700'
+                }`}
+              >
+                {isResettingCalendar ? (
+                  <>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" /> Redefinindo...
+                  </>
+                ) : (
+                  <>
+                    <RotateCcw className="w-3.5 h-3.5" /> Confirmar Redefinição
+                  </>
+                )}
               </button>
             </div>
           </div>
