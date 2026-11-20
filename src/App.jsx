@@ -30,7 +30,8 @@ import {
   Search, Library, Clock, Calendar as CalendarIcon, Repeat, Dumbbell, 
   Target as TargetIcon, BarChart2, Store, Settings, Award, BrainCircuit, 
   X, Check, ArrowRight, ShieldCheck, Trophy, Sun, Moon, Coins, 
-  AlertTriangle, Info, LogOut, Shield, RefreshCw, Dog, Skull, Crosshair, ListFilter 
+  AlertTriangle, Info, LogOut, Shield, RefreshCw, Dog, Skull, Crosshair, ListFilter,
+  PanelLeftClose, PanelLeftOpen
 } from 'lucide-react';
 import {
   parseCourseIndexSubtopics,
@@ -84,6 +85,20 @@ export default function App() {
   } = useStore();
   
   const [promotionModal, setPromotionModal] = useState(null);
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
+    try {
+      return localStorage.getItem('qg_sidebar_collapsed') === 'true';
+    } catch (_) {
+      return false;
+    }
+  });
+  const toggleSidebarCollapsed = () => {
+    setIsSidebarCollapsed(prev => {
+      const next = !prev;
+      try { localStorage.setItem('qg_sidebar_collapsed', String(next)); } catch (_) {}
+      return next;
+    });
+  };
   const [dismissedPrePromptModalRef, setDismissedPrePromptModalRef] = useState(null);
   const [courseIndexCache, setCourseIndexCache] = useState({ latest: null, byLesson: {} });
   const [manualLessonIndexMap, setManualLessonIndexMap] = useState(() => {
@@ -434,22 +449,36 @@ export default function App() {
   const todayStr = getLocalDateStr();
   const allDueToday = reviews.filter(r => r.nextDateStr <= todayStr);
 
-  const tabs = [
-    { id: '/', label: 'Carreira', icon: Award },
-    { id: '/duelo', label: 'Duelo CTB', icon: Crosshair },
-
-    { id: '/revisoes', label: 'Revisões', icon: BrainCircuit, count: allDueToday.length },
-
-    { id: '/ciclo', label: 'Ciclo', icon: Repeat },
-    { id: '/calendario', label: 'Calendário', icon: CalendarIcon },
-    { id: '/taf', label: 'Treino TAF', icon: Dumbbell },
-    { id: '/simulados', label: 'Simulados', icon: TargetIcon },
-    { id: '/estatisticas', label: 'Estatísticas', icon: BarChart2 },
-    { id: '/caveira', label: 'Raio-X Caveira', icon: Skull },
-    { id: '/pet', label: 'Mascote K9', icon: Dog },
-    { id: '/loja', label: 'Loja', icon: Store },
-    { id: '/config', label: 'Ajustes', icon: Settings },
+  const navGroups = [
+    {
+      title: 'Estudo',
+      items: [
+        { id: '/ciclo', label: 'Ciclo', icon: Repeat },
+        { id: '/calendario', label: 'Calendário', icon: CalendarIcon },
+        { id: '/revisoes', label: 'Revisões', icon: BrainCircuit, count: allDueToday.length },
+        { id: '/caveira', label: 'Raio-X Caveira', icon: Skull },
+      ]
+    },
+    {
+      title: 'Desempenho',
+      items: [
+        { id: '/', label: 'Carreira', icon: Award },
+        { id: '/estatisticas', label: 'Estatísticas', icon: BarChart2 },
+        { id: '/simulados', label: 'Simulados', icon: TargetIcon },
+        { id: '/taf', label: 'Treino TAF', icon: Dumbbell },
+        { id: '/duelo', label: 'Duelo CTB', icon: Crosshair },
+      ]
+    },
+    {
+      title: 'Sistema',
+      items: [
+        { id: '/pet', label: 'Mascote K9', icon: Dog },
+        { id: '/loja', label: 'Loja', icon: Store },
+        { id: '/config', label: 'Ajustes', icon: Settings },
+      ]
+    }
   ];
+  const tabs = navGroups.flatMap(g => g.items);
 
   const pageVariants = {
     initial: { opacity: 0, y: 10 },
@@ -469,124 +498,167 @@ export default function App() {
       <TacticalCountdownBanner />
 
       {/* MENU LATERAL ESQUERDO (DESKTOP) */}
-      <aside className={`hidden md:flex flex-col fixed inset-y-0 left-0 w-64 z-50 border-r transition-colors ${
+      <aside className={`hidden md:flex flex-col fixed inset-y-0 left-0 z-50 border-r transition-all duration-200 ${
+        isSidebarCollapsed ? 'w-[72px]' : 'w-64'
+      } ${
         isDarkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200/80'
       } backdrop-blur-xl`}>
         {/* Logo / Topo */}
-        <div className="px-4 py-4 border-b border-slate-200/60 dark:border-slate-800 flex items-center justify-between">
-          <Link to="/" className="flex items-center gap-3">
-            <div className="p-2 bg-gradient-to-br from-blue-600/20 to-amber-500/15 rounded-xl border border-blue-500/25 shadow-[0_0_15px_rgba(59,130,246,0.12)]">
+        <div className={`py-3.5 border-b border-slate-200/60 dark:border-slate-800 flex items-center ${isSidebarCollapsed ? 'flex-col gap-2 px-2' : 'justify-between px-4'}`}>
+          <Link to="/" className="flex items-center gap-3 min-w-0" title="QG da PRF">
+            <div className="p-2 bg-gradient-to-br from-blue-600/20 to-amber-500/15 rounded-xl border border-blue-500/25 shadow-[0_0_15px_rgba(59,130,246,0.12)] shrink-0">
               <Award className="text-blue-600 dark:text-blue-400 w-5 h-5" />
             </div>
-            <div className="min-w-0">
-              <div className="flex items-center gap-2">
-                <h1 className="text-base font-black tracking-wider text-slate-800 dark:text-white uppercase leading-none">
-                  QG DA PRF
-                </h1>
-                {isSyncing && <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
+            {!isSidebarCollapsed && (
+              <div className="min-w-0">
+                <div className="flex items-center gap-2">
+                  <h1 className="text-base font-black tracking-wider text-slate-800 dark:text-white uppercase leading-none">
+                    QG DA PRF
+                  </h1>
+                  {isSyncing && <RefreshCw className="w-3.5 h-3.5 text-blue-500 animate-spin" />}
+                </div>
+                <span className="text-[10px] font-semibold tracking-widest uppercase text-slate-400 dark:text-slate-500 block mt-0.5">
+                  Centro de Comando
+                </span>
               </div>
-              <span className="text-[10px] font-semibold tracking-widest uppercase text-slate-400 dark:text-slate-500 block mt-0.5">
-                Centro de Comando
-              </span>
-            </div>
+            )}
           </Link>
+          <button
+            type="button"
+            onClick={toggleSidebarCollapsed}
+            title={isSidebarCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+            aria-label={isSidebarCollapsed ? 'Expandir menu lateral' : 'Recolher menu lateral'}
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+          >
+            {isSidebarCollapsed ? <PanelLeftOpen className="w-4 h-4" /> : <PanelLeftClose className="w-4 h-4" />}
+          </button>
         </div>
 
         {/* Card Compacto de Patente & Moedas */}
-        <div className="px-3 py-3 border-b border-slate-200/60 dark:border-slate-800 space-y-2">
-          <div className={`flex items-center justify-between bg-slate-100/90 dark:bg-slate-950/70 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 ${getCurrentPatente().color}`}>
-            <div className="flex items-center gap-2.5 min-w-0">
-              <span className="text-base leading-none shrink-0">{getCurrentPatente().icon}</span>
-              <div className="min-w-0">
-                <span className="text-[11px] font-bold uppercase tracking-wider block truncate">{getCurrentPatente().name}</span>
-                <div className="w-24 bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 mt-1 overflow-hidden">
-                  <div
-                    className="bg-gradient-to-r from-blue-500 to-cyan-400 h-full transition-all duration-1000"
-                    style={{ width: `${Math.min(100, (userStats.xp % 1000) / 10)}%` }}
-                  />
+        <div className={`py-3 border-b border-slate-200/60 dark:border-slate-800 ${isSidebarCollapsed ? 'px-2' : 'px-3 space-y-2'}`}>
+          {isSidebarCollapsed ? (
+            <div className="flex flex-col items-center gap-1.5" title={`${getCurrentPatente().name} • ${coins} moedas`}>
+              <span className="text-lg leading-none">{getCurrentPatente().icon}</span>
+              <div className="flex items-center gap-0.5 bg-amber-500/10 dark:bg-amber-500/15 px-1.5 py-0.5 rounded-md border border-amber-500/20">
+                <Coins className="text-amber-600 dark:text-amber-400 w-3 h-3" />
+                <span className="font-bold text-[10px] tabular-nums text-amber-600 dark:text-amber-400">{coins}</span>
+              </div>
+            </div>
+          ) : (
+            <div className={`flex items-center justify-between bg-slate-100/90 dark:bg-slate-950/70 px-3 py-2.5 rounded-xl border border-slate-200 dark:border-slate-800 ${getCurrentPatente().color}`}>
+              <div className="flex items-center gap-2.5 min-w-0">
+                <span className="text-base leading-none shrink-0">{getCurrentPatente().icon}</span>
+                <div className="min-w-0">
+                  <span className="text-[11px] font-bold uppercase tracking-wider block truncate">{getCurrentPatente().name}</span>
+                  <div className="w-24 bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 mt-1 overflow-hidden">
+                    <div
+                      className="bg-gradient-to-r from-blue-500 to-cyan-400 h-full transition-all duration-1000"
+                      style={{ width: `${Math.min(100, (userStats.xp % 1000) / 10)}%` }}
+                    />
+                  </div>
                 </div>
               </div>
-            </div>
 
-            <div className="flex items-center gap-1 bg-amber-500/10 dark:bg-amber-500/15 px-2 py-1 rounded-lg border border-amber-500/20 shrink-0">
-              <Coins className="text-amber-600 dark:text-amber-400 w-3.5 h-3.5" />
-              <span className="font-bold text-xs tabular-nums text-amber-600 dark:text-amber-400">{coins}</span>
+              <div className="flex items-center gap-1 bg-amber-500/10 dark:bg-amber-500/15 px-2 py-1 rounded-lg border border-amber-500/20 shrink-0">
+                <Coins className="text-amber-600 dark:text-amber-400 w-3.5 h-3.5" />
+                <span className="font-bold text-xs tabular-nums text-amber-600 dark:text-amber-400">{coins}</span>
+              </div>
             </div>
-          </div>
+          )}
         </div>
 
-        {/* Links de Navegação Vertical */}
-        <nav className="flex-1 overflow-y-auto custom-scrollbar px-3 py-3.5 space-y-1">
-          {tabs.map(tab => (
-            <NavLink
-              key={tab.id}
-              to={tab.id}
-              className={({ isActive }) => `flex items-center justify-between py-2.5 px-3 rounded-xl transition-all duration-200 text-[13px] font-semibold tracking-tight cursor-pointer ${
-                isActive
-                  ? 'bg-blue-600 text-white shadow-sm border border-transparent dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/30 dark:shadow-none'
-                  : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-slate-100 border border-transparent'
-              }`}
-            >
-              <div className="flex items-center gap-2.5 min-w-0">
-                <tab.icon className="w-4 h-4 shrink-0" />
-                <span className="truncate">{tab.label}</span>
-              </div>
-              {tab.count > 0 && (
-                <span className="bg-red-500 text-white text-[10px] min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full font-black shrink-0">
-                  {tab.count}
-                </span>
+        {/* Links de Navegação Vertical por Categoria */}
+        <nav className={`flex-1 overflow-y-auto custom-scrollbar py-3 ${isSidebarCollapsed ? 'px-2 space-y-1' : 'px-3 space-y-4'}`}>
+          {navGroups.map((group, gIdx) => (
+            <div key={group.title}>
+              {!isSidebarCollapsed ? (
+                <div className="text-[10px] font-bold uppercase tracking-widest text-slate-400 dark:text-slate-500 px-3 mb-1.5">
+                  {group.title}
+                </div>
+              ) : (
+                gIdx > 0 && <div className="h-px bg-slate-200/70 dark:bg-slate-800 mx-2 my-2" />
               )}
-            </NavLink>
+              <div className="space-y-1">
+                {group.items.map(tab => (
+                  <NavLink
+                    key={tab.id}
+                    to={tab.id}
+                    title={tab.label}
+                    className={({ isActive }) => `relative flex items-center ${isSidebarCollapsed ? 'justify-center py-2.5 px-2' : 'justify-between py-2 px-3'} rounded-xl transition-all duration-200 text-[13px] font-semibold tracking-tight cursor-pointer ${
+                      isActive
+                        ? 'bg-blue-600 text-white shadow-sm border border-transparent dark:bg-blue-500/15 dark:text-blue-400 dark:border-blue-500/30 dark:shadow-none'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-slate-100 border border-transparent'
+                    }`}
+                  >
+                    <div className={`flex items-center min-w-0 ${isSidebarCollapsed ? 'justify-center' : 'gap-2.5'}`}>
+                      <tab.icon className="w-4 h-4 shrink-0" />
+                      {!isSidebarCollapsed && <span className="truncate">{tab.label}</span>}
+                    </div>
+                    {tab.count > 0 && (
+                      <span className={isSidebarCollapsed
+                        ? 'absolute top-1 right-1 bg-red-500 text-white text-[9px] min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full font-black leading-none'
+                        : 'bg-red-500 text-white text-[10px] min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-full font-black shrink-0'
+                      }>
+                        {tab.count}
+                      </span>
+                    )}
+                  </NavLink>
+                ))}
+              </div>
+            </div>
           ))}
         </nav>
 
         {/* Rodapé da Sidebar: Tema & Logout */}
-        <div className="p-3 border-t border-slate-200/60 dark:border-slate-800/80 flex flex-col gap-2">
-          <div className="flex items-center gap-2">
+        <div className={`p-3 border-t border-slate-200/60 dark:border-slate-800/80 flex flex-col gap-2 ${isSidebarCollapsed ? 'items-center px-2' : ''}`}>
+          <div className={`flex items-center gap-2 ${isSidebarCollapsed ? 'flex-col w-full' : ''}`}>
             <button
               onClick={() => setIsDarkMode(!isDarkMode)}
-              className="flex-1 flex items-center justify-center gap-2 py-2 px-3 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition-all text-slate-700 dark:text-white text-xs font-bold uppercase cursor-pointer"
+              title={isDarkMode ? 'Alternar para modo claro' : 'Alternar para modo escuro'}
+              className={`flex items-center justify-center gap-2 py-2 bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 rounded-xl border border-slate-200 dark:border-slate-700 transition-all text-slate-700 dark:text-white text-xs font-bold uppercase cursor-pointer ${isSidebarCollapsed ? 'w-full px-2' : 'flex-1 px-3'}`}
             >
               {isDarkMode ? <Sun className="w-4 h-4 text-amber-400" /> : <Moon className="w-4 h-4" />}
-              <span>{isDarkMode ? 'Claro' : 'Escuro'}</span>
+              {!isSidebarCollapsed && <span>{isDarkMode ? 'Claro' : 'Escuro'}</span>}
             </button>
 
             <button
               onClick={signOut}
-              className="p-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl border border-red-500/20 transition-all cursor-pointer"
+              className={`p-2 bg-red-600/10 hover:bg-red-600 text-red-500 hover:text-white rounded-xl border border-red-500/20 transition-all cursor-pointer flex items-center justify-center ${isSidebarCollapsed ? 'w-full' : ''}`}
               title="Sair do QG"
             >
               <LogOut className="w-4 h-4" />
             </button>
           </div>
 
-          <div className="flex items-center justify-between px-1 text-[11px] text-slate-400 dark:text-slate-500 font-medium">
-            <span className="tracking-wide">Versão</span>
-            <button
-              type="button"
-              onClick={async () => {
-                toast.loading("Limpando cache...", { id: 'reload-sw' });
-                try {
-                  if ('serviceWorker' in navigator) {
-                    const regs = await navigator.serviceWorker.getRegistrations();
-                    for (const r of regs) await r.unregister();
+          {!isSidebarCollapsed && (
+            <div className="flex items-center justify-between px-1 text-[11px] text-slate-400 dark:text-slate-500 font-medium">
+              <span className="tracking-wide">Versão</span>
+              <button
+                type="button"
+                onClick={async () => {
+                  toast.loading("Limpando cache...", { id: 'reload-sw' });
+                  try {
+                    if ('serviceWorker' in navigator) {
+                      const regs = await navigator.serviceWorker.getRegistrations();
+                      for (const r of regs) await r.unregister();
+                    }
+                    if ('caches' in window) {
+                      const ks = await caches.keys();
+                      await Promise.all(ks.map(k => caches.delete(k)));
+                    }
+                    window.location.reload();
+                  } catch {
+                    window.location.reload();
                   }
-                  if ('caches' in window) {
-                    const ks = await caches.keys();
-                    await Promise.all(ks.map(k => caches.delete(k)));
-                  }
-                  window.location.reload();
-                } catch {
-                  window.location.reload();
-                }
-              }}
-              title="Clique para forçar atualização do aplicativo e limpar caches"
-              className="font-mono font-bold text-slate-600 dark:text-slate-400 bg-slate-200/60 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-300/60 dark:border-slate-700 text-[10px] hover:border-blue-400 hover:text-blue-500 transition-colors cursor-pointer flex items-center gap-1"
-            >
-              <span>{APP_VERSION}</span>
-              <RefreshCw className="w-2.5 h-2.5 opacity-60" />
-            </button>
-          </div>
+                }}
+                title="Clique para forçar atualização do aplicativo e limpar caches"
+                className="font-mono font-bold text-slate-600 dark:text-slate-400 bg-slate-200/60 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-300/60 dark:border-slate-700 text-[10px] hover:border-blue-400 hover:text-blue-500 transition-colors cursor-pointer flex items-center gap-1"
+              >
+                <span>{APP_VERSION}</span>
+                <RefreshCw className="w-2.5 h-2.5 opacity-60" />
+              </button>
+            </div>
+          )}
         </div>
       </aside>
 
@@ -666,7 +738,7 @@ export default function App() {
       </header>
 
       {/* ÁREA DE CONTEÚDO PRINCIPAL */}
-      <div className="flex-1 md:pl-64 min-w-0 w-full">
+      <div className={`flex-1 min-w-0 w-full transition-all duration-200 ${isSidebarCollapsed ? 'md:pl-[72px]' : 'md:pl-64'}`}>
         <main className="w-full max-w-[1480px] mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 pb-28 sm:pb-24">
           <AnimatePresence mode="wait">
             <motion.div

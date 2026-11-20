@@ -4,6 +4,7 @@ import {
   Target, Sparkles, X 
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { useStore } from '../store/useStore';
 
 const STORAGE_KEY = 'qg_tactical_countdown_config';
 
@@ -23,16 +24,19 @@ export default function TacticalCountdownBanner() {
         return {
           title: parsed.title || 'OPERAÇÃO PRF • CONTAGEM REGRESSIVA',
           targetDate: parsed.targetDate || getDefaultTargetDate(),
-          isCollapsed: parsed.isCollapsed !== undefined ? Boolean(parsed.isCollapsed) : false
+          isCollapsed: parsed.isCollapsed !== undefined ? Boolean(parsed.isCollapsed) : true
         };
       }
     } catch (_) {}
     return {
       title: 'OPERAÇÃO PRF • CONTAGEM REGRESSIVA',
       targetDate: getDefaultTargetDate(),
-      isCollapsed: false
+      isCollapsed: true
     };
   });
+
+  const targetExamDate = useStore((s) => s.targetExamDate);
+  const setTargetExamDate = useStore((s) => s.setTargetExamDate);
 
   const [now, setNow] = useState(() => Date.now());
   const [isModalOpen, setIsModalOpen] = useState(false);
@@ -58,6 +62,26 @@ export default function TacticalCountdownBanner() {
     } catch (_) {}
   };
 
+  const effectiveTargetDate = useMemo(() => {
+    if (targetExamDate && /^\d{4}-\d{2}-\d{2}$/.test(targetExamDate) && targetExamDate !== '2026-08-15') {
+      const [y, m, d] = targetExamDate.split('-').map(Number);
+      const localCandidate = new Date(y, m - 1, d, 8, 0, 0);
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
+      if (!isNaN(localCandidate.getTime()) && localCandidate >= todayStart) {
+        const currentParsed = new Date(config.targetDate);
+        const currentLocalDate = !isNaN(currentParsed.getTime())
+          ? `${currentParsed.getFullYear()}-${String(currentParsed.getMonth() + 1).padStart(2, '0')}-${String(currentParsed.getDate()).padStart(2, '0')}`
+          : '';
+        if (currentLocalDate === targetExamDate) {
+          return config.targetDate;
+        }
+        return localCandidate.toISOString();
+      }
+    }
+    return config.targetDate;
+  }, [config.targetDate, targetExamDate]);
+
   const toggleCollapsed = () => {
     saveConfig({ ...config, isCollapsed: !config.isCollapsed });
   };
@@ -66,7 +90,7 @@ export default function TacticalCountdownBanner() {
     e?.stopPropagation();
     setDraftTitle(config.title);
     try {
-      const d = new Date(config.targetDate);
+      const d = new Date(effectiveTargetDate);
       setDraftDate(new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 16));
     } catch (_) {
       setDraftDate('');
@@ -82,6 +106,12 @@ export default function TacticalCountdownBanner() {
       const parsed = new Date(draftDate);
       if (isNaN(parsed.getTime())) return;
       targetISO = parsed.toISOString();
+      const dateOnly = /^\d{4}-\d{2}-\d{2}/.test(draftDate)
+        ? draftDate.slice(0, 10)
+        : `${parsed.getFullYear()}-${String(parsed.getMonth() + 1).padStart(2, '0')}-${String(parsed.getDate()).padStart(2, '0')}`;
+      if (setTargetExamDate && dateOnly !== targetExamDate) {
+        setTargetExamDate(dateOnly);
+      }
     } catch (_) {
       return;
     }
@@ -102,7 +132,7 @@ export default function TacticalCountdownBanner() {
   };
 
   const timeRemaining = useMemo(() => {
-    const targetTime = new Date(config.targetDate).getTime();
+    const targetTime = new Date(effectiveTargetDate).getTime();
     const diff = targetTime - now;
 
     if (isNaN(diff) || diff <= 0) {
@@ -115,11 +145,11 @@ export default function TacticalCountdownBanner() {
     const days = Math.floor(diff / (1000 * 60 * 60 * 24));
 
     return { diff, days, hours, minutes, seconds, isPassed: false };
-  }, [config.targetDate, now]);
+  }, [effectiveTargetDate, now]);
 
   const formattedTargetDate = useMemo(() => {
     try {
-      const d = new Date(config.targetDate);
+      const d = new Date(effectiveTargetDate);
       return d.toLocaleDateString('pt-BR', {
         day: '2-digit',
         month: 'short',
@@ -130,7 +160,7 @@ export default function TacticalCountdownBanner() {
     } catch (_) {
       return '';
     }
-  }, [config.targetDate]);
+  }, [effectiveTargetDate]);
 
   return (
     <>

@@ -7,7 +7,7 @@ import { assetUrl } from '../lib/assets';
 import { 
   Activity, Trophy, Clock, AlertTriangle, CheckCircle, Coins, 
   Flame, ShieldCheck, Target, Pencil, Check as CheckIcon,
-  BookOpen, TrendingUp, Zap, X, Lock, Dog
+  BookOpen, TrendingUp, Zap, X, Lock, Dog, ArrowRight, Calendar
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -124,7 +124,20 @@ export default function Dashboard() {
     reviewStats = { totalDone: 0, correct: 0, streak: 0 },
     xpHistory = [],
     isSyncing,
-    petData
+    petData,
+    subjects = {},
+    cycle = [],
+    cycleScheduleType = 'weekly',
+    cycleWeekStart = 'sunday',
+    cycleCarryoverOffset = 0,
+    currentDayIndex = 0,
+    completedToday: rawCompletedToday = [],
+    completedTodayDate,
+    calendarOverrides = {},
+    futureScheduleRules = [],
+    getPendingReviews,
+    getLocalDateStr,
+    getCycleIndexForDate
   } = useStore();
 
   useEffect(() => {
@@ -208,6 +221,73 @@ export default function Dashboard() {
 
   const effectiveStreak = getEffectiveStreak ? getEffectiveStreak() : (streakData.currentStreak || 0);
   void todayKey;
+
+  const todayDateStr = getLocalDateStr ? getLocalDateStr() : '';
+  const todayCompletedSlots = completedTodayDate === todayDateStr ? (rawCompletedToday || []) : [];
+  const pendingReviews = getPendingReviews ? getPendingReviews() : [];
+  const pendingReviewsCount = pendingReviews.length;
+
+  const todayBlocks = (() => {
+    const todayObj = new Date();
+    const todayDow = todayObj.getDay();
+    const sanitize = (rawSubs) =>
+      (rawSubs || [])
+        .map((subId, slotIdx) => {
+          const sub = subjects?.[subId];
+          if (!sub) return null;
+          return {
+            slotIdx,
+            id: subId,
+            name: sub.name,
+            color: sub.color,
+            completed: todayCompletedSlots.includes(slotIdx)
+          };
+        })
+        .filter(Boolean);
+
+    if (calendarOverrides && Array.isArray(calendarOverrides[todayDateStr])) {
+      return sanitize(calendarOverrides[todayDateStr]);
+    }
+
+    const baseCycleIdx = cycleScheduleType === 'weekly'
+      ? (getCycleIndexForDate ? getCycleIndexForDate(todayObj, todayObj) : ((cycleWeekStart === 'monday') ? (todayDow + 6) % 7 : todayDow))
+      : (currentDayIndex || 0);
+
+    const shouldShiftCarryover = cycleScheduleType === 'weekly' && (cycleCarryoverOffset || 0) > 0;
+    const effectiveCycleIdx = shouldShiftCarryover
+      ? ((baseCycleIdx - cycleCarryoverOffset) % 7 + 7) % 7
+      : baseCycleIdx;
+
+    const effectiveDateObj = shouldShiftCarryover
+      ? new Date(todayObj.getFullYear(), todayObj.getMonth(), todayObj.getDate() - cycleCarryoverOffset)
+      : todayObj;
+    const effectiveDateStr = shouldShiftCarryover && getLocalDateStr
+      ? getLocalDateStr(effectiveDateObj)
+      : todayDateStr;
+
+    if (shouldShiftCarryover && calendarOverrides && Array.isArray(calendarOverrides[effectiveDateStr])) {
+      return sanitize(calendarOverrides[effectiveDateStr]);
+    }
+
+    const effDow = effectiveDateObj.getDay();
+    const matchingRules = (futureScheduleRules || [])
+      .filter(r => {
+        if (!r || r.v !== 2 || !r.fromDate || r.fromDate > effectiveDateStr) return false;
+        if (cycleScheduleType === 'weekly' && r.dayOfWeek !== undefined) {
+          return r.dayOfWeek === effDow;
+        }
+        return r.dayOfWeek === effDow || r.cycleIndex === effectiveCycleIdx;
+      })
+      .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
+
+    if (matchingRules.length > 0 && Array.isArray(matchingRules[0].daySlots)) {
+      return sanitize(matchingRules[0].daySlots);
+    }
+
+    return sanitize(Array.isArray(cycle?.[effectiveCycleIdx]) ? cycle[effectiveCycleIdx] : []);
+  })();
+
+  const completedBlocksCount = todayBlocks.filter(b => b.completed).length;
 
   const kpis = [
     { label: 'Ofensiva', value: `${effectiveStreak}d`, sub: 'dias consecutivos', icon: Flame, color: 'text-orange-500', glow: 'hover:shadow-orange-500/10 hover:border-orange-500/30' },
@@ -305,6 +385,130 @@ export default function Dashboard() {
                <CheckCircle className="text-emerald-500 w-6 h-6 mb-1.5" />
                <span className="text-2xl font-black tabular-nums text-emerald-600 dark:text-emerald-400 leading-none">{completionPercent}%</span>
                <span className="text-[11px] font-bold text-emerald-700/70 dark:text-slate-400 uppercase mt-1">Edital</span>
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* MISSÃO DE HOJE */}
+      <section className="glass-card rounded-2xl p-4 sm:p-5 mb-6 border border-slate-200 dark:border-slate-800/90">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800/80">
+          <div className="flex items-center gap-2.5">
+            <div className="w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-600 dark:text-blue-400">
+              <Target className="w-4 h-4" />
+            </div>
+            <div>
+              <h3 className="text-sm sm:text-base font-black text-slate-800 dark:text-slate-100 leading-tight">Missão de Hoje</h3>
+              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Resumo operacional imediato para acelerar sua aprovação</p>
+            </div>
+          </div>
+          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-850 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/80 tabular-nums">
+            {new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}
+          </span>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          {/* Coluna 1: Revisões FSRS */}
+          <div className="rounded-xl p-4 bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between gap-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">Revisões FSRS</span>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className={`text-2xl sm:text-3xl font-black tabular-nums leading-none ${pendingReviewsCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                    {pendingReviewsCount}
+                  </span>
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                    {pendingReviewsCount === 0
+                      ? 'Tudo em dia por hoje!'
+                      : pendingReviewsCount === 1
+                        ? 'questão aguardando revisão'
+                        : 'questões aguardando revisão'}
+                  </span>
+                </div>
+              </div>
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${
+                pendingReviewsCount > 0
+                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80'
+                  : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80'
+              }`}>
+                {pendingReviewsCount > 0 ? 'Pendente' : 'Em dia'}
+              </span>
+            </div>
+
+            <div className="flex items-center justify-between gap-2 pt-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                {pendingReviewsCount > 0
+                  ? 'Elimine sua fila de retenção antes de avançar na teoria.'
+                  : 'Memória consolidada. Excelente constância tática.'}
+              </p>
+              <button
+                type="button"
+                onClick={() => navigate('/revisoes')}
+                className="shrink-0 h-8 px-3 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              >
+                <span>{pendingReviewsCount > 0 ? 'Revisar agora' : 'Ver revisões'}</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          </div>
+
+          {/* Coluna 2: Blocos do Ciclo de Hoje */}
+          <div className="rounded-xl p-4 bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between gap-3">
+            <div className="flex items-start justify-between gap-3">
+              <div>
+                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5 text-blue-500" /> Ciclo de Hoje
+                </span>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="text-2xl sm:text-3xl font-black tabular-nums text-slate-800 dark:text-slate-100 leading-none">
+                    {todayBlocks.length > 0 ? `${completedBlocksCount}/${todayBlocks.length}` : '0'}
+                  </span>
+                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                    {todayBlocks.length === 0
+                      ? 'Nenhum bloco programado hoje'
+                      : completedBlocksCount === todayBlocks.length
+                        ? 'Todos os blocos concluídos!'
+                        : `${todayBlocks.length - completedBlocksCount} ${todayBlocks.length - completedBlocksCount === 1 ? 'bloco restante' : 'blocos restantes'}`}
+                  </span>
+                </div>
+              </div>
+              {todayBlocks.length > 0 && (
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${
+                  completedBlocksCount === todayBlocks.length
+                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80'
+                    : 'bg-blue-100 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80'
+                }`}>
+                  {Math.round((completedBlocksCount / todayBlocks.length) * 100)}%
+                </span>
+              )}
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <div className="flex flex-wrap items-center gap-1.5 min-w-0 flex-1">
+                {todayBlocks.slice(0, 5).map((block) => (
+                  <span
+                    key={block.slotIdx}
+                    className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md truncate max-w-[140px] ${block.color} ${block.completed ? 'opacity-60 line-through' : ''}`}
+                    title={`${block.name}${block.completed ? ' (concluído)' : ''}`}
+                  >
+                    {block.completed && <CheckIcon className="w-2.5 h-2.5 shrink-0" />}
+                    <span className="truncate">{block.name}</span>
+                  </span>
+                ))}
+                {todayBlocks.length > 5 && (
+                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
+                    +{todayBlocks.length - 5}
+                  </span>
+                )}
+              </div>
+              <button
+                type="button"
+                onClick={() => navigate('/ciclo')}
+                className="shrink-0 h-8 px-3 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-900 dark:bg-slate-800 dark:hover:bg-slate-700 text-white border border-slate-700/50 flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+              >
+                <span>Ir para o Ciclo</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
           </div>
         </div>

@@ -22,6 +22,7 @@ export default function Config({
   const [showImportOCR, setShowImportOCR] = useState(false);
   const [showResetModal, setShowResetModal] = useState(false);
   const [shareModalConfig, setShareModalConfig] = useState(null); // { isOpen: boolean, tab: 'share'|'import', initialSubjectId: string|null }
+  const [activeConfigTab, setActiveConfigTab] = useState('disciplinas'); // 'disciplinas' | 'ritmo' | 'perfil' | 'sistema'
   // Scanner de aulas por assunto
   const [scannerTopicIdx, setScannerTopicIdx] = useState(null); // índice do tópico sendo escaneado
   const modalBodyRef = useRef(null);
@@ -126,7 +127,38 @@ export default function Config({
 
   return (
     <div className="fade-in w-full pb-10">
-      
+      {/* Navegação por Abas Internas dos Ajustes */}
+      <div className="mb-6 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-1.5 shadow-sm overflow-x-auto custom-scrollbar">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 min-w-[300px]">
+          {[
+            { id: 'disciplinas', label: 'Disciplinas & Edital', icon: BookOpen },
+            { id: 'ritmo', label: 'Ritmo & Metas', icon: Target },
+            { id: 'perfil', label: 'Perfil & Alertas', icon: User },
+            { id: 'sistema', label: 'Backup & Sistema', icon: Shield }
+          ].map((tabItem) => {
+            const TabIcon = tabItem.icon;
+            const isActive = activeConfigTab === tabItem.id;
+            return (
+              <button
+                key={tabItem.id}
+                type="button"
+                onClick={() => setActiveConfigTab(tabItem.id)}
+                className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                  isActive
+                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
+                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-850 hover:text-slate-900 dark:hover:text-slate-100'
+                }`}
+              >
+                <TabIcon className="w-4 h-4 shrink-0" />
+                <span className="truncate">{tabItem.label}</span>
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {activeConfigTab === 'ritmo' && (
+      <>
       <div className="bg-slate-900 p-5 sm:p-6 rounded-2xl shadow-lg border border-slate-800 mb-6 relative overflow-hidden text-white">
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-bl-full pointer-events-none"></div>
         <h3 className="text-lg font-black text-white flex items-center gap-2 mb-2">
@@ -209,7 +241,11 @@ export default function Config({
            />
         </div>
       </div>
+      </>
+      )}
 
+      {activeConfigTab === 'disciplinas' && (
+      <>
       <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 dark:bg-slate-900 dark:border-slate-800">
         <div>
           <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 dark:text-slate-100">
@@ -384,8 +420,11 @@ export default function Config({
           );
         })}
       </div>
+      </>
+      )}
 
       {/* ⚡ SEÇÃO: ACELERAÇÃO DE VÍDEO-AULAS POR DISCIPLINA */}
+      {activeConfigTab === 'ritmo' && (
       <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mt-6 mb-6 border-l-4 border-l-yellow-500 dark:bg-slate-900 dark:border-slate-800">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
           <div>
@@ -579,8 +618,10 @@ export default function Config({
           )}
         </div>
       </div>
+      )}
 
       {/* 👤 SEÇÃO: IDENTIDADE E PREFERÊNCIAS */}
+      {activeConfigTab === 'perfil' && (
       <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mb-6 dark:bg-slate-900 dark:border-slate-800">
         <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-6 dark:text-slate-100">
           <User className="text-blue-600 w-5 h-5"/> Identidade e Preferências
@@ -655,8 +696,10 @@ export default function Config({
           </div>
         </div>
       </div>
+      )}
 
       {/* 🎯 SEÇÃO: METAS DE ESTUDO DIÁRIAS */}
+      {activeConfigTab === 'ritmo' && (
       <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mb-6 dark:bg-slate-900 dark:border-slate-800">
         <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-6 dark:text-slate-100">
           <Clock className="text-blue-600 w-5 h-5"/> Metas de Estudo Operacionais
@@ -720,8 +763,10 @@ export default function Config({
           </div>
         </div>
       </div>
+      )}
 
       {/* 🔔 SEÇÃO: NOTIFICAÇÕES PUSH */}
+      {activeConfigTab === 'perfil' && (
       <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mb-6 dark:bg-slate-900 dark:border-slate-800">
         <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-6 dark:text-slate-100">
           <Shield className="text-blue-600 w-5 h-5"/> Notificações e Lembretes Operacionais
@@ -830,7 +875,10 @@ export default function Config({
           </div>
         </div>
       </div>
+      )}
 
+      {activeConfigTab === 'sistema' && (
+      <>
       <div className="bg-emerald-50 p-5 sm:p-6 rounded-2xl shadow-sm border border-emerald-200 mt-6 mb-6 relative overflow-hidden dark:bg-emerald-950/20 dark:border-emerald-900/50">
         <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-bl-full pointer-events-none"></div>
         <h3 className="text-lg font-black text-emerald-800 flex items-center gap-2 mb-2 dark:text-emerald-400">
@@ -968,6 +1016,8 @@ export default function Config({
           </button>
         </div>
       </div>
+      </>
+      )}
       {/* Modal de Edição de Disciplina (Estilo Compacto Centralizado) */}
       {editingSubjectId && draftSubject && createPortal((
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[120] p-3 sm:p-6 overflow-y-auto fade-in">

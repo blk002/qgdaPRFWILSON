@@ -5,6 +5,8 @@ import {
   Calendar as CalendarIcon, 
   ChevronLeft, 
   ChevronRight, 
+  ChevronDown,
+  ChevronUp,
   CheckCircle, 
   Clock, 
   Trophy, 
@@ -45,9 +47,7 @@ export default function Calendario() {
     setCalendarDate, 
     subjects = {}, 
     cycle = [], 
-    setCycle,
     cycleSlotCounts = [],
-    setCycleSlotCounts,
     cycleScheduleType = 'weekly',
     cycleWeekStart = 'sunday',
     cycleCarryoverOffset = 0,
@@ -63,10 +63,8 @@ export default function Calendario() {
     subjectTimeGoal = {},
     calendarOverrides = {},
     calendarOverrideCounts = {},
-    setDayOverride,
     removeDayOverride,
     futureScheduleRules = [],
-    addFutureScheduleRule,
     updateSubject,
     executeSelectiveReset
   } = useStore();
@@ -86,6 +84,39 @@ export default function Calendario() {
   const [daySlots, setDaySlots] = useState([]);
   const [daySlotCounts, setDaySlotCounts] = useState([]);
   const [saveMode, setSaveMode] = useState('future'); // 'single' | 'future' | 'all'
+  const [initialDaySnapshot, setInitialDaySnapshot] = useState('');
+  const [highlightedSubjectId, setHighlightedSubjectId] = useState(null);
+  const [showSubjectsPanel, setShowSubjectsPanel] = useState(() => {
+    try {
+      const saved = localStorage.getItem('qg_cal_show_subjects');
+      return saved === null ? true : saved === 'true';
+    } catch {
+      return true;
+    }
+  });
+  const [autoSaveOnNavigate, setAutoSaveOnNavigate] = useState(() => {
+    try {
+      return localStorage.getItem('qg_cal_autosave_nav') === 'true';
+    } catch {
+      return false;
+    }
+  });
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('qg_cal_show_subjects', String(showSubjectsPanel));
+    } catch {
+      // ignore storage errors
+    }
+  }, [showSubjectsPanel]);
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('qg_cal_autosave_nav', String(autoSaveOnNavigate));
+    } catch {
+      // ignore storage errors
+    }
+  }, [autoSaveOnNavigate]);
 
   // Estado do Modal de Redefinição do Calendário
   const [showResetCalendarModal, setShowResetCalendarModal] = useState(false);
@@ -442,16 +473,28 @@ export default function Calendario() {
       weekIndex,
       isCustomized: hasCustomOverride || hasFutureRuleOnDay || hasDiffFromBase
     });
+    const normalizedInitialCounts = (currentDaySubs || []).map((_, idx) => Math.max(0, Math.floor(Number(currentDayCounts?.[idx]) || 0)));
     setDaySlots(currentDaySubs);
     setDaySlotCounts(currentDayCounts);
+    setInitialDaySnapshot(JSON.stringify({ slots: currentDaySubs || [], counts: normalizedInitialCounts }));
     setSaveMode('future'); // padrão: aplicar desta data para o futuro (sem alterar o passado)
   };
+
+  const currentDaySnapshot = useMemo(() => {
+    const normalizedCounts = (daySlots || []).map((_, idx) => Math.max(0, Math.floor(Number(daySlotCounts?.[idx]) || 0)));
+    return JSON.stringify({ slots: daySlots || [], counts: normalizedCounts });
+  }, [daySlots, daySlotCounts]);
+
+  const isDayDirty = Boolean(managingDay) && initialDaySnapshot !== '' && currentDaySnapshot !== initialDaySnapshot;
 
   // Navegação entre dias dentro do gerenciador (setas na tela e teclado ← →)
   const canGoPrevDay = Boolean(managingDay) && Math.round((managingDay.dateObj.getTime() - todayDateObj.getTime()) / (1000 * 60 * 60 * 24)) > 0;
 
   const navigateManagedDay = (delta) => {
     if (!managingDay) return;
+    if (autoSaveOnNavigate && isDayDirty) {
+      saveCurrentDayManager({ closeModal: false, silent: true });
+    }
     const d = managingDay.dateObj;
     const target = new Date(d.getFullYear(), d.getMonth(), d.getDate() + delta);
     if (target.getTime() < todayDateObj.getTime()) return;
@@ -484,22 +527,38 @@ export default function Calendario() {
     return () => window.removeEventListener('keydown', onKeyDown);
   }, [managingDay]);
 
-  const handleSaveDayManager = () => {
-    if (!managingDay) return;
+  const saveCurrentDayManager = ({ closeModal = true, silent = false } = {}) => {
+    if (!managingDay) return false;
+    const storeState = useStore.getState();
+    const {
+      calendarOverrides: freshOverrides,
+      calendarOverrideCounts: freshOverrideCounts,
+      futureScheduleRules: freshFutureRules,
+      cycle: freshCycle,
+      cycleSlotCounts: freshCycleSlotCounts,
+      cycleScheduleType: freshScheduleType,
+      setDayOverride: storeSetDayOverride,
+      addFutureScheduleRule: storeAddFutureScheduleRule,
+      setCycle: storeSetCycle,
+      setCycleSlotCounts: storeSetCycleSlotCounts,
+      removeDayOverride: storeRemoveDayOverride,
+      getLocalDateStr: storeGetLocalDateStr
+    } = storeState;
+
     const { dateKey, dayOfWeek, weekIndex } = managingDay;
     const updatedSlots = [...daySlots];
     const updatedCounts = updatedSlots.map((_, idx) => Math.max(0, Math.floor(Number(daySlotCounts?.[idx]) || 0)));
 
     if (saveMode === 'single') {
       // 1. Salva apenas nesta data específica (prioridade absoluta sobre regras e extensões)
-      if (setDayOverride) {
-        setDayOverride(dateKey, updatedSlots, updatedCounts);
-        toast.success(`Programação salva exclusivamente para ${dateKey}!`);
+      if (storeSetDayOverride) {
+        storeSetDayOverride(dateKey, updatedSlots, updatedCounts);
+        if (!silent) toast.success(`Programação salva exclusivamente para ${dateKey}!`);
       }
     } else if (saveMode === 'future') {
       // 2. Torna padrão a partir desta data para o FUTURO (preserva todos os dias anteriores/passado intactos!)
-      if (addFutureScheduleRule) {
-        addFutureScheduleRule({
+      if (storeAddFutureScheduleRule) {
+        storeAddFutureScheduleRule({
           fromDate: dateKey,
           dayOfWeek,
           cycleIndex: weekIndex,
@@ -508,8 +567,8 @@ export default function Calendario() {
         });
       }
       // Remove overrides avulsos desta data em diante neste mesmo dia da semana para que a regra futura prevaleça
-      const nextOverrides = { ...(calendarOverrides || {}) };
-      const nextOverrideCounts = { ...(calendarOverrideCounts || {}) };
+      const nextOverrides = { ...(freshOverrides || {}) };
+      const nextOverrideCounts = { ...(freshOverrideCounts || {}) };
       Object.keys(nextOverrides).forEach(dKey => {
         if (dKey >= dateKey) {
           const parts = dKey.split('-').map(Number);
@@ -522,40 +581,51 @@ export default function Calendario() {
           }
         }
       });
-      const todayStr = getLocalDateStr ? getLocalDateStr() : '';
+      const todayStr = storeGetLocalDateStr ? storeGetLocalDateStr() : '';
       useStore.setState({
         calendarOverrides: nextOverrides,
         calendarOverrideCounts: nextOverrideCounts,
         ...(dateKey === todayStr ? { cycleCarryoverOffset: 0, lastCarryoverCheckDate: todayStr } : {})
       });
-      toast.success(`Programação definida de ${dateKey} para o futuro! Os dias anteriores não foram alterados.`);
+      if (!silent) toast.success(`Programação definida de ${dateKey} para o futuro! Os dias anteriores não foram alterados.`);
     } else {
       // 3. Atualiza o ciclo semanal base para todas as semanas neste dia e limpa regras antigas conflitantes
-      if (setCycle) {
-        const totalDays = cycleScheduleType === 'weekly' ? 7 : Math.max((cycle || []).length, weekIndex + 1);
-        const newCycle = Array.from({ length: totalDays }, (_, i) => Array.isArray(cycle?.[i]) ? [...cycle[i]] : []);
-        const newCycleSlotCounts = Array.from({ length: totalDays }, (_, i) => Array.isArray(cycleSlotCounts?.[i]) ? [...cycleSlotCounts[i]] : []);
+      if (storeSetCycle) {
+        const totalDays = freshScheduleType === 'weekly' ? 7 : Math.max((freshCycle || []).length, weekIndex + 1);
+        const newCycle = Array.from({ length: totalDays }, (_, i) => Array.isArray(freshCycle?.[i]) ? [...freshCycle[i]] : []);
+        const newCycleSlotCounts = Array.from({ length: totalDays }, (_, i) => Array.isArray(freshCycleSlotCounts?.[i]) ? [...freshCycleSlotCounts[i]] : []);
         newCycle[weekIndex] = updatedSlots;
         newCycleSlotCounts[weekIndex] = updatedCounts;
-        setCycle(newCycle);
-        if (setCycleSlotCounts) setCycleSlotCounts(newCycleSlotCounts);
-        if (removeDayOverride) removeDayOverride(dateKey);
+        storeSetCycle(newCycle);
+        if (storeSetCycleSlotCounts) storeSetCycleSlotCounts(newCycleSlotCounts);
+        if (storeRemoveDayOverride) storeRemoveDayOverride(dateKey);
 
         // Remove regras futuras antigas que sobrescreviam este dia da semana
-        const cleanedRules = (futureScheduleRules || []).filter(
+        const cleanedRules = (freshFutureRules || []).filter(
           r => r && r.v === 2 && r.dayOfWeek !== dayOfWeek && r.cycleIndex !== weekIndex
         );
-        const todayStr = getLocalDateStr ? getLocalDateStr() : '';
+        const todayStr = storeGetLocalDateStr ? storeGetLocalDateStr() : '';
         useStore.setState({
           futureScheduleRules: cleanedRules,
           ...(dateKey === todayStr ? { cycleCarryoverOffset: 0, lastCarryoverCheckDate: todayStr } : {})
         });
 
-        toast.success(`Ciclo semanal base atualizado com sucesso!`);
+        if (!silent) toast.success(`Ciclo semanal base atualizado com sucesso!`);
       }
     }
 
-    setManagingDay(null);
+    setInitialDaySnapshot(JSON.stringify({ slots: updatedSlots, counts: updatedCounts }));
+    if (silent) {
+      toast.success(`Alterações de ${dateKey} salvas automaticamente`, { duration: 1800 });
+    }
+    if (closeModal) {
+      setManagingDay(null);
+    }
+    return true;
+  };
+
+  const handleSaveDayManager = () => {
+    saveCurrentDayManager({ closeModal: true, silent: false });
   };
 
   const handleResetDayToDefault = () => {
@@ -603,9 +673,43 @@ export default function Calendario() {
     <div className="flex flex-col items-stretch gap-5 w-full pb-10 fade-in">
       {/* Painel Lateral: Fim das Disciplinas & Transições */}
       <div className="w-full bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 sm:p-5 flex flex-col shrink-0 dark:bg-slate-900 dark:border-slate-800">
-        <h3 className="text-base md:text-lg font-bold text-slate-800 mb-3 flex items-center gap-2 border-b border-slate-100 pb-3 dark:text-slate-100 dark:border-slate-800">
-          <BookOpen className="text-blue-600 w-5 h-5" /> Fim das Disciplinas
-        </h3>
+        <div className={`flex flex-wrap items-center justify-between gap-2 ${showSubjectsPanel ? 'mb-3 border-b border-slate-100 pb-3 dark:border-slate-800' : ''}`}>
+          <div className="flex items-center gap-2 flex-wrap">
+            <h3 className="text-base md:text-lg font-bold text-slate-800 flex items-center gap-2 dark:text-slate-100">
+              <BookOpen className="text-blue-600 w-5 h-5" /> Fim das Disciplinas
+            </h3>
+            <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
+              ({subjectEstimates.length} {subjectEstimates.length === 1 ? 'disciplina' : 'disciplinas'}{highlightedSubjectId && subjects?.[highlightedSubjectId] ? ` • Filtrando: ${subjects[highlightedSubjectId].name}` : ''})
+            </span>
+          </div>
+          <div className="flex items-center gap-2">
+            {highlightedSubjectId && (
+              <button
+                type="button"
+                onClick={() => setHighlightedSubjectId(null)}
+                className="h-7 px-2.5 rounded-lg text-[11px] font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/80 flex items-center gap-1 transition-colors cursor-pointer"
+              >
+                <X className="w-3 h-3" /> Limpar destaque
+              </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowSubjectsPanel(prev => !prev)}
+              className="h-7 px-2.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-200 flex items-center gap-1 transition-colors cursor-pointer"
+            >
+              {showSubjectsPanel ? (
+                <>
+                  <ChevronUp className="w-3.5 h-3.5" /> Ocultar
+                </>
+              ) : (
+                <>
+                  <ChevronDown className="w-3.5 h-3.5" /> Mostrar
+                </>
+              )}
+            </button>
+          </div>
+        </div>
+        {showSubjectsPanel && (
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-3">
           {subjectEstimates.map(sub => {
             const totalClasses = (sub.topics || []).reduce((acc, t) => acc + (t.total || 0), 0);
@@ -618,7 +722,16 @@ export default function Calendario() {
             const displayDateStr = calFinish ? calFinish.dateStr : sub.dateStr;
 
             return (
-              <div key={sub.id} className="border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col gap-2 hover:border-blue-300 dark:hover:border-blue-900 transition-all bg-slate-50/70 dark:bg-slate-950/70 shadow-sm">
+              <div
+                key={sub.id}
+                onClick={() => setHighlightedSubjectId(prev => (prev === sub.id ? null : sub.id))}
+                title="Clique para destacar esta disciplina no calendário"
+                className={`border rounded-xl p-3 flex flex-col gap-2 transition-all bg-slate-50/70 dark:bg-slate-950/70 shadow-sm cursor-pointer ${
+                  highlightedSubjectId === sub.id
+                    ? 'border-blue-500 ring-2 ring-blue-500/30 dark:border-blue-400 dark:ring-blue-400/25'
+                    : 'border-slate-200 dark:border-slate-800 hover:border-blue-300 dark:hover:border-blue-900'
+                }`}
+              >
                 <div className="flex justify-between items-start gap-1">
                   <div className="flex items-center gap-1.5 flex-wrap">
                     <span className={`text-[10px] font-black px-2 py-0.5 rounded-md tracking-wider uppercase ${sub.color}`}>{sub.name}</span>
@@ -653,7 +766,10 @@ export default function Calendario() {
                     <div className="mt-1 pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between text-[11px]">
                       <button
                         type="button"
-                        onClick={() => handleOpenTransitionModal(sub)}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          handleOpenTransitionModal(sub);
+                        }}
                         className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-bold"
                       >
                         <Sparkles className="w-3 h-3 text-amber-500" /> Regra ao concluir...
@@ -668,6 +784,7 @@ export default function Calendario() {
             );
           })}
         </div>
+        )}
       </div>
 
       <div className="flex-1 min-w-0 w-full bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 sm:p-6 overflow-hidden dark:bg-slate-900 dark:border-slate-800">
@@ -729,6 +846,17 @@ export default function Calendario() {
             >
               <RotateCcw className="w-3.5 h-3.5 text-red-600 dark:text-red-400" /> Redefinir
             </button>
+            {highlightedSubjectId && subjects?.[highlightedSubjectId] && (
+              <button
+                type="button"
+                onClick={() => setHighlightedSubjectId(null)}
+                title="Remover filtro de destaque desta disciplina"
+                className="h-8 px-3 rounded-lg text-xs font-bold bg-blue-50 text-blue-700 border border-blue-200 hover:bg-blue-100 dark:bg-blue-950/60 dark:text-blue-300 dark:border-blue-800/80 flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
+              >
+                <span>Filtrando: {subjects[highlightedSubjectId].name}</span>
+                <X className="w-3.5 h-3.5" />
+              </button>
+            )}
           </div>
           <div className="flex gap-1.5 items-center">
             <button onClick={() => setCalendarDate(new Date())} className="h-8 px-3 bg-slate-50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg border border-slate-200 dark:bg-slate-950 dark:border-slate-800 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-center transition-colors" title="Voltar ao mês atual">Hoje</button>
@@ -808,7 +936,13 @@ export default function Calendario() {
                             <div
                               key={idx}
                               title={blockTooltip}
-                              className={`flex flex-col gap-0.5 min-w-0 text-[10px] sm:text-[11px] font-bold px-1.5 py-1 rounded-md leading-tight ${sub.color}`}
+                              className={`flex flex-col gap-0.5 min-w-0 text-[10px] sm:text-[11px] font-bold px-1.5 py-1 rounded-md leading-tight transition-opacity ${sub.color} ${
+                                highlightedSubjectId && sub.id !== highlightedSubjectId
+                                  ? 'opacity-20 grayscale-[40%]'
+                                  : highlightedSubjectId && sub.id === highlightedSubjectId
+                                    ? 'ring-2 ring-blue-500 dark:ring-blue-400 shadow-xs'
+                                    : ''
+                              }`}
                             >
                               <div className="flex items-center justify-between gap-0.5 min-w-0">
                                 <span className="truncate flex-1 min-w-0">
@@ -903,7 +1037,25 @@ export default function Calendario() {
                   <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
-              <p className="text-[11px] text-center text-slate-400 dark:text-slate-500 mb-1">Use as setas ← → do teclado para trocar de dia (alterações não salvas deste dia são descartadas)</p>
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5 px-1">
+                <label className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={autoSaveOnNavigate}
+                    onChange={(e) => setAutoSaveOnNavigate(e.target.checked)}
+                    className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                  />
+                  <span>Salvar automaticamente ao trocar de dia (← →)</span>
+                </label>
+                {isDayDirty && (
+                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80">
+                    Alterações não salvas
+                  </span>
+                )}
+              </div>
+              <p className="text-[11px] text-center text-slate-400 dark:text-slate-500 mb-1">
+                Use as setas ← → do teclado para trocar de dia {autoSaveOnNavigate ? '(alterações são salvas ao avançar/voltar)' : '(alterações não salvas deste dia são descartadas)'}
+              </p>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Ajuste os blocos deste dia e decida se a alteração se aplica apenas a esta data ou se torna o novo padrão para o futuro.
               </p>
