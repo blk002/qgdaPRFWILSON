@@ -443,7 +443,7 @@ export default function Dashboard() {
               </p>
               <button
                 type="button"
-                onClick={() => navigate('/revisoes')}
+                onClick={() => navigate('/estudos?tab=revisoes')}
                 className="shrink-0 h-8 px-3 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
               >
                 <span>{pendingReviewsCount > 0 ? 'Revisar agora' : 'Ver revisões'}</span>
@@ -503,7 +503,7 @@ export default function Dashboard() {
               </div>
               <button
                 type="button"
-                onClick={() => navigate('/ciclo')}
+                onClick={() => navigate('/estudos?tab=cronograma')}
                 className="shrink-0 h-8 px-3 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-900 dark:bg-slate-800 dark:hover:bg-slate-700 text-white border border-slate-700/50 flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
               >
                 <span>Ir para o Ciclo</span>
