@@ -563,36 +563,36 @@ export default function Calendario() {
   };
 
   return (
-    <div className="flex flex-col lg:flex-row items-start gap-4 md:gap-6 w-full pb-10 fade-in">
-      <div className="flex-1 w-full bg-white rounded-xl shadow-sm border border-slate-200 p-4 md:p-6 overflow-hidden dark:bg-slate-900 dark:border-slate-800">
+    <div className="flex flex-col lg:flex-row items-start gap-5 lg:gap-6 w-full pb-10 fade-in">
+      <div className="flex-1 min-w-0 w-full bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 sm:p-6 overflow-hidden dark:bg-slate-900 dark:border-slate-800">
         
         {/* Banner de Previsão de Término */}
-        <div className={`text-white p-4 md:p-5 rounded-xl shadow-md mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-colors ${(estimatedDate.isLate && !examDateNotSet) ? 'bg-red-600 animate-pulse border border-red-800' : 'bg-gradient-to-r from-blue-600 to-blue-800'}`}>
-          <div className="flex items-center gap-3">
+        <div className={`text-white p-4 sm:p-5 rounded-2xl shadow-md mb-6 flex flex-col md:flex-row items-start md:items-center justify-between gap-4 transition-colors ${(estimatedDate.isLate && !examDateNotSet) ? 'bg-gradient-to-r from-red-600 to-rose-700 border border-red-500/40' : 'bg-gradient-to-r from-blue-600 to-blue-800'}`}>
+          <div className="flex items-center gap-3 min-w-0">
             <div className="bg-white/20 p-2 rounded-full shrink-0 dark:bg-slate-900">
               <Trophy className="w-5 h-5 md:w-6 md:h-6 text-yellow-300" />
             </div>
-            <div>
-              <p className="text-blue-100 text-[10px] md:text-xs font-bold uppercase tracking-wider mb-0.5">Previsão de Fechamento do Edital</p>
+            <div className="min-w-0">
+              <p className="text-blue-100 text-[11px] font-bold uppercase tracking-wider mb-0.5">Previsão de Fechamento do Edital</p>
               <div className="flex-1 min-w-0">
-                <h4 className="text-xl md:text-2xl font-black text-white whitespace-nowrap overflow-visible">{estimatedDate.full}</h4>
+                <h4 className="text-lg sm:text-xl md:text-2xl font-black text-white leading-tight">{estimatedDate.full}</h4>
               </div>
             </div>
           </div>
           
-          <div className="flex flex-col items-end">
+          <div className="flex flex-col items-start md:items-end shrink-0">
             <div className="bg-black/20 px-3 py-1.5 rounded-lg text-xs md:text-sm text-white font-bold flex items-center gap-1.5">
               <Clock className="w-4 h-4"/> {examDateNotSet ? 'Prova: não definida' : `Prova: ${estimatedDate.examDateFormatted}`}
             </div>
             {examDateNotSet ? (
               <button
                 onClick={() => navigate('/config')}
-                className="text-xs font-black text-yellow-300 mt-2 uppercase text-right underline underline-offset-2 hover:text-yellow-200 cursor-pointer"
+                className="text-xs font-black text-yellow-300 mt-2 uppercase md:text-right underline underline-offset-2 hover:text-yellow-200 cursor-pointer"
               >
                 Defina a data da prova
               </button>
             ) : estimatedDate.isLate && (
-              <span className="text-xs font-black text-yellow-300 mt-2 uppercase text-right">
+              <span className="text-xs font-black text-yellow-300 mt-2 uppercase md:text-right">
                 Risco de Reprovação: Atrasado {estimatedDate.daysDiff} dias. Aumente seu ritmo!
               </span>
             )}
@@ -600,14 +600,14 @@ export default function Calendario() {
         </div>
 
         {/* Cabeçalho do Mês no Calendário */}
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4 sm:mb-6">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-5">
           <div className="flex items-center gap-2 flex-wrap">
-            <h2 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2 dark:text-slate-100">
+            <h2 className="text-lg sm:text-xl font-bold text-slate-800 flex items-center gap-2 dark:text-slate-100 mr-1">
               <CalendarIcon className="text-blue-600 w-5 h-5 sm:w-6 sm:h-6" /> {mesesNomes[month]} {year}
             </h2>
             <button
               onClick={handleFixCalendar}
-              className="ml-2 px-2.5 py-1 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1 shadow-sm hover:scale-105 transition-all cursor-pointer"
+              className="h-8 px-3 rounded-lg text-xs font-bold bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800 flex items-center gap-1.5 shadow-xs hover:bg-emerald-200/80 dark:hover:bg-emerald-900/70 transition-colors cursor-pointer"
               title="Fixar a grade semanal e remover quaisquer extensões ou regras que alteravam a programação"
             >
               <Pin className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> Grade Semanal Fixa
@@ -618,27 +618,27 @@ export default function Calendario() {
                 setResetMode('overrides');
                 setShowResetCalendarModal(true);
               }}
-              className="px-2.5 py-1 rounded-lg text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800/80 dark:hover:bg-red-900/60 flex items-center gap-1 shadow-sm hover:scale-105 transition-all cursor-pointer"
+              className="h-8 px-3 rounded-lg text-xs font-bold bg-red-50 text-red-700 border border-red-200 hover:bg-red-100 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800/80 dark:hover:bg-red-900/60 flex items-center gap-1.5 shadow-xs transition-colors cursor-pointer"
               title="Redefinir programação, edições manuais ou progresso das aulas no calendário"
             >
               <RotateCcw className="w-3.5 h-3.5 text-red-600 dark:text-red-400" /> Redefinir
             </button>
           </div>
-          <div className="flex gap-1 sm:gap-2 items-center">
-            <button onClick={() => setCalendarDate(new Date())} className="px-3 py-1.5 sm:py-2 bg-slate-50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full border border-slate-200 dark:bg-slate-950 dark:border-slate-800 cursor-pointer text-xs sm:text-sm font-bold text-slate-700 dark:text-slate-300" title="Voltar ao mês atual">Hoje</button>
-            <button onClick={() => setCalendarDate(new Date(year, month - 1, 1))} className="p-1.5 sm:p-2 bg-slate-50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full border border-slate-200 dark:bg-slate-950 dark:border-slate-800 cursor-pointer"><ChevronLeft className="w-4 h-4 sm:w-5 sm:h-5" /></button>
-            <button onClick={() => setCalendarDate(new Date(year, month + 1, 1))} className="p-1.5 sm:p-2 bg-slate-50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-full border border-slate-200 dark:bg-slate-950 dark:border-slate-800 cursor-pointer"><ChevronRight className="w-4 h-4 sm:w-5 sm:h-5" /></button>
+          <div className="flex gap-1.5 items-center">
+            <button onClick={() => setCalendarDate(new Date())} className="h-8 px-3 bg-slate-50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg border border-slate-200 dark:bg-slate-950 dark:border-slate-800 cursor-pointer text-xs font-bold text-slate-700 dark:text-slate-300 flex items-center justify-center transition-colors" title="Voltar ao mês atual">Hoje</button>
+            <button onClick={() => setCalendarDate(new Date(year, month - 1, 1))} className="h-8 w-8 bg-slate-50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg border border-slate-200 dark:bg-slate-950 dark:border-slate-800 cursor-pointer flex items-center justify-center transition-colors" title="Mês anterior"><ChevronLeft className="w-4 h-4" /></button>
+            <button onClick={() => setCalendarDate(new Date(year, month + 1, 1))} className="h-8 w-8 bg-slate-50 hover:bg-slate-100 dark:hover:bg-slate-800 rounded-lg border border-slate-200 dark:bg-slate-950 dark:border-slate-800 cursor-pointer flex items-center justify-center transition-colors" title="Próximo mês"><ChevronRight className="w-4 h-4" /></button>
           </div>
         </div>
         
         {/* Grade do Calendário */}
-        <div className="overflow-x-auto custom-scrollbar pb-2 -mx-2 px-2 sm:mx-0 sm:px-0">
-          <div className="min-w-[500px] sm:min-w-0">
-            <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
+        <div className="overflow-x-auto custom-scrollbar pb-2">
+          <div className="min-w-[560px] sm:min-w-0">
+            <div className="grid grid-cols-7 gap-1.5 sm:gap-2 mb-2">
               {diasSemana.map(dia => <div key={dia} className="text-center font-bold text-slate-400 text-xs sm:text-sm">{dia}</div>)}
             </div>
-            <div className="grid grid-cols-7 gap-1 sm:gap-2">
-              {blanks.map((_, i) => <div key={`blank-${i}`} className="min-h-[5.5rem] md:min-h-[7.5rem] bg-slate-50/50 rounded-md sm:rounded-lg dark:bg-slate-950"></div>)}
+            <div className="grid grid-cols-7 gap-1.5 sm:gap-2">
+              {blanks.map((_, i) => <div key={`blank-${i}`} className="min-h-[6rem] md:min-h-[8.25rem] bg-slate-50/50 rounded-lg dark:bg-slate-950/60"></div>)}
               {days.map(day => {
                 const cellDateObj = new Date(year, month, day);
                 const cellTime = cellDateObj.getTime();
@@ -648,10 +648,10 @@ export default function Calendario() {
                 const isPast = diffDays < 0;
 
                 let bgClass = isPast 
-                  ? "bg-slate-50 text-slate-400 dark:bg-slate-900/40 dark:text-slate-500 cursor-default" 
+                  ? "bg-slate-50/80 text-slate-400 border border-slate-200/40 dark:bg-slate-900/40 dark:border-slate-800/40 dark:text-slate-500 cursor-default" 
                   : isTodayReal 
                     ? "bg-blue-50 border-2 border-blue-500 shadow-sm text-blue-700 dark:bg-blue-900/30 dark:border-blue-500 dark:text-blue-300 cursor-pointer hover:ring-2 hover:ring-blue-400 hover:shadow-md" 
-                    : "bg-white border border-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 cursor-pointer hover:ring-2 hover:ring-blue-400 hover:shadow-md";
+                    : "bg-white border border-slate-200/80 hover:bg-slate-50 dark:hover:bg-slate-800/50 text-slate-700 dark:bg-slate-900 dark:border-slate-800 dark:text-slate-300 cursor-pointer hover:ring-2 hover:ring-blue-400 hover:shadow-md";
 
                 const cellDateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isOverridden = !isPast && Boolean(calendarOverrides && calendarOverrides[cellDateKey]);
@@ -673,24 +673,24 @@ export default function Calendario() {
                   <div 
                     key={day} 
                     onClick={() => !isPast && handleOpenDayManager(cellDateObj, cellDateKey)}
-                    className={`min-h-[5.5rem] md:min-h-[7.5rem] min-w-0 p-1 sm:p-1.5 rounded-md flex flex-col transition-all group ${bgClass}`}
+                    className={`min-h-[6rem] md:min-h-[8.25rem] min-w-0 p-1.5 sm:p-2 rounded-lg flex flex-col transition-all group ${bgClass}`}
                     title={isPast ? "Dia já concluído / passado" : "Clique para gerenciar matérias deste dia"}
                   >
-                    <div className="flex justify-between items-start mb-1 gap-0.5">
+                    <div className="flex justify-between items-start mb-1.5 gap-0.5">
                       <div className="flex items-center gap-1">
-                        <span className={`font-bold text-xs sm:text-sm px-1 transition-colors ${!isPast ? 'group-hover:text-blue-500' : ''}`}>{day}</span>
+                        <span className={`font-bold text-xs sm:text-sm px-0.5 transition-colors ${!isPast ? 'group-hover:text-blue-500' : ''}`}>{day}</span>
                         {isOverridden && (
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Dia com personalização manual avulsa" />
                         )}
                       </div>
                       <div className="flex items-center gap-1">
-                        {isTodayReal && <span className="text-[9px] sm:text-[10px] font-black bg-blue-500 text-white px-1 sm:px-1.5 py-0.5 rounded-sm">HOJE</span>}
+                        {isTodayReal && <span className="text-[9px] sm:text-[10px] font-black bg-blue-500 text-white px-1.5 py-0.5 rounded-sm">HOJE</span>}
                         {!isPast && <Settings className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />}
                       </div>
                     </div>
                     
                     {dayItemsToRender.length > 0 && (
-                      <div className="flex flex-col gap-0.5 sm:gap-1 pb-1 mt-auto min-w-0">
+                      <div className="flex flex-col gap-1 pb-0.5 mt-auto min-w-0">
                         {dayItemsToRender.map((item, idx) => {
                           const sub = subjects[item.id];
                           if (!sub) return null;
@@ -702,7 +702,7 @@ export default function Calendario() {
                             <div
                               key={idx}
                               title={blockTooltip}
-                              className={`flex flex-col min-w-0 text-[10px] sm:text-[12px] font-bold px-1 sm:px-1.5 py-0.5 rounded-sm leading-tight mb-0.5 ${sub.color}`}
+                              className={`flex flex-col gap-0.5 min-w-0 text-[10px] sm:text-[11px] font-bold px-1.5 py-1 rounded-md leading-tight ${sub.color}`}
                             >
                               <div className="flex items-center justify-between gap-0.5 min-w-0">
                                 <span className="truncate flex-1 min-w-0">
@@ -715,7 +715,7 @@ export default function Calendario() {
                                 </span>
                                 {item.count >= 1 && (
                                   <span
-                                    className="ml-1 px-1 py-0.2 rounded text-[8px] sm:text-[9px] font-black bg-black/25 dark:bg-white/20 shrink-0"
+                                    className="ml-1 px-1 py-0.2 rounded text-[9px] font-black bg-black/25 dark:bg-white/20 shrink-0"
                                     title={`${item.count} ${item.count === 1 ? 'aula prevista' : 'aulas previstas'} neste bloco`}
                                   >
                                     {item.count}a
@@ -723,7 +723,7 @@ export default function Calendario() {
                                 )}
                                 {item.isLast && (
                                   <span title={`Conclusão prevista de ${sub.name}!`} className="flex items-center ml-0.5 shrink-0">
-                                    <svg className="w-2.5 h-2.5 sm:w-3.5 sm:h-3.5 animate-bounce" viewBox="0 0 24 24" fill="none">
+                                    <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" viewBox="0 0 24 24" fill="none">
                                       <path d="M12 2L22 20H2L12 2Z" fill="white" stroke="#E81C23" strokeWidth="3" strokeLinejoin="round"/>
                                       <path d="M12 8V14" stroke="#1A1A1A" strokeWidth="2.5" strokeLinecap="round"/>
                                       <circle cx="12" cy="17.5" r="1.5" fill="#1A1A1A"/>
@@ -736,7 +736,7 @@ export default function Calendario() {
                                   {lessonsList.map((les, lIdx) => (
                                     <span
                                       key={lIdx}
-                                      className="text-[9px] sm:text-[10px] font-medium leading-tight truncate opacity-95"
+                                      className="text-[10px] font-medium leading-tight truncate opacity-95"
                                       title={les.topicName && !les.name.includes(les.topicName) ? `${les.topicName} • ${les.name}${les.duration ? ` (${les.duration})` : ''}` : `${les.name}${les.duration ? ` (${les.duration})` : ''}`}
                                     >
                                       • {les.name}
@@ -758,11 +758,11 @@ export default function Calendario() {
       </div>
 
       {/* Painel Lateral: Fim das Disciplinas & Transições */}
-      <div className="w-full lg:w-80 bg-white rounded-xl shadow-sm border border-slate-200 p-4 md:p-6 flex flex-col shrink-0 mb-8 lg:mb-0 dark:bg-slate-900 dark:border-slate-800">
+      <div className="w-full lg:w-72 xl:w-80 bg-white rounded-2xl shadow-sm border border-slate-200/80 p-4 sm:p-5 flex flex-col shrink-0 dark:bg-slate-900 dark:border-slate-800">
         <h3 className="text-base md:text-lg font-bold text-slate-800 mb-4 flex items-center gap-2 border-b border-slate-100 pb-3 dark:text-slate-100 dark:border-slate-800">
           <BookOpen className="text-blue-600 w-5 h-5" /> Fim das Disciplinas
         </h3>
-        <div className="flex flex-col gap-3 pr-2">
+        <div className="flex flex-col gap-3">
           {subjectEstimates.map(sub => {
             const totalClasses = (sub.topics || []).reduce((acc, t) => acc + (t.total || 0), 0);
             const completedClasses = Math.max(0, totalClasses - sub.remaining);

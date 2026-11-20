@@ -213,7 +213,7 @@ export default function Revisoes() {
   return (
     <div className="fade-in w-full pb-10">
       
-      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center dark:bg-slate-900 dark:border-slate-800">
+      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mb-6 flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center dark:bg-slate-900 dark:border-slate-800">
         <div className="flex items-center gap-4">
           <div className="bg-red-100 p-3 rounded-full shrink-0"><BrainCircuit className="text-red-600 w-6 h-6 sm:w-8 sm:h-8" /></div>
           <div>

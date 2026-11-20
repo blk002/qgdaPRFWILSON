@@ -216,13 +216,13 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
 
   return createPortal(
     <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-[150] p-3 sm:p-6 overflow-y-auto fade-in">
-      <div className="bg-[#0f172a] rounded-2xl shadow-2xl max-w-2xl w-full border border-red-900/60 relative overflow-hidden flex flex-col h-[90vh] max-h-[90vh] my-auto">
+      <div className="bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full border border-red-900/60 relative overflow-hidden flex flex-col h-[90vh] max-h-[90vh] my-auto">
         
         {/* Barra de Perigo no Topo */}
-        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-red-600 via-amber-500 to-red-600 z-10 animate-pulse"></div>
+        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-red-600 via-amber-500 to-red-600 z-10"></div>
 
         {/* Cabeçalho */}
-        <div className="flex items-center justify-between p-6 pb-4 border-b border-slate-800 shrink-0 bg-gradient-to-r from-[#0f172a] via-[#1e1424] to-[#0f172a]">
+        <div className="flex items-center justify-between p-6 pb-4 border-b border-slate-800 shrink-0 bg-gradient-to-r from-slate-900 via-[#1e1424] to-slate-900">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-red-950/80 border border-red-700/60 flex items-center justify-center shadow-lg shadow-red-900/30">
               <ShieldAlert className="w-5 h-5 text-red-400" />
@@ -364,7 +364,7 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
             /* Tela de Confirmação de Segurança */
             <div className="space-y-5 py-2">
               <div className="bg-red-950/40 border border-red-800/60 rounded-xl p-5 text-center space-y-3">
-                <div className="w-14 h-14 rounded-full bg-red-900/40 border border-red-600/50 flex items-center justify-center mx-auto text-red-400 animate-pulse">
+                <div className="w-14 h-14 rounded-full bg-red-900/40 border border-red-600/50 flex items-center justify-center mx-auto text-red-400">
                   <AlertTriangle className="w-7 h-7" />
                 </div>
                 <h4 className="text-base font-black text-white uppercase tracking-tight">
@@ -408,7 +408,7 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
                     value={confirmText}
                     onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
                     placeholder="DIGITE RESET"
-                    className="w-full bg-[#020617] border border-red-800 focus:border-red-500 rounded-xl px-4 py-3 font-mono font-black text-sm text-center text-red-400 outline-none uppercase tracking-widest"
+                    className="w-full bg-slate-950 border border-red-800 focus:border-red-500 rounded-xl px-4 py-3 font-mono font-black text-sm text-center text-red-400 outline-none uppercase tracking-widest"
                   />
                 </div>
               )}
@@ -431,7 +431,7 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
         </div>
 
         {/* Rodapé Fixo com Ações */}
-        <div className="p-6 pt-3 border-t border-slate-800 bg-[#0f172a] shrink-0 flex flex-col gap-2.5">
+        <div className="p-6 pt-3 border-t border-slate-800 bg-slate-900 shrink-0 flex flex-col gap-2.5">
           {!confirmStep ? (
             <div className="flex gap-3">
               <button

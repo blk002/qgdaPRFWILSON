@@ -470,7 +470,7 @@ export default function App() {
 
       {/* MENU LATERAL ESQUERDO (DESKTOP) */}
       <aside className={`hidden md:flex flex-col fixed inset-y-0 left-0 w-60 z-50 border-r transition-colors ${
-        isDarkMode ? 'bg-slate-900/95 border-slate-800/80' : 'bg-white/95 border-slate-200/80'
+        isDarkMode ? 'bg-slate-900/95 border-slate-800' : 'bg-white/95 border-slate-200/80'
       } backdrop-blur-xl`}>
         {/* Logo / Topo */}
         <div className="px-4 py-4 border-b border-slate-200/60 dark:border-slate-800/80 flex items-center justify-between">
@@ -511,7 +511,7 @@ export default function App() {
         </div>
 
         {/* Links de Navegação Vertical */}
-        <nav className="flex-1 overflow-y-auto custom-scrollbar px-3 py-3 space-y-1">
+        <nav className="flex-1 overflow-y-auto custom-scrollbar px-3 py-3.5 space-y-1">
           {tabs.map(tab => (
             <NavLink
               key={tab.id}
@@ -586,9 +586,9 @@ export default function App() {
       </aside>
 
       {/* HEADER COMPACTO (APENAS MOBILE) */}
-      <header className="md:hidden sticky top-2 z-50 mx-auto w-full px-3 pt-1">
-        <div className={`glass-card rounded-2xl ${isDarkMode ? 'bg-slate-900/90 border-slate-800/80 shadow-2xl' : 'bg-white/80 border-slate-200/50 shadow-lg'} overflow-hidden`}>
-          <div className="px-3.5 py-2.5 flex justify-between items-center">
+      <header className="md:hidden sticky top-2 z-50 mx-auto w-full px-4 pt-2">
+        <div className={`glass-card rounded-2xl ${isDarkMode ? 'bg-slate-900/90 border-slate-800 shadow-2xl' : 'bg-white/90 border-slate-200/80 shadow-lg'} overflow-hidden`}>
+          <div className="px-3.5 py-2.5 flex justify-between items-center gap-2">
             <Link to="/" className="flex items-center gap-2.5">
               <div className="p-1.5 bg-blue-600/10 dark:bg-blue-500/15 rounded-xl border border-blue-500/20">
                 <Award className="text-blue-600 dark:text-blue-400 w-5 h-5" />
@@ -596,7 +596,7 @@ export default function App() {
               <h1 className="text-sm font-black tracking-wider text-slate-800 dark:text-white uppercase leading-none">QG DA PRF</h1>
             </Link>
 
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={async () => {
@@ -616,19 +616,19 @@ export default function App() {
                   }
                 }}
                 title="Clique para forçar atualização e limpar cache"
-                className="font-mono text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 hover:border-blue-400 hover:text-blue-500 flex items-center gap-1 cursor-pointer"
+                className="h-8 font-mono text-[10px] font-bold text-slate-500 dark:text-slate-400 bg-slate-100 dark:bg-slate-800 px-2 rounded-xl border border-slate-200 dark:border-slate-700 hover:border-blue-400 hover:text-blue-500 flex items-center gap-1 cursor-pointer"
               >
                 <span>{APP_VERSION}</span>
                 <RefreshCw className="w-2.5 h-2.5 opacity-60" />
               </button>
-              <div className="flex items-center gap-1 bg-yellow-500/10 dark:bg-yellow-500/15 px-2.5 py-1 rounded-full border border-yellow-500/20">
+              <div className="h-8 flex items-center gap-1 bg-yellow-500/10 dark:bg-yellow-500/15 px-2.5 rounded-xl border border-yellow-500/20">
                 <Coins className="text-yellow-600 dark:text-yellow-400 w-3.5 h-3.5" />
                 <span className="font-black text-xs text-yellow-600 dark:text-yellow-400">{coins}</span>
               </div>
-              <button onClick={() => setIsDarkMode(!isDarkMode)} className="p-1.5 bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white">
+              <button onClick={() => setIsDarkMode(!isDarkMode)} className="h-8 w-8 flex items-center justify-center bg-slate-100 dark:bg-slate-800 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-white cursor-pointer">
                 {isDarkMode ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
               </button>
-              <button onClick={signOut} className="p-1.5 bg-red-600/10 text-red-500 rounded-xl border border-red-500/10">
+              <button onClick={signOut} className="h-8 w-8 flex items-center justify-center bg-red-600/10 text-red-500 rounded-xl border border-red-500/20 cursor-pointer">
                 <LogOut className="w-3.5 h-3.5" />
               </button>
             </div>
@@ -662,7 +662,7 @@ export default function App() {
 
       {/* ÁREA DE CONTEÚDO PRINCIPAL */}
       <div className="flex-1 md:pl-60 min-w-0 w-full">
-        <main className="w-full max-w-7xl mx-auto px-4 sm:px-6 py-4 sm:py-5">
+        <main className="w-full max-w-[1480px] mx-auto px-4 sm:px-6 lg:px-8 py-5 sm:py-6 pb-28 sm:pb-24">
           <AnimatePresence mode="wait">
             <motion.div
               key={location.pathname}

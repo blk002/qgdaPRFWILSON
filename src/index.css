@@ -69,11 +69,11 @@
 
 /* Glassmorphism Styles */
 .glass-card {
-  @apply bg-white/70 dark:bg-slate-900/80 backdrop-blur-xl border border-slate-200/50 dark:border-slate-800/80 shadow-lg shadow-slate-100/50 dark:shadow-2xl dark:shadow-black/50 transition-all duration-300;
+  @apply bg-white/90 dark:bg-slate-900/90 backdrop-blur-xl border border-slate-200/80 dark:border-slate-800 shadow-sm dark:shadow-xl dark:shadow-black/30 transition-all duration-200;
 }
 
 .glass-card-hover {
-  @apply hover:bg-white/80 dark:hover:bg-slate-900/95 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-xl hover:-translate-y-0.5;
+  @apply hover:bg-white dark:hover:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-md hover:-translate-y-0.5;
 }
 
 /* Custom Tactical Scrollbar */

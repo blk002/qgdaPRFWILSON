@@ -145,15 +145,12 @@ export default function TacticalCountdownBanner() {
               animate={{ opacity: 1, y: 0, scale: 1 }}
               exit={{ opacity: 0, y: 20, scale: 0.95 }}
               transition={{ duration: 0.2 }}
-              className="w-[320px] sm:w-[350px] overflow-hidden rounded-2xl border border-blue-500/30 bg-slate-900/95 dark:bg-[#121417]/95 shadow-[0_10px_35px_rgba(0,0,0,0.7)] backdrop-blur-xl"
+              className="w-[320px] sm:w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-900/95 shadow-[0_10px_35px_rgba(0,0,0,0.65)] backdrop-blur-xl"
             >
               {/* Barra de Título */}
               <div className="px-3.5 py-2 flex items-center justify-between border-b border-slate-800 bg-slate-950/60">
                 <div className="flex items-center gap-2 min-w-0">
-                  <span className="relative flex h-2 w-2 shrink-0">
-                    <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                    <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-                  </span>
+                  <span className="inline-flex rounded-full h-2 w-2 bg-emerald-500 shrink-0" />
                   <span className="text-[11px] font-black tracking-wider uppercase text-blue-400 flex items-center gap-1.5 truncate">
                     <Target className="w-3 h-3 text-blue-400 shrink-0" />
                     <span className="truncate">{config.title}</span>
@@ -256,13 +253,10 @@ export default function TacticalCountdownBanner() {
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.2 }}
               onClick={toggleCollapsed}
-              className="flex items-center gap-2 bg-slate-900/95 dark:bg-[#121417]/95 border border-blue-500/35 hover:border-blue-400 text-white px-3 py-2 rounded-2xl shadow-2xl backdrop-blur-xl cursor-pointer transition-all group"
+              className="flex items-center gap-2 bg-slate-900/95 border border-slate-700/80 hover:border-blue-400 text-white px-3 py-2 rounded-2xl shadow-2xl backdrop-blur-xl cursor-pointer transition-all group max-w-[calc(100vw-2rem)]"
               title="Clique para expandir o contador tático"
             >
-              <span className="relative flex h-2 w-2 shrink-0">
-                <span className="animate-ping absolute inline-flex h-full w-full rounded-full bg-emerald-400 opacity-75" />
-                <span className="relative inline-flex rounded-full h-2 w-2 bg-emerald-500" />
-              </span>
+              <span className="inline-flex rounded-full h-2 w-2 bg-emerald-500 shrink-0" />
 
               <div className="flex items-center gap-1.5 font-mono text-xs">
                 <span className="text-blue-400 font-sans font-black text-[10px] uppercase">PRF:</span>

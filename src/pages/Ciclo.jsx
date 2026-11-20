@@ -280,7 +280,7 @@ export default function Ciclo() {
     <div className="fade-in w-full pb-10">
       
       
-      <div className="mb-8">
+      <div className="mb-6">
         <div className="flex items-center gap-3 mb-4">
           <Target className="text-blue-600 w-7 h-7" />
           <h2 className="text-2xl font-black text-slate-800 tracking-tight dark:text-slate-100">Conversor de Edital (Teoria ➔ Questões)</h2>
@@ -338,7 +338,7 @@ export default function Ciclo() {
       </div>
 
       {completedToday.length === todayTotalSlots && completedToday.length > 0 && (
-        <div className="bg-emerald-500 p-5 md:p-6 rounded-xl shadow-md mb-8 flex flex-col md:flex-row items-center justify-between gap-5 text-white fade-in border border-emerald-600">
+        <div className="bg-emerald-500 p-5 md:p-6 rounded-2xl shadow-md mb-6 flex flex-col md:flex-row items-center justify-between gap-5 text-white fade-in border border-emerald-600">
           <div className="text-center md:text-left flex items-center gap-4">
             <div className="bg-white/20 p-3 rounded-full dark:bg-slate-900"><Trophy className="text-yellow-300 w-8 h-8" /></div>
             <div>
@@ -357,18 +357,18 @@ export default function Ciclo() {
         </div>
       )}
 
-      <div className="bg-slate-900 p-4 rounded-xl shadow-sm border border-slate-800 mb-8 overflow-hidden">
-        <div className="flex justify-between items-center mb-3 border-b border-slate-800 pb-2">
-          <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
+      <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 mb-6 overflow-hidden">
+        <div className="flex flex-wrap justify-between items-center gap-2 mb-3 border-b border-slate-100 dark:border-slate-800 pb-2.5">
+          <h3 className="text-xs font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
             <Flame className="w-4 h-4 text-orange-500" /> Progresso de Execução (Blocos de Hoje)
           </h3>
-          <div className="bg-blue-500/20 text-blue-300 border border-blue-500/30 px-3 py-1 rounded-full text-[10px] font-black uppercase flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-400 animate-pulse"></span>
+          <div className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/20 dark:text-blue-300 border dark:border-blue-500/30 px-3 py-1 rounded-full text-[11px] font-black uppercase flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 dark:bg-blue-400"></span>
             Queimar Teoria: {completedToday.length} / {todayTotalSlots} Slots
           </div>
         </div>
         
-        <div className="flex gap-4 overflow-x-auto custom-scrollbar pb-4 pt-2 snap-x">
+        <div className="flex gap-4 overflow-x-auto custom-scrollbar pb-3 pt-2 snap-x">
           {Object.values(subjects).map(sub => {
             const progress = getSubjectProgress(sub.id);
             const radius = 34;
@@ -377,7 +377,7 @@ export default function Ciclo() {
             const isDone = progress === 100;
 
             return (
-              <div key={sub.id} className={`min-w-[110px] sm:min-w-[120px] shrink-0 snap-start rounded-xl p-3 flex flex-col items-center justify-center gap-3 relative overflow-hidden transition-all shadow-sm border ${isDone ? 'bg-emerald-900/20 border-emerald-800/50 hover:border-emerald-600' : 'bg-slate-800 border-slate-700 hover:border-slate-500'}`}>
+              <div key={sub.id} className={`min-w-[115px] sm:min-w-[125px] shrink-0 snap-start rounded-xl p-3 flex flex-col items-center justify-center gap-2.5 relative overflow-hidden transition-all shadow-xs border ${isDone ? 'bg-emerald-50 border-emerald-200 hover:border-emerald-400 dark:bg-emerald-900/20 dark:border-emerald-800/50 dark:hover:border-emerald-600' : 'bg-slate-50 border-slate-200 hover:border-slate-300 dark:bg-slate-800/80 dark:border-slate-700/80 dark:hover:border-slate-500'}`}>
                 
                 {isDone && <div className="absolute inset-0 bg-gradient-to-t from-emerald-500/10 to-transparent pointer-events-none"></div>}
 
@@ -393,7 +393,7 @@ export default function Ciclo() {
                         <feComposite in="SourceGraphic" in2="blur" operator="over" />
                       </filter>
                     </defs>
-                    <circle cx="50" cy="50" r={radius} stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-100 dark:text-slate-800" />
+                    <circle cx="50" cy="50" r={radius} stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-200 dark:text-slate-700" />
                     <circle 
                       cx="50" cy="50" r={radius} 
                       stroke={`url(#grad-cycle-${sub.id})`} 
@@ -405,12 +405,12 @@ export default function Ciclo() {
                     />
                   </svg>
                   <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className={`text-[11px] sm:text-xs font-black ${isDone ? 'text-emerald-400' : 'text-white'}`}>{progress}%</span>
+                    <span className={`text-xs font-black ${isDone ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-white'}`}>{progress}%</span>
                   </div>
                 </div>
 
                 <div className="w-full text-center z-10">
-                  <span className="text-[9px] font-bold text-slate-300 uppercase truncate block px-1" title={sub.name}>{sub.name}</span>
+                  <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 uppercase truncate block px-1" title={sub.name}>{sub.name}</span>
                 </div>
                 
               </div>
@@ -488,7 +488,7 @@ export default function Ciclo() {
       </div>
 
       {/* Barra de atalhos rápidos para todos os dias do ciclo */}
-      <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar-x pb-2 mb-4 -mx-2 px-2 sm:mx-0 sm:px-0">
+      <div className="flex items-center gap-2 overflow-x-auto custom-scrollbar-x pb-2 mb-4">
         {shownDays.map(({ dayIndex, dateInfo }) => {
           const isToday = dateInfo.isToday;
           const isPast = dateInfo.isPast;
@@ -507,7 +507,7 @@ export default function Ciclo() {
             >
               <span>{dateInfo.shortName || `D${dayIndex + 1}`}</span>
               <span className={`text-[10px] ${isToday ? 'text-blue-100 font-black' : 'opacity-70'}`}>{dateInfo.dateStr}</span>
-              {isToday && <span className="w-1.5 h-1.5 rounded-full bg-white animate-pulse"></span>}
+              {isToday && <span className="w-1.5 h-1.5 rounded-full bg-white"></span>}
             </button>
           );
         })}
@@ -516,7 +516,7 @@ export default function Ciclo() {
       <div 
         ref={scrollContainerRef}
         id="cycle-scroll-container" 
-        className="overflow-x-auto pt-2 pb-5 custom-scrollbar-x -mx-4 px-4 sm:mx-0 sm:px-0"
+        className="overflow-x-auto pt-5 pb-5 custom-scrollbar-x"
       >
         <div className="flex gap-2.5 sm:gap-4 items-stretch w-full min-w-max">
           {(() => {

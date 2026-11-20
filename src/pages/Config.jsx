@@ -127,7 +127,7 @@ export default function Config({
   return (
     <div className="fade-in w-full pb-10">
       
-      <div className="bg-slate-900 p-5 sm:p-6 rounded-xl shadow-lg border border-slate-800 mb-6 relative overflow-hidden text-white">
+      <div className="bg-slate-900 p-5 sm:p-6 rounded-2xl shadow-lg border border-slate-800 mb-6 relative overflow-hidden text-white">
         <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-bl-full pointer-events-none"></div>
         <h3 className="text-lg font-black text-white flex items-center gap-2 mb-2">
           <Target className="text-blue-400 w-5 h-5"/> Auditoria do Ciclo (Curva ABC)
@@ -195,7 +195,7 @@ export default function Config({
         )}
       </div>
 
-      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 border-l-4 border-l-blue-500 dark:bg-slate-900 dark:border-slate-800">
+      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mb-6 border-l-4 border-l-blue-500 dark:bg-slate-900 dark:border-slate-800">
         <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-2 dark:text-slate-100">
           <Clock className="text-blue-600 w-5 h-5"/> Data Alvo da Prova
         </h3>
@@ -210,7 +210,7 @@ export default function Config({
         </div>
       </div>
 
-      <div className="bg-white p-4 sm:p-5 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 dark:bg-slate-900 dark:border-slate-800">
+      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 dark:bg-slate-900 dark:border-slate-800">
         <div>
           <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 dark:text-slate-100">
             <Settings className="text-slate-600 w-5 h-5 dark:text-slate-300"/> Minhas Disciplinas
@@ -386,7 +386,7 @@ export default function Config({
       </div>
 
       {/* ⚡ SEÇÃO: ACELERAÇÃO DE VÍDEO-AULAS POR DISCIPLINA */}
-      <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 mt-8 mb-6 border-l-4 border-l-yellow-500 dark:bg-slate-900 dark:border-slate-800">
+      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mt-6 mb-6 border-l-4 border-l-yellow-500 dark:bg-slate-900 dark:border-slate-800">
         <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
           <div>
             <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 dark:text-slate-100">
@@ -581,7 +581,7 @@ export default function Config({
       </div>
 
       {/* 👤 SEÇÃO: IDENTIDADE E PREFERÊNCIAS */}
-      <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 dark:bg-slate-900 dark:border-slate-800">
+      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mb-6 dark:bg-slate-900 dark:border-slate-800">
         <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-6 dark:text-slate-100">
           <User className="text-blue-600 w-5 h-5"/> Identidade e Preferências
         </h3>
@@ -657,7 +657,7 @@ export default function Config({
       </div>
 
       {/* 🎯 SEÇÃO: METAS DE ESTUDO DIÁRIAS */}
-      <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 dark:bg-slate-900 dark:border-slate-800">
+      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mb-6 dark:bg-slate-900 dark:border-slate-800">
         <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-6 dark:text-slate-100">
           <Clock className="text-blue-600 w-5 h-5"/> Metas de Estudo Operacionais
         </h3>
@@ -722,7 +722,7 @@ export default function Config({
       </div>
 
       {/* 🔔 SEÇÃO: NOTIFICAÇÕES PUSH */}
-      <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 dark:bg-slate-900 dark:border-slate-800">
+      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mb-6 dark:bg-slate-900 dark:border-slate-800">
         <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-6 dark:text-slate-100">
           <Shield className="text-blue-600 w-5 h-5"/> Notificações e Lembretes Operacionais
         </h3>
@@ -831,7 +831,7 @@ export default function Config({
         </div>
       </div>
 
-      <div className="bg-emerald-50 p-5 sm:p-6 rounded-xl shadow-sm border border-emerald-200 mt-8 mb-6 relative overflow-hidden dark:bg-emerald-950/20 dark:border-emerald-900/50">
+      <div className="bg-emerald-50 p-5 sm:p-6 rounded-2xl shadow-sm border border-emerald-200 mt-6 mb-6 relative overflow-hidden dark:bg-emerald-950/20 dark:border-emerald-900/50">
         <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-bl-full pointer-events-none"></div>
         <h3 className="text-lg font-black text-emerald-800 flex items-center gap-2 mb-2 dark:text-emerald-400">
           <Save className="text-emerald-600 w-5 h-5"/> Centro de Backup e Segurança
@@ -912,7 +912,7 @@ export default function Config({
       </div>
 
       {/* Central de Versão e Atualizações */}
-      <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 mt-4 mb-2 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+      <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <div className="flex items-center gap-2 mb-1">
             <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
@@ -935,7 +935,7 @@ export default function Config({
         </button>
       </div>
 
-      <div className="bg-red-50 p-5 sm:p-6 rounded-xl shadow-sm border border-red-200 mt-4 mb-6 relative overflow-hidden dark:bg-red-950/20 dark:border-red-900/50">
+      <div className="bg-red-50 p-5 sm:p-6 rounded-2xl shadow-sm border border-red-200 mb-6 relative overflow-hidden dark:bg-red-950/20 dark:border-red-900/50">
         <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-bl-full pointer-events-none"></div>
         <h3 className="text-lg font-black text-red-800 flex items-center gap-2 mb-2 dark:text-red-400">
           <AlertTriangle className="text-red-600 w-5 h-5"/> Zona de Perigo (Reset & Purga de Dados)
@@ -971,7 +971,7 @@ export default function Config({
       {/* Modal de Edição de Disciplina (Estilo Compacto Centralizado) */}
       {editingSubjectId && draftSubject && createPortal((
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[120] p-3 sm:p-6 overflow-y-auto fade-in">
-          <div className="bg-[#0f172a] rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-800 relative overflow-hidden flex flex-col h-[90vh] max-h-[90vh] my-auto">
+          <div className="bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-800 relative overflow-hidden flex flex-col h-[90vh] max-h-[90vh] my-auto">
             
             {/* Barra de Progresso Topo */}
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-teal-400 to-blue-500 opacity-80 z-10"></div>
@@ -1007,7 +1007,7 @@ export default function Config({
                   type="text" 
                   value={draftSubject.name}
                   onChange={(e) => setDraftSubject(prev => ({ ...prev, name: e.target.value.toUpperCase() }))}
-                  className="w-full bg-[#020617] border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600"
                   placeholder="EX: PORTUGUÊS..."
                 />
               </div>
@@ -1016,7 +1016,7 @@ export default function Config({
                 <select 
                   value={draftSubject.block}
                   onChange={(e) => setDraftSubject(prev => ({ ...prev, block: e.target.value }))}
-                  className="w-full bg-[#020617] border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all appearance-none cursor-pointer"
+                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all appearance-none cursor-pointer"
                 >
                   <option value="B1">Bloco I (Básicas)</option>
                   <option value="B2">Bloco II (Trânsito)</option>
@@ -1049,7 +1049,7 @@ export default function Config({
                       title={c.label}
                       className={`h-9 rounded-lg transition-all relative flex items-center justify-center cursor-pointer ${
                         isSelected 
-                          ? 'ring-2 ring-white ring-offset-2 ring-offset-[#0f172a] shadow-lg scale-105 z-10' 
+                          ? 'ring-2 ring-white ring-offset-2 ring-offset-slate-900 shadow-lg scale-105 z-10' 
                           : 'hover:scale-105 opacity-85 hover:opacity-100'
                       }`}
                     >
@@ -1101,7 +1101,7 @@ export default function Config({
               {(() => {
                 const stats = getSubjectVideoStats(draftSubject);
                 return (
-                  <div className="grid grid-cols-3 gap-2 bg-[#020617] p-2.5 rounded-lg border border-slate-800/80 text-center">
+                  <div className="grid grid-cols-3 gap-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800/80 text-center">
                     <div>
                       <span className="text-[8px] font-black text-slate-500 uppercase block">Sem Aceleração</span>
                       <span className="text-xs font-black text-slate-300">{stats.totalFriendly}</span>
@@ -1163,7 +1163,7 @@ export default function Config({
               </div>
 
               {/* Input customizado de minutos */}
-              <div className="flex items-center justify-between bg-[#020617] p-2.5 rounded-lg border border-slate-800 text-xs">
+              <div className="flex items-center justify-between bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-xs">
                 <span className="text-slate-400 font-bold">Tempo personalizado (em minutos):</span>
                 <div className="flex items-center gap-2">
                   <input
@@ -1183,7 +1183,7 @@ export default function Config({
               </div>
 
               {/* Quantidade fixa de aulas por bloco */}
-              <div className={`mt-2 flex flex-col gap-2 bg-[#020617] p-2.5 rounded-lg border text-xs ${Number(draftSubject.lessonsPerBlock) > 0 ? 'border-emerald-500' : 'border-slate-800'}`}>
+              <div className={`mt-2 flex flex-col gap-2 bg-slate-950 p-2.5 rounded-lg border text-xs ${Number(draftSubject.lessonsPerBlock) > 0 ? 'border-emerald-500' : 'border-slate-800'}`}>
                 <div className="flex items-center justify-between">
                   <span className="text-slate-400 font-bold">Ou: quantidade fixa de aulas por bloco:</span>
                   <div className="flex items-center gap-2">
@@ -1331,7 +1331,7 @@ export default function Config({
 
               {/* Se escolher substituir por outra matéria, exibe o seletor */}
               {draftSubject.onCompleteAction === 'replace' && (
-                <div className="bg-[#020617] p-3 rounded-lg border border-slate-800 mt-2">
+                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 mt-2">
                   <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">
                     Qual disciplina deve entrar nesta vaga quando concluir?
                   </label>
@@ -1624,7 +1624,7 @@ export default function Config({
                               };
                               return { ...prev, topics: newTopics };
                             })}
-                            className="w-12 bg-[#020617] border border-slate-800 rounded px-1 py-1 text-center text-xs font-black text-white"
+                            className="w-12 bg-slate-950 border border-slate-800 rounded px-1 py-1 text-center text-xs font-black text-white"
                           />
                         </div>
                       </div>
@@ -1666,7 +1666,7 @@ export default function Config({
             </div>
 
             {/* Ações Fixas no Rodapé */}
-            <div className="p-6 pt-3 border-t border-slate-800 bg-[#0f172a] shrink-0 flex flex-col gap-2.5">
+            <div className="p-6 pt-3 border-t border-slate-800 bg-slate-900 shrink-0 flex flex-col gap-2.5">
               <button 
                 onClick={() => {
                   if (!draftSubject.name || draftSubject.name.trim() === "") {

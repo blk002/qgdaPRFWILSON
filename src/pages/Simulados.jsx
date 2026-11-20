@@ -94,7 +94,7 @@ export default function Simulados() {
     <div className="fade-in w-full pb-10">
       <div className="flex flex-col lg:flex-row gap-6">
         <div className="flex-1 min-w-0">
-          <div className="bg-white p-4 rounded-xl shadow-sm border border-slate-200 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 dark:bg-slate-900 dark:border-slate-800">
+          <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 dark:bg-slate-900 dark:border-slate-800">
             <div className="flex items-center gap-3 sm:gap-4">
               <div className="bg-purple-100 p-2 sm:p-3 rounded-full shrink-0"><Target className="text-purple-600 w-6 h-6 sm:w-8 sm:h-8" /></div>
               <div>
