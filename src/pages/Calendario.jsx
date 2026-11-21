@@ -41,6 +41,19 @@ const mesesNomesShort = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago',
 // Data de prova padrão antiga (valor inicial do app): se ainda for ela e já passou, o usuário nunca definiu a prova.
 const LEGACY_DEFAULT_EXAM_DATE = '2026-08-15';
 
+function getWeekdayPluralAgreement(dayOfWeek) {
+  const map = {
+    0: { nextPrep: 'nos próximos', allPrep: 'em todos os', plural: 'Domingos' },
+    1: { nextPrep: 'nas próximas', allPrep: 'em todas as', plural: 'Segundas-feiras' },
+    2: { nextPrep: 'nas próximas', allPrep: 'em todas as', plural: 'Terças-feiras' },
+    3: { nextPrep: 'nas próximas', allPrep: 'em todas as', plural: 'Quartas-feiras' },
+    4: { nextPrep: 'nas próximas', allPrep: 'em todas as', plural: 'Quintas-feiras' },
+    5: { nextPrep: 'nas próximas', allPrep: 'em todas as', plural: 'Sextas-feiras' },
+    6: { nextPrep: 'nos próximos', allPrep: 'em todos os', plural: 'Sábados' }
+  };
+  return map[dayOfWeek] || { nextPrep: 'nos próximos', allPrep: 'em todos os', plural: 'dias' };
+}
+
 export default function Calendario() {
   const navigate = useNavigate();
   const { 
@@ -998,365 +1011,353 @@ export default function Calendario() {
       </div>
 
 
-      {/* MODAL: GERENCIADOR DE DIA DO CALENDÁRIO */}
-      {managingDay && createPortal(
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/60 backdrop-blur-xs animate-in fade-in duration-200">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 w-full max-w-lg shadow-2xl relative flex flex-col gap-4 max-h-[90vh] overflow-y-auto">
-            <button 
-              onClick={() => setManagingDay(null)}
-              className="absolute top-4 right-4 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
-            >
-              <X className="w-5 h-5" />
-            </button>
+      {/* MODAL: GERENCIADOR DE DIA DO CALENDÁRIO (LAYOUT COMPACTO EM 2 COLUNAS) */}
+      {managingDay && (() => {
+        const dayAgr = getWeekdayPluralAgreement(managingDay.dayOfWeek);
+        return createPortal(
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 bg-black/65 backdrop-blur-xs animate-in fade-in duration-200">
+            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-4 sm:p-5 w-full max-w-4xl shadow-2xl relative flex flex-col gap-3 max-h-[94vh] overflow-y-auto custom-scrollbar">
+              <button 
+                onClick={() => setManagingDay(null)}
+                className="absolute top-3.5 right-3.5 p-1.5 text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-5 h-5" />
+              </button>
 
-            <div>
-              <div className="flex items-center gap-2 mb-1 pr-8">
-                <button
-                  type="button"
-                  onClick={() => navigateManagedDay(-1)}
-                  disabled={!canGoPrevDay}
-                  title="Dia anterior (←)"
-                  aria-label="Dia anterior"
-                  className="h-8 w-8 shrink-0 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
-                >
-                  <ChevronLeft className="w-4 h-4" />
-                </button>
-                <div className="flex-1 min-w-0 flex items-center justify-center gap-2">
-                  <CalendarIcon className="w-5 h-5 text-blue-600 shrink-0" />
-                  <h3 className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 text-center">
-                    {managingDay.dateKey} ({diasSemanaFull[managingDay.dateObj.getDay()]})
-                  </h3>
+              {/* Cabeçalho Compacto de Navegação Diária */}
+              <div className="border-b border-slate-100 dark:border-slate-800 pb-2.5">
+                <div className="flex items-center gap-2 pr-8">
+                  <button
+                    type="button"
+                    onClick={() => navigateManagedDay(-1)}
+                    disabled={!canGoPrevDay}
+                    title="Dia anterior (←)"
+                    aria-label="Dia anterior"
+                    className="h-8 w-8 shrink-0 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-30 disabled:cursor-not-allowed transition-colors cursor-pointer"
+                  >
+                    <ChevronLeft className="w-4 h-4" />
+                  </button>
+                  <div className="flex-1 min-w-0 flex items-center justify-center gap-2">
+                    <CalendarIcon className="w-4 h-4 text-sky-500 shrink-0" />
+                    <h3 className="text-sm sm:text-base font-black text-slate-800 dark:text-slate-100 text-center">
+                      {managingDay.dateKey} ({diasSemanaFull[managingDay.dateObj.getDay()]})
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => navigateManagedDay(1)}
+                    title="Próximo dia (→)"
+                    aria-label="Próximo dia"
+                    className="h-8 w-8 shrink-0 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                  >
+                    <ChevronRight className="w-4 h-4" />
+                  </button>
                 </div>
-                <button
-                  type="button"
-                  onClick={() => navigateManagedDay(1)}
-                  title="Próximo dia (→)"
-                  aria-label="Próximo dia"
-                  className="h-8 w-8 shrink-0 flex items-center justify-center rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
-                >
-                  <ChevronRight className="w-4 h-4" />
-                </button>
-              </div>
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-1.5 px-1">
-                <label className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 cursor-pointer select-none">
-                  <input
-                    type="checkbox"
-                    checked={autoSaveOnNavigate}
-                    onChange={(e) => setAutoSaveOnNavigate(e.target.checked)}
-                    className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer"
-                  />
-                  <span>Salvar automaticamente ao trocar de dia (← →)</span>
-                </label>
-                {isDayDirty && (
-                  <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80">
-                    Alterações não salvas
-                  </span>
-                )}
-              </div>
-              <p className="text-[11px] text-center text-slate-400 dark:text-slate-500 mb-1">
-                Use as setas ← → do teclado para trocar de dia {autoSaveOnNavigate ? '(alterações são salvas ao avançar/voltar)' : '(alterações não salvas deste dia são descartadas)'}
-              </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Ajuste os blocos deste dia e decida se a alteração se aplica apenas a esta data ou se torna o novo padrão para o futuro.
-              </p>
-            </div>
-
-            {/* Lista de Blocos Agendados para o Dia */}
-            <div className="flex flex-col gap-2">
-              <label className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
-                Blocos de Estudo Agendados ({daySlots.length})
-              </label>
-
-              {daySlots.length === 0 ? (
-                <div className="p-4 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-center text-xs text-slate-400">
-                  Nenhum bloco agendado para este dia (Dia de Descanso).
+                <div className="flex flex-wrap items-center justify-between gap-2 mt-1.5 px-1">
+                  <label className="inline-flex items-center gap-1.5 text-[11px] font-medium text-slate-500 dark:text-slate-400 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={autoSaveOnNavigate}
+                      onChange={(e) => setAutoSaveOnNavigate(e.target.checked)}
+                      className="rounded border-slate-300 dark:border-slate-700 text-blue-600 focus:ring-blue-500 cursor-pointer"
+                    />
+                    <span>Salvar automaticamente ao trocar de dia com as setas ← →</span>
+                  </label>
+                  {isDayDirty && (
+                    <span className="text-[10px] font-bold px-2 py-0.5 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80">
+                      Alterações não salvas
+                    </span>
+                  )}
                 </div>
-              ) : (
-                daySlots.map((subId, idx) => {
-                  const sub = subjects[subId];
-                  const slotCountVal = Math.max(0, Math.floor(Number(daySlotCounts?.[idx]) || 0));
-                  const defaultLabel = sub
-                    ? (Number(sub.lessonsPerBlock) > 0
-                        ? `Padrão (${sub.lessonsPerBlock}a)`
-                        : (Number(sub.timeGoalMinutes || subjectTimeGoal?.[subId]) > 0
-                            ? `Padrão (${formatMinutesToFriendly(Number(sub.timeGoalMinutes || subjectTimeGoal?.[subId]))})`
-                            : 'Padrão (1a)'))
-                    : 'Padrão';
+              </div>
 
-                  const updateSlotCount = (val) => {
-                    const next = [...daySlotCounts];
-                    while (next.length < daySlots.length) next.push(0);
-                    next[idx] = Math.min(50, Math.max(0, Math.floor(Number(val) || 0)));
-                    setDaySlotCounts(next);
-                  };
+              {/* Corpo em 2 Colunas: Esquerda = Blocos do Dia | Direita = Escopo e Ações */}
+              <div className="grid grid-cols-1 lg:grid-cols-12 gap-3.5 items-start">
+                {/* Coluna Esquerda (7 cols): Lista de Blocos Agendados + Adicionar */}
+                <div className="lg:col-span-7 flex flex-col gap-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <label className="text-xs font-black uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                      Blocos de Estudo Agendados ({daySlots.length})
+                    </label>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const firstSubId = Object.keys(subjects)[0] || '';
+                        if (firstSubId) {
+                          setDaySlots([...daySlots, firstSubId]);
+                          setDaySlotCounts([...(daySlotCounts || []), 0]);
+                        }
+                      }}
+                      className="px-2.5 py-1 rounded-lg border border-blue-300 dark:border-blue-800 bg-blue-50/70 hover:bg-blue-100 dark:bg-blue-950/40 dark:hover:bg-blue-900/50 text-blue-700 dark:text-blue-300 text-[11px] font-bold flex items-center gap-1 transition-all cursor-pointer"
+                    >
+                      <Plus className="w-3.5 h-3.5" /> Adicionar ({daySlots.length + 1}º Bloco)
+                    </button>
+                  </div>
 
-                  return (
-                    <div key={idx} className="flex flex-col gap-2 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
-                      <div className="flex items-center gap-2">
-                        <span className="text-xs font-black text-slate-400 w-6 text-center">
-                          #{idx + 1}
+                  {daySlots.length === 0 ? (
+                    <div className="p-4 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-xl text-center text-xs text-slate-400">
+                      Nenhum bloco agendado para este dia (Dia de Descanso).
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-2 max-h-[54vh] overflow-y-auto custom-scrollbar pr-1">
+                      {daySlots.map((subId, idx) => {
+                        const sub = subjects[subId];
+                        const slotCountVal = Math.max(0, Math.floor(Number(daySlotCounts?.[idx]) || 0));
+                        const defaultLabel = sub
+                          ? (Number(sub.lessonsPerBlock) > 0
+                              ? `Padrão (${sub.lessonsPerBlock}a)`
+                              : (Number(sub.timeGoalMinutes || subjectTimeGoal?.[subId]) > 0
+                                  ? `Padrão (${formatMinutesToFriendly(Number(sub.timeGoalMinutes || subjectTimeGoal?.[subId]))})`
+                                  : 'Padrão (1a)'))
+                          : 'Padrão';
+
+                        const updateSlotCount = (val) => {
+                          const next = [...daySlotCounts];
+                          while (next.length < daySlots.length) next.push(0);
+                          next[idx] = Math.min(50, Math.max(0, Math.floor(Number(val) || 0)));
+                          setDaySlotCounts(next);
+                        };
+
+                        const previewLessons = managingDayPreviewLessons[idx] || [];
+
+                        return (
+                          <div key={idx} className="flex flex-col gap-1.5 bg-slate-50 dark:bg-slate-800/50 p-2.5 rounded-xl border border-slate-200 dark:border-slate-700">
+                            <div className="flex items-center gap-2">
+                              <span className="text-xs font-black text-slate-400 w-5 text-center">
+                                #{idx + 1}
+                              </span>
+                              <select
+                                value={subId}
+                                onChange={(e) => {
+                                  const newSlots = [...daySlots];
+                                  newSlots[idx] = e.target.value;
+                                  setDaySlots(newSlots);
+                                }}
+                                className={`flex-1 text-xs font-bold py-1.5 px-2 rounded-lg border border-slate-200 dark:border-slate-700 outline-none cursor-pointer ${sub ? sub.color : 'bg-white text-slate-800'}`}
+                              >
+                                {Object.values(subjects).map(s => (
+                                  <option key={s.id} value={s.id} className="bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100">{s.name}</option>
+                                ))}
+                              </select>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setDaySlots(daySlots.filter((_, i) => i !== idx));
+                                  setDaySlotCounts((daySlotCounts || []).filter((_, i) => i !== idx));
+                                }}
+                                className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
+                                title="Remover este bloco"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+
+                            {/* Seletor de Quantidade de Aulas neste Dia para este Bloco */}
+                            <div className="flex flex-wrap items-center justify-between gap-1.5 pl-6 pr-1 pt-1 border-t border-slate-200/70 dark:border-slate-700/60">
+                              <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                                Qtd. de aulas:
+                              </span>
+                              <div className="flex flex-wrap items-center gap-1">
+                                <button
+                                  type="button"
+                                  onClick={() => updateSlotCount(0)}
+                                  className={`px-2 py-0.5 rounded-md text-[10px] font-black transition-all cursor-pointer ${
+                                    slotCountVal === 0
+                                      ? 'bg-blue-600 text-white shadow-xs'
+                                      : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:text-slate-800 dark:hover:text-white'
+                                  }`}
+                                  title="Usar a configuração padrão da disciplina"
+                                >
+                                  {defaultLabel}
+                                </button>
+                                {[1, 2, 3, 4, 5].map(n => (
+                                  <button
+                                    key={n}
+                                    type="button"
+                                    onClick={() => updateSlotCount(n)}
+                                    className={`px-1.5 py-0.5 rounded-md text-[10px] font-black transition-all cursor-pointer ${
+                                      slotCountVal === n
+                                        ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-400'
+                                        : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:text-slate-900 dark:hover:text-white'
+                                    }`}
+                                  >
+                                    {n}a
+                                  </button>
+                                ))}
+                                <div
+                                  className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border ${
+                                    slotCountVal > 5
+                                      ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-400'
+                                      : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'
+                                  }`}
+                                  title="Digitar outra quantidade de aulas para este dia"
+                                >
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    max="50"
+                                    placeholder="Nº"
+                                    value={slotCountVal > 0 ? slotCountVal : ''}
+                                    onChange={(e) => updateSlotCount(e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
+                                    className="w-7 bg-transparent text-center text-[10px] font-black text-emerald-600 dark:text-emerald-400 outline-none"
+                                  />
+                                  <span className="text-[9px] font-bold text-slate-400">aulas</span>
+                                </div>
+                              </div>
+                            </div>
+
+                            {/* Prévia Compacta das Aulas Previstas neste Bloco */}
+                            <div className="pl-6 pr-1 pt-1 border-t border-slate-200/70 dark:border-slate-700/60">
+                              {previewLessons.length > 0 ? (
+                                <div className="flex flex-col gap-1 max-h-20 overflow-y-auto custom-scrollbar pr-1">
+                                  {previewLessons.map((les, lIdx) => (
+                                    <div
+                                      key={lIdx}
+                                      className="flex items-center justify-between gap-2 text-[11px] bg-white dark:bg-slate-900/90 px-2 py-0.5 rounded border border-slate-200/80 dark:border-slate-700/80"
+                                    >
+                                      <p className="font-bold text-slate-700 dark:text-slate-200 truncate flex-1" title={les.name}>
+                                        • {les.name}
+                                      </p>
+                                      {les.duration && les.duration !== '00:00' && (
+                                        <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-slate-400 shrink-0">
+                                          {les.duration}
+                                        </span>
+                                      )}
+                                    </div>
+                                  ))}
+                                </div>
+                              ) : (
+                                <p className="text-[11px] italic text-amber-600 dark:text-amber-400">
+                                  Todas as aulas desta disciplina já foram concluídas antes desta data.
+                                </p>
+                              )}
+                            </div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  )}
+                </div>
+
+                {/* Coluna Direita (5 cols): Escopo de Salvamento + Botões de Ação */}
+                <div className="lg:col-span-5 flex flex-col gap-2.5 bg-slate-50/70 dark:bg-slate-950/50 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800">
+                  <label className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Target className="w-3.5 h-3.5 text-blue-600" /> Onde aplicar estas alterações?
+                  </label>
+
+                  <div className="grid grid-cols-1 gap-2">
+                    <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-start gap-2.5 ${saveMode === 'future' ? 'bg-emerald-50 border-emerald-500 dark:bg-emerald-950/40 dark:border-emerald-600' : 'bg-white border-slate-200 dark:bg-slate-900/70 dark:border-slate-700'}`}>
+                      <input 
+                        type="radio" 
+                        name="saveModeRadio" 
+                        value="future" 
+                        checked={saveMode === 'future'} 
+                        onChange={() => setSaveMode('future')}
+                        className="mt-0.5"
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                          🚀 Padrão para o Futuro (a partir de {managingDay.dateKey})
                         </span>
-                        <select
-                          value={subId}
-                          onChange={(e) => {
-                            const newSlots = [...daySlots];
-                            newSlots[idx] = e.target.value;
-                            setDaySlots(newSlots);
-                          }}
-                          className={`flex-1 text-xs font-bold p-2 rounded-lg border border-slate-200 dark:border-slate-700 outline-none cursor-pointer ${sub ? sub.color : 'bg-white text-slate-800'}`}
-                        >
-                          {Object.values(subjects).map(s => (
-                            <option key={s.id} value={s.id} className="bg-white text-slate-800 dark:bg-slate-900 dark:text-slate-100">{s.name}</option>
-                          ))}
-                        </select>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                          Aplica esta programação {dayAgr.nextPrep} <strong>{dayAgr.plural}</strong> desta data em diante. Dias anteriores não mudam.
+                        </span>
+                      </div>
+                    </label>
+
+                    <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-start gap-2.5 ${saveMode === 'single' ? 'bg-blue-50 border-blue-500 dark:bg-blue-950/40 dark:border-blue-600' : 'bg-white border-slate-200 dark:bg-slate-900/70 dark:border-slate-700'}`}>
+                      <input 
+                        type="radio" 
+                        name="saveModeRadio" 
+                        value="single" 
+                        checked={saveMode === 'single'} 
+                        onChange={() => setSaveMode('single')}
+                        className="mt-0.5"
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                          💾 Apenas neste dia ({managingDay.dateKey})
+                        </span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                          Modifica exclusivamente esta data ({managingDay.dateKey}), sem alterar semanas seguintes.
+                        </span>
+                      </div>
+                    </label>
+
+                    <label className={`p-2.5 rounded-xl border cursor-pointer transition-all flex items-start gap-2.5 ${saveMode === 'all' ? 'bg-amber-50 border-amber-500 dark:bg-amber-950/40 dark:border-amber-600' : 'bg-white border-slate-200 dark:bg-slate-900/70 dark:border-slate-700'}`}>
+                      <input 
+                        type="radio" 
+                        name="saveModeRadio" 
+                        value="all" 
+                        checked={saveMode === 'all'} 
+                        onChange={() => setSaveMode('all')}
+                        className="mt-0.5"
+                      />
+                      <div className="flex flex-col">
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-100">
+                          📌 Fixar {dayAgr.allPrep} {dayAgr.plural} do Ciclo Base
+                        </span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                          Atualiza o ciclo semanal inteiro (incluindo semanas anteriores a esta data).
+                        </span>
+                      </div>
+                    </label>
+                  </div>
+
+                  {/* Botões de Ação do Modal */}
+                  <div className="flex flex-col gap-2 pt-2 border-t border-slate-200 dark:border-slate-800 mt-auto">
+                    <button
+                      type="button"
+                      onClick={handleSaveDayManager}
+                      className={`w-full py-2.5 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
+                        saveMode === 'future'
+                          ? 'bg-emerald-600 hover:bg-emerald-700'
+                          : saveMode === 'all'
+                            ? 'bg-amber-600 hover:bg-amber-700'
+                            : 'bg-blue-600 hover:bg-blue-700'
+                      }`}
+                    >
+                      <CheckCircle className="w-4 h-4" /> 
+                      {saveMode === 'future'
+                        ? `Aplicar de ${managingDay.dateKey} para o Futuro`
+                        : saveMode === 'all'
+                          ? `Fixar ${dayAgr.allPrep} ${dayAgr.plural} do Ciclo`
+                          : `Salvar Apenas neste Dia (${managingDay.dateKey})`}
+                    </button>
+
+                    <div className="flex flex-wrap items-center gap-2">
+                      {daySlots.length > 0 && (
                         <button
                           type="button"
                           onClick={() => {
-                            setDaySlots(daySlots.filter((_, i) => i !== idx));
-                            setDaySlotCounts((daySlotCounts || []).filter((_, i) => i !== idx));
+                            setDaySlots([]);
+                            setDaySlotCounts([]);
+                            toast.info('Blocos removidos. Clique no botão de salvar acima para confirmar este dia livre.');
                           }}
-                          className="p-1.5 text-slate-400 hover:text-red-500 rounded-lg hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
-                          title="Remover este bloco"
+                          className="flex-1 py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-800 text-[11px] font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
                         >
-                          <Trash2 className="w-4 h-4" />
+                          <Trash2 className="w-3.5 h-3.5" /> Limpar Dia
                         </button>
-                      </div>
+                      )}
 
-                      {/* Seletor de Quantidade de Aulas neste Dia para este Bloco */}
-                      <div className="flex flex-wrap items-center justify-between gap-1.5 pl-8 pr-1 pt-1 border-t border-slate-200/70 dark:border-slate-700/60">
-                        <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
-                          Qtd. de aulas neste dia:
-                        </span>
-                        <div className="flex flex-wrap items-center gap-1">
-                          <button
-                            type="button"
-                            onClick={() => updateSlotCount(0)}
-                            className={`px-2 py-1 rounded-md text-[10px] font-black transition-all cursor-pointer ${
-                              slotCountVal === 0
-                                ? 'bg-blue-600 text-white shadow-xs'
-                                : 'bg-white dark:bg-slate-900 text-slate-500 dark:text-slate-400 border border-slate-200 dark:border-slate-700 hover:text-slate-800 dark:hover:text-white'
-                            }`}
-                            title="Usar a configuração padrão da disciplina"
-                          >
-                            {defaultLabel}
-                          </button>
-                          {[1, 2, 3, 4, 5].map(n => (
-                            <button
-                              key={n}
-                              type="button"
-                              onClick={() => updateSlotCount(n)}
-                              className={`px-2 py-1 rounded-md text-[10px] font-black transition-all cursor-pointer ${
-                                slotCountVal === n
-                                  ? 'bg-emerald-600 text-white shadow-xs ring-1 ring-emerald-400'
-                                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 hover:text-slate-900 dark:hover:text-white'
-                              }`}
-                            >
-                              {n} {n === 1 ? 'aula' : 'aulas'}
-                            </button>
-                          ))}
-                          <div
-                            className={`flex items-center gap-1 px-1.5 py-0.5 rounded-md border ${
-                              slotCountVal > 5
-                                ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 ring-1 ring-emerald-400'
-                                : 'border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900'
-                            }`}
-                            title="Digitar outra quantidade de aulas para este dia"
-                          >
-                            <input
-                              type="number"
-                              min="0"
-                              max="50"
-                              placeholder="Nº"
-                              value={slotCountVal > 0 ? slotCountVal : ''}
-                              onChange={(e) => updateSlotCount(e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
-                              className="w-8 bg-transparent text-center text-[10px] font-black text-emerald-600 dark:text-emerald-400 outline-none"
-                            />
-                            <span className="text-[9px] font-bold text-slate-400">aulas</span>
-                          </div>
-                        </div>
-                      </div>
-
-                      {/* Prévia das Aulas Previstas neste Bloco */}
-                      {(() => {
-                        const previewLessons = managingDayPreviewLessons[idx] || [];
-                        return (
-                          <div className="pl-8 pr-1 pt-1.5 border-t border-slate-200/70 dark:border-slate-700/60">
-                            <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider block mb-1">
-                              Aulas previstas neste bloco ({previewLessons.length}):
-                            </span>
-                            {previewLessons.length > 0 ? (
-                              <div className="flex flex-col gap-1 max-h-28 overflow-y-auto custom-scrollbar pr-1">
-                                {previewLessons.map((les, lIdx) => (
-                                  <div
-                                    key={lIdx}
-                                    className="flex items-center justify-between gap-2 text-[11px] bg-white dark:bg-slate-900/90 px-2 py-1 rounded-lg border border-slate-200/80 dark:border-slate-700/80"
-                                  >
-                                    <div className="min-w-0 flex-1">
-                                      <p className="font-bold text-slate-700 dark:text-slate-200 truncate" title={les.name}>
-                                        {les.name}
-                                      </p>
-                                      {les.topicName && !les.name.includes(les.topicName) && (
-                                        <p className="text-[9px] text-slate-400 dark:text-slate-500 truncate" title={les.topicName}>
-                                          {les.topicName}
-                                        </p>
-                                      )}
-                                    </div>
-                                    {les.duration && les.duration !== '00:00' && (
-                                      <span className="text-[10px] font-mono font-bold text-slate-500 dark:text-slate-400 shrink-0">
-                                        {les.duration}
-                                      </span>
-                                    )}
-                                  </div>
-                                ))}
-                              </div>
-                            ) : (
-                              <p className="text-[11px] italic text-amber-600 dark:text-amber-400">
-                                Todas as aulas desta disciplina já foram concluídas antes desta data.
-                              </p>
-                            )}
-                          </div>
-                        );
-                      })()}
+                      {managingDay.isCustomized && (
+                        <button
+                          type="button"
+                          onClick={handleResetDayToDefault}
+                          className="flex-1 py-1.5 px-2.5 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-red-500 hover:border-red-300 dark:hover:border-red-800 text-[11px] font-bold transition-colors flex items-center justify-center gap-1 cursor-pointer"
+                        >
+                          <RotateCcw className="w-3.5 h-3.5" /> Restaurar Padrão
+                        </button>
+                      )}
                     </div>
-                  );
-                })
-              )}
-            </div>
-
-            {/* Adicionar Novo Bloco neste Dia */}
-            <div className="pt-2 border-t border-slate-200 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={() => {
-                  const firstSubId = Object.keys(subjects)[0] || '';
-                  if (firstSubId) {
-                    setDaySlots([...daySlots, firstSubId]);
-                    setDaySlotCounts([...(daySlotCounts || []), 0]);
-                  }
-                }}
-                className="w-full py-2 border-2 border-dashed border-blue-300 dark:border-blue-900 bg-blue-50/50 hover:bg-blue-100 dark:bg-blue-950/30 dark:hover:bg-blue-900/40 text-blue-700 dark:text-blue-300 text-xs font-bold rounded-xl flex items-center justify-center gap-1.5 transition-all cursor-pointer"
-              >
-                <Plus className="w-4 h-4" /> Adicionar Bloco de Estudo neste Dia ({daySlots.length + 1}º Bloco)
-              </button>
-            </div>
-
-            {/* SELEÇÃO DO ESCOPO DE SALVAMENTO */}
-            <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex flex-col gap-2">
-              <label className="text-xs font-black uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                <Target className="w-3.5 h-3.5 text-blue-600" /> Onde aplicar estas alterações?
-              </label>
-
-              <div className="grid grid-cols-1 gap-2">
-                <label className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${saveMode === 'future' ? 'bg-emerald-50 border-emerald-500 dark:bg-emerald-950/40 dark:border-emerald-600' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'}`}>
-                  <input 
-                    type="radio" 
-                    name="saveModeRadio" 
-                    value="future" 
-                    checked={saveMode === 'future'} 
-                    onChange={() => setSaveMode('future')}
-                    className="mt-1"
-                  />
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1">
-                      🚀 Tornar padrão para o Futuro (a partir de {managingDay.dateKey})
-                    </span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Aplica esta programação nas próximas <strong>{diasSemanaFull[managingDay.dayOfWeek]}s</strong> desta data em diante. <strong>Os dias anteriores (passado) não serão alterados!</strong>
-                    </span>
                   </div>
-                </label>
-
-                <label className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${saveMode === 'single' ? 'bg-blue-50 border-blue-500 dark:bg-blue-950/40 dark:border-blue-600' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'}`}>
-                  <input 
-                    type="radio" 
-                    name="saveModeRadio" 
-                    value="single" 
-                    checked={saveMode === 'single'} 
-                    onChange={() => setSaveMode('single')}
-                    className="mt-1"
-                  />
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1">
-                      💾 Apenas neste dia ({managingDay.dateKey})
-                    </span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Modifica exclusivamente esta data ({managingDay.dateKey}). As semanas anteriores e seguintes não serão alteradas.
-                    </span>
-                  </div>
-                </label>
-
-                <label className={`p-3 rounded-xl border cursor-pointer transition-all flex items-start gap-3 ${saveMode === 'all' ? 'bg-amber-50 border-amber-500 dark:bg-amber-950/40 dark:border-amber-600' : 'bg-slate-50 border-slate-200 dark:bg-slate-800/40 dark:border-slate-700'}`}>
-                  <input 
-                    type="radio" 
-                    name="saveModeRadio" 
-                    value="all" 
-                    checked={saveMode === 'all'} 
-                    onChange={() => setSaveMode('all')}
-                    className="mt-1"
-                  />
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100 flex items-center gap-1">
-                      📌 Fixar em todas as {diasSemanaFull[managingDay.dayOfWeek]}s do Ciclo Base
-                    </span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                      Atualiza o ciclo semanal inteiro (incluindo as semanas anteriores a esta data).
-                    </span>
-                  </div>
-                </label>
+                </div>
               </div>
             </div>
-
-            {/* Botões de Ação do Modal */}
-            <div className="flex flex-col gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
-              <button
-                type="button"
-                onClick={handleSaveDayManager}
-                className={`w-full py-2.5 text-white font-bold text-xs rounded-xl shadow-md transition-all flex items-center justify-center gap-1.5 cursor-pointer ${
-                  saveMode === 'future'
-                    ? 'bg-emerald-600 hover:bg-emerald-700'
-                    : saveMode === 'all'
-                      ? 'bg-amber-600 hover:bg-amber-700'
-                      : 'bg-blue-600 hover:bg-blue-700'
-                }`}
-              >
-                <CheckCircle className="w-4 h-4" /> 
-                {saveMode === 'future'
-                  ? `Aplicar de ${managingDay.dateKey} para o Futuro`
-                  : saveMode === 'all'
-                    ? `Fixar em todas as ${diasSemanaFull[managingDay.dayOfWeek]}s do Ciclo`
-                    : `Salvar Apenas neste Dia (${managingDay.dateKey})`}
-              </button>
-
-              <div className="flex flex-wrap items-center gap-2">
-                {daySlots.length > 0 && (
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setDaySlots([]);
-                      setDaySlotCounts([]);
-                      toast.info('Blocos removidos. Clique no botão de salvar acima para confirmar este dia livre.');
-                    }}
-                    className="flex-1 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 hover:text-red-600 dark:hover:text-red-400 hover:border-red-300 dark:hover:border-red-800 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <Trash2 className="w-3.5 h-3.5" /> Limpar / Redefinir Dia
-                  </button>
-                )}
-
-                {managingDay.isCustomized && (
-                  <button
-                    type="button"
-                    onClick={handleResetDayToDefault}
-                    className="flex-1 py-2 px-3 rounded-xl border border-slate-200 dark:border-slate-700 text-slate-500 hover:text-red-500 hover:border-red-300 dark:hover:border-red-800 text-xs font-bold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
-                  >
-                    <RotateCcw className="w-3.5 h-3.5" /> Restaurar Padrão do Ciclo
-                  </button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>,
-        document.body
-      )}
+          </div>,
+          document.body
+        );
+      })()}
 
       {/* MODAL: CONFIGURAÇÃO DE TRANSIÇÃO DE UMA MATÉRIA */}
       {editingTransitionSub && createPortal(

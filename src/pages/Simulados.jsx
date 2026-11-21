@@ -290,7 +290,15 @@ export default function Simulados() {
                <Info className="w-3 h-3"/> Diagnóstico Cebraspe
              </h4>
              <p className="text-xs text-slate-400 leading-relaxed">
-               O seu bloco mais fraco atualmente é o <strong className="text-white">{weakPoint}</strong>. Foque em exercícios de fixação para subir sua média líquida geral.
+               {totalSimulados > 0 ? (
+                 <>
+                   O seu bloco mais fraco atualmente é o <strong className="text-white">{weakPoint}</strong>. Foque em exercícios de fixação para subir sua média líquida geral.
+                 </>
+               ) : (
+                 <>
+                   Registre seu primeiro simulado para destravar o diagnóstico automático de ponto crítico por bloco (B1, B2 e B3).
+                 </>
+               )}
              </p>
           </div>
         </div>

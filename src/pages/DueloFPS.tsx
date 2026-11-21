@@ -551,11 +551,11 @@ export default function DueloFPS() {
         </div>
 
         {/* Navegação entre Abas */}
-        <nav className="hidden sm:flex items-center gap-5 text-xs font-bold uppercase tracking-wider text-zinc-400">
+        <nav className="hidden sm:flex items-center gap-3.5 lg:gap-5 text-xs font-bold uppercase tracking-wider text-zinc-400 overflow-x-auto no-scrollbar">
           <button
             type="button"
             onClick={() => setActiveTab('arena')}
-            className={`transition-colors cursor-pointer ${
+            className={`transition-colors cursor-pointer whitespace-nowrap shrink-0 py-1 ${
               activeTab === 'arena' ? 'text-amber-400 underline underline-offset-8' : 'hover:text-zinc-100'
             }`}
           >
@@ -564,27 +564,27 @@ export default function DueloFPS() {
           <button
             type="button"
             onClick={() => setActiveTab('guia')}
-            className={`transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 py-1 ${
               activeTab === 'guia' ? 'text-amber-400 underline underline-offset-8' : 'hover:text-zinc-100'
             }`}
           >
-            <Sparkles className="w-3.5 h-3.5 text-amber-400" />
-            Guia PRF (Mais Cobrados)
+            <Sparkles className="w-3.5 h-3.5 text-amber-400 shrink-0" />
+            <span>Guia PRF (Mais Cobrados)</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('raiox')}
-            className={`transition-colors cursor-pointer flex items-center gap-1.5 ${
+            className={`transition-colors cursor-pointer flex items-center gap-1.5 whitespace-nowrap shrink-0 py-1 ${
               activeTab === 'raiox' ? 'text-amber-400 underline underline-offset-8' : 'hover:text-zinc-100'
             }`}
           >
-            <BarChart3 className="w-3.5 h-3.5" />
-            Raio-X de Assuntos
+            <BarChart3 className="w-3.5 h-3.5 shrink-0" />
+            <span>Raio-X de Assuntos</span>
           </button>
           <button
             type="button"
             onClick={() => setActiveTab('vademecum')}
-            className={`transition-colors cursor-pointer ${
+            className={`transition-colors cursor-pointer whitespace-nowrap shrink-0 py-1 ${
               activeTab === 'vademecum' ? 'text-amber-400 underline underline-offset-8' : 'hover:text-zinc-100'
             }`}
           >
@@ -593,7 +593,7 @@ export default function DueloFPS() {
           <button
             type="button"
             onClick={() => setActiveTab('historico')}
-            className={`transition-colors cursor-pointer ${
+            className={`transition-colors cursor-pointer whitespace-nowrap shrink-0 py-1 ${
               activeTab === 'historico' ? 'text-amber-400 underline underline-offset-8' : 'hover:text-zinc-100'
             }`}
           >
@@ -635,7 +635,7 @@ export default function DueloFPS() {
       </header>
 
       {/* ÁREA CENTRAL PRINCIPAL */}
-      <main className="flex-1 relative overflow-hidden bg-black">
+      <div className="flex-1 relative overflow-hidden bg-black">
         {/* ABA 1: ESTANDE 3D */}
         <div className={`absolute inset-0 z-0 ${activeTab === 'arena' ? 'block' : 'hidden'}`}>
           <TacticalRange3D
@@ -1439,7 +1439,7 @@ export default function DueloFPS() {
             </div>
           </div>
         )}
-      </main>
+      </div>
     </div>
   );
 }

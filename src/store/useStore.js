@@ -1097,7 +1097,12 @@ export const useStore = create(
       setTafHistory: (tafHistory) => set((state) => ({ tafHistory: typeof tafHistory === 'function' ? tafHistory(state.tafHistory) : tafHistory })),
       setTafTrainingStatus: (tafTrainingStatus) => set({ tafTrainingStatus }),
       setGlobalModal: (globalModal) => set({ globalModal }),
-      setIsDarkMode: (isDarkMode) => set({ isDarkMode }),
+      setIsDarkMode: (isDarkMode) => {
+        set({ isDarkMode });
+        try {
+          localStorage.setItem('qg_prf_dark_mode', String(Boolean(isDarkMode)));
+        } catch (_) {}
+      },
       setTargetExamDate: (targetExamDate) => set({ targetExamDate }),
       setActiveTab: (activeTab) => set({ activeTab }),
       setCurrentDayIndex: (currentDayIndex) => set({ currentDayIndex }),
@@ -3620,6 +3625,7 @@ useStore.subscribe((state, prevState) => {
 
   const changedKeys = PERSISTED_KEYS.filter(key => state[key] !== prevState[key]);
   if (changedKeys.length === 0) return;
+  const isUiThemeOnlyChange = changedKeys.every(k => k === 'isDarkMode' || k === 'activeTab');
 
   const nowIso = new Date().toISOString();
   const nextTimestamps = { ...(useStore._keyTimestamps || {}) };
@@ -3640,7 +3646,7 @@ useStore.subscribe((state, prevState) => {
   }, 500);
 
   // Só envia para a nuvem depois que a sincronização inicial concluiu com segurança
-  if (!state.user || !state.hasCompletedInitialCloudSync) return;
+  if (!state.user || !state.hasCompletedInitialCloudSync || isUiThemeOnlyChange) return;
 
   clearTimeout(useStore._debounceTimer);
   useStore._debounceTimer = setTimeout(() => {

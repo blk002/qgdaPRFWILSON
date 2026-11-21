@@ -122,6 +122,7 @@ export default function Dashboard() {
     getEffectiveStreak,
     todayKey,
     reviewStats = { totalDone: 0, correct: 0, streak: 0 },
+    caveiraQuestions = [],
     xpHistory = [],
     isSyncing,
     petData,
@@ -217,8 +218,18 @@ export default function Dashboard() {
     setIsEditingName(false);
   };
 
-  const acertoRate = reviewStats.totalDone > 0 
-    ? Math.round((reviewStats.correct / reviewStats.totalDone) * 100) : 0;
+  const caveiraTotal = Array.isArray(caveiraQuestions) ? caveiraQuestions.length : 0;
+  const caveiraCorrect = Array.isArray(caveiraQuestions)
+    ? caveiraQuestions.filter(q => q && (q.isCorrect === true || q.acertou === true || q.result === 'correct' || q.status === 'correct')).length
+    : 0;
+  const combinedTotalAnswered = (Number(reviewStats.totalDone) || 0) + caveiraTotal;
+  const combinedTotalCorrect = (Number(reviewStats.correct) || 0) + caveiraCorrect;
+  const acertoRate = combinedTotalAnswered > 0
+    ? Math.round((combinedTotalCorrect / combinedTotalAnswered) * 100)
+    : 0;
+  const acertoSubLabel = combinedTotalAnswered > 0
+    ? `${combinedTotalCorrect}/${combinedTotalAnswered} questões & revisões`
+    : 'taxa de correção';
   const last7DayKeys = new Set(
     Array.from({ length: 7 }, (_, i) => {
       const d = new Date();
@@ -304,7 +315,7 @@ export default function Dashboard() {
     { label: 'Ofensiva', value: `${effectiveStreak}d`, sub: 'dias consecutivos', icon: Flame, color: 'text-orange-500', glow: 'hover:shadow-orange-500/10 hover:border-orange-500/30' },
     { label: 'Revisões', value: reviewStats.totalDone, sub: 'total realizadas', icon: BookOpen, color: 'text-purple-500', glow: 'hover:shadow-purple-500/10 hover:border-purple-500/30' },
     { label: 'XP Semana', value: xpThisWeek.toLocaleString(), sub: 'pontos esta semana', icon: Zap, color: 'text-blue-500', glow: 'hover:shadow-blue-500/10 hover:border-blue-500/30' },
-    { label: 'Acertos', value: `${acertoRate}%`, sub: 'taxa de correção', icon: TrendingUp, color: 'text-emerald-500', glow: 'hover:shadow-emerald-500/10 hover:border-emerald-500/30' },
+    { label: 'Acertos', value: `${acertoRate}%`, sub: acertoSubLabel, icon: TrendingUp, color: 'text-emerald-500', glow: 'hover:shadow-emerald-500/10 hover:border-emerald-500/30' },
   ];
 
   const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.1 } } };
@@ -707,7 +718,7 @@ export default function Dashboard() {
                 <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase truncate">
                   {petData?.name || 'Recruta K9'}
                 </h4>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold uppercase mt-0.5 truncate">
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold uppercase mt-0.5 leading-snug">
                   {(petData?.hunger || 0) < 35 
                     ? '⚠️ Com fome, precisa de lanche!' 
                     : petData?.isSleeping 
@@ -729,30 +740,30 @@ export default function Dashboard() {
               </div>
             </div>
           </div>
-          <div className="glass-card rounded-2xl p-6 sm:p-7">
-             <h3 className="font-black text-slate-800 dark:text-white uppercase text-sm mb-6 flex items-center gap-3">
+          <div className="glass-card rounded-2xl p-5 sm:p-6">
+             <h3 className="font-black text-slate-800 dark:text-white uppercase text-sm mb-4 flex items-center gap-2.5">
                <ShieldCheck className="w-5 h-5 text-blue-500" /> Vitrine de Honra
              </h3>
-             <div className="grid grid-cols-2 gap-4">
+             <div className="grid grid-cols-2 gap-3">
                 {MEDALHAS.map(medal => {
                   const isUnlocked = userStats.medals.includes(medal.id);
                   return (
-                    <div key={medal.id} className={`p-4 rounded-2xl border text-center transition-all hover:-translate-y-0.5 ${
+                    <div key={medal.id} className={`p-3 rounded-xl border text-center transition-all hover:-translate-y-0.5 flex flex-col items-center ${
                       isUnlocked 
                         ? 'bg-slate-50/80 dark:bg-slate-850/80 border-blue-500/25 dark:border-slate-700/80' 
-                        : 'bg-slate-100/30 dark:bg-slate-950/60 border-slate-200/50 dark:border-slate-800/50 opacity-35'
+                        : 'bg-slate-100/30 dark:bg-slate-950/60 border-slate-200/50 dark:border-slate-800/50 opacity-40'
                     }`}>
-                       <div className="relative w-full aspect-square mb-3 flex items-center justify-center">
+                       <div className="relative w-12 h-12 mb-2 flex items-center justify-center shrink-0">
                           {isUnlocked ? (
                             <motion.img whileHover={{ scale: 1.1, rotate: 4 }} src={assetUrl(medal.icon)} alt={medal.title}
                               className="w-full h-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.3)]"
                               onError={e => { e.target.src = 'https://cdn-icons-png.flaticon.com/512/190/190411.png' }} />
                           ) : (
-                            <div className="text-4xl filter grayscale contrast-0 opacity-20">🛡️</div>
+                            <div className="text-3xl filter grayscale contrast-0 opacity-25">🛡️</div>
                           )}
                        </div>
-                       <p className={`text-xs font-black uppercase ${isUnlocked ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>{medal.title}</p>
-                       <p className="text-[10px] text-slate-500 dark:text-slate-400 font-semibold uppercase mt-1 leading-tight">{medal.desc}</p>
+                       <p className={`text-[11px] font-black uppercase leading-tight ${isUnlocked ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>{medal.title}</p>
+                       <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium mt-1 leading-snug">{medal.desc}</p>
                     </div>
                   );
                 })}

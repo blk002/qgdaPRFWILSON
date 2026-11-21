@@ -452,7 +452,15 @@ export default function TreinoTAF() {
                <Info className="w-3 h-3"/> Dica de Treino
              </h4>
              <p className="text-xs text-slate-400 leading-relaxed">
-               Foque em evoluir no seu gargalo (**{weakTest}**) para garantir que a soma global ultrapasse os 12 pontos com folga.
+               {totalSimuladosTaf > 0 ? (
+                 <>
+                   Foque em evoluir no seu gargalo (<strong className="text-white">{weakTest}</strong>) para garantir que a soma global ultrapasse os 12 pontos com folga.
+                 </>
+               ) : (
+                 <>
+                   Registre seu primeiro simulado físico para identificar automaticamente seu gargalo entre os 5 testes do TAF da PRF.
+                 </>
+               )}
              </p>
           </div>
         </div>

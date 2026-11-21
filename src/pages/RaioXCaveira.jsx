@@ -883,8 +883,8 @@ export default function RaioXCaveira() {
               </div>
 
               {/* Fundo: Tempo total gasto | Tempo médio por questão */}
-              <div className="grid grid-cols-2 gap-3 text-center pt-1">
-                <div>
+              <div className="grid grid-cols-2 gap-3 text-center pt-1 items-stretch">
+                <div className="flex flex-col justify-between">
                   <span className="block text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400">
                     Tempo total gasto
                   </span>
@@ -892,7 +892,7 @@ export default function RaioXCaveira() {
                     {formatDurationHMS(stats.totalSeconds)}
                   </span>
                 </div>
-                <div>
+                <div className="flex flex-col justify-between">
                   <span className="block text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400">
                     Tempo médio por questão
                   </span>

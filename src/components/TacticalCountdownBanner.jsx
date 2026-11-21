@@ -24,14 +24,16 @@ export default function TacticalCountdownBanner() {
         return {
           title: parsed.title || 'OPERAÇÃO PRF • CONTAGEM REGRESSIVA',
           targetDate: parsed.targetDate || getDefaultTargetDate(),
-          isCollapsed: parsed.isCollapsed !== undefined ? Boolean(parsed.isCollapsed) : true
+          isCollapsed: parsed.isCollapsed !== undefined ? Boolean(parsed.isCollapsed) : true,
+          isMiniIcon: Boolean(parsed.isMiniIcon)
         };
       }
     } catch (_) {}
     return {
       title: 'OPERAÇÃO PRF • CONTAGEM REGRESSIVA',
       targetDate: getDefaultTargetDate(),
-      isCollapsed: true
+      isCollapsed: true,
+      isMiniIcon: false
     };
   });
 
@@ -83,7 +85,12 @@ export default function TacticalCountdownBanner() {
   }, [config.targetDate, targetExamDate]);
 
   const toggleCollapsed = () => {
-    saveConfig({ ...config, isCollapsed: !config.isCollapsed });
+    saveConfig({ ...config, isCollapsed: !config.isCollapsed, isMiniIcon: false });
+  };
+
+  const toggleMiniIcon = (e) => {
+    e?.stopPropagation();
+    saveConfig({ ...config, isCollapsed: true, isMiniIcon: !config.isMiniIcon });
   };
 
   const handleOpenModal = (e) => {
@@ -274,6 +281,22 @@ export default function TacticalCountdownBanner() {
                 </div>
               </div>
             </motion.div>
+          ) : config.isMiniIcon ? (
+            /* BOTÃO MINI ÍCONE DISCRETO */
+            <motion.button
+              key="mini-icon"
+              type="button"
+              initial={{ opacity: 0, scale: 0.9 }}
+              animate={{ opacity: 1, scale: 1 }}
+              exit={{ opacity: 0, scale: 0.9 }}
+              transition={{ duration: 0.15 }}
+              onClick={toggleMiniIcon}
+              className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 hover:border-sky-400 text-white px-2.5 py-1.5 rounded-full shadow-lg backdrop-blur-md cursor-pointer transition-all"
+              title={`Contador PRF: ${timeRemaining.days}d ${timeRemaining.hours}h (clique para mostrar)`}
+            >
+              <Clock className="w-3.5 h-3.5 text-sky-400 shrink-0" />
+              <span className="font-mono font-black text-[11px] text-white">{timeRemaining.days}d</span>
+            </motion.button>
           ) : (
             /* PÍLULA MINIMIZADA FLUTUANTE */
             <motion.div
@@ -283,7 +306,7 @@ export default function TacticalCountdownBanner() {
               exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.2 }}
               onClick={toggleCollapsed}
-              className="flex items-center gap-2 bg-slate-900/95 border border-slate-700/80 hover:border-blue-400 text-white px-3 py-2 rounded-2xl shadow-2xl backdrop-blur-xl cursor-pointer transition-all group max-w-[calc(100vw-2rem)]"
+              className="flex items-center gap-2 bg-slate-900/95 border border-slate-700/80 hover:border-blue-400 text-white pl-3 pr-2 py-1.5 rounded-2xl shadow-2xl backdrop-blur-xl cursor-pointer transition-all group max-w-[calc(100vw-2rem)]"
               title="Clique para expandir o contador tático"
             >
               <span className="inline-flex rounded-full h-2 w-2 bg-emerald-500 shrink-0" />
@@ -296,7 +319,15 @@ export default function TacticalCountdownBanner() {
                 <span className="font-black text-amber-400">{timeRemaining.seconds}s</span>
               </div>
 
-              <ChevronUp className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-colors shrink-0 ml-1" />
+              <ChevronUp className="w-3.5 h-3.5 text-slate-400 group-hover:text-white transition-colors shrink-0 ml-0.5" />
+              <button
+                type="button"
+                onClick={toggleMiniIcon}
+                title="Encolher contador para ícone compacto"
+                className="p-0.5 rounded-md text-slate-500 hover:text-slate-200 hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                <X className="w-3 h-3" />
+              </button>
             </motion.div>
           )}
         </AnimatePresence>

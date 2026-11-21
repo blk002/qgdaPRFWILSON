@@ -83,7 +83,6 @@ export default function Config({
     const dayCount = isWeekly ? 7 : (cycle?.length || 0);
     return Array.from({ length: dayCount }, (_, dayIndex) => {
       const baseSlots = Array.isArray(cycle?.[dayIndex]) ? cycle[dayIndex] : [];
-      if (baseSlots.length > 0) return baseSlots;
       const dateInfo = getRelativeDateInfo ? getRelativeDateInfo(dayIndex) : null;
       const fullDateStr = dateInfo?.fullDateStr;
       const dayOfWeek = isWeekly
@@ -91,7 +90,7 @@ export default function Config({
         : undefined;
       const matchingRules = (futureScheduleRules || [])
         .filter(r => {
-          if (!r || r.v !== 2 || !Array.isArray(r.daySlots)) return false;
+          if (!r || r.v !== 2 || !Array.isArray(r.daySlots) || r.daySlots.length === 0) return false;
           if (fullDateStr && r.fromDate && r.fromDate > fullDateStr) return false;
           if (isWeekly && r.dayOfWeek !== undefined && dayOfWeek !== undefined) {
             return r.dayOfWeek === dayOfWeek;
@@ -301,12 +300,96 @@ export default function Config({
           const currentTimeGoal = Number(sub.timeGoalMinutes || subjectTimeGoal?.[sub.id]) || 0;
 
           return (
-            <div key={sub.id} className="border border-slate-200 rounded-lg p-4 flex flex-col gap-3 bg-slate-50 hover:border-blue-400 transition-colors dark:bg-slate-950 dark:border-slate-800">
-              <div className="flex justify-between items-start">
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <span className={`text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider ${sub.color}`}>
-                    {sub.name} <span className="opacity-60 ml-1">({sub.block})</span>
+            <div key={sub.id} className="border border-slate-200/80 rounded-xl p-4 flex flex-col justify-between gap-2.5 bg-white hover:border-blue-400 transition-colors dark:bg-slate-900 dark:border-slate-800 shadow-xs dark:shadow-none">
+              <div className="flex flex-col gap-2">
+                <div className="flex justify-between items-start gap-2">
+                  <span
+                    className={`text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider truncate max-w-full ${sub.color}`}
+                    title={`${sub.name} (${sub.block})`}
+                  >
+                    {sub.name} <span className="opacity-65 ml-1">({sub.block})</span>
                   </span>
+                  <div className="flex gap-1 shrink-0">
+                    <button 
+                      onClick={() => setShareModalConfig({ isOpen: true, tab: 'share', initialSubjectId: sub.id })}
+                      className="p-1.5 bg-slate-50 border border-slate-200 text-slate-500 hover:text-blue-600 rounded-lg dark:bg-slate-850 dark:text-slate-400 dark:border-slate-700 transition-colors cursor-pointer"
+                      title={`Compartilhar ${sub.name}`}
+                    >
+                      <Share2 className="w-3.5 h-3.5" />
+                    </button>
+                    <button onClick={() => {
+                      setDraftSubject({ 
+                        ...sub, 
+                        speed: sub.speed || 1,
+                        timeGoalMinutes: currentTimeGoal,
+                        onCompleteAction: (sub.onCompleteAction === 'replace' || sub.onCompleteAction === 'double_remaining') ? sub.onCompleteAction : 'keep_fixed',
+                        replacementSubjectId: sub.replacementSubjectId || ''
+                      });
+                      setEditingSubjectId(sub.id);
+                    }} className="p-1.5 bg-slate-50 border border-slate-200 text-slate-500 hover:text-blue-600 rounded-lg dark:bg-slate-850 dark:text-slate-400 dark:border-slate-700 cursor-pointer"><Edit2 className="w-3.5 h-3.5" /></button>
+                    <button onClick={() => {
+                      setGlobalModal({
+                        title: "Excluir Disciplina",
+                        message: `Você tem certeza que deseja excluir a matéria "${sub.name}" permanentemente do seu planejamento?`,
+                        onConfirm: () => {
+                          const st = useStore.getState();
+                          const newSubjects = { ...st.subjects };
+                          delete newSubjects[sub.id];
+                          Object.keys(newSubjects).forEach(k => {
+                            if (newSubjects[k]?.replacementSubjectId === sub.id) {
+                              newSubjects[k] = { ...newSubjects[k], replacementSubjectId: '' };
+                            }
+                          });
+
+                          const newCycle = (st.cycle || []).map(day => (day || []).filter(sId => sId !== sub.id));
+                          const newCycleSlotCounts = (st.cycleSlotCounts || []).map((counts, dIdx) => {
+                            const day = st.cycle?.[dIdx] || [];
+                            return (counts || []).filter((_, sIdx) => day[sIdx] !== sub.id);
+                          });
+
+                          const newOverrides = {};
+                          const newOverrideCounts = {};
+                          Object.entries(st.calendarOverrides || {}).forEach(([dateKey, arr]) => {
+                            const filtered = (arr || []).filter(sId => sId !== sub.id);
+                            if (filtered.length > 0 || (arr || []).length === 0) {
+                              newOverrides[dateKey] = filtered;
+                              if (st.calendarOverrideCounts?.[dateKey]) {
+                                newOverrideCounts[dateKey] = st.calendarOverrideCounts[dateKey].filter((_, sIdx) => (arr || [])[sIdx] !== sub.id);
+                              }
+                            }
+                          });
+
+                          const newRules = (st.futureScheduleRules || []).map(rule => {
+                            const slots = rule.daySlots || rule.subjects || [];
+                            const filtered = slots.filter(sId => sId !== sub.id);
+                            const filteredCounts = (rule.slotCounts || []).filter((_, sIdx) => slots[sIdx] !== sub.id);
+                            return { ...rule, daySlots: filtered, slotCounts: filteredCounts };
+                          });
+
+                          useStore.setState({
+                            subjects: newSubjects,
+                            cycle: newCycle,
+                            cycleSlotCounts: newCycleSlotCounts,
+                            calendarOverrides: newOverrides,
+                            calendarOverrideCounts: newOverrideCounts,
+                            futureScheduleRules: newRules,
+                            reviews: (st.reviews || []).filter(r =>
+                              r.subjectId !== sub.id ||
+                              r.isCaveiraQuestion ||
+                              Boolean(r.questionData) ||
+                              String(r.id || '').startsWith('rev_caveira_') ||
+                              String(r.topicName || '').startsWith('[Caveira')
+                            ),
+                            completedToday: []
+                          });
+                          useStore.getState().syncAndRepairCaveiraReviews?.();
+                        }
+                      });
+                    }} className="p-1.5 bg-slate-50 border border-slate-200 text-slate-500 hover:text-red-600 rounded-lg dark:bg-slate-850 dark:text-slate-400 dark:border-slate-700 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                  </div>
+                </div>
+
+                <div className="flex items-center gap-1.5 flex-wrap">
                   {currentSpeed > 1 && (
                     <span className="text-[9px] font-black bg-blue-100 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-blue-200 dark:border-blue-900" title={`Aceleração configurada: ${currentSpeed}x`}>
                       <Zap className="w-2.5 h-2.5 text-yellow-500 fill-yellow-500" /> {currentSpeed}x
@@ -326,91 +409,13 @@ export default function Config({
                       <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500" /> Dobra no Dia
                     </span>
                   ) : (
-                    <span className="text-[9px] font-black bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-slate-300 dark:border-slate-700" title="Encerra e libera a vaga ao fim das aulas">
+                    <span className="text-[9px] font-black bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-slate-200 dark:border-slate-700" title="Encerra e libera a vaga ao fim das aulas">
                       <Clock className="w-2.5 h-2.5 text-slate-400" /> Encerra ao fim
                     </span>
                   )}
                 </div>
-                <div className="flex gap-1">
-                  <button 
-                    onClick={() => setShareModalConfig({ isOpen: true, tab: 'share', initialSubjectId: sub.id })}
-                    className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-blue-600 rounded dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800 transition-colors"
-                    title={`Compartilhar ${sub.name}`}
-                  >
-                    <Share2 className="w-4 h-4" />
-                  </button>
-                  <button onClick={() => {
-                    setDraftSubject({ 
-                      ...sub, 
-                      speed: sub.speed || 1,
-                      timeGoalMinutes: currentTimeGoal,
-                      onCompleteAction: (sub.onCompleteAction === 'replace' || sub.onCompleteAction === 'double_remaining') ? sub.onCompleteAction : 'keep_fixed',
-                      replacementSubjectId: sub.replacementSubjectId || ''
-                    });
-                    setEditingSubjectId(sub.id);
-                  }} className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-blue-600 rounded dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800"><Edit2 className="w-4 h-4" /></button>
-                  <button onClick={() => {
-                    setGlobalModal({
-                      title: "Excluir Disciplina",
-                      message: `Você tem certeza que deseja excluir a matéria "${sub.name}" permanentemente do seu planejamento?`,
-                      onConfirm: () => {
-                        const st = useStore.getState();
-                        const newSubjects = { ...st.subjects };
-                        delete newSubjects[sub.id];
-                        Object.keys(newSubjects).forEach(k => {
-                          if (newSubjects[k]?.replacementSubjectId === sub.id) {
-                            newSubjects[k] = { ...newSubjects[k], replacementSubjectId: '' };
-                          }
-                        });
-
-                        const newCycle = (st.cycle || []).map(day => (day || []).filter(sId => sId !== sub.id));
-                        const newCycleSlotCounts = (st.cycleSlotCounts || []).map((counts, dIdx) => {
-                          const day = st.cycle?.[dIdx] || [];
-                          return (counts || []).filter((_, sIdx) => day[sIdx] !== sub.id);
-                        });
-
-                        const newOverrides = {};
-                        const newOverrideCounts = {};
-                        Object.entries(st.calendarOverrides || {}).forEach(([dateKey, arr]) => {
-                          const filtered = (arr || []).filter(sId => sId !== sub.id);
-                          if (filtered.length > 0 || (arr || []).length === 0) {
-                            newOverrides[dateKey] = filtered;
-                            if (st.calendarOverrideCounts?.[dateKey]) {
-                              newOverrideCounts[dateKey] = st.calendarOverrideCounts[dateKey].filter((_, sIdx) => (arr || [])[sIdx] !== sub.id);
-                            }
-                          }
-                        });
-
-                        const newRules = (st.futureScheduleRules || []).map(rule => {
-                          const slots = rule.daySlots || rule.subjects || [];
-                          const filtered = slots.filter(sId => sId !== sub.id);
-                          const filteredCounts = (rule.slotCounts || []).filter((_, sIdx) => slots[sIdx] !== sub.id);
-                          return { ...rule, daySlots: filtered, slotCounts: filteredCounts };
-                        });
-
-                        useStore.setState({
-                          subjects: newSubjects,
-                          cycle: newCycle,
-                          cycleSlotCounts: newCycleSlotCounts,
-                          calendarOverrides: newOverrides,
-                          calendarOverrideCounts: newOverrideCounts,
-                          futureScheduleRules: newRules,
-                          reviews: (st.reviews || []).filter(r =>
-                            r.subjectId !== sub.id ||
-                            r.isCaveiraQuestion ||
-                            Boolean(r.questionData) ||
-                            String(r.id || '').startsWith('rev_caveira_') ||
-                            String(r.topicName || '').startsWith('[Caveira')
-                          ),
-                          completedToday: []
-                        });
-                        useStore.getState().syncAndRepairCaveiraReviews?.();
-                      }
-                    });
-                  }} className="p-1.5 bg-white border border-slate-200 text-slate-500 hover:text-red-600 rounded dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800"><Trash2 className="w-4 h-4" /></button>
-                </div>
               </div>
-              <div className="flex items-center justify-between text-xs text-slate-500 font-medium dark:text-slate-400">
+              <div className="flex items-center justify-between text-xs text-slate-500 font-medium dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800/80">
                 <span>{sub.topics?.length || 0} {sub.topics?.length === 1 ? 'assunto' : 'assuntos'}</span>
                 <span className="text-[10px] font-mono text-slate-400" title={`Sem aceleração: ${st.totalFriendly} | Acelerado: ${st.acceleratedFriendly}`}>
                   {st.acceleratedFriendly} {currentSpeed > 1 && `(${currentSpeed}x)`}

@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X, ChevronLeft, ChevronRight, Sparkles, BookOpen, Repeat,
-  BrainCircuit, Calendar, BarChart2, CheckCircle, ArrowRight, Target, Info
+  BrainCircuit, Calendar, CheckCircle, ArrowRight, Target, Info, Zap, Skull
 } from 'lucide-react';
 
 const TUTORIAL_STEPS = [
@@ -11,102 +11,102 @@ const TUTORIAL_STEPS = [
     tabId: null,
     badge: 'Visão Geral',
     title: 'Bem-vindo à Central de Estudos',
-    subtitle: 'Tudo o que você precisa para estudar no dia a dia, organizado por tipo em um só lugar.',
+    subtitle: 'Sua estação diária de execução com 4 abas integradas: Hoje, Cronograma, Raio-X Caveira e Calendário.',
     icon: Sparkles,
-    accentClass: 'bg-blue-500/15 text-blue-600 dark:text-blue-400 border-blue-500/30',
+    accentClass: 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30',
     description:
-      'Para facilitar sua rotina, reunimos as 5 ferramentas principais de estudo em abas logo no topo: Cronograma, Revisões, Histórico, Calendário e Edital.',
+      'A Central de Estudos reúne as 4 abas operacionais do seu dia a dia (Hoje, Cronograma, Raio-X Caveira e Calendário), enquanto Revisões FSRS, Histórico, Edital, Simulados, Treino TAF e Duelo CTB ficam acessíveis com um clique no menu lateral.',
     bullets: [
-      'Acompanhe na barra superior quantas aulas do edital você já concluiu e a data prevista para terminar.',
-      'Alterne entre as abas sem perder o contexto — ideal para seguir uma rotina simples todos os dias.',
-      'Use os atalhos no cabeçalho para acessar rapidamente Raio-X Caveira, Simulados e Duelo CTB.'
+      'Acompanhe na faixa superior quantas aulas do edital você já concluiu e a data prevista de fechamento.',
+      'Comece pela aba Hoje para executar imediatamente suas aulas do dia, revisões pendentes e conferir sua consistência.',
+      'Use o menu lateral esquerdo a qualquer momento para abrir Revisões FSRS, Histórico, Edital e Simulados.'
     ],
-    proTip: 'Rotina recomendada para iniciantes: 1) Zere suas Revisões → 2) Estude os blocos do Cronograma → 3) Confira seu progresso no Histórico.'
+    proTip: 'Rotina recomendada: 1) Abra a aba Hoje → 2) Zere suas Revisões FSRS → 3) Assista às aulas do dia e clique em "Exercícios da Aula".'
   },
   {
-    id: 'edital',
-    tabId: 'edital',
-    badge: 'Passo 1 • Base',
-    title: 'Aba Edital — Seu Mapa Completo',
-    subtitle: 'Visualize todas as disciplinas e assuntos que faltam até fechar o edital da PRF.',
-    icon: BookOpen,
-    accentClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
+    id: 'hoje',
+    tabId: 'hoje',
+    badge: 'Passo 1 • Foco do Dia',
+    title: 'Aba Hoje — Execução Rápida sem Distrações',
+    subtitle: 'Veja apenas o que precisa ser feito hoje: blocos de teoria, revisões e consistência.',
+    icon: Zap,
+    accentClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30',
     description:
-      'Aqui você enxerga cada disciplina organizada por Bloco (B1, B2 ou B3), filtra matérias específicas e expande cada cartão para conferir o progresso aula por aula.',
+      'A aba Hoje mostra lado a lado seus blocos de teoria escalados para o dia, seu painel de Revisão FSRS e, na base, seu Heatmap de Consistência junto ao resumo de questões do Caveira.',
     bullets: [
-      'Clique em uma matéria para abrir todos os tópicos e ver quantas aulas já foram concluídas.',
-      'Filtre por Bloco (B1, B2, B3) ou digite o nome de um assunto na busca para achar rápido.',
-      'Precisa adicionar matérias, links de aulas ou ajustar sua velocidade? Clique em "Gerenciar / Adicionar Matérias".'
+      'Clique em "Aula Assistida" para registrar a conclusão da videoaula, ganhar XP/moedas e alimentar o histórico.',
+      'Clique em "Exercícios da Aula" para abrir o Projeto Caveira já filtrado nos subassuntos daquela aula.',
+      'Acompanhe seus quadradinhos de estudo dos últimos 12 meses e sua taxa de acertos em questões.'
     ],
-    proTip: 'Se você ainda não cadastrou matérias, comece pela aba Edital ou clique em "Ajustar Edital" no canto superior direito.'
+    proTip: 'Use o botão "Colar Bizus" ao concluir uma aula para salvar os subassuntos e filtrar questões automaticamente.'
   },
   {
     id: 'cronograma',
     tabId: 'cronograma',
-    badge: 'Passo 2 • Execução Diária',
-    title: 'Aba Cronograma — O Que Estudar Hoje',
-    subtitle: 'Siga os blocos programados para o dia e registre cada aula assistida.',
+    badge: 'Passo 2 • Visão Semanal',
+    title: 'Aba Cronograma — Seus Dias em 3 Colunas',
+    subtitle: 'Navegue pelos dias da semana com visão ampla dos títulos completos das aulas.',
     icon: Repeat,
     accentClass: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30',
     description:
-      'O Cronograma mostra exatamente quais disciplinas estão escaladas para hoje e para a semana. É aqui que você marca os blocos concluídos e registra suas aulas.',
+      'O Cronograma exibe 3 colunas largas por vez para que os nomes completos das disciplinas, tópicos e aulas fiquem sempre legíveis, com rolagem horizontal fluida entre os 7 dias.',
     bullets: [
-      'Cada card representa um bloco de estudo do seu dia com a próxima aula da fila já selecionada.',
-      'Ao finalizar uma aula, registre a conclusão para avançar no Edital, ganhar XP e alimentar seu histórico.',
-      'Você pode reordenar blocos, usar o ciclo semanal ou flexível e ajustar sua meta diária.'
+      'Use as pílulas dos dias no topo (DOM, SEG, TER...) para saltar instantaneamente para qualquer dia da semana.',
+      'Reordene blocos, personalize o ciclo semanal ou flexível e registre aulas de dias anteriores se necessário.',
+      'Veja o tempo total original e acelerado (ex.: 1.5x) de cada dia antes mesmo de começar.'
     ],
-    proTip: 'Mantenha o Cronograma como sua aba padrão ao abrir o aplicativo pela manhã.'
+    proTip: 'Se você perder um dia de estudo, a reposição automática desloca a fila para você não deixar nenhuma matéria para trás.'
   },
   {
-    id: 'revisoes',
-    tabId: 'revisoes',
-    badge: 'Passo 3 • Retenção FSRS',
-    title: 'Aba Revisões — Nunca Mais Esqueça a Matéria',
-    subtitle: 'O sistema calcula automaticamente o dia certo de revisar cada questão ou assunto.',
-    icon: BrainCircuit,
-    accentClass: 'bg-amber-500/15 text-amber-600 dark:text-amber-400 border-amber-500/30',
+    id: 'caveira',
+    tabId: 'caveira',
+    badge: 'Passo 3 • Questões & Diagnóstico',
+    title: 'Aba Raio-X Caveira — Caderno Tático de Questões',
+    subtitle: 'Sincronize questões resolvidas no Caveira e descubra seus pontos fortes e críticos.',
+    icon: Skull,
+    accentClass: 'bg-rose-500/15 text-rose-600 dark:text-rose-400 border-rose-500/30',
     description:
-      'Sempre que houver revisões pendentes para hoje, um contador aparecerá diretamente na aba Revisões. Resolver essa fila antes da teoria evita o esquecimento.',
+      'O Raio-X Caveira consolida todas as questões que você resolveu, calculando aproveitamento líquido, tempo médio por questão e ranking de assuntos mais errados vs. mais acertados.',
     bullets: [
-      'Filtre por disciplina ou alterne entre revisões do Projeto Caveira e revisões do Ciclo.',
-      'Avalie o nível de dificuldade ao responder (Fácil, Bom, Difícil, Errei) para o algoritmo FSRS recalcular o próximo intervalo.',
-      'Use o termômetro de retenção para identificar tópicos que precisam de reforço.'
+      'Filtre por período (Hoje, 7 dias, 30 dias), disciplina, assunto ou modalidade (Certo/Errado vs. Múltipla Escolha).',
+      'Expanda qualquer disciplina em "Desempenho por Disciplina" para ver a precisão assunto por assunto.',
+      'Questões erradas podem entrar automaticamente na sua fila de Revisões FSRS para retenção espaçada.'
     ],
-    proTip: 'Tente manter o contador de revisões zerado todos os dias — poucos minutos garantem alta pontuação na prova.'
+    proTip: 'Antes de iniciar um bloco de teoria, confira no Raio-X Caveira quais subassuntos daquela matéria estão na Zona Crítica.'
   },
   {
     id: 'calendario',
     tabId: 'calendario',
-    badge: 'Passo 4 • Planejamento',
-    title: 'Aba Calendário — Previsão e Ajustes no Mês',
-    subtitle: 'Saiba em que data cada matéria termina e personalize dias específicos.',
+    badge: 'Passo 4 • Planejamento Mensal',
+    title: 'Aba Calendário — Previsão de Término do Edital',
+    subtitle: 'Saiba em que data cada matéria termina e personalize qualquer dia futuro.',
     icon: Calendar,
     accentClass: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/30',
     description:
-      'O Calendário projeta suas aulas futuras dia a dia com base no seu ciclo atual, mostrando o nome das aulas previstas e a data estimada de término.',
+      'O Calendário projeta todas as aulas restantes dia a dia com base no seu ritmo atual, exibindo quais aulas serão vistas em cada data e quando cada disciplina será concluída.',
     bullets: [
-      'Em "Fim das Disciplinas", clique em qualquer matéria para destacá-la em todo o calendário mensal (e oculte o painel quando quiser mais espaço).',
-      'Clique em qualquer dia futuro para abrir "Gerenciar Dia" e adaptar a programação daquela data ou do futuro.',
-      'Use as setas ← e → do teclado dentro do modal para trocar de dia rapidamente e ative o salvamento automático se preferir.'
+      'Em "Fim das Disciplinas", clique em uma matéria para destacá-la no mês inteiro.',
+      'Clique em qualquer célula do calendário para abrir o modal "Gerenciar Dia" em 2 colunas (sem rolagem).',
+      'Use as setas ← e → do teclado dentro do modal para navegar entre dias rapidamente.'
     ],
-    proTip: 'Verifique a barra de atraso/risco comparando sua previsão de término com a Data Alvo da Prova.'
+    proTip: 'Compare a Previsão de Fechamento do Edital com a Data Alvo da Prova para saber se precisa aumentar o ritmo.'
   },
   {
-    id: 'historico',
-    tabId: 'historico',
-    badge: 'Passo 5 • Métricas',
-    title: 'Aba Histórico — Seus Dados e Evolução',
-    subtitle: 'Analise horas estudadas, ritmo semanal e domínio por disciplina.',
-    icon: BarChart2,
-    accentClass: 'bg-purple-500/15 text-purple-600 dark:text-purple-400 border-purple-500/30',
+    id: 'revisoes',
+    tabId: 'revisoes',
+    badge: 'Passo 5 • Desempenho & Edital',
+    title: 'Menu Lateral — Revisões FSRS, Histórico e Edital',
+    subtitle: 'Acesse suas ferramentas de retenção e evolução na seção Desempenho da barra lateral.',
+    icon: BrainCircuit,
+    accentClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
     description:
-      'No Histórico você acompanha sua evolução em gráficos de estudo diário (7, 15 ou 30 dias), equilíbrio entre matérias e anotações de revisão.',
+      'Para manter a Central de Estudos limpa e rápida, os módulos analíticos ficam organizados na seção "Desempenho" do menu lateral esquerdo.',
     bullets: [
-      'Alterne o período do gráfico para acompanhar sua média de minutos diários.',
-      'Expanda qualquer disciplina para ler suas anotações pessoais de revisão.',
-      'Cruze esses dados com seus Simulados para ajustar o tempo dedicado às matérias com menor percentual.'
+      'Revisões: resolva sua fila diária calculada pelo algoritmo FSRS v6 e veja o mapa de carga dos próximos 7 dias.',
+      'Histórico: acompanhe seus gráficos de horas estudadas (7, 15 ou 30 dias) e distribuição de tempo por matéria.',
+      'Edital: consulte o edital verticalizado completo da PRF por Bloco (B1, B2 e B3) e busque qualquer tópico.'
     ],
-    proTip: 'Use o Histórico uma vez por semana (por exemplo, no domingo) para recalibrar seu ciclo.'
+    proTip: 'Clique no botão ao lado para abrir diretamente o Centro de Comando de Retenção (Revisões FSRS).'
   }
 ];
 

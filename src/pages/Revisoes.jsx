@@ -482,7 +482,7 @@ export default function Revisoes() {
                 <Zap className="w-4 h-4 text-sky-500 dark:text-sky-400" /> Previsão de Carga FSRS (Próximos 7 Dias)
               </h3>
               <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Total na semana: <strong>{totalNext7Days} cartões</strong> • Clique em <strong>⚡ Adiantar</strong> para puxar para hoje.
+                Total na semana: <strong>{totalNext7Days} cartões</strong> • Clique em <strong>⚡ Puxar</strong> para trazer revisões para hoje.
               </p>
             </div>
           </div>

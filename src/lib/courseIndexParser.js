@@ -14,7 +14,7 @@ export function normalizeCourseIndexLineText(rawLine) {
 
   // Remove timestamps no início: [00:01:42], (00:01:42), 00:01:42 -
   line = line
-    .replace(/^[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?\s*[-–—:|]*\s*/, '')
+    .replace(/^[([ ]?\d{1,2}:\d{2}(?::\d{2})?[\])]?\s*[-–—:|]*\s*/, '')
     .replace(/^(?:[-•*●▪◦]|\d{1,2}\s*[.)\-–—])\s+/, '')
     .trim();
 
@@ -163,7 +163,7 @@ export function parseCourseIndexSubtopics(rawText, contextNames = []) {
   for (let i = 0; i < rawLines.length; i++) {
     const cur = rawLines[i];
     if (
-      (/^[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?$/.test(cur) || /^\d{1,2}\s*[.)\-–—]$/.test(cur)) &&
+      (/^[([ ]?\d{1,2}:\d{2}(?::\d{2})?[\])]?$/.test(cur) || /^\d{1,2}\s*[.)\-–—]$/.test(cur)) &&
       i + 1 < rawLines.length
     ) {
       mergedLines.push(`${cur} ${rawLines[i + 1]}`);
@@ -203,7 +203,7 @@ export function parseCourseIndexSubtopics(rawText, contextNames = []) {
       continue;
     }
 
-    const hadIntroPrefix = /^(?:[\[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?\s*|\d{1,2}\s*[.)\-–—]\s*)?introdu[cç][aã]o\b/i.test(rawLine);
+    const hadIntroPrefix = /^(?:[([ ]?\d{1,2}:\d{2}(?::\d{2})?[\])]?\s*|\d{1,2}\s*[.)\-–—]\s*)?introdu[cç][aã]o\b/i.test(rawLine);
     let cleaned = normalizeCourseIndexLineText(rawLine);
     if (!cleaned) continue;
 

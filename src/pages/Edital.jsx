@@ -150,14 +150,30 @@ export default function Edital() {
               </div>
             </div>
 
-            <button
-              type="button"
-              onClick={onOpenConfig}
-              className="h-8 px-3 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-850 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer shrink-0"
-            >
-              <Settings className="w-3.5 h-3.5" />
-              <span>Gerenciar Matérias</span>
-            </button>
+            <div className="flex items-center gap-1.5 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  const allIds = {};
+                  filteredSubjects.forEach((s) => { allIds[s.id] = true; });
+                  setExpandedSubjects(allIds);
+                }}
+                className="h-8 px-2.5 rounded-lg text-xs font-bold bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 dark:text-slate-200 dark:border-slate-700 flex items-center justify-center gap-1 transition-colors cursor-pointer"
+              >
+                <ChevronDown className="w-3.5 h-3.5" />
+                <span>Expandir Todos</span>
+              </button>
+              {Object.values(expandedSubjects).some(Boolean) && (
+                <button
+                  type="button"
+                  onClick={() => setExpandedSubjects({})}
+                  className="h-8 px-2.5 rounded-lg text-xs font-bold bg-transparent hover:bg-slate-100 text-slate-500 border border-slate-200 dark:hover:bg-slate-850 dark:text-slate-400 dark:border-slate-800 flex items-center justify-center gap-1 transition-colors cursor-pointer"
+                >
+                  <ChevronUp className="w-3.5 h-3.5" />
+                  <span>Recolher</span>
+                </button>
+              )}
+            </div>
           </div>
 
           {/* Lista de Disciplinas */}

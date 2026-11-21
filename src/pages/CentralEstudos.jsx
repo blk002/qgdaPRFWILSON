@@ -17,7 +17,7 @@ const TUTORIAL_SEEN_KEY = 'qg_central_tutorial_seen';
 const VALID_TABS = new Set(['hoje', 'cronograma', 'caveira', 'calendario']);
 
 const TAB_CONFIG = [
-  { id: 'hoje', label: 'Hoje', icon: Zap, tutorialStep: 0 },
+  { id: 'hoje', label: 'Hoje', icon: Zap, tutorialStep: 1 },
   { id: 'cronograma', label: 'Cronograma', icon: Repeat, tutorialStep: 2 },
   { id: 'caveira', label: 'Raio-X Caveira', icon: Skull, tutorialStep: 3 },
   { id: 'calendario', label: 'Calendário', icon: CalendarIcon, tutorialStep: 4 }
@@ -89,6 +89,10 @@ export default function CentralEstudos() {
 
   const handleTutorialGoToTab = (tabId) => {
     handleCloseTutorial();
+    if (tabId === 'revisoes') {
+      navigate('/revisoes');
+      return;
+    }
     if (tabId === 'historico') {
       navigate('/estatisticas');
       return;
