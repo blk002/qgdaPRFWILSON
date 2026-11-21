@@ -25,7 +25,8 @@ import {
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { toast } from 'sonner';
-import { parseDurationToSeconds, calculateLessonsForGoal } from '../lib/durationHelpers';
+import { parseDurationToSeconds, calculateLessonsForGoal, formatSecondsToFriendly } from '../lib/durationHelpers';
+import { getSubjectTextColorClass } from '../lib/subjectColors';
 
 function formatMinutesToFriendly(minutes) {
   if (!minutes || minutes <= 0) return '0 min';
@@ -335,6 +336,7 @@ export default function Calendario() {
           id: effectiveSubId, 
           isLast, 
           count: consumed,
+          accelSec: suggestion.totalAccelSec || 0,
           customCount: customSlotLessons,
           isTransitioned: wasTransitioned,
           lessons: consumedLessons
@@ -884,8 +886,8 @@ export default function Calendario() {
                 let bgClass = isPast 
                   ? "bg-slate-50/80 text-slate-400 border border-slate-200/40 dark:bg-slate-950/40 dark:border-slate-800/40 dark:text-slate-600 cursor-default" 
                   : isTodayReal 
-                    ? "bg-blue-50 border-2 border-blue-500 shadow-sm text-blue-700 dark:bg-blue-950/35 dark:border-blue-500/80 dark:text-blue-300 cursor-pointer hover:ring-2 hover:ring-blue-400/50 hover:shadow-md" 
-                    : "bg-white border border-slate-200/80 hover:bg-slate-50 dark:hover:bg-slate-900/90 text-slate-700 dark:bg-slate-950/80 dark:border-slate-800 dark:text-slate-300 cursor-pointer hover:border-blue-400 dark:hover:border-blue-500/50 hover:shadow-md";
+                    ? "bg-sky-50/40 border-2 border-sky-500 text-slate-800 dark:bg-slate-900 dark:border-sky-400 dark:text-slate-100 cursor-pointer hover:ring-2 hover:ring-sky-400/40" 
+                    : "bg-white border border-slate-200/80 hover:bg-slate-50 dark:hover:bg-slate-900/90 text-slate-700 dark:bg-slate-950/80 dark:border-slate-800 dark:text-slate-300 cursor-pointer hover:border-sky-400 dark:hover:border-sky-500/50";
 
                 const cellDateKey = `${year}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
                 const isOverridden = !isPast && Boolean(calendarOverrides && calendarOverrides[cellDateKey]);
@@ -903,6 +905,10 @@ export default function Calendario() {
                   }
                 }
 
+                const dayAccelSec = dayItemsToRender.reduce((acc, it) => acc + (Number(it?.accelSec) || 0), 0);
+                const dayTimeLabel = dayAccelSec > 0 ? formatSecondsToFriendly(dayAccelSec) : '';
+                const dayMonthLabel = `${String(day).padStart(2, '0')}/${String(month + 1).padStart(2, '0')}`;
+
                 return (
                   <div 
                     key={day} 
@@ -910,81 +916,80 @@ export default function Calendario() {
                     className={`min-h-[4.75rem] md:min-h-[5.75rem] min-w-0 p-1.5 rounded-lg flex flex-col transition-all group ${bgClass}`}
                     title={isPast ? "Dia já concluído / passado" : "Clique para gerenciar matérias deste dia"}
                   >
-                    <div className="flex justify-between items-start mb-1.5 gap-0.5">
-                      <div className="flex items-center gap-1">
-                        <span className={`font-bold text-xs sm:text-sm px-0.5 transition-colors ${!isPast ? 'group-hover:text-blue-500' : ''}`}>{day}</span>
+                    <div className="flex items-center justify-between gap-1 pb-1 mb-1 border-b border-slate-100 dark:border-slate-800/80 text-[10px] leading-none">
+                      <div className="flex items-center gap-1 min-w-0">
+                        <span className={`font-black tabular-nums ${isTodayReal ? 'text-sky-600 dark:text-sky-400' : ''}`}>
+                          {dayMonthLabel}
+                        </span>
                         {isOverridden && (
-                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400" title="Dia com personalização manual avulsa" />
+                          <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="Dia com personalização manual avulsa" />
+                        )}
+                        {isTodayReal && (
+                          <span className="text-[8px] font-black uppercase text-sky-600 dark:text-sky-400">
+                            Hoje
+                          </span>
                         )}
                       </div>
-                      <div className="flex items-center gap-1">
-                        {isTodayReal && <span className="text-[9px] sm:text-[10px] font-black bg-blue-500 text-white px-1.5 py-0.5 rounded-sm">HOJE</span>}
-                        {!isPast && <Settings className="w-3 h-3 text-slate-400 opacity-0 group-hover:opacity-100 transition-opacity" />}
-                      </div>
+
+                      {dayTimeLabel && (
+                        <span className="font-bold text-slate-500 dark:text-slate-400 tabular-nums truncate">
+                          {dayTimeLabel}
+                        </span>
+                      )}
+
+                      {!isPast && (
+                        <span className="font-bold uppercase text-[9px] text-sky-600 dark:text-sky-400 group-hover:underline shrink-0">
+                          Editar
+                        </span>
+                      )}
                     </div>
                     
                     {dayItemsToRender.length > 0 && (
-                      <div className="flex flex-col gap-1 pb-0.5 mt-auto min-w-0">
+                      <div className="flex flex-col gap-0.5 min-w-0">
                         {dayItemsToRender.map((item, idx) => {
                           const sub = subjects[item.id];
                           if (!sub) return null;
                           const lessonsList = Array.isArray(item.lessons) ? item.lessons : [];
+                          const textColorClass = getSubjectTextColorClass(sub.color);
+                          const isDimmed = Boolean(highlightedSubjectId && sub.id !== highlightedSubjectId);
+                          const isHighlighted = Boolean(highlightedSubjectId && sub.id === highlightedSubjectId);
                           const blockTooltip = lessonsList.length > 0
                             ? `${sub.name}: ${lessonsList.map(l => l.name).join(' • ')}`
                             : sub.name;
                           return (
-                            <div
-                              key={idx}
-                              title={blockTooltip}
-                              className={`flex flex-col gap-0.5 min-w-0 text-[10px] sm:text-[11px] font-bold px-1.5 py-1 rounded-md leading-tight transition-opacity ${sub.color} ${
-                                highlightedSubjectId && sub.id !== highlightedSubjectId
-                                  ? 'opacity-20 grayscale-[40%]'
-                                  : highlightedSubjectId && sub.id === highlightedSubjectId
-                                    ? 'ring-2 ring-blue-500 dark:ring-blue-400 shadow-xs'
-                                    : ''
-                              }`}
-                            >
-                              <div className="flex items-center justify-between gap-0.5 min-w-0">
-                                <span className="truncate flex-1 min-w-0">
-                                  {sub.name}
-                                  {item.isTransitioned && (
-                                    <span className="opacity-80 text-[8px] font-black uppercase tracking-tight ml-1 bg-black/20 dark:bg-white/20 px-1 py-0.2 rounded">
-                                      SUBST.
-                                    </span>
-                                  )}
-                                </span>
-                                {item.count >= 1 && (
+                            <React.Fragment key={idx}>
+                              <span
+                                title={blockTooltip}
+                                className={`block mt-1 first:mt-0 text-[10px] sm:text-[11px] font-black uppercase leading-tight truncate transition-opacity ${textColorClass} ${
+                                  isDimmed ? 'opacity-20' : ''
+                                } ${isHighlighted ? 'underline underline-offset-2' : ''}`}
+                              >
+                                {sub.name}
+                                {item.isTransitioned ? ' • SUBST.' : ''}
+                                {item.isLast ? ' ★' : ''}
+                              </span>
+                              {lessonsList.length > 0 ? (
+                                lessonsList.map((les, lIdx) => (
                                   <span
-                                    className="ml-1 px-1 py-0.2 rounded text-[9px] font-black bg-black/25 dark:bg-white/20 shrink-0"
-                                    title={`${item.count} ${item.count === 1 ? 'aula prevista' : 'aulas previstas'} neste bloco`}
+                                    key={`${idx}-${lIdx}`}
+                                    className={`block pl-1.5 text-[10px] sm:text-[11px] font-semibold leading-snug break-words transition-opacity ${textColorClass} ${
+                                      isDimmed ? 'opacity-20' : 'opacity-95'
+                                    }`}
+                                    title={les.topicName && !les.name.includes(les.topicName) ? `${les.topicName} • ${les.name}${les.duration ? ` (${les.duration})` : ''}` : `${les.name}${les.duration ? ` (${les.duration})` : ''}`}
                                   >
-                                    {item.count}a
+                                    • {les.name}
                                   </span>
-                                )}
-                                {item.isLast && (
-                                  <span title={`Conclusão prevista de ${sub.name}!`} className="flex items-center ml-0.5 shrink-0">
-                                    <svg className="w-3 h-3 sm:w-3.5 sm:h-3.5" viewBox="0 0 24 24" fill="none">
-                                      <path d="M12 2L22 20H2L12 2Z" fill="white" stroke="#E81C23" strokeWidth="3" strokeLinejoin="round"/>
-                                      <path d="M12 8V14" stroke="#1A1A1A" strokeWidth="2.5" strokeLinecap="round"/>
-                                      <circle cx="12" cy="17.5" r="1.5" fill="#1A1A1A"/>
-                                    </svg>
-                                  </span>
-                                )}
-                              </div>
-                              {lessonsList.length > 0 && (
-                                <div className="mt-0.5 pt-0.5 border-t border-black/15 dark:border-white/15 flex flex-col gap-0.5 min-w-0">
-                                  {lessonsList.map((les, lIdx) => (
-                                    <span
-                                      key={lIdx}
-                                      className="text-[10px] font-medium leading-tight truncate opacity-95"
-                                      title={les.topicName && !les.name.includes(les.topicName) ? `${les.topicName} • ${les.name}${les.duration ? ` (${les.duration})` : ''}` : `${les.name}${les.duration ? ` (${les.duration})` : ''}`}
-                                    >
-                                      • {les.name}
-                                    </span>
-                                  ))}
-                                </div>
-                              )}
-                            </div>
+                                ))
+                              ) : item.count >= 1 ? (
+                                <span
+                                  className={`block pl-1.5 text-[10px] font-semibold leading-snug transition-opacity ${textColorClass} ${
+                                    isDimmed ? 'opacity-20' : 'opacity-90'
+                                  }`}
+                                >
+                                  • {item.count} {item.count === 1 ? 'aula prevista' : 'aulas previstas'}
+                                </span>
+                              ) : null}
+                            </React.Fragment>
                           );
                         })}
                       </div>

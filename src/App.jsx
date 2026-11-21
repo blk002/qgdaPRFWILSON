@@ -458,7 +458,7 @@ export default function App() {
     {
       title: 'Desempenho',
       items: [
-        { id: '/', label: 'Carreira', icon: Award },
+        { id: '/carreira', label: 'Carreira', icon: Award },
         { id: '/taf', label: 'Treino TAF', icon: Dumbbell },
         { id: '/duelo', label: 'Duelo CTB', icon: Crosshair },
       ]
@@ -756,8 +756,9 @@ export default function App() {
                 </div>
               }>
                 <Routes location={location}>
-                  <Route path="/" element={<Dashboard />} />
+                  <Route path="/" element={<Navigate to="/estudos?tab=hoje" replace />} />
                   <Route path="/estudos" element={<CentralEstudos />} />
+                  <Route path="/carreira" element={<Dashboard />} />
                   <Route path="/duelo" element={<DueloFPS />} />
 
                   <Route path="/revisoes" element={<Navigate to="/estudos?tab=revisoes" replace />} />
@@ -910,7 +911,7 @@ export default function App() {
       )}
 
       {/* 2a. Diálogo Pré-Confirmação: Fazer Questões Antes de Queimar Aula */}
-      {classConfirmModal && dismissedPrePromptModalRef !== classConfirmModal && createPortal(
+      {classConfirmModal && !classConfirmModal.skipPrePrompt && dismissedPrePromptModalRef !== classConfirmModal && createPortal(
         <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[120] p-4 fade-in font-sans">
           <div className="bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-sm w-full p-6 text-center border border-slate-200 dark:border-slate-800 relative max-h-[92vh] overflow-y-auto">
             <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-500 via-blue-500 to-emerald-500"></div>
@@ -1048,7 +1049,7 @@ export default function App() {
       {/* 2b. Modal de Confirmação de Aula (Componente Externo) */}
       <ClassCompletionModal 
         key={classConfirmModal ? `${classConfirmModal.subjectId}_${classConfirmModal.initialStudyDate || 'today'}` : 'none'}
-        isOpen={Boolean(classConfirmModal && dismissedPrePromptModalRef === classConfirmModal)}
+        isOpen={Boolean(classConfirmModal && (classConfirmModal.skipPrePrompt || dismissedPrePromptModalRef === classConfirmModal))}
         topicName={classConfirmModal?.topicName}
         maxClasses={classConfirmModal?.maxClasses}
         subjectSpeed={subjects[classConfirmModal?.subjectId]?.speed || 1}

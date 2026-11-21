@@ -2,8 +2,9 @@ import React, { useState, useMemo, Suspense } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import CentralEstudosTutorialModal from '../components/CentralEstudosTutorialModal';
+import AbaHoje from '../components/AbaHoje';
 import {
-  Repeat, BrainCircuit, BarChart2, Calendar as CalendarIcon, BookOpen,
+  Zap, Repeat, BrainCircuit, BarChart2, Calendar as CalendarIcon, BookOpen,
   Settings, Info, Sparkles, Search, ChevronDown, ChevronUp, ArrowLeft,
   Skull, Target, Crosshair, Award, Clock, CheckCircle, X, Plus
 } from 'lucide-react';
@@ -15,9 +16,10 @@ const Calendario = React.lazy(() => import('./Calendario'));
 
 const TUTORIAL_SEEN_KEY = 'qg_central_tutorial_seen';
 
-const VALID_TABS = new Set(['cronograma', 'revisoes', 'historico', 'calendario', 'edital']);
+const VALID_TABS = new Set(['hoje', 'cronograma', 'revisoes', 'historico', 'calendario', 'edital']);
 
 const TAB_CONFIG = [
+  { id: 'hoje', label: 'Hoje', icon: Zap, tutorialStep: 0 },
   { id: 'cronograma', label: 'Cronograma', icon: Repeat, tutorialStep: 2 },
   { id: 'revisoes', label: 'Revisões', icon: BrainCircuit, tutorialStep: 3 },
   { id: 'historico', label: 'Histórico', icon: BarChart2, tutorialStep: 5 },
@@ -264,7 +266,7 @@ export default function CentralEstudos() {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const rawTab = searchParams.get('tab');
-  const activeTab = VALID_TABS.has(rawTab) ? rawTab : 'cronograma';
+  const activeTab = VALID_TABS.has(rawTab) ? rawTab : 'hoje';
 
   const [tutorialModalState, setTutorialModalState] = useState({ isOpen: false, step: 0 });
   const [showOnboardingBanner, setShowOnboardingBanner] = useState(() => {
@@ -343,7 +345,7 @@ export default function CentralEstudos() {
     { label: 'Raio-X Caveira', path: '/caveira', icon: Skull },
     { label: 'Simulados', path: '/simulados', icon: Target },
     { label: 'Duelo CTB', path: '/duelo', icon: Crosshair },
-    { label: 'Carreira', path: '/', icon: Award }
+    { label: 'Carreira', path: '/carreira', icon: Award }
   ];
 
   return (
@@ -354,11 +356,11 @@ export default function CentralEstudos() {
           <div className="flex items-center gap-2 min-w-0">
             <button
               type="button"
-              onClick={() => navigate('/')}
+              onClick={() => navigate('/carreira')}
               className="inline-flex items-center gap-1 text-[11px] font-bold text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white transition-colors cursor-pointer"
             >
               <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Voltar</span>
+              <span>Carreira</span>
             </button>
             <span className="text-slate-300 dark:text-slate-700">/</span>
             <h1 className="text-sm sm:text-base font-black tracking-tight text-slate-900 dark:text-white uppercase truncate">
@@ -502,7 +504,9 @@ export default function CentralEstudos() {
 
       {/* Conteúdo da Aba Selecionada */}
       <div>
-        {activeTab === 'edital' ? (
+        {activeTab === 'hoje' ? (
+          <AbaHoje onGoToTab={handleTabChange} />
+        ) : activeTab === 'edital' ? (
           <EditalVerticalizadoView
             subjectsList={subjectsList}
             onOpenConfig={() => navigate('/config')}
