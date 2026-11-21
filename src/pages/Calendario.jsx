@@ -932,7 +932,7 @@ export default function Calendario() {
                       </div>
 
                       {dayTimeLabel && (
-                        <span className="font-bold text-slate-500 dark:text-slate-400 tabular-nums truncate">
+                        <span className="font-black text-[11px] text-amber-600 dark:text-amber-300 tabular-nums truncate">
                           {dayTimeLabel}
                         </span>
                       )}

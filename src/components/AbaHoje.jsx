@@ -402,8 +402,8 @@ export default function AbaHoje({ onGoToTab }) {
                         <span>{todayHeaderLabel}</span>
                       </div>
                       {totalTimeText && !block.isSlotCompleted && (
-                        <div className="flex items-center gap-1 font-bold text-slate-600 dark:text-slate-300 tabular-nums">
-                          {block.spd > 1 && <Zap className="w-3 h-3 text-sky-500 dark:text-sky-400" />}
+                        <div className="flex items-center gap-1 text-xs font-black text-amber-600 dark:text-amber-300 tabular-nums">
+                          {block.spd > 1 && <Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-300" />}
                           <span>Tempo total: {totalTimeText}</span>
                         </div>
                       )}
@@ -466,8 +466,8 @@ export default function AbaHoje({ onGoToTab }) {
                                     • {les.name}
                                   </span>
                                   {durationLabel && (
-                                    <span className="text-[11px] font-mono font-bold text-slate-500 dark:text-slate-400 shrink-0 flex items-center gap-1 tabular-nums">
-                                      <Clock className="w-3 h-3 text-slate-400" />
+                                    <span className="text-xs font-mono font-black text-amber-600 dark:text-amber-300 shrink-0 flex items-center gap-1 tabular-nums">
+                                      <Clock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-300" />
                                       {durationLabel}
                                     </span>
                                   )}
