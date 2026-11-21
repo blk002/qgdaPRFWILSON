@@ -1,10 +1,11 @@
 import { useStore } from '../store/useStore';
-import { Target, AlertTriangle, Activity, Trophy, ChevronRight, ChevronLeft, Flame, Layers, PlayCircle, BrainCircuit, Shuffle, CheckCircle, FileText, Save, Clock, Zap, FastForward, Calendar } from 'lucide-react';
+import { Target, AlertTriangle, Activity, Trophy, ChevronRight, ChevronLeft, Layers, PlayCircle, BrainCircuit, Shuffle, CheckCircle, FileText, Clock, Zap, Calendar } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { useState, useEffect, useRef } from 'react';
 import { useConfetti } from '../hooks/useConfetti';
 import NotesDrawer from '../components/NotesDrawer';
 import { parseDurationToSeconds, formatSecondsToClock, formatSecondsToFriendly, calculateLessonsForGoal, formatMinutesToFriendly } from '../lib/durationHelpers';
+import { getSubjectTextColorClass, getSubjectAccentBorderClass } from '../lib/subjectColors';
 
 export default function Ciclo() {
   const navigate = useNavigate();
@@ -666,23 +667,26 @@ export default function Ciclo() {
                         }
                       }
 
+                      const textColorClass = getSubjectTextColorClass(subject.color);
+                      const borderColorClass = getSubjectAccentBorderClass(subject.color);
+
                       if (isPast) {
                         const pastMinutes = studyHistory?.[dateInfo.fullDateStr] || 0;
                         const wasStudied = pastMinutes > 0;
                         const pastActiveTopic = getActiveTopic ? getActiveTopic(subjectId) : null;
                         return (
-                          <div key={slotIndex} className="bg-white/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden flex flex-col shadow-xs opacity-85 min-w-0">
-                            <div className={`px-3 py-1.5 flex justify-between items-center gap-1.5 border-b border-black/5 ${subject.color}`}>
-                              <span className="font-black text-xs uppercase tracking-wider truncate min-w-0 flex-1" title={subject.name}>
+                          <div key={slotIndex} className={`p-3 rounded-xl border bg-white dark:bg-slate-900 ${borderColorClass} opacity-85 space-y-2 min-w-0`}>
+                            <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100 dark:border-slate-800">
+                              <span className={`text-xs sm:text-sm font-black uppercase tracking-wide truncate min-w-0 flex-1 ${textColorClass}`} title={subject.name}>
                                 {subject.name}
-                                {isDoubled && <span className="ml-1 text-[8px] font-bold opacity-80">(2º BLOCO)</span>}
-                                {isReplaced && <span className="ml-1 text-[8px] font-bold opacity-80">(SUBST.)</span>}
                               </span>
-                              <span className="text-[9px] font-black bg-white/30 dark:bg-slate-900/50 dark:text-white px-1.5 py-0.5 rounded backdrop-blur-sm shrink-0">
-                                {isDoubled ? '⚡ DOBRADA' : isReplaced ? '🔄 SUBST.' : (subject.block || 'B?')}
-                              </span>
+                              {(isDoubled || isReplaced) && (
+                                <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-850 text-slate-500 dark:text-slate-300 shrink-0 uppercase">
+                                  {isReplaced ? 'Subst.' : '2x'}
+                                </span>
+                              )}
                             </div>
-                            <div className="p-2.5 flex flex-col items-center justify-center text-center gap-1 flex-1 min-h-[82px]">
+                            <div className="py-1 flex flex-col items-center justify-center text-center gap-1 min-h-[72px]">
                               {wasStudied ? (
                                 <>
                                   <CheckCircle className="w-4 h-4 text-emerald-500" />
@@ -732,7 +736,7 @@ export default function Ciclo() {
                                       initialStudyDate: dateInfo.fullDateStr
                                     });
                                   }}
-                                  className="mt-2 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-100 hover:bg-blue-600 text-slate-600 hover:text-white dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-blue-600 dark:hover:text-white border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+                                  className="mt-1.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-slate-100 hover:bg-sky-600 text-slate-600 hover:text-white dark:bg-slate-850 dark:text-slate-300 dark:hover:bg-sky-500 dark:hover:text-slate-950 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
                                 >
                                   Registrar em {dateInfo.dateStr}
                                 </button>
@@ -751,8 +755,6 @@ export default function Ciclo() {
                       let currentCompleted = 0;
                       let currentTotal = 0;
                       let blockCount = 1;
-                      let blockAccelSec = 0;
-                      let blockOrigSec = 0;
                       let plannedLessons = [];
                       let goalMin = 0;
                       let spd = 1;
@@ -778,8 +780,6 @@ export default function Ciclo() {
                               const remainingInTopic = t.total - currentCompleted;
                               const suggestion = calculateLessonsForGoal(t.lessons || [], currentCompleted, spd, goalMin, t.total, lessonsN);
                               blockCount = Math.min(remainingInTopic, Math.max(1, suggestion.count));
-                              blockAccelSec = suggestion.totalAccelSec;
-                              blockOrigSec = suggestion.totalOrigSec;
                               plannedLessons = suggestion.lessonsList;
                               const firstLesson = plannedLessons[0];
                               activeLessonName = firstLesson?.name || (t.lessons?.[currentCompleted]?.name) || `${t.name} - Aula ${currentCompleted + 1}`;
@@ -790,13 +790,12 @@ export default function Ciclo() {
                               activeLessonName = lessonEntry?.name || `${t.name} - Aula ${currentCompleted + 1}`;
                               activeLessonDuration = lessonEntry?.duration || '';
                               const origSec = parseDurationToSeconds(activeLessonDuration) || 3600;
-                              blockOrigSec = origSec;
-                              blockAccelSec = Math.round(origSec / spd);
+                              const accelSec = Math.round(origSec / spd);
                               plannedLessons = [{
                                 index: currentCompleted,
                                 name: activeLessonName,
                                 origSec,
-                                accelSec: blockAccelSec,
+                                accelSec,
                                 durStr: activeLessonDuration
                               }];
                             }
@@ -813,173 +812,151 @@ export default function Ciclo() {
                         }
                       }
 
+                      const startNum = currentCompleted + 1;
+                      const endNum = currentCompleted + blockCount;
+
+                      const openSlotModal = (skipPrePrompt) => {
+                        if (!activeTopic || !setClassConfirmModal) return;
+                        const remainingLessons = (activeTopic.lessons || []).slice(currentCompleted, activeTopic.total);
+                        const blockLessonNames = plannedLessons.map(pl => pl?.name).filter(Boolean);
+                        setClassConfirmModal({
+                          subjectId,
+                          slotIndex,
+                          topicName: activeTopic.name,
+                          lessonNames: blockLessonNames.length > 0 ? blockLessonNames : (activeLessonName ? [activeLessonName] : []),
+                          allRemainingLessonNames: remainingLessons.map(l => l?.name).filter(Boolean),
+                          maxClasses: Math.max(1, (Number(activeTopic.total) || 0) - (Number(activeTopic.completed) || 0)),
+                          lessonDuration: activeLessonDuration,
+                          allLessonsDurations: remainingLessons.map(l => l?.duration || '60:00'),
+                          suggestedClasses: blockCount,
+                          timeGoalMinutes: goalMin || null,
+                          skipPrePrompt
+                        });
+                      };
+
                       return (
-                        <div key={slotIndex} className={`bg-white dark:bg-slate-900 border rounded-xl overflow-hidden flex flex-col shadow-sm transition-all min-w-0 ${isSlotCompleted ? 'border-emerald-200 dark:border-emerald-800 opacity-80' : isToday ? 'border-slate-300 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md' : 'border-slate-200 dark:border-slate-800'}`}>
-                          
-                          <div className={`px-3 py-1.5 flex justify-between items-center gap-1.5 border-b border-black/5 ${subject.color}`}>
-                            <span className="font-black text-xs uppercase tracking-wider truncate min-w-0 flex-1" title={subject.name}>{subject.name}</span>
-                            <span className="text-[9px] font-black bg-white/30 dark:bg-slate-900/50 dark:text-white px-1.5 py-0.5 rounded backdrop-blur-sm shrink-0">{subject.block || 'B?'}</span>
+                        <div
+                          key={slotIndex}
+                          className={`p-3 rounded-xl border bg-white dark:bg-slate-900 ${
+                            isSlotCompleted ? 'border-emerald-300 dark:border-emerald-800/70 opacity-85' : borderColorClass
+                          } space-y-2.5 transition-all min-w-0`}
+                        >
+                          {/* Cabeçalho: DISCIPLINA -> TÓPICO */}
+                          <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100 dark:border-slate-800">
+                            <div
+                              className={`text-xs sm:text-sm font-black uppercase tracking-wide truncate min-w-0 flex-1 ${textColorClass}`}
+                              title={activeTopic?.name ? `${subject.name} → ${activeTopic.name}` : subject.name}
+                            >
+                              {subject.name}
+                              {activeTopic?.name ? ` → ${activeTopic.name}` : ''}
+                            </div>
+                            <div className="flex items-center gap-1.5 shrink-0">
+                              {(isReplaced || isDoubled) && (
+                                <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-850 text-slate-500 dark:text-slate-300 uppercase">
+                                  {isReplaced ? 'Subst.' : '2x'}
+                                </span>
+                              )}
+                              {!isSlotCompleted && activeTopic && (
+                                <button
+                                  type="button"
+                                  onClick={() => handleOpenNotes(subjectId, activeTopic)}
+                                  className="p-1 hover:bg-slate-100 dark:hover:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded text-slate-400 hover:text-sky-500 transition-colors cursor-pointer"
+                                  title="Anotações do Tópico"
+                                >
+                                  <FileText className="w-3.5 h-3.5" />
+                                </button>
+                              )}
+                            </div>
                           </div>
 
-                          <div className="p-2.5 flex flex-col gap-2 flex-1 justify-center min-w-0">
-                            {isSlotCompleted ? (
-                              <div className="py-2 fade-in flex items-center justify-center gap-1.5">
-                                <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
-                                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Teoria Queimada!</span>
+                          {isSlotCompleted ? (
+                            <div className="py-2 fade-in flex items-center justify-center gap-2 text-emerald-600 dark:text-emerald-400">
+                              <CheckCircle className="w-4 h-4 shrink-0" />
+                              <span className="text-xs font-black uppercase tracking-wider">
+                                Aula Assistida • Bloco Concluído Hoje
+                              </span>
+                            </div>
+                          ) : activeTopic ? (
+                            <>
+                              {/* Linha AULA X/Y */}
+                              <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+                                <span className="uppercase tracking-wider">
+                                  {blockCount > 1
+                                    ? `Aulas ${startNum}–${endNum}/${currentTotal}`
+                                    : `Aula ${startNum}/${currentTotal}`}
+                                </span>
+                                {spd > 1 && (
+                                  <span className="text-[11px] font-black text-sky-600 dark:text-sky-400">
+                                    {spd}x ativo
+                                  </span>
+                                )}
                               </div>
-                            ) : activeTopic ? (
-                              <>
-                                {/* Header do Tópico com Botão de Notas */}
-                                <div className="flex items-center justify-between gap-1.5 border-b border-slate-100 dark:border-slate-800/80 pb-1.5">
-                                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
-                                    <Flame className="w-3.5 h-3.5 text-orange-500 shrink-0"/> 
-                                    <span className="text-xs font-black text-slate-600 dark:text-slate-300 uppercase tracking-wider truncate" title={activeTopic.name}>
-                                      {activeTopic.name}
-                                    </span>
-                                  </div>
-                                  <button 
-                                    onClick={() => handleOpenNotes(subjectId, activeTopic)}
-                                    className="p-1 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-800 rounded text-slate-400 hover:text-blue-500 transition-colors shrink-0"
-                                    title="Anotações do Tópico"
-                                  >
-                                    <FileText className="w-3.5 h-3.5" />
-                                  </button>
-                                </div>
 
-                                {blockCount > 1 ? (
-                                  <div className="flex flex-col gap-2">
-                                    {/* Barra de Meta e Contagem de Aulas */}
-                                    <div className="flex flex-wrap items-center justify-between gap-1.5 bg-slate-100/90 dark:bg-slate-800/60 px-2.5 py-1.5 rounded-lg border border-slate-200/80 dark:border-slate-700/60">
-                                      <div className="flex items-center gap-1.5 min-w-0">
-                                        <span className="text-xs font-black text-slate-800 dark:text-slate-100 whitespace-nowrap">
-                                          📚 {blockCount} Aulas
-                                        </span>
-                                        <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border border-slate-200/80 dark:border-slate-800 whitespace-nowrap">
-                                          {currentCompleted + 1} a {currentCompleted + blockCount}
-                                        </span>
-                                      </div>
-                                      {goalMin > 0 && (
-                                        <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/70 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 shrink-0 whitespace-nowrap" title={`Meta do bloco: ${goalMin} min`}>
-                                          <Target className="w-2.5 h-2.5 text-emerald-500" /> {formatMinutesToFriendly(goalMin)}
+                              {/* Lista de Aulas com Nome + MM:SS (spd) */}
+                              <div className="space-y-1.5">
+                                {plannedLessons.map((les, lIdx) => {
+                                  const origSec = Number(les.origSec) || parseDurationToSeconds(les.durStr) || 0;
+                                  const accelSec = Number(les.accelSec) || (origSec > 0 ? Math.round(origSec / spd) : 0);
+                                  const durationLabel =
+                                    accelSec > 0
+                                      ? `${formatSecondsToClock(accelSec)}${spd > 1 ? ` (${spd}x)` : ''}`
+                                      : les.durStr || '';
+
+                                  return (
+                                    <div
+                                      key={lIdx}
+                                      className="flex items-start justify-between gap-2.5 text-sm leading-snug"
+                                    >
+                                      <span className="font-semibold text-slate-800 dark:text-slate-100 break-words flex-1 min-w-0">
+                                        • {les.name}
+                                      </span>
+                                      {durationLabel && (
+                                        <span className="text-xs sm:text-sm font-mono font-black text-amber-600 dark:text-amber-300 shrink-0 flex items-center gap-1 tabular-nums">
+                                          <Clock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-300" />
+                                          {durationLabel}
                                         </span>
                                       )}
                                     </div>
+                                  );
+                                })}
+                              </div>
 
-                                    {/* Lista das Aulas no Bloco */}
-                                    <div className="space-y-1.5 max-h-36 overflow-y-auto pr-1 custom-scrollbar">
-                                      {plannedLessons.map((pl, plIdx) => (
-                                        <div key={plIdx} className="flex items-start justify-between gap-2 text-[11px] bg-slate-50 dark:bg-slate-950/80 px-2.5 py-1.5 rounded-lg border border-slate-200/70 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 transition-colors min-w-0">
-                                          <span className="flex-1 min-w-0 font-semibold text-slate-700 dark:text-slate-200 text-left leading-snug line-clamp-2" title={pl.name}>
-                                            {pl.name}
-                                          </span>
-                                          <span className="font-mono font-bold text-blue-600 dark:text-blue-400 shrink-0 text-[10px] bg-blue-50 dark:bg-blue-950/80 border border-blue-100 dark:border-blue-900/60 px-1.5 py-0.5 rounded whitespace-nowrap mt-0.5">
-                                            ⚡{formatSecondsToClock(pl.accelSec)}
-                                          </span>
-                                        </div>
-                                      ))}
-                                    </div>
-
-                                    {/* Barra de Tempo Total do Bloco */}
-                                    <div className="flex flex-wrap items-center justify-between gap-1 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 rounded-lg px-2.5 py-1.5 text-xs">
-                                      <div className="flex items-center gap-1.5 font-black text-blue-700 dark:text-blue-300">
-                                        <Zap className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500 shrink-0" />
-                                        <span>Bloco: {formatSecondsToFriendly(blockAccelSec)}</span>
-                                        <span className="text-[10px] font-bold opacity-75">({spd}x)</span>
-                                      </div>
-                                      <span className="text-[10px] font-bold text-slate-400 dark:text-slate-400 line-through">
-                                        {formatSecondsToFriendly(blockOrigSec)} 1x
-                                      </span>
-                                    </div>
-                                  </div>
-                                ) : (
-                                  <div className="flex flex-col gap-2">
-                                    <div>
-                                      <div className="flex flex-wrap items-center justify-between gap-1 mb-1">
-                                        <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded">
-                                          Aula {currentCompleted + 1}
-                                        </span>
-                                        {goalMin > 0 && (
-                                          <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-300 bg-emerald-50 dark:bg-emerald-950/70 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-800 flex items-center gap-1 shrink-0">
-                                            <Target className="w-2.5 h-2.5 text-emerald-500" /> {formatMinutesToFriendly(goalMin)}
-                                          </span>
-                                        )}
-                                      </div>
-                                      <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2" title={activeLessonName}>
-                                        {activeLessonName}
-                                      </p>
-                                    </div>
-
-                                    {activeLessonDuration && activeLessonDuration !== '00:00' && (
-                                      <div className="flex flex-wrap items-center justify-between gap-1 bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-xs mt-0.5">
-                                        <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1">
-                                          <Clock className="w-3 h-3 text-slate-400" /> {activeLessonDuration} (1x)
-                                        </span>
-                                        {spd > 1 && (
-                                          <span className="font-black text-blue-600 dark:text-blue-400 flex items-center gap-1 bg-blue-50 dark:bg-blue-950/80 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-900">
-                                            <Zap className="w-3 h-3 text-yellow-500 fill-yellow-500" />
-                                            {formatSecondsToClock(blockAccelSec)} ({spd}x)
-                                          </span>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                )}
-                                
-                                <div className="bg-slate-50 p-1.5 sm:p-2 rounded-lg border border-slate-100 dark:bg-slate-950 dark:border-slate-800 mt-0.5">
-                                  <div className="flex items-center justify-between mb-1">
-                                    <span className="text-[8px] sm:text-[10px] text-slate-500 font-bold uppercase dark:text-slate-400">Teoria Restante</span>
-                                    <span className="text-[8px] sm:text-[10px] font-black text-blue-600">{currentCompleted}/{currentTotal} Aulas</span>
-                                  </div>
-                                  <div className="w-full bg-slate-200 rounded-full h-1 dark:bg-slate-800">
-                                    <div className="bg-blue-500 h-1 rounded-full" style={{ width: `${currentTotal > 0 ? Math.min(100, (currentCompleted / currentTotal) * 100) : 0}%` }}></div>
-                                  </div>
-                                </div>
-
+                              {/* 2 Botões: AULA ASSISTIDA + EXERCÍCIOS DA AULA */}
                               {isToday && (
-                                <button 
-                                  onClick={() => {
-                                    const remainingLessons = (activeTopic.lessons || []).slice(currentCompleted, activeTopic.total);
-                                    const blockLessonNames = plannedLessons.map(pl => pl?.name).filter(Boolean);
-                                    setClassConfirmModal({ 
-                                      subjectId, 
-                                      slotIndex, 
-                                      topicName: activeTopic.name, 
-                                      lessonNames: blockLessonNames.length > 0 ? blockLessonNames : (activeLessonName ? [activeLessonName] : []),
-                                      allRemainingLessonNames: remainingLessons.map(l => l?.name).filter(Boolean),
-                                      maxClasses: activeTopic.total - activeTopic.completed,
-                                      lessonDuration: activeLessonDuration,
-                                      allLessonsDurations: remainingLessons.map(l => l.duration || '60:00'),
-                                      suggestedClasses: blockCount,
-                                      timeGoalMinutes: goalMin || null
-                                    });
-                                  }} 
-                                  className="mt-1 flex items-center justify-center gap-1 w-full py-2 bg-slate-900 dark:bg-slate-800 hover:bg-orange-600 dark:hover:bg-orange-600 text-white rounded-lg text-[9px] sm:text-xs font-black transition-all shadow-md border border-slate-200 dark:border-slate-600 hover:border-orange-500 dark:hover:border-orange-500 hover:scale-[1.02] active:scale-95 group"
-                                >
-                                  <PlayCircle className="w-3.5 h-3.5 group-hover:scale-110 transition-transform text-orange-400 group-hover:text-white shrink-0" />
-                                  <span className="truncate">
-                                    {blockCount > 1 
-                                      ? `Queimar Bloco (${blockCount} Aulas • ${formatSecondsToFriendly(blockAccelSec)})` 
-                                      : 'Queimar Teoria (+1 Aula)'}
-                                  </span>
-                                </button>
+                                <div className="grid grid-cols-2 gap-2 pt-1">
+                                  <button
+                                    type="button"
+                                    onClick={() => openSlotModal(true)}
+                                    className="h-9 px-2.5 rounded-lg text-xs font-black uppercase tracking-wide bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                  >
+                                    <PlayCircle className="w-4 h-4 shrink-0" />
+                                    <span className="truncate">Aula Assistida</span>
+                                  </button>
+                                  <button
+                                    type="button"
+                                    onClick={() => openSlotModal(false)}
+                                    className="h-9 px-2.5 rounded-lg text-xs font-black uppercase tracking-wide bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-850 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                  >
+                                    <Target className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
+                                    <span className="truncate">Exercícios da Aula</span>
+                                  </button>
+                                </div>
                               )}
-
                             </>
                           ) : (
                             <div className="text-center py-2 flex flex-col items-center">
                               <div className="bg-emerald-100 dark:bg-emerald-950/50 p-1.5 rounded-full mb-1.5"><BrainCircuit className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /></div>
-                              <span className="text-[8px] sm:text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-2">100% da Teoria Concluída</span>
+                              <span className="text-[10px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wider mb-2">100% da Teoria Concluída</span>
                               
-                              <button onClick={() => setReplaceSubjectModal({ dayIndex, slotIndex, oldSubjectId: originalSubId })} className="w-full py-1.5 bg-blue-50 hover:bg-blue-600 text-blue-700 hover:text-white rounded-lg text-[9px] sm:text-[11px] font-black transition-all flex items-center justify-center gap-1 border border-blue-100 hover:border-blue-600">
+                              <button onClick={() => setReplaceSubjectModal({ dayIndex, slotIndex, oldSubjectId: originalSubId })} className="w-full py-1.5 bg-sky-50 hover:bg-sky-600 text-sky-700 hover:text-white dark:bg-slate-850 dark:text-sky-400 dark:hover:bg-sky-500 dark:hover:text-slate-950 rounded-lg text-[11px] font-black transition-all flex items-center justify-center gap-1 border border-sky-200 dark:border-slate-700 cursor-pointer">
                                 <Shuffle className="w-3 h-3" /> <span className="truncate">Reestruturar Vaga</span>
                               </button>
                               
-                              {isToday && <button onClick={() => setCompletedToday(prev => [...prev, slotIndex])} className="mt-1 text-[8px] sm:text-[10px] font-bold text-slate-400 hover:text-slate-600 underline underline-offset-2 dark:text-slate-300">Pular hoje</button>}
+                              {isToday && <button onClick={() => setCompletedToday(prev => [...prev, slotIndex])} className="mt-1 text-[10px] font-bold text-slate-400 hover:text-slate-600 underline underline-offset-2 dark:text-slate-300 cursor-pointer">Pular hoje</button>}
                             </div>
                           )}
                         </div>
-                      </div>
-                    );
+                      );
                   })}
                 </div>
               </div>
