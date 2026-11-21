@@ -712,7 +712,7 @@ export default function Calendario() {
           </div>
         </div>
         {showSubjectsPanel && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 2xl:grid-cols-4 gap-2">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-2">
           {subjectEstimates.map(sub => {
             const totalClasses = (sub.topics || []).reduce((acc, t) => acc + (t.total || 0), 0);
             const completedClasses = Math.max(0, totalClasses - sub.remaining);
@@ -728,56 +728,56 @@ export default function Calendario() {
                 key={sub.id}
                 onClick={() => setHighlightedSubjectId(prev => (prev === sub.id ? null : sub.id))}
                 title="Clique para destacar esta disciplina no calendário"
-                className={`border rounded-lg p-2.5 flex flex-col gap-1.5 transition-all bg-slate-50/70 dark:bg-slate-850/70 cursor-pointer ${
+                className={`border rounded-lg p-2.5 flex flex-col justify-between gap-1.5 transition-all bg-slate-50/70 dark:bg-slate-850/70 cursor-pointer ${
                   highlightedSubjectId === sub.id
                     ? 'border-sky-500 ring-2 ring-sky-500/25 dark:border-sky-400'
                     : 'border-slate-200 dark:border-slate-800 hover:border-sky-400/50 dark:hover:border-sky-500/40'
                 }`}
               >
-                <div className="flex justify-between items-start gap-1">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-md tracking-wider uppercase ${sub.color}`}>{sub.name}</span>
+                <div className="flex justify-between items-start gap-1.5">
+                  <div className="flex items-center gap-1 flex-wrap min-w-0">
+                    <span className={`text-[10px] font-black px-2 py-0.5 rounded-md tracking-wider uppercase truncate max-w-full ${sub.color}`} title={sub.name}>{sub.name}</span>
                     {currentSpeed > 1 && (
-                      <span className="text-[9px] font-black bg-blue-100 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-900 flex items-center gap-0.5" title={`Aceleração de vídeo: ${currentSpeed}x`}>
+                      <span className="text-[9px] font-black bg-blue-100 text-blue-700 dark:bg-blue-950/80 dark:text-blue-300 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-900 inline-flex items-center gap-0.5 shrink-0 whitespace-nowrap" title={`Aceleração de vídeo: ${currentSpeed}x`}>
                         <Zap className="w-2.5 h-2.5 text-yellow-500 fill-yellow-500" /> {currentSpeed}x
                       </span>
                     )}
                     {currentTimeGoal > 0 && (
-                      <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-900 flex items-center gap-0.5" title={`Meta por bloco no ciclo: ${currentTimeGoal} min`}>
+                      <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950/80 dark:text-emerald-300 px-1.5 py-0.5 rounded border border-emerald-200 dark:border-emerald-900 inline-flex items-center gap-0.5 shrink-0 whitespace-nowrap" title={`Meta por bloco no ciclo: ${currentTimeGoal} min`}>
                         <Target className="w-2.5 h-2.5" /> {formatMinutesToFriendly(currentTimeGoal)}
                       </span>
                     )}
                   </div>
                   {sub.remaining === 0 ? (
-                    <span className="flex items-center gap-1 text-xs font-black text-emerald-600"><CheckCircle className="w-3.5 h-3.5" /> Concluído</span>
+                    <span className="flex items-center gap-1 text-[11px] font-black text-emerald-600 shrink-0 whitespace-nowrap"><CheckCircle className="w-3.5 h-3.5" /> Concluído</span>
                   ) : (
-                    <span className="text-sm font-black text-blue-600 dark:text-blue-400 font-mono tracking-tight shrink-0">{displayDateStr}</span>
+                    <span className="text-xs font-black text-blue-600 dark:text-blue-400 font-mono tracking-tight shrink-0 whitespace-nowrap">{displayDateStr}</span>
                   )}
                 </div>
 
                 {sub.remaining > 0 && (
                   <>
-                    <div className="flex justify-between items-center text-xs text-slate-500 font-medium">
+                    <div className="flex justify-between items-center text-[11px] text-slate-500 font-medium">
                       <span>{sub.remaining} aulas restantes</span>
-                      <span className="font-bold text-slate-700 dark:text-slate-300">{pct}%</span>
+                      <span className="font-bold text-slate-700 dark:text-slate-300 tabular-nums">{pct}%</span>
                     </div>
                     <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
                       <div className="bg-blue-600 h-1.5 rounded-full transition-all duration-300" style={{ width: `${pct}%` }}></div>
                     </div>
 
-                    <div className="mt-1 pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between text-[11px]">
+                    <div className="mt-0.5 pt-1.5 border-t border-slate-200/60 dark:border-slate-800/60 flex items-center justify-between gap-1 text-[10px]">
                       <button
                         type="button"
                         onClick={(e) => {
                           e.stopPropagation();
                           handleOpenTransitionModal(sub);
                         }}
-                        className="text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1 font-bold"
+                        className="text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center gap-1 font-bold whitespace-nowrap cursor-pointer"
                       >
-                        <Sparkles className="w-3 h-3 text-amber-500" /> Regra ao concluir...
+                        <Sparkles className="w-3 h-3 text-amber-500 shrink-0" /> Ao concluir
                       </button>
-                      <span className="text-[10px] text-slate-400 font-medium">
-                        {sub.onCompleteAction === 'replace' ? '🔄 Substituir' : sub.onCompleteAction === 'double_remaining' ? '⚡ Dobrar Dia' : '✅ Encerrar ao Fim'}
+                      <span className="text-[10px] text-slate-400 font-medium whitespace-nowrap truncate">
+                        {sub.onCompleteAction === 'replace' ? '🔄 Substituir' : sub.onCompleteAction === 'double_remaining' ? '⚡ Dobrar' : '✅ Encerrar'}
                       </span>
                     </div>
                   </>
@@ -916,29 +916,24 @@ export default function Calendario() {
                     className={`min-h-[4.75rem] md:min-h-[5.75rem] min-w-0 p-1.5 rounded-lg flex flex-col transition-all group ${bgClass}`}
                     title={isPast ? "Dia já concluído / passado" : "Clique para gerenciar matérias deste dia"}
                   >
-                    <div className="flex items-center justify-between gap-1 pb-1 mb-1 border-b border-slate-100 dark:border-slate-800/80 text-xs leading-none">
-                      <div className="flex items-center gap-1 min-w-0">
-                        <span className={`font-black tabular-nums ${isTodayReal ? 'text-sky-600 dark:text-sky-400' : ''}`}>
+                    <div className="flex items-center justify-between gap-1 pb-1 mb-1 border-b border-slate-100 dark:border-slate-800/80 leading-none">
+                      <div className="flex items-center gap-1 shrink-0">
+                        <span className={`text-[11px] font-black tabular-nums ${isTodayReal ? 'text-sky-600 dark:text-sky-400' : ''}`}>
                           {dayMonthLabel}
                         </span>
                         {isOverridden && (
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="Dia com personalização manual avulsa" />
                         )}
-                        {isTodayReal && (
-                          <span className="text-[9px] font-black uppercase text-sky-600 dark:text-sky-400">
-                            Hoje
-                          </span>
-                        )}
                       </div>
 
                       {dayTimeLabel && (
-                        <span className="font-black text-xs text-amber-600 dark:text-amber-300 tabular-nums truncate">
+                        <span className="font-black text-[11px] text-amber-600 dark:text-amber-300 tabular-nums whitespace-nowrap">
                           {dayTimeLabel}
                         </span>
                       )}
 
                       {!isPast && (
-                        <span className="font-bold uppercase text-[11px] text-sky-600 dark:text-sky-400 group-hover:underline shrink-0">
+                        <span className="font-bold uppercase text-[10px] text-sky-600 dark:text-sky-400 group-hover:underline shrink-0">
                           Editar
                         </span>
                       )}

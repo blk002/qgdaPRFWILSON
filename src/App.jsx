@@ -209,6 +209,10 @@ export default function App() {
   const [reviewInputs, setReviewInputs] = useState({ total: 10, correct: 0 });
   const location = useLocation();
 
+  useEffect(() => {
+    window.scrollTo(0, 0);
+  }, [location.pathname]);
+
   const { setTriggerConfetti, ConfettiCanvas } = useConfetti();
 
   useEffect(() => {
@@ -540,12 +544,12 @@ export default function App() {
               </div>
             </div>
           ) : (
-            <div className={`flex items-center justify-between bg-slate-100/90 dark:bg-slate-850 px-2.5 py-2 rounded-lg border border-slate-200 dark:border-slate-800 ${getCurrentPatente().color}`}>
-              <div className="flex items-center gap-2 min-w-0">
+            <div className={`flex items-center justify-between gap-1.5 bg-slate-100/90 dark:bg-slate-850 px-2 py-1.5 rounded-lg border border-slate-200 dark:border-slate-800 ${getCurrentPatente().color}`}>
+              <div className="flex items-center gap-1.5 min-w-0 flex-1">
                 <span className="text-sm leading-none shrink-0">{getCurrentPatente().icon}</span>
-                <div className="min-w-0">
-                  <span className="text-[10px] font-bold uppercase tracking-wider block truncate">{getCurrentPatente().name}</span>
-                  <div className="w-20 bg-slate-200 dark:bg-slate-800 rounded-full h-1 mt-1 overflow-hidden">
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] font-bold uppercase tracking-tight block truncate" title={getCurrentPatente().name}>{getCurrentPatente().name}</span>
+                  <div className="w-full max-w-[84px] bg-slate-200 dark:bg-slate-800 rounded-full h-1 mt-1 overflow-hidden">
                     <div
                       className="bg-gradient-to-r from-sky-500 to-teal-400 h-full transition-all duration-1000"
                       style={{ width: `${Math.min(100, (userStats.xp % 1000) / 10)}%` }}
@@ -556,7 +560,7 @@ export default function App() {
 
               <div className="flex items-center gap-1 bg-amber-500/10 px-1.5 py-0.5 rounded border border-amber-500/20 shrink-0">
                 <Coins className="text-amber-500 w-3 h-3" />
-                <span className="font-bold text-[11px] tabular-nums text-amber-500">{coins}</span>
+                <span className="font-bold text-[10px] tabular-nums text-amber-500">{coins}</span>
               </div>
             </div>
           )}

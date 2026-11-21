@@ -487,16 +487,16 @@ export default function Revisoes() {
             </div>
           </div>
 
-          <div className="grid grid-cols-7 gap-1.5 items-end pt-1">
+          <div className="grid grid-cols-7 gap-1 sm:gap-1.5 items-end pt-1">
             {next7DaysForecast.map(day => {
               const barHeightPct = day.total > 0 ? Math.max(18, Math.round((day.total / maxForecastCount) * 100)) : 8;
               const isHeavy = day.total >= 10;
               return (
                 <div
                   key={day.dateStr}
-                  className="flex flex-col items-center bg-slate-50 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 rounded-lg p-1.5 transition-all"
+                  className="min-w-0 flex flex-col items-center bg-slate-50 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 rounded-lg p-1.5 transition-all"
                 >
-                  <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 truncate max-w-full">
+                  <span className="text-[10px] font-black uppercase tracking-tight text-slate-500 dark:text-slate-400 truncate max-w-full">
                     {day.offset === 1 ? 'Amanhã' : day.label.split(' ')[0]}
                   </span>
                   <span className="text-[9px] font-mono text-slate-400 mb-1">{day.shortDate}</span>
@@ -526,9 +526,9 @@ export default function Revisoes() {
                     disabled={day.total === 0}
                     onClick={() => advanceFutureReviews(day.dateStr)}
                     title={day.total > 0 ? `Adiantar ${day.total} revisões de ${day.shortDate} para hoje` : 'Sem revisões agendadas'}
-                    className="mt-1.5 w-full py-1 px-1 rounded-md text-[9px] font-black uppercase tracking-wider bg-sky-500/10 hover:bg-sky-500 text-sky-600 dark:text-sky-400 hover:text-white border border-sky-500/25 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+                    className="mt-1.5 w-full py-1 px-0.5 rounded-md text-[10px] font-black uppercase tracking-tight bg-sky-500/10 hover:bg-sky-500 text-sky-600 dark:text-sky-400 hover:text-white border border-sky-500/25 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer truncate"
                   >
-                    ⚡ Adiantar
+                    ⚡ Puxar
                   </button>
                 </div>
               );
@@ -541,9 +541,9 @@ export default function Revisoes() {
           <div>
             <div className="flex items-center justify-between gap-2 mb-1">
               <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
-                <Activity className="w-4 h-4 text-emerald-400" /> Curva de Esquecimento FSRS
+                <Activity className="w-4 h-4 text-emerald-400 shrink-0" /> Curva de Esquecimento FSRS
               </h3>
-              <span className="text-[11px] font-black px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 border border-emerald-500/30">
+              <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 border border-emerald-500/30 whitespace-nowrap shrink-0">
                 Estab. Média: {typeof avgStabilityDays === 'number' && !isNaN(avgStabilityDays) ? avgStabilityDays.toFixed(1) : '0.0'}d
               </span>
             </div>

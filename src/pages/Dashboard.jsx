@@ -114,7 +114,7 @@ export default function Dashboard() {
 
   const { 
     userStats, coins, user,
-    getCurrentPatente, getEstimatedCompletionDate, getSubjectEstimates,
+    getCurrentPatente, getEstimatedCompletionDate,
     weeklyMissions = [], claimMissionReward,
     dailyMissions = [], claimDailyMissionReward,
     unlockedAvatars = [], selectAvatar,
@@ -196,8 +196,19 @@ export default function Dashboard() {
   const progressToNext = nextPatente ? ((userStats.xp - patenteAtual.minXp) / (nextPatente.minXp - patenteAtual.minXp)) * 100 : 100;
 
   const estimatedDate = getEstimatedCompletionDate();
-  const subjectEstimates = getSubjectEstimates();
-  const completionPercent = Math.round((subjectEstimates.filter(s => s.remaining === 0).length / subjectEstimates.length) * 100) || 0;
+  const completionPercent = (() => {
+    let total = 0;
+    let done = 0;
+    Object.values(subjects || {}).forEach((sub) => {
+      (sub.topics || []).forEach((t) => {
+        const tTotal = Number(t.total) || 0;
+        const tDone = Math.min(tTotal, Number(t.completed) || 0);
+        total += tTotal;
+        done += tDone;
+      });
+    });
+    return total > 0 ? Math.round((done / total) * 100) : 0;
+  })();
 
   const displayName = userStats?.displayName || user?.email?.split('@')[0] || 'Combatente';
 
@@ -353,7 +364,7 @@ export default function Dashboard() {
                 <Target className="w-3.5 h-3.5" /> ID: {enrollmentId}
               </div>
               <div className="flex items-center gap-1.5 text-orange-500 font-bold text-xs bg-orange-50 dark:bg-orange-500/10 px-3 py-1 rounded-full border border-orange-200 dark:border-orange-500/25">
-                <Flame className="w-3.5 h-3.5 fill-current" /> OFENSIVA: {effectiveStreak} DIAS
+                <Flame className="w-3.5 h-3.5 fill-current" /> OFENSIVA: {effectiveStreak} {effectiveStreak === 1 ? 'DIA' : 'DIAS'}
               </div>
             </div>
 
@@ -568,7 +579,9 @@ export default function Dashboard() {
                         <RankBadge level={p.level} size={48} />
                       </div>
                       <div className="absolute top-full mt-3 text-center w-max">
-                        <p className={`text-[10px] sm:text-[11px] font-black uppercase tracking-tight ${isActive ? patenteAtual.color : isCompleted ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>{p.name.split(' ')[0]}</p>
+                        <p className={`text-[10px] font-black uppercase tracking-tight ${isActive ? patenteAtual.color : isCompleted ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>
+                          {p.name.replace('Policial Rodoviário', 'PRF').replace('Agente ', 'Ag. ').replace('Classe', 'Cl.')}
+                        </p>
                       </div>
                       {isNext && <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-[9px] font-black text-white px-2 py-0.5 rounded-full">PRÓXIMO</span>}
                    </div>
@@ -606,9 +619,9 @@ export default function Dashboard() {
                       <div className="w-full bg-slate-200 dark:bg-slate-950 rounded-full h-1.5 mb-2 overflow-hidden">
                         <div className={`h-full transition-all duration-300 ${mission.completed ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${Math.min(100, (mission.current / mission.goal) * 100)}%` }}></div>
                       </div>
-                      <div className="flex justify-between items-center text-[11px] text-slate-500 dark:text-slate-400 mb-4 font-semibold tabular-nums">
+                      <div className="flex justify-between items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 mb-4 font-semibold tabular-nums whitespace-nowrap">
                         <span>Progresso:</span>
-                        <span>{mission.current} / {mission.goal} {mission.type === 'minutes' ? 'min' : ''}</span>
+                        <span>{mission.current} / {mission.goal}{mission.type === 'minutes' ? ' min' : ''}</span>
                       </div>
                     </div>
                     

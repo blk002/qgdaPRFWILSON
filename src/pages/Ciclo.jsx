@@ -351,9 +351,10 @@ export default function Ciclo() {
       )}
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
-        <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
-          <Layers className="w-4 h-4 text-sky-500 dark:text-sky-400" /> Fila de Conteúdo Novo / Avanço
-          <span className="text-[10px] bg-slate-200 dark:bg-slate-850 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold ml-1">
+        <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2 flex-wrap">
+          <Layers className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
+          <span>Fila de Conteúdo Novo / Avanço</span>
+          <span className="text-[10px] bg-slate-200 dark:bg-slate-850 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold whitespace-nowrap shrink-0">
             {shownDays.length} {shownDays.length === 1 ? 'dia' : 'dias'}
           </span>
         </h3>
@@ -923,22 +924,22 @@ export default function Ciclo() {
 
                               {/* 2 Botões: AULA ASSISTIDA + EXERCÍCIOS DA AULA */}
                               {isToday && (
-                                <div className="grid grid-cols-2 gap-2 pt-1">
+                                <div className="grid grid-cols-2 gap-1.5 pt-1">
                                   <button
                                     type="button"
                                     onClick={() => openSlotModal(true)}
-                                    className="h-9 px-2.5 rounded-lg text-xs font-black uppercase tracking-wide bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                    className="h-9 px-2 rounded-lg text-[11px] font-black uppercase tracking-tight bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 flex items-center justify-center gap-1 transition-colors cursor-pointer whitespace-nowrap"
                                   >
-                                    <PlayCircle className="w-4 h-4 shrink-0" />
-                                    <span className="truncate">Aula Assistida</span>
+                                    <PlayCircle className="w-3.5 h-3.5 shrink-0" />
+                                    <span>Aula Assistida</span>
                                   </button>
                                   <button
                                     type="button"
                                     onClick={() => openSlotModal(false)}
-                                    className="h-9 px-2.5 rounded-lg text-xs font-black uppercase tracking-wide bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-850 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                                    className="h-9 px-2 rounded-lg text-[11px] font-black uppercase tracking-tight bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-850 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700 flex items-center justify-center gap-1 transition-colors cursor-pointer whitespace-nowrap"
                                   >
-                                    <Target className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
-                                    <span className="truncate">Exercícios da Aula</span>
+                                    <Target className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400 shrink-0" />
+                                    <span>Exercícios da Aula</span>
                                   </button>
                                 </div>
                               )}

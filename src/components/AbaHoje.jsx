@@ -350,9 +350,9 @@ export default function AbaHoje({ onGoToTab }) {
 
   return (
     <div className="fade-in w-full pb-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-start">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
         {/* COLUNA ESQUERDA: TEORIA */}
-        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 space-y-3">
+        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 space-y-3 flex flex-col">
           <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
               <BookOpen className="w-4 h-4 text-sky-500 dark:text-sky-400" />
@@ -530,7 +530,7 @@ export default function AbaHoje({ onGoToTab }) {
         </section>
 
         {/* COLUNA DIREITA: REVISÃO */}
-        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 space-y-3">
+        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 space-y-3 flex flex-col">
           <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2">
               <BrainCircuit className="w-4 h-4 text-sky-500 dark:text-sky-400" />
@@ -656,8 +656,8 @@ export default function AbaHoje({ onGoToTab }) {
           </div>
 
           <div className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
-            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-              Tempo total gasto
+            <span className="text-[11px] font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
+              Tempo Total Gasto
             </span>
             <span className="text-base font-extrabold text-slate-800 dark:text-white tabular-nums">
               {formatDurationHMS(caveiraStats.totalSeconds)}
@@ -665,8 +665,8 @@ export default function AbaHoje({ onGoToTab }) {
           </div>
 
           <div className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
-            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
-              Tempo médio por questão
+            <span className="text-[11px] font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
+              Tempo Médio por Questão
             </span>
             <span className="text-base font-extrabold text-slate-800 dark:text-white tabular-nums">
               {formatDurationHMS(caveiraStats.avgTimeSec)}

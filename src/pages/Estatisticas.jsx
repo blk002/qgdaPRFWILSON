@@ -153,26 +153,28 @@ export default function Estatisticas() {
       </div>
 
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
-        <div className="bg-white rounded-xl border border-slate-200 p-3.5 dark:bg-slate-900 dark:border-slate-800 flex flex-col items-center min-h-[220px] justify-center">
-          <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-2 dark:text-slate-100">Equilíbrio Operacional</h3>
+        <div className="bg-white rounded-xl border border-slate-200 p-3.5 dark:bg-slate-900 dark:border-slate-800 flex flex-col items-center justify-between">
+          <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-1 dark:text-slate-100">Equilíbrio Operacional</h3>
           {stats.length > 0 ? (
-            <div className="w-full h-[210px]">
-              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-                <RadarChart cx="50%" cy="50%" outerRadius="78%" data={radarData}>
-                  <PolarGrid stroke={isDarkMode ? '#252C3D' : '#e2e8f0'} />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: isDarkMode ? '#9CA6BC' : '#64748b', fontSize: 10, fontWeight: 'bold' }} />
-                  <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
-                  <Radar
-                    name="Evolução"
-                    dataKey="A"
-                    stroke="#0ea5e9"
-                    fill="#0ea5e9"
-                    fillOpacity={0.4}
-                  />
-                </RadarChart>
-              </ResponsiveContainer>
+            <>
+              <div className="w-full h-[195px]">
+                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+                  <RadarChart cx="50%" cy="50%" outerRadius="76%" data={radarData}>
+                    <PolarGrid stroke={isDarkMode ? '#252C3D' : '#e2e8f0'} />
+                    <PolarAngleAxis dataKey="subject" tick={{ fill: isDarkMode ? '#9CA6BC' : '#64748b', fontSize: 10, fontWeight: 'bold' }} />
+                    <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
+                    <Radar
+                      name="Evolução"
+                      dataKey="A"
+                      stroke="#0ea5e9"
+                      fill="#0ea5e9"
+                      fillOpacity={0.4}
+                    />
+                  </RadarChart>
+                </ResponsiveContainer>
+              </div>
               <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 text-center">Equilíbrio entre frentes do edital e constância física.</p>
-            </div>
+            </>
           ) : (
             <div className="flex flex-col items-center justify-center py-6 opacity-50">
               <BarChart2 className="w-9 h-9 text-slate-300 mb-1.5" />
@@ -199,7 +201,7 @@ export default function Estatisticas() {
                    </div>
                    <div className="bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700/60 p-2.5 rounded-lg">
                       <span className="text-[9px] font-black text-slate-400 block uppercase">Status</span>
-                      <span className="text-sm font-black text-slate-800 dark:text-white">
+                      <span className="text-xs sm:text-sm font-black text-slate-800 dark:text-white whitespace-nowrap">
                          {(weeklySprint.currentMinutes / (weeklySprint.goalHours * 60)) >= 1 ? '🥇 CUMPRIDA' : '⚡ EM CURSO'}
                       </span>
                    </div>
