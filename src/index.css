@@ -36,16 +36,25 @@
   --color-blue-800: var(--theme-blue-800, #1e40af);
   --color-blue-900: var(--theme-blue-900, #1e3a8a);
   --color-blue-950: var(--theme-blue-950, #172554);
+
+  /* Escala Tipográfica Elevada para Legibilidade Global (sem inflar espaçamentos) */
+  --text-xs: 0.875rem;
+  --text-xs--line-height: 1.25rem;
+  --text-sm: 0.96875rem;
+  --text-sm--line-height: 1.375rem;
+  --text-base: 1.0625rem;
+  --text-base--line-height: 1.55rem;
+  --text-lg: 1.25rem;
+  --text-lg--line-height: 1.75rem;
+  --text-xl: 1.375rem;
+  --text-xl--line-height: 1.85rem;
+  --text-2xl: 1.625rem;
+  --text-2xl--line-height: 2.1rem;
 }
 
 @layer base {
   html {
-    font-size: 15.5px;
-  }
-  @media (min-width: 1024px) {
-    html {
-      font-size: 16px;
-    }
+    font-size: 16px;
   }
 
   body {
@@ -251,4 +260,18 @@
     page-break-after: always;
     page-break-inside: avoid;
   }
+}
+
+/* Eleva o piso de tamanhos arbitrários pequenos sem alterar padding/gap/margin */
+.text-\[9px\] {
+  font-size: 11px;
+}
+.text-\[10px\] {
+  font-size: 12px;
+}
+.text-\[10\.5px\] {
+  font-size: 12.5px;
+}
+.text-\[11px\] {
+  font-size: 13px;
 }
