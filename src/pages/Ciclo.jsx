@@ -204,6 +204,8 @@ export default function Ciclo() {
     if (!container) return;
 
     const handleWheel = (e) => {
+      // Só converte rolagem vertical em horizontal quando houver overflow horizontal real
+      if (container.scrollWidth <= container.clientWidth) return;
       // Ignora se estiver rolando um sub-menu vertical interno
       if (e.target.closest('.overflow-y-auto')) return;
       if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
@@ -444,9 +446,9 @@ export default function Ciclo() {
       <div 
         ref={scrollContainerRef}
         id="cycle-scroll-container" 
-        className="overflow-x-auto pt-3 pb-3 custom-scrollbar-x"
+        className="pt-2.5 pb-3"
       >
-        <div className="flex gap-2.5 sm:gap-3 items-stretch w-full min-w-max">
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-2 items-stretch w-full">
           {(() => {
             const simulatedIncrements = {};
             const isSubDoneWithSim = (sub, simMap) => {
@@ -543,24 +545,24 @@ export default function Ciclo() {
               if (week !== weekOffset) return null;
 
               return (
-                <div id={`cycle-day-${dayIndex}`} key={dayIndex} className={`flex-1 min-w-[245px] sm:min-w-[260px] max-w-[300px] flex flex-col rounded-xl border transition-all mt-2 ${
+                <div id={`cycle-day-${dayIndex}`} key={dayIndex} className={`min-w-0 flex flex-col rounded-xl border transition-all mt-2 ${
                     isToday ? 'border-sky-500/80 bg-slate-50 shadow-md ring-2 ring-sky-500/15 relative dark:bg-slate-900 dark:border-sky-500/80 dark:ring-sky-500/10' : 'border-slate-200/80 bg-white opacity-95 hover:opacity-100 dark:border-slate-800 dark:bg-slate-900/80'
                 }`}>
                   {isToday && (
-                     <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-sky-600 dark:bg-sky-500 dark:text-slate-950 text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-xs z-10 border border-white dark:border-slate-900 whitespace-nowrap">
+                     <div className="absolute -top-2.5 left-1/2 transform -translate-x-1/2 bg-sky-600 dark:bg-sky-500 dark:text-slate-950 text-white text-[10px] font-black uppercase tracking-wider px-2 py-0.5 rounded-full shadow-xs z-10 border border-white dark:border-slate-900 whitespace-nowrap">
                        Ordem do Dia
                      </div>
                   )}
 
-                  <div className={`p-2.5 text-center border-b flex flex-col gap-0.5 rounded-t-xl ${isToday ? 'border-sky-200 bg-sky-50/70 pt-3.5 dark:border-sky-500/25 dark:bg-sky-950/25' : 'border-slate-100 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-950/40'}`}>
-                    <span className={`text-[10px] font-black uppercase tracking-widest ${isToday ? 'text-sky-600 dark:text-sky-400' : 'text-slate-400 dark:text-slate-400'}`}>
+                  <div className={`p-2 text-center border-b flex flex-col gap-0.5 rounded-t-xl ${isToday ? 'border-sky-200 bg-sky-50/70 pt-3 dark:border-sky-500/25 dark:bg-sky-950/25' : 'border-slate-100 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-950/40'}`}>
+                    <span className={`text-[10px] font-black uppercase tracking-wider truncate ${isToday ? 'text-sky-600 dark:text-sky-400' : 'text-slate-400 dark:text-slate-400'}`}>
                       {dateInfo.title} • {dateInfo.dateStr}
                     </span>
-                    <span className={`font-black text-base sm:text-lg tracking-tight ${isToday ? 'text-slate-800 dark:text-white' : 'text-slate-700 dark:text-slate-200'}`}>
+                    <span className={`font-black text-xs xl:text-sm tracking-tight truncate ${isToday ? 'text-slate-800 dark:text-white' : 'text-slate-700 dark:text-slate-200'}`} title={cycleScheduleType === 'weekly' ? (dateInfo.weekDayName || `DIA ${dayIndex + 1}`) : `DIA ${dayIndex + 1}`}>
                       {cycleScheduleType === 'weekly' ? (dateInfo.weekDayName || `DIA ${dayIndex + 1}`) : `DIA ${dayIndex + 1}`}
                     </span>
                     {isToday && cycleScheduleType === 'weekly' && cycleCarryoverOffset > 0 && (
-                      <div className="flex flex-wrap items-center justify-center gap-1.5 mt-1">
+                      <div className="flex flex-wrap items-center justify-center gap-1 mt-1">
                         <span
                           title={`Grade deslocada ${cycleCarryoverOffset} dia(s) para repor dia não estudado`}
                           className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-amber-100 text-amber-800 border border-amber-300 dark:bg-amber-950/60 dark:text-amber-300 dark:border-amber-800"
@@ -579,28 +581,28 @@ export default function Ciclo() {
                     {isPast ? (
                       <div className="flex flex-col items-center gap-1 mt-1">
                         {dayTotalSeconds > 0 ? (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
-                            <CheckCircle className="w-3 h-3 text-emerald-500" /> Realizado ({formatSecondsToFriendly(dayTotalSeconds)})
+                          <span className="inline-flex items-center justify-center flex-wrap gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
+                            <CheckCircle className="w-3 h-3 text-emerald-500 shrink-0" /> Realizado ({formatSecondsToFriendly(dayTotalSeconds)})
                           </span>
                         ) : (
-                          <span className="inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-300 dark:border-slate-700">
+                          <span className="inline-flex items-center justify-center flex-wrap gap-1 px-2 py-0.5 rounded-md text-[10px] font-black bg-slate-200 text-slate-600 dark:bg-slate-800 dark:text-slate-400 border border-slate-300 dark:border-slate-700">
                             Não Realizado
                           </span>
                         )}
                       </div>
                     ) : dayTotalSeconds > 0 && (
-                      <div className="flex flex-col items-center gap-1 mt-1">
+                      <div className="flex flex-col items-center gap-0.5 mt-1">
                         {hasAcceleration ? (
                           <>
                             <span 
-                              className={`inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-[11px] font-black shadow-xs ${
+                              className={`inline-flex items-center justify-center flex-wrap gap-1 px-2 py-0.5 rounded-full text-[10px] font-black shadow-xs ${
                                 isToday 
                                   ? 'bg-blue-600 text-white' 
                                   : 'bg-slate-200 text-slate-800 dark:bg-slate-800 dark:text-blue-300 border border-slate-300 dark:border-slate-700'
                               }`}
                               title={`Sem aceleração: ${formatSecondsToFriendly(dayTotalSeconds)} | Poupado: ${formatSecondsToFriendly(dayTotalSeconds - dayAcceleratedSeconds)}`}
                             >
-                              <Zap className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" />
+                              <Zap className="w-3 h-3 text-yellow-400 fill-yellow-400 shrink-0" />
                               <span>{formatSecondsToFriendly(dayAcceleratedSeconds)}</span>
                               <span className="opacity-75 text-[9px] font-bold uppercase tracking-wider">acelerado</span>
                             </span>
@@ -609,29 +611,29 @@ export default function Ciclo() {
                             </span>
                           </>
                         ) : (
-                          <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded-md text-[11px] font-black ${isToday ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/60 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-800' : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
-                            <Clock className="w-3 h-3 text-yellow-500" /> {formatSecondsToFriendly(dayTotalSeconds)}
+                          <span className={`inline-flex items-center justify-center flex-wrap gap-1 px-2 py-0.5 rounded-md text-[10px] font-black ${isToday ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/60 dark:text-yellow-300 border border-yellow-300 dark:border-yellow-800' : 'bg-slate-200 text-slate-700 dark:bg-slate-800 dark:text-slate-300'}`}>
+                            <Clock className="w-3 h-3 text-yellow-500 shrink-0" /> {formatSecondsToFriendly(dayTotalSeconds)}
                           </span>
                         )}
                       </div>
                     )}
                   </div>
 
-                  <div className="p-2 flex flex-col gap-2 flex-1">
+                  <div className="p-1.5 flex flex-col gap-1.5 flex-1 min-w-0">
                     {daySubjects.length === 0 && (
-                      <div className="flex flex-col items-center justify-center text-center p-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30 flex-1 min-h-[88px] gap-1.5">
+                      <div className="flex flex-col items-center justify-center text-center p-2.5 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30 flex-1 min-h-[88px] gap-1.5">
                         <Calendar className="w-5 h-5 text-slate-400 dark:text-slate-600" />
                         <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                           Dia Livre / Descanso
                         </span>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-500 max-w-[190px] leading-snug">
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500 leading-snug">
                           Nenhum bloco agendado. Clique no dia pelo Calendário para programar.
                         </p>
                         {!isPast && (
                           <button
                             type="button"
                             onClick={() => navigate('/calendario')}
-                            className="mt-0.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-sky-50 hover:bg-sky-600 text-sky-600 hover:text-white dark:bg-sky-950/40 dark:text-sky-400 dark:hover:bg-sky-500 dark:hover:text-slate-950 border border-sky-200 dark:border-sky-800/60 transition-colors cursor-pointer"
+                            className="mt-0.5 px-2 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-sky-50 hover:bg-sky-600 text-sky-600 hover:text-white dark:bg-sky-950/40 dark:text-sky-400 dark:hover:bg-sky-500 dark:hover:text-slate-950 border border-sky-200 dark:border-sky-800/60 transition-colors cursor-pointer"
                           >
                             Agendar no Calendário
                           </button>
@@ -669,9 +671,9 @@ export default function Ciclo() {
                         const wasStudied = pastMinutes > 0;
                         const pastActiveTopic = getActiveTopic ? getActiveTopic(subjectId) : null;
                         return (
-                          <div key={slotIndex} className="bg-white/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden flex flex-col shadow-xs opacity-85">
-                            <div className={`px-2.5 py-1.5 sm:px-3 sm:py-2 flex justify-between items-center border-b border-black/5 ${subject.color}`}>
-                              <span className="font-black text-[10px] sm:text-xs uppercase tracking-wider truncate max-w-[70%]" title={subject.name}>
+                          <div key={slotIndex} className="bg-white/70 dark:bg-slate-900/70 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden flex flex-col shadow-xs opacity-85 min-w-0">
+                            <div className={`px-2 py-1.5 flex justify-between items-center gap-1 border-b border-black/5 ${subject.color}`}>
+                              <span className="font-black text-[10px] uppercase tracking-wider truncate min-w-0 flex-1" title={subject.name}>
                                 {subject.name}
                                 {isDoubled && <span className="ml-1 text-[8px] font-bold opacity-80">(2º BLOCO)</span>}
                                 {isReplaced && <span className="ml-1 text-[8px] font-bold opacity-80">(SUBST.)</span>}
@@ -680,7 +682,7 @@ export default function Ciclo() {
                                 {isDoubled ? '⚡ DOBRADA' : isReplaced ? '🔄 SUBST.' : (subject.block || 'B?')}
                               </span>
                             </div>
-                            <div className="p-2.5 flex flex-col items-center justify-center text-center gap-1 flex-1 min-h-[82px]">
+                            <div className="p-2 flex flex-col items-center justify-center text-center gap-1 flex-1 min-h-[76px]">
                               {wasStudied ? (
                                 <>
                                   <CheckCircle className="w-4 h-4 text-emerald-500" />
@@ -697,7 +699,7 @@ export default function Ciclo() {
                                   <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                                     Não Estudado
                                   </span>
-                                  <span className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight max-w-[190px]">
+                                  <span className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight">
                                     Fila retomada em <strong className="text-sky-500 font-bold">Hoje</strong>.
                                   </span>
                                 </>
@@ -812,26 +814,26 @@ export default function Ciclo() {
                       }
 
                       return (
-                        <div key={slotIndex} className={`bg-white dark:bg-slate-900 border rounded-xl overflow-hidden flex flex-col shadow-sm transition-all ${isSlotCompleted ? 'border-emerald-200 dark:border-emerald-800 opacity-80' : isToday ? 'border-slate-300 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md' : 'border-slate-200 dark:border-slate-800'}`}>
+                        <div key={slotIndex} className={`bg-white dark:bg-slate-900 border rounded-xl overflow-hidden flex flex-col shadow-sm transition-all min-w-0 ${isSlotCompleted ? 'border-emerald-200 dark:border-emerald-800 opacity-80' : isToday ? 'border-slate-300 dark:border-slate-700 hover:border-blue-400 dark:hover:border-blue-500 hover:shadow-md' : 'border-slate-200 dark:border-slate-800'}`}>
                           
-                          <div className={`px-2.5 py-1.5 sm:px-3 sm:py-2 flex justify-between items-center border-b border-black/5 ${subject.color}`}>
-                            <span className="font-black text-[10px] sm:text-xs uppercase tracking-wider truncate max-w-[70%]" title={subject.name}>{subject.name}</span>
+                          <div className={`px-2 py-1.5 flex justify-between items-center gap-1 border-b border-black/5 ${subject.color}`}>
+                            <span className="font-black text-[10px] uppercase tracking-wider truncate min-w-0 flex-1" title={subject.name}>{subject.name}</span>
                             <span className="text-[9px] font-black bg-white/30 dark:bg-slate-900/50 dark:text-white px-1.5 py-0.5 rounded backdrop-blur-sm shrink-0">{subject.block || 'B?'}</span>
                           </div>
 
-                          <div className="p-2.5 flex flex-col gap-2 flex-1 justify-center">
+                          <div className="p-2 flex flex-col gap-1.5 flex-1 justify-center min-w-0">
                             {isSlotCompleted ? (
-                              <div className="py-2 fade-in flex items-center justify-center gap-2">
+                              <div className="py-2 fade-in flex items-center justify-center gap-1.5">
                                 <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
                                 <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Teoria Queimada!</span>
                               </div>
                             ) : activeTopic ? (
                               <>
                                 {/* Header do Tópico com Botão de Notas */}
-                                <div className="flex items-center justify-between gap-1.5 border-b border-slate-100 dark:border-slate-800/80 pb-1.5">
-                                  <div className="flex items-center gap-1.5 min-w-0 flex-1">
+                                <div className="flex items-center justify-between gap-1 border-b border-slate-100 dark:border-slate-800/80 pb-1.5">
+                                  <div className="flex items-center gap-1 min-w-0 flex-1">
                                     <Flame className="w-3.5 h-3.5 text-orange-500 shrink-0"/> 
-                                    <span className="text-[10px] sm:text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate" title={activeTopic.name}>
+                                    <span className="text-[10px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider truncate" title={activeTopic.name}>
                                       {activeTopic.name}
                                     </span>
                                   </div>
@@ -845,14 +847,14 @@ export default function Ciclo() {
                                 </div>
 
                                 {blockCount > 1 ? (
-                                  <div className="flex flex-col gap-2">
+                                  <div className="flex flex-col gap-1.5">
                                     {/* Barra de Meta e Contagem de Aulas */}
-                                    <div className="flex items-center justify-between gap-1.5 bg-slate-100/90 dark:bg-slate-800/60 p-2 rounded-lg border border-slate-200/80 dark:border-slate-700/60">
-                                      <div className="flex items-center gap-1.5 min-w-0">
+                                    <div className="flex flex-wrap items-center justify-between gap-1 bg-slate-100/90 dark:bg-slate-800/60 px-2 py-1 rounded-lg border border-slate-200/80 dark:border-slate-700/60">
+                                      <div className="flex items-center gap-1 min-w-0">
                                         <span className="text-xs font-black text-slate-800 dark:text-slate-100 whitespace-nowrap">
                                           📚 {blockCount} Aulas
                                         </span>
-                                        <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 px-1.5 py-0.5 rounded border border-slate-200/80 dark:border-slate-800 whitespace-nowrap">
+                                        <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-white dark:bg-slate-900 px-1 py-0.5 rounded border border-slate-200/80 dark:border-slate-800 whitespace-nowrap">
                                           {currentCompleted + 1} a {currentCompleted + blockCount}
                                         </span>
                                       </div>
@@ -864,13 +866,13 @@ export default function Ciclo() {
                                     </div>
 
                                     {/* Lista das Aulas no Bloco */}
-                                    <div className="space-y-1.5 max-h-28 overflow-y-auto pr-1 custom-scrollbar">
+                                    <div className="space-y-1 max-h-28 overflow-y-auto pr-0.5 custom-scrollbar">
                                       {plannedLessons.map((pl, plIdx) => (
-                                        <div key={plIdx} className="flex items-center justify-between gap-2 text-[11px] bg-slate-50 dark:bg-slate-950/80 px-2 py-1.5 rounded-lg border border-slate-200/70 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 transition-colors">
-                                          <span className="truncate flex-1 font-medium text-slate-700 dark:text-slate-200 text-left" title={pl.name}>
+                                        <div key={plIdx} className="flex items-center justify-between gap-1.5 text-[11px] bg-slate-50 dark:bg-slate-950/80 px-2 py-1 rounded-lg border border-slate-200/70 dark:border-slate-800/80 hover:border-slate-300 dark:hover:border-slate-700 transition-colors min-w-0">
+                                          <span className="truncate flex-1 min-w-0 font-medium text-slate-700 dark:text-slate-200 text-left" title={pl.name}>
                                             {pl.name}
                                           </span>
-                                          <span className="font-mono font-bold text-blue-600 dark:text-blue-400 shrink-0 text-[10px] bg-blue-50 dark:bg-blue-950/80 border border-blue-100 dark:border-blue-900/60 px-1.5 py-0.5 rounded whitespace-nowrap">
+                                          <span className="font-mono font-bold text-blue-600 dark:text-blue-400 shrink-0 text-[10px] bg-blue-50 dark:bg-blue-950/80 border border-blue-100 dark:border-blue-900/60 px-1 py-0.5 rounded whitespace-nowrap">
                                             ⚡{formatSecondsToClock(pl.accelSec)}
                                           </span>
                                         </div>
@@ -878,8 +880,8 @@ export default function Ciclo() {
                                     </div>
 
                                     {/* Barra de Tempo Total do Bloco */}
-                                    <div className="flex items-center justify-between bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 rounded-lg px-2.5 py-1.5 text-xs">
-                                      <div className="flex items-center gap-1.5 font-black text-blue-700 dark:text-blue-300">
+                                    <div className="flex flex-wrap items-center justify-between gap-1 bg-blue-50/80 dark:bg-blue-950/40 border border-blue-200/80 dark:border-blue-900/60 rounded-lg px-2 py-1 text-xs">
+                                      <div className="flex items-center gap-1 font-black text-blue-700 dark:text-blue-300">
                                         <Zap className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500 shrink-0" />
                                         <span>Bloco: {formatSecondsToFriendly(blockAccelSec)}</span>
                                         <span className="text-[10px] font-bold opacity-75">({spd}x)</span>
@@ -890,9 +892,9 @@ export default function Ciclo() {
                                     </div>
                                   </div>
                                 ) : (
-                                  <div className="flex flex-col gap-2">
+                                  <div className="flex flex-col gap-1.5">
                                     <div>
-                                      <div className="flex items-center justify-between gap-1 mb-1">
+                                      <div className="flex flex-wrap items-center justify-between gap-1 mb-1">
                                         <span className="text-[10px] font-mono font-bold text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 px-1.5 py-0.5 rounded">
                                           Aula {currentCompleted + 1}
                                         </span>
@@ -902,15 +904,15 @@ export default function Ciclo() {
                                           </span>
                                         )}
                                       </div>
-                                      <p className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2" title={activeLessonName}>
+                                      <p className="text-xs font-bold text-slate-800 dark:text-slate-100 leading-snug line-clamp-2" title={activeLessonName}>
                                         {activeLessonName}
                                       </p>
                                     </div>
 
                                     {activeLessonDuration && activeLessonDuration !== '00:00' && (
-                                      <div className="flex items-center justify-between bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 py-1.5 text-xs mt-1">
+                                      <div className="flex flex-wrap items-center justify-between gap-1 bg-slate-50 dark:bg-slate-950/80 border border-slate-200 dark:border-slate-800 rounded-lg px-2 py-1 text-xs mt-0.5">
                                         <span className="text-slate-500 dark:text-slate-400 font-medium flex items-center gap-1">
-                                          <Clock className="w-3.5 h-3.5 text-slate-400" /> {activeLessonDuration} (1x)
+                                          <Clock className="w-3 h-3 text-slate-400" /> {activeLessonDuration} (1x)
                                         </span>
                                         {spd > 1 && (
                                           <span className="font-black text-blue-600 dark:text-blue-400 flex items-center gap-1 bg-blue-50 dark:bg-blue-950/80 px-1.5 py-0.5 rounded border border-blue-200 dark:border-blue-900">
