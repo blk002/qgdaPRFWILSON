@@ -361,10 +361,83 @@ export default function App() {
 
   // --- PONTE GLOBAL DE SINCRONIZAÇÃO COM A EXTENSÃO CAVEIRA (ATIVA EM TODAS AS ABAS DO SITE) ---
   useEffect(() => {
+    const handleCourseLessonCompleteFromExtension = (payload) => {
+      if (!payload) return;
+      const rawTitle = String(payload.lessonTitle || '').trim();
+      const rawIndexText = String(payload.rawIndexText || '').trim();
+      if (rawTitle && rawIndexText) {
+        saveManualLessonIndex(rawIndexText, rawTitle);
+      }
+      const st = useStore.getState();
+      const subs = Object.values(st.subjects || {});
+      const normTarget = normalizeCourseLookupKey(rawTitle);
+      const normSubHint = normalizeCourseLookupKey(payload.subject || '');
+
+      let matchedSub = null;
+      let matchedTopic = null;
+
+      // 1. Tenta casar pelo título da aula nos tópicos em andamento
+      if (normTarget) {
+        for (const sub of subs) {
+          for (const t of (sub.topics || [])) {
+            const lessons = t.lessons || [];
+            const hasLessonMatch = lessons.some(l => {
+              const ln = normalizeCourseLookupKey(l?.name || '');
+              return ln && (ln === normTarget || ln.includes(normTarget) || normTarget.includes(ln));
+            });
+            const tn = normalizeCourseLookupKey(t?.name || '');
+            const hasTopicMatch = tn && (tn === normTarget || normTarget.includes(tn));
+            if (hasLessonMatch || hasTopicMatch) {
+              matchedSub = sub;
+              matchedTopic = t;
+              break;
+            }
+          }
+          if (matchedSub) break;
+        }
+      }
+
+      // 2. Fallback: casa pela disciplina inferida e pega o próximo tópico não concluído
+      if (!matchedSub && normSubHint) {
+        matchedSub = subs.find(s => {
+          const sn = normalizeCourseLookupKey(s?.name || '');
+          return sn && (sn === normSubHint || sn.includes(normSubHint) || normSubHint.includes(sn));
+        }) || null;
+        if (matchedSub) {
+          matchedTopic = (matchedSub.topics || []).find(t => (Number(t.completed) || 0) < (Number(t.total) || 0)) || (matchedSub.topics || [])[0] || null;
+        }
+      }
+
+      if (matchedSub && matchedTopic) {
+        const currentCompleted = Math.min(Number(matchedTopic.total) || 0, Number(matchedTopic.completed) || 0);
+        const remLessons = (matchedTopic.lessons || []).slice(currentCompleted, matchedTopic.total);
+        const firstLesson = remLessons[0];
+        st.setClassConfirmModal({
+          subjectId: matchedSub.id,
+          slotIndex: 0,
+          topicName: matchedTopic.name,
+          lessonNames: rawTitle ? [rawTitle] : (firstLesson?.name ? [firstLesson.name] : [matchedTopic.name]),
+          allRemainingLessonNames: remLessons.map(l => l?.name).filter(Boolean),
+          maxClasses: Math.max(1, (Number(matchedTopic.total) || 1) - currentCompleted),
+          lessonDuration: firstLesson?.duration || '60:00',
+          allLessonsDurations: remLessons.map(l => l?.duration || '60:00'),
+          suggestedClasses: 1,
+          skipPrePrompt: true
+        });
+        toast.success(`Aula "${rawTitle || matchedTopic.name}" recebida do Caveira com ${payload.subtopics?.length || 0} Bizus!`);
+      } else {
+        toast.info(`Bizus da aula "${rawTitle || 'Caveira'}" salvos! Clique em "Aula Assistida" na matéria correspondente.`);
+      }
+    };
+
     const handleExtensionMessage = (event) => {
       if (event.data && event.data.source === 'QG_CAVEIRA_EXTENSION') {
         if (event.data.type === 'COURSE_INDEX_SYNC' && event.data.payload) {
           setCourseIndexCache(event.data.payload);
+          return;
+        }
+        if (event.data.type === 'COURSE_LESSON_COMPLETE_REQUEST' && event.data.payload) {
+          handleCourseLessonCompleteFromExtension(event.data.payload);
           return;
         }
         const currentUser = useStore.getState().user;
@@ -374,7 +447,16 @@ export default function App() {
         if (msgUserId && msgUserId !== currentUser.id) return;
 
         if (event.data.type === 'SYNC_UPDATE' && event.data.payload) {
-          const { newQuestion, questions } = event.data.payload;
+          const { newQuestion, questions, session: extSession, dailyGoal: extGoal } = event.data.payload;
+          if (extSession) {
+            useStore.getState().setCaveiraSessionStats?.(extSession);
+          }
+          if (extGoal && Number(extGoal) >= 5) {
+            const curGoal = useStore.getState().caveiraDailyGoal;
+            if (Number(extGoal) !== Number(curGoal)) {
+              useStore.setState({ caveiraDailyGoal: Number(extGoal) });
+            }
+          }
           if (newQuestion) {
             if (newQuestion.ownerUserId && newQuestion.ownerUserId !== currentUser.id) return;
             useStore.getState().addCaveiraQuestion(newQuestion);
@@ -386,7 +468,16 @@ export default function App() {
           }
         }
         if (event.data.type === 'CAVEIRA_DATA_RESPONSE' && event.data.payload) {
-          const { questions } = event.data.payload;
+          const { questions, session: extSession, dailyGoal: extGoal } = event.data.payload;
+          if (extSession) {
+            useStore.getState().setCaveiraSessionStats?.(extSession);
+          }
+          if (extGoal && Number(extGoal) >= 5) {
+            const curGoal = useStore.getState().caveiraDailyGoal;
+            if (Number(extGoal) !== Number(curGoal)) {
+              useStore.setState({ caveiraDailyGoal: Number(extGoal) });
+            }
+          }
           if (Array.isArray(questions) && questions.length > 0) {
             const scoped = questions.filter(q => q && (!q.ownerUserId || q.ownerUserId === currentUser.id));
             if (scoped.length > 0) {

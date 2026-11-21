@@ -13,18 +13,30 @@ const FIRST_PREFS = { examBoards: ['cebraspe', 'caveira_ineditas', 'caveira_adap
 function renderAccountStatus(activeUserId, activeUserLabel) {
   const pill = document.getElementById('account-status-pill');
   if (!pill) return;
+  pill.textContent = '';
+  const iconSpan = document.createElement('span');
+  const textSpan = document.createElement('span');
+  textSpan.style.overflow = 'hidden';
+  textSpan.style.textOverflow = 'ellipsis';
+  textSpan.style.whiteSpace = 'nowrap';
+
   if (activeUserId) {
     const label = (activeUserLabel || '').trim() || `ID ${String(activeUserId).slice(0, 8)}...`;
     pill.style.borderColor = 'rgba(16, 185, 129, 0.35)';
     pill.style.background = 'rgba(16, 185, 129, 0.08)';
     pill.style.color = '#86efac';
-    pill.innerHTML = `<span>🟢</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;" title="${label}">Conta: ${label}</span>`;
+    iconSpan.textContent = '🟢';
+    textSpan.textContent = `Conta: ${label}`;
+    textSpan.title = label;
   } else {
     pill.style.borderColor = 'rgba(251, 191, 36, 0.35)';
     pill.style.background = 'rgba(251, 191, 36, 0.08)';
     pill.style.color = '#fde68a';
-    pill.innerHTML = '<span>🟡</span><span style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">Abra o QG da PRF e faça login</span>';
+    iconSpan.textContent = '🟡';
+    textSpan.textContent = 'Abra o QG da PRF e faça login';
   }
+  pill.appendChild(iconSpan);
+  pill.appendChild(textSpan);
 }
 
 function getTodaySessionDate() {
@@ -210,14 +222,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
   // Botão Abrir QG da PRF
   document.getElementById('btn-open-qg').addEventListener('click', async () => {
-    const targetUrl = 'https://blk002.github.io/qgdaPRFWILSON/#/caveira';
+    const targetUrl = 'https://blk002.github.io/qgdaPRFWILSON/#/estudos?tab=caveira';
     try {
       if (chrome.tabs && chrome.tabs.query) {
         const tabs = await chrome.tabs.query({
           url: ['https://blk002.github.io/*', 'http://localhost:*/*', 'http://127.0.0.1:*/*']
         });
         if (tabs && tabs.length > 0 && tabs[0].id) {
-          await chrome.tabs.update(tabs[0].id, { active: true, url: targetUrl });
+          await chrome.tabs.update(tabs[0].id, { active: true });
           if (tabs[0].windowId && chrome.windows) {
             chrome.windows.update(tabs[0].windowId, { focused: true });
           }
@@ -244,9 +256,8 @@ document.addEventListener('DOMContentLoaded', () => {
   // Botão Zerar Sessão
   document.getElementById('btn-reset-session').addEventListener('click', () => {
     const today = getTodaySessionDate();
-    const resetSession = { date: today, hits: 0, errors: 0, total: 0 };
-    chrome.storage.local.set({ [SESSION_KEY]: resetSession }, () => {
-      chrome.runtime.sendMessage({ type: 'CLEAR_CAVEIRA_SESSION' }).catch(() => {});
+    const resetSession = { date: today, hits: 0, errors: 0, total: 0, wasExplicitlyReset: true };
+    chrome.runtime.sendMessage({ type: 'CLEAR_CAVEIRA_SESSION' }, () => {
       document.getElementById('stat-hits').textContent = '0';
       document.getElementById('stat-errors').textContent = '0';
       document.getElementById('stat-net').textContent = '0%';

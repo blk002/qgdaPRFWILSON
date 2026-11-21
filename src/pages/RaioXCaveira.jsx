@@ -614,6 +614,39 @@ export default function RaioXCaveira() {
     setSelectedLegalDevice(null);
   };
 
+  const triggerCriticalTopicPractice = (subjectName = '', topicsList = []) => {
+    const cleanTopics = (Array.isArray(topicsList) ? topicsList : [topicsList])
+      .map(t => String(t || '').trim())
+      .filter(Boolean);
+    const primaryTopic = cleanTopics[0] || '';
+    const subtopics = cleanTopics.flatMap(t =>
+      t.split(/\s*(?:➔|->|•|\|)\s*/).map(s => s.trim()).filter(Boolean)
+    );
+    const uniqueSubtopics = Array.from(new Set(subtopics.length > 0 ? subtopics : cleanTopics));
+    const hasExt = typeof document !== 'undefined' && document.documentElement.getAttribute('data-qg-caveira-extension-installed') === 'true';
+    if (navigator.clipboard && (uniqueSubtopics[0] || primaryTopic || subjectName)) {
+      navigator.clipboard.writeText(uniqueSubtopics[0] || primaryTopic || subjectName).catch(() => {});
+    }
+    if (hasExt) {
+      window.postMessage({
+        source: 'QG_WEB_APP',
+        type: 'OPEN_CAVEIRA_PRACTICE',
+        payload: {
+          subject: subjectName,
+          lessons: cleanTopics,
+          topic: cleanTopics.slice(0, 3).join(' • '),
+          fallbackTopic: primaryTopic,
+          subtopics: uniqueSubtopics,
+          rawIndexText: uniqueSubtopics.map((s, idx) => `${idx + 1}. ${s}`).join('\n')
+        }
+      }, '*');
+      toast.success(`Abrindo Caveira focado na Zona Crítica: ${cleanTopics.slice(0, 2).join(' • ')}`);
+    } else {
+      window.open('https://app.caveira.com/questions', '_blank', 'noopener');
+      toast.info('Extensão não detectada nesta aba. Assunto crítico copiado para a área de transferência!');
+    }
+  };
+
   return (
     <div className="fade-in w-full pb-12 font-sans space-y-4">
 
@@ -999,12 +1032,31 @@ export default function RaioXCaveira() {
         <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
           {/* COLUNA ESQUERDA: ASSUNTOS MAIS ERRADOS (ZONA CRÍTICA) */}
           <div className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-red-500/25 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
               <h3 className="text-xs sm:text-sm font-black uppercase text-red-500 dark:text-red-400 flex items-center gap-2">
                 <TrendingDown className="w-4 h-4" />
                 Zona Crítica: Assuntos Mais Errados ({topicRankings.mostErrored.length})
               </h3>
-              <span className="text-[10px] font-bold uppercase text-slate-400">Requer Atenção Imediata</span>
+              {topicRankings.mostErrored.length > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    const topSubject = topicRankings.mostErrored[0].subject;
+                    const sameSubjectCritical = topicRankings.mostErrored
+                      .filter(item => item.subject === topSubject)
+                      .slice(0, 3)
+                      .map(item => item.topic);
+                    triggerCriticalTopicPractice(topSubject, sameSubjectCritical);
+                  }}
+                  className="px-2.5 py-1 rounded-lg bg-red-500/15 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-colors cursor-pointer"
+                  title="Abrir o Projeto Caveira já filtrado nos piores assuntos da sua disciplina mais crítica"
+                >
+                  <Target className="w-3 h-3" />
+                  <span>Treinar Top Críticos no Caveira</span>
+                </button>
+              ) : (
+                <span className="text-[10px] font-bold uppercase text-slate-400">Requer Atenção Imediata</span>
+              )}
             </div>
 
             {topicRankings.mostErrored.length === 0 ? (
@@ -1052,21 +1104,32 @@ export default function RaioXCaveira() {
 
                     {/* Barra de Letalidade / Erro */}
                     <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[10px] font-semibold text-slate-400">
+                      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-semibold text-slate-400">
                         <span>Taxa de Erro: <strong className="text-red-400">{t.errorPercent}%</strong></span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedSubject('all');
-                            setSelectedTopic(t.topic);
-                            const el = document.getElementById('caderno-questoes');
-                            if (el) el.scrollIntoView({ behavior: 'smooth' });
-                          }}
-                          className="text-amber-400 hover:underline cursor-pointer flex items-center gap-1"
-                        >
-                          <span>Ver no Caderno</span>
-                          <ArrowRight className="w-3 h-3" />
-                        </button>
+                        <div className="flex items-center gap-2.5">
+                          <button
+                            type="button"
+                            onClick={() => triggerCriticalTopicPractice(t.subject, [t.topic])}
+                            className="px-2 py-0.5 rounded bg-sky-500/15 hover:bg-sky-500 text-sky-400 hover:text-slate-950 border border-sky-500/30 font-black uppercase tracking-wider cursor-pointer flex items-center gap-1 transition-colors"
+                            title={`Resolver questões de ${t.topic} (${t.subject}) no Projeto Caveira`}
+                          >
+                            <Target className="w-2.5 h-2.5" />
+                            <span>Treinar no Caveira</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setSelectedSubject('all');
+                              setSelectedTopic(t.topic);
+                              const el = document.getElementById('caderno-questoes');
+                              if (el) el.scrollIntoView({ behavior: 'smooth' });
+                            }}
+                            className="text-amber-400 hover:underline cursor-pointer flex items-center gap-1"
+                          >
+                            <span>Ver no Caderno</span>
+                            <ArrowRight className="w-3 h-3" />
+                          </button>
+                        </div>
                       </div>
                       <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
                         <div

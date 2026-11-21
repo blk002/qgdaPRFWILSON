@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.5.0 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v1.6.0 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -10,7 +10,7 @@
     if (oldHud) oldHud.remove();
   } catch (_) {}
 
-  const QG_WEB_URL = 'https://blk002.github.io/qgdaPRFWILSON/#/caveira';
+  const QG_WEB_URL = 'https://blk002.github.io/qgdaPRFWILSON/#/estudos?tab=caveira';
   const STORAGE_KEY = 'qg_caveira_questions';
   const SESSION_KEY = 'qg_caveira_session';
   const SCHEMA_KEY = 'qg_caveira_schema_v3';
@@ -92,6 +92,8 @@
   const savedQuestionIds = new Set();
   // Questões já salvas anteriormente que ainda não possuem o texto das alternativas
   const savedQuestionsMissingAlts = new Set();
+  // Questões já respondidas cujos comentários do professor já tentamos auto-carregar silenciosamente
+  const autoCommentAttemptedQIds = new Set();
 
   // Estado da Sessão no HUD
   let sessionStats = {
@@ -389,6 +391,15 @@
           <span class="qg-hud-timer" id="qg-timer">00:00</span>
         </div>
 
+        <div id="qg-hud-course-actions" style="display:none;flex-direction:column;gap:5px;margin-top:8px;">
+          <button type="button" id="qg-btn-course-practice" style="width:100%;background:linear-gradient(90deg,#0284c7,#2563eb);color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:10px;font-weight:900;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 3px 10px rgba(2,132,199,0.3);">
+            <span>🎯 Resolver Questões desta Aula</span>
+          </button>
+          <button type="button" id="qg-btn-course-complete" style="width:100%;background:rgba(16,185,129,0.14);color:#6ee7b7;border:1px solid rgba(16,185,129,0.35);border-radius:8px;padding:6px 10px;font-size:10px;font-weight:800;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
+            <span>✅ Marcar Aula Assistida no QG</span>
+          </button>
+        </div>
+
         <div id="qg-hud-history-box" style="display: none;"></div>
       </div>
 
@@ -520,6 +531,68 @@
       if (box) box.style.display = 'none';
       if (activePracticeFilter) {
         applyCaveiraPracticeFilterLegacyDom(activePracticeFilter);
+      }
+    });
+
+    hud.querySelector('#qg-btn-course-practice')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      if (!currentCourseIndexStatus) return;
+      const lessonTitle = currentCourseIndexStatus.lessonTitle || extractCourseLessonTitle() || '';
+      const subtopics = Array.isArray(currentCourseIndexStatus.subtopics) ? currentCourseIndexStatus.subtopics : [];
+      const rawIndexText = currentCourseIndexStatus.rawIndexText || '';
+      const inferredSubject = inferSubjectFromLessons([lessonTitle], lessonTitle) || '';
+      const filterData = {
+        subject: inferredSubject,
+        topic: lessonTitle,
+        lessons: lessonTitle ? [lessonTitle] : [],
+        fallbackTopic: lessonTitle,
+        subtopics,
+        rawIndexText,
+        createdAt: Date.now()
+      };
+      try {
+        chrome.storage.local.set({ [PENDING_FILTER_KEY]: filterData }, () => {
+          if (chrome.runtime && chrome.runtime.sendMessage) {
+            chrome.runtime.sendMessage({
+              type: 'OPEN_CAVEIRA_PRACTICE',
+              payload: filterData
+            }).catch(() => {});
+          }
+        });
+      } catch (_) {}
+    });
+
+    hud.querySelector('#qg-btn-course-complete')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const btn = e.currentTarget;
+      const lessonTitle = currentCourseIndexStatus?.lessonTitle || extractCourseLessonTitle() || '';
+      const subtopics = Array.isArray(currentCourseIndexStatus?.subtopics) ? currentCourseIndexStatus.subtopics : [];
+      const rawIndexText = currentCourseIndexStatus?.rawIndexText || '';
+      const inferredSubject = inferSubjectFromLessons([lessonTitle], lessonTitle) || '';
+      const payload = {
+        subject: inferredSubject,
+        lessonTitle,
+        subtopics,
+        rawIndexText,
+        url: window.location.href,
+        requestedAt: Date.now()
+      };
+      try {
+        chrome.storage.local.set({ qg_pending_course_completion: payload }, () => {
+          if (chrome.runtime && chrome.runtime.sendMessage) {
+            chrome.runtime.sendMessage({
+              type: 'OPEN_QG_LESSON_COMPLETE',
+              payload
+            }).catch(() => {});
+          }
+        });
+      } catch (_) {}
+      if (btn) {
+        const orig = btn.innerHTML;
+        btn.innerHTML = '<span>✓ Enviado para o QG da PRF!</span>';
+        setTimeout(() => {
+          if (btn && btn.isConnected) btn.innerHTML = orig;
+        }, 2000);
       }
     });
 
@@ -5171,17 +5244,7 @@
     const durationSeconds = Math.max(3, elapsedForThisQ);
 
     // Captura Comentário do Professor caso esteja aberto no card
-    let teacherComment = '';
-    const commentNodes = card.querySelectorAll(
-      '.teacher-comment, .comment-teacher, .professor-comment, .comentario-professor, [class*="teacher-comment"], [class*="comentario"], .q-tab-panel'
-    );
-    for (const node of commentNodes) {
-      const txt = (node.innerText || node.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
-      if (txt.length > 50 && !txt.toUpperCase().startsWith('SELECIONE') && !txt.includes('Estatísticas da questão')) {
-        teacherComment = txt.slice(0, 2500);
-        break;
-      }
-    }
+    const teacherComment = extractTeacherCommentFromCard(card);
 
     return {
       id: qId,
@@ -5668,6 +5731,8 @@
       count: subtopics.length,
       lessonTitle,
       source: captureSource,
+      subtopics,
+      rawIndexText,
       preview: `${lessonTitle ? lessonTitle + ': ' : ''}${subtopics.slice(0, 6).join(' • ')}`
     };
 
@@ -5676,6 +5741,11 @@
       const label = captureSource === 'bizus' ? 'Bizus capturado' : 'Índice capturado';
       currentQEl.textContent = `📑 ${label} (${subtopics.length} subassuntos)`;
       currentQEl.title = currentCourseIndexStatus.preview;
+    }
+
+    const courseActionsEl = document.getElementById('qg-hud-course-actions');
+    if (courseActionsEl) {
+      courseActionsEl.style.display = 'flex';
     }
 
     const signature = `${captureSource}|${window.location.href}|${lessonTitle}|${rawIndexText}`;
@@ -5735,6 +5805,83 @@
     } catch (_) {}
   }
 
+  function extractTeacherCommentFromCard(card) {
+    if (!card) return '';
+    const commentNodes = card.querySelectorAll(
+      '.teacher-comment, .comment-teacher, .professor-comment, .comentario-professor, [class*="teacher-comment"], [class*="comentario"], [class*="gabarito-comentado"], .q-tab-panel'
+    );
+    for (const node of commentNodes) {
+      const txt = (node.innerText || node.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+      if (!txt || txt.length <= 45) continue;
+      const upper = txt.toUpperCase();
+      if (
+        upper.startsWith('SELECIONE') ||
+        txt.includes('Estatísticas da questão') ||
+        txt.includes('Acertos e erros') ||
+        txt.includes('Digite seu comentário') ||
+        txt.includes('Nenhum comentário ainda')
+      ) {
+        continue;
+      }
+      return txt.slice(0, 2500);
+    }
+    return '';
+  }
+
+  function triggerSilentTeacherCommentCapture(card, qId) {
+    if (!card || !qId || autoCommentAttemptedQIds.has(qId)) return;
+    if (extractTeacherCommentFromCard(card)) {
+      autoCommentAttemptedQIds.add(qId);
+      return;
+    }
+    const tabs = Array.from(card.querySelectorAll('.q-tab, [role="tab"], button, .q-btn')).filter(el => {
+      if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
+      const r = el.getBoundingClientRect();
+      return r.width >= 30 && r.height >= 18 && r.height <= 56;
+    });
+    const teacherTab = tabs.find(t => {
+      const tText = normalizeFilterText(t.innerText || t.textContent);
+      return (
+        tText === 'comentario do professor' ||
+        tText === 'comentarios do professor' ||
+        tText === 'gabarito comentado' ||
+        tText === 'professor' ||
+        (tText.includes('comentario') && tText.includes('professor')) ||
+        tText === 'comentario'
+      );
+    });
+    if (!teacherTab) return;
+
+    autoCommentAttemptedQIds.add(qId);
+    const activeTabBefore = tabs.find(t =>
+      t.getAttribute('aria-selected') === 'true' ||
+      t.classList.contains('q-tab--active') ||
+      /\bactive\b/i.test(t.className || '')
+    ) || null;
+
+    const alreadyOnTeacherTab = activeTabBefore === teacherTab;
+    if (!alreadyOnTeacherTab) {
+      teacherTab.click();
+    }
+
+    const checkAndRestore = (shouldRestore) => {
+      if (isDestroyed || !card.isConnected) return;
+      const captured = extractTeacherCommentFromCard(card);
+      if (captured) {
+        const existing = questionsCache.find(item => item && item.id === qId);
+        if (existing && !existing.teacherComment) {
+          saveQuestion({ ...existing, teacherComment: captured }, true);
+        }
+      }
+      if (shouldRestore && !alreadyOnTeacherTab && activeTabBefore && activeTabBefore.isConnected) {
+        activeTabBefore.click();
+      }
+    };
+
+    setTimeout(() => checkAndRestore(false), 260);
+    setTimeout(() => checkAndRestore(true), 600);
+  }
+
   // --- 7. VARREDURA DE CARDS E DETECÇÃO DE VIEWPORT ---
   function scanCards() {
     if (!isExtensionContextValid()) {
@@ -5746,6 +5893,9 @@
 
     if (isCoursePage()) {
       scanCourseVideoIndex();
+    } else {
+      const courseActionsEl = document.getElementById('qg-hud-course-actions');
+      if (courseActionsEl) courseActionsEl.style.display = 'none';
     }
 
     const cards = getQuestionCards();
@@ -5777,19 +5927,15 @@
         }
       }
 
-      // Se a questão já estava salva e o usuário abriu o Comentário do Professor depois, enriquece automaticamente!
+      // Se a questão já estava salva e ainda não tem o Comentário do Professor, captura automaticamente!
       if (savedQuestionIds.has(qId)) {
         const existing = questionsCache.find(item => item && item.id === qId);
         if (existing && !existing.teacherComment) {
-          const commentNodes = card.querySelectorAll(
-            '.teacher-comment, .comment-teacher, .professor-comment, .comentario-professor, [class*="teacher-comment"], [class*="comentario"], .q-tab-panel'
-          );
-          for (const node of commentNodes) {
-            const txt = (node.innerText || node.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
-            if (txt.length > 50 && !txt.toUpperCase().startsWith('SELECIONE') && !txt.includes('Estatísticas da questão')) {
-              saveQuestion({ ...existing, teacherComment: txt.slice(0, 2500) }, true);
-              break;
-            }
+          const commentTxt = extractTeacherCommentFromCard(card);
+          if (commentTxt) {
+            saveQuestion({ ...existing, teacherComment: commentTxt }, true);
+          } else if (isCardAnswered(card) && !autoCommentAttemptedQIds.has(qId)) {
+            setTimeout(() => triggerSilentTeacherCommentCapture(card, qId), 350);
           }
         }
       }
@@ -5820,6 +5966,9 @@
             saveQuestion(questionData, false);
             renderQuestionHistory(qId, true);
             showPrompt(questionData);
+            if (!questionData.teacherComment) {
+              setTimeout(() => triggerSilentTeacherCommentCapture(card, qId), 380);
+            }
           }
         }
       }
@@ -5915,28 +6064,12 @@
           // Varreduras rápidas e estendidas para cobrir qualquer atraso de rede da API do Caveira
           [40, 100, 200, 400, 800, 1500, 2500, 4000].forEach(delay => setTimeout(scanCards, delay));
 
-          // Tentativa de auto-carregar o Comentário do Professor em segundo plano sem quebrar a visão do usuário
+          // Auto-captura invisível do Comentário do Professor com restauração imediata da aba original do card
           setTimeout(() => {
-            try {
-              if (rootCard) {
-                const tabs = rootCard.querySelectorAll('.q-tab, [role="tab"], button, .q-btn');
-                for (const t of tabs) {
-                  const tText = (t.textContent || '').toLowerCase();
-                  if (tText.includes('comentário') || tText.includes('comentario') || tText.includes('professor')) {
-                    // Se o comentário ainda não foi carregado e a aba existe, dá um toque para disparar a busca
-                    if (!rootCard.querySelector('.teacher-comment, [class*="teacher-comment"]')) {
-                      // Dispara clique na aba do comentário
-                      t.click();
-                      // E após carregar o comentário, varre os cards
-                      setTimeout(scanCards, 300);
-                      setTimeout(scanCards, 800);
-                    }
-                    break;
-                  }
-                }
-              }
-            } catch (_) {}
-          }, 450);
+            if (targetCard && targetQId) {
+              triggerSilentTeacherCommentCapture(targetCard, targetQId);
+            }
+          }, 420);
         }
 
         if (

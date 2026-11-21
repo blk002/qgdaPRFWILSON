@@ -65,6 +65,9 @@ export default function AbaHoje({ onGoToTab }) {
     subjectTimeGoal = {},
     reviews = [],
     caveiraQuestions = [],
+    caveiraDailyGoal = 50,
+    caveiraSessionStats = null,
+    setCaveiraDailyGoal,
     getLocalDateStr,
     getCycleIndexForDate,
     setClassConfirmModal,
@@ -72,6 +75,14 @@ export default function AbaHoje({ onGoToTab }) {
   } = useStore();
 
   const [reviewIdx, setReviewIdx] = useState(0);
+  const [isEditingQGoal, setIsEditingQGoal] = useState(false);
+  const [qGoalDraft, setQGoalDraft] = useState(caveiraDailyGoal || 50);
+
+  const todayDateStr = useMemo(
+    () => (getLocalDateStr ? getLocalDateStr() : ''),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [getLocalDateStr, todayKey]
+  );
 
   const caveiraStats = useMemo(() => {
     const list = Array.isArray(caveiraQuestions) ? caveiraQuestions.filter(Boolean) : [];
@@ -80,14 +91,24 @@ export default function AbaHoje({ onGoToTab }) {
     const errors = list.filter((q) => q && !q.hit).length;
     const totalSeconds = list.reduce((acc, q) => acc + (Number(q?.durationSeconds) || 0), 0);
     const avgTimeSec = total > 0 ? Math.round(totalSeconds / total) : 0;
-    return { total, hits, errors, totalSeconds, avgTimeSec };
-  }, [caveiraQuestions]);
 
-  const todayDateStr = useMemo(
-    () => (getLocalDateStr ? getLocalDateStr() : ''),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [getLocalDateStr, todayKey]
-  );
+    // Questões respondidas hoje (pela sessão da extensão se for de hoje, ou pelo timestamp das questões)
+    const todayFromQuestions = list.filter((q) => {
+      if (!q?.timestamp) return false;
+      const d = new Date(q.timestamp);
+      if (isNaN(d.getTime())) return false;
+      const dStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      return dStr === todayDateStr;
+    }).length;
+
+    const extSessionToday =
+      caveiraSessionStats && caveiraSessionStats.date === todayDateStr
+        ? Number(caveiraSessionStats.total) || 0
+        : 0;
+    const todayAnswered = Math.max(todayFromQuestions, extSessionToday);
+
+    return { total, hits, errors, totalSeconds, avgTimeSec, todayAnswered };
+  }, [caveiraQuestions, caveiraSessionStats, todayDateStr]);
 
   const todayHeaderLabel = useMemo(() => {
     const d = new Date();
@@ -628,6 +649,70 @@ export default function AbaHoje({ onGoToTab }) {
         <StudyConsistencyHeatmap />
 
         <div className="flex-1 min-w-[240px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 sm:p-4 flex flex-col justify-between divide-y divide-slate-100 dark:divide-slate-800">
+          {/* Meta Diária de Questões Sincronizada com a Extensão */}
+          {(() => {
+            const safeGoal = Math.max(5, Number(caveiraDailyGoal) || 50);
+            const pct = Math.min(100, Math.round((caveiraStats.todayAnswered / safeGoal) * 100));
+            const isGoalMet = caveiraStats.todayAnswered >= safeGoal;
+            return (
+              <div className="pb-2.5 first:pt-0 space-y-1.5">
+                <div className="flex items-center justify-between gap-2">
+                  <span className="text-[11px] font-extrabold tracking-wider uppercase text-sky-600 dark:text-sky-400 flex items-center gap-1">
+                    <Target className="w-3.5 h-3.5 shrink-0" />
+                    <span>Meta Diária (Hoje)</span>
+                  </span>
+                  {isEditingQGoal ? (
+                    <div className="flex items-center gap-1">
+                      <input
+                        type="number"
+                        min="5"
+                        max="1000"
+                        value={qGoalDraft}
+                        onChange={(e) => setQGoalDraft(e.target.value)}
+                        className="w-14 h-6 px-1.5 rounded border border-sky-500 bg-slate-50 dark:bg-slate-950 text-xs font-black text-center text-slate-800 dark:text-white outline-none"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          if (setCaveiraDailyGoal) setCaveiraDailyGoal(qGoalDraft);
+                          setIsEditingQGoal(false);
+                        }}
+                        className="h-6 px-2 rounded bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-black uppercase cursor-pointer"
+                      >
+                        OK
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="flex items-center gap-1.5">
+                      <span className={`text-xs font-black tabular-nums ${isGoalMet ? 'text-emerald-500' : 'text-slate-800 dark:text-white'}`}>
+                        {caveiraStats.todayAnswered} / {safeGoal} ({pct}%)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setQGoalDraft(safeGoal);
+                          setIsEditingQGoal(true);
+                        }}
+                        className="text-[10px] font-bold text-slate-400 hover:text-sky-400 cursor-pointer px-1"
+                        title="Alterar meta diária de questões (sincroniza com a extensão)"
+                      >
+                        ✏️
+                      </button>
+                    </div>
+                  )}
+                </div>
+                <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-850 overflow-hidden">
+                  <div
+                    className={`h-full rounded-full transition-all duration-300 ${
+                      isGoalMet ? 'bg-emerald-500' : 'bg-gradient-to-r from-sky-500 to-emerald-400'
+                    }`}
+                    style={{ width: `${pct}%` }}
+                  />
+                </div>
+              </div>
+            );
+          })()}
+
           <div className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
             <span className="text-[11px] font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
               Questões Respondidas

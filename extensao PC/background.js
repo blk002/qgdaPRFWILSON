@@ -2,6 +2,9 @@
 
 const STORAGE_KEY = 'qg_caveira_questions';
 const SESSION_KEY = 'qg_caveira_session';
+const ACTIVE_USER_KEY = 'qg_active_user_id';
+const USER_BUCKETS_KEY = 'qg_caveira_user_buckets';
+const GOAL_KEY = 'qg_caveira_daily_goal';
 
 const CAVEIRA_URL_PATTERNS = [
   '*://*.caveira.com/*',
@@ -77,8 +80,8 @@ async function reinjectOpenTabs() {
   } catch (_) {}
 }
 
-// Notifica todas as abas abertas do QG da PRF imediatamente quando novas questões são salvas
-async function broadcastToQgTabs(questions, session) {
+// Notifica todas as abas abertas do QG da PRF imediatamente quando novas questões ou meta diária são salvas
+async function broadcastToQgTabs(questions, session, dailyGoal = 50) {
   if (!chrome.tabs) return;
   try {
     const qgTabs = await chrome.tabs.query({ url: QG_URL_PATTERNS });
@@ -86,7 +89,7 @@ async function broadcastToQgTabs(questions, session) {
       if (tab.id) {
         chrome.tabs.sendMessage(tab.id, {
           type: 'PUSH_CAVEIRA_SYNC',
-          payload: { questions, session }
+          payload: { questions, session, dailyGoal }
         }).catch(() => {});
       }
     }
@@ -120,10 +123,11 @@ chrome.storage.onChanged.addListener((changes, area) => {
       }
     }
 
-    if (changes[STORAGE_KEY]) {
-      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
+    if (changes[STORAGE_KEY] || changes[SESSION_KEY] || changes[GOAL_KEY]) {
+      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, GOAL_KEY], (res) => {
         const session = normalizeSession(res[SESSION_KEY]);
-        broadcastToQgTabs(res[STORAGE_KEY] || [], session);
+        const dailyGoal = Number(res[GOAL_KEY]) || 50;
+        broadcastToQgTabs(res[STORAGE_KEY] || [], session, dailyGoal);
       });
     }
   }
@@ -156,14 +160,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     }
 
     setTimeout(() => {
-      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
+      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, GOAL_KEY], (res) => {
         const session = normalizeSession(res[SESSION_KEY]);
+        const dailyGoal = Number(res[GOAL_KEY]) || 50;
         if (res[SESSION_KEY]?.date !== session.date) {
           chrome.storage.local.set({ [SESSION_KEY]: session });
         }
         sendResponse({
           questions: res[STORAGE_KEY] || [],
-          session
+          session,
+          dailyGoal
         });
       });
     }, 150);
@@ -173,9 +179,20 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'CLEAR_CAVEIRA_SESSION') {
     const today = getTodaySessionDate();
     const cleanSession = { date: today, hits: 0, errors: 0, total: 0, wasExplicitlyReset: true };
-    chrome.storage.local.set({ [SESSION_KEY]: cleanSession }, () => {
-      chrome.action.setBadgeText({ text: '' });
-      sendResponse({ success: true });
+    chrome.storage.local.get([ACTIVE_USER_KEY, USER_BUCKETS_KEY], (res) => {
+      const activeUserId = res?.[ACTIVE_USER_KEY] || null;
+      const payload = { [SESSION_KEY]: cleanSession };
+      if (activeUserId && res?.[USER_BUCKETS_KEY] && typeof res[USER_BUCKETS_KEY] === 'object') {
+        const buckets = { ...res[USER_BUCKETS_KEY] };
+        if (buckets[activeUserId]) {
+          buckets[activeUserId] = { ...buckets[activeUserId], session: cleanSession };
+          payload[USER_BUCKETS_KEY] = buckets;
+        }
+      }
+      chrome.storage.local.set(payload, () => {
+        chrome.action.setBadgeText({ text: '' });
+        sendResponse({ success: true });
+      });
     });
     return true;
   }
@@ -203,7 +220,33 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
               targetOrigin = new URL(tabs[0].url).origin;
             } catch (_) {}
           }
-          await chrome.tabs.create({ url: `${targetOrigin}/` });
+          await chrome.tabs.create({ url: `${targetOrigin}/questions` });
+        }
+        sendResponse({ success: true });
+      } catch (_) {
+        sendResponse({ success: false });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'OPEN_QG_LESSON_COMPLETE') {
+    (async () => {
+      try {
+        const targetUrl = 'https://blk002.github.io/qgdaPRFWILSON/#/estudos?tab=hoje';
+        const qgTabs = chrome.tabs ? await chrome.tabs.query({ url: QG_URL_PATTERNS }) : [];
+        if (qgTabs && qgTabs.length > 0 && qgTabs[0].id) {
+          const tab = qgTabs[0];
+          await chrome.tabs.update(tab.id, { active: true });
+          if (tab.windowId && chrome.windows) {
+            chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+          }
+          chrome.tabs.sendMessage(tab.id, {
+            type: 'PUSH_COURSE_LESSON_COMPLETE',
+            payload: message.payload || {}
+          }).catch(() => {});
+        } else if (chrome.tabs) {
+          await chrome.tabs.create({ url: targetUrl });
         }
         sendResponse({ success: true });
       } catch (_) {

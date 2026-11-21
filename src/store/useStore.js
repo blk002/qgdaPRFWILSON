@@ -3526,6 +3526,20 @@ export const useStore = create(
 
       setDailyGoalMinutes: (minutes) => set({ dailyGoalMinutes: minutes }),
 
+      setCaveiraDailyGoal: (goal) => {
+        const safeGoal = Math.max(5, Math.min(1000, Math.round(Number(goal) || 50)));
+        set({ caveiraDailyGoal: safeGoal });
+        try {
+          window.postMessage({
+            source: 'QG_WEB_APP',
+            type: 'SET_CAVEIRA_DAILY_GOAL',
+            payload: { dailyGoal: safeGoal }
+          }, '*');
+        } catch (_) {}
+      },
+
+      setCaveiraSessionStats: (sessionStats) => set({ caveiraSessionStats: sessionStats }),
+
       setSubjectGoal: (subjectId, minutes) => set(state => ({
         subjectGoals: {
           ...state.subjectGoals,

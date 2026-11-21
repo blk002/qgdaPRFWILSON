@@ -39,13 +39,13 @@
     });
   }
 
-  function postSyncUpdate(questions, userId) {
+  function postSyncUpdate(questions, userId, extra = {}) {
     if (isBridgeDestroyed || !Array.isArray(questions) || !userId) return;
     const scopedQuestions = questions.filter(q => q && (!q.ownerUserId || q.ownerUserId === userId));
     const now = Date.now();
     let payloadJson = '';
     try {
-      payloadJson = JSON.stringify({ userId, scopedQuestions });
+      payloadJson = JSON.stringify({ userId, scopedQuestions, extra });
     } catch (_) {
       payloadJson = `${userId}:${scopedQuestions.length}`;
     }
@@ -57,7 +57,12 @@
     window.postMessage({
       source: 'QG_CAVEIRA_EXTENSION',
       type: 'SYNC_UPDATE',
-      payload: { questions: scopedQuestions, userId }
+      payload: {
+        questions: scopedQuestions,
+        userId,
+        ...(extra.session ? { session: normalizeSession(extra.session) } : {}),
+        ...(extra.dailyGoal ? { dailyGoal: Number(extra.dailyGoal) || 50 } : {})
+      }
     }, '*');
   }
 
@@ -97,7 +102,7 @@
       return;
     }
     try {
-      chrome.storage.local.get([COURSE_INDEX_CACHE_KEY], (res) => {
+      chrome.storage.local.get([COURSE_INDEX_CACHE_KEY, 'qg_pending_course_completion'], (res) => {
         if (chrome.runtime.lastError || isBridgeDestroyed) return;
         const cache = res?.[COURSE_INDEX_CACHE_KEY];
         if (cache && typeof cache === 'object') {
@@ -106,6 +111,19 @@
             type: 'COURSE_INDEX_SYNC',
             payload: cache
           }, '*');
+        }
+        const pendingCourse = res?.qg_pending_course_completion;
+        if (pendingCourse && pendingCourse.requestedAt && (Date.now() - pendingCourse.requestedAt) < 120000) {
+          chrome.storage.local.remove(['qg_pending_course_completion']);
+          setTimeout(() => {
+            if (!isBridgeDestroyed) {
+              window.postMessage({
+                source: 'QG_CAVEIRA_EXTENSION',
+                type: 'COURSE_LESSON_COMPLETE_REQUEST',
+                payload: pendingCourse
+              }, '*');
+            }
+          }, 900);
         }
       });
     } catch (_) {}
@@ -298,7 +316,7 @@
 
   function deliverDataForActiveUser(activeUserId) {
     if (!isExtensionContextValid() || !activeUserId) return;
-    const postFilteredResponse = (rawQuestions, rawSession) => {
+    const postFilteredResponse = (rawQuestions, rawSession, rawGoal) => {
       if (isBridgeDestroyed) return;
       const scoped = (Array.isArray(rawQuestions) ? rawQuestions : []).filter(
         q => q && (!q.ownerUserId || q.ownerUserId === activeUserId)
@@ -309,7 +327,8 @@
         payload: {
           userId: activeUserId,
           questions: scoped,
-          session: normalizeSession(rawSession)
+          session: normalizeSession(rawSession),
+          dailyGoal: Number(rawGoal) || 50
         }
       }, '*');
     };
@@ -318,18 +337,18 @@
       if (chrome.runtime && chrome.runtime.sendMessage) {
         chrome.runtime.sendMessage({ type: 'GET_CAVEIRA_QUESTIONS' }, (response) => {
           if (!chrome.runtime.lastError && response && Array.isArray(response.questions)) {
-            postFilteredResponse(response.questions, response.session);
+            postFilteredResponse(response.questions, response.session, response.dailyGoal);
           } else {
-            chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
+            chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, GOAL_KEY], (res) => {
               if (chrome.runtime.lastError) return;
-              postFilteredResponse(res?.[STORAGE_KEY], res?.[SESSION_KEY]);
+              postFilteredResponse(res?.[STORAGE_KEY], res?.[SESSION_KEY], res?.[GOAL_KEY]);
             });
           }
         });
       } else {
-        chrome.storage.local.get([STORAGE_KEY, SESSION_KEY], (res) => {
+        chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, GOAL_KEY], (res) => {
           if (chrome.runtime.lastError) return;
-          postFilteredResponse(res?.[STORAGE_KEY], res?.[SESSION_KEY]);
+          postFilteredResponse(res?.[STORAGE_KEY], res?.[SESSION_KEY], res?.[GOAL_KEY]);
         });
       }
     } catch (_) {}
@@ -418,11 +437,23 @@
       if (event.data.type === 'UPDATE_CAVEIRA_QUESTION' && event.data.payload?.id && event.data.payload?.updates) {
         const { id, updates } = event.data.payload;
         try {
-          chrome.storage.local.get([STORAGE_KEY], (res) => {
+          chrome.storage.local.get([STORAGE_KEY, ACTIVE_USER_KEY, USER_BUCKETS_KEY], (res) => {
             if (chrome.runtime.lastError || isBridgeDestroyed) return;
             const list = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
             const updatedList = list.map(q => (q && q.id === id) ? { ...q, ...updates } : q);
-            chrome.storage.local.set({ [STORAGE_KEY]: updatedList });
+            const activeUserId = res?.[ACTIVE_USER_KEY] || cachedActiveUserId;
+            const payload = { [STORAGE_KEY]: updatedList };
+            if (activeUserId && res?.[USER_BUCKETS_KEY] && typeof res[USER_BUCKETS_KEY] === 'object') {
+              const buckets = { ...res[USER_BUCKETS_KEY] };
+              const prevB = buckets[activeUserId] || {};
+              const bList = Array.isArray(prevB.questions) ? prevB.questions : updatedList;
+              buckets[activeUserId] = {
+                ...prevB,
+                questions: compactQuestionsForStorage(bList.map(q => (q && q.id === id) ? { ...q, ...updates } : q))
+              };
+              payload[USER_BUCKETS_KEY] = buckets;
+            }
+            chrome.storage.local.set(payload);
           });
         } catch (_) {}
       }
@@ -430,11 +461,23 @@
       if (event.data.type === 'DELETE_CAVEIRA_QUESTION' && event.data.payload?.id) {
         const targetId = event.data.payload.id;
         try {
-          chrome.storage.local.get([STORAGE_KEY], (res) => {
+          chrome.storage.local.get([STORAGE_KEY, ACTIVE_USER_KEY, USER_BUCKETS_KEY], (res) => {
             if (chrome.runtime.lastError || isBridgeDestroyed) return;
             const list = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
             const filtered = list.filter(q => q && q.id !== targetId);
-            chrome.storage.local.set({ [STORAGE_KEY]: filtered });
+            const activeUserId = res?.[ACTIVE_USER_KEY] || cachedActiveUserId;
+            const payload = { [STORAGE_KEY]: filtered };
+            if (activeUserId && res?.[USER_BUCKETS_KEY] && typeof res[USER_BUCKETS_KEY] === 'object') {
+              const buckets = { ...res[USER_BUCKETS_KEY] };
+              const prevB = buckets[activeUserId] || {};
+              const bList = Array.isArray(prevB.questions) ? prevB.questions : filtered;
+              buckets[activeUserId] = {
+                ...prevB,
+                questions: compactQuestionsForStorage(bList.filter(q => q && q.id !== targetId))
+              };
+              payload[USER_BUCKETS_KEY] = buckets;
+            }
+            chrome.storage.local.set(payload);
           });
         } catch (_) {}
       }
@@ -444,25 +487,69 @@
         const today = getTodaySessionDate();
         const hits = newQuestions.filter(q => q && q.hit).length;
         const errors = newQuestions.length - hits;
+        const nextSession = { date: today, total: newQuestions.length, hits, errors };
         try {
-          chrome.storage.local.set({
-            [STORAGE_KEY]: newQuestions,
-            [SESSION_KEY]: { date: today, total: newQuestions.length, hits, errors }
+          chrome.storage.local.get([ACTIVE_USER_KEY, USER_BUCKETS_KEY], (res) => {
+            const activeUserId = res?.[ACTIVE_USER_KEY] || cachedActiveUserId;
+            const payload = {
+              [STORAGE_KEY]: newQuestions,
+              [SESSION_KEY]: nextSession
+            };
+            if (activeUserId && res?.[USER_BUCKETS_KEY] && typeof res[USER_BUCKETS_KEY] === 'object') {
+              const buckets = { ...res[USER_BUCKETS_KEY] };
+              buckets[activeUserId] = {
+                ...(buckets[activeUserId] || {}),
+                questions: newQuestions,
+                session: nextSession
+              };
+              payload[USER_BUCKETS_KEY] = buckets;
+            }
+            chrome.storage.local.set(payload);
+          });
+        } catch (_) {}
+      }
+
+      if (event.data.type === 'SET_CAVEIRA_DAILY_GOAL' && event.data.payload?.dailyGoal) {
+        const newGoal = Math.max(5, Math.min(1000, Number(event.data.payload.dailyGoal) || 50));
+        try {
+          chrome.storage.local.get([ACTIVE_USER_KEY, USER_BUCKETS_KEY], (res) => {
+            const activeUserId = res?.[ACTIVE_USER_KEY] || cachedActiveUserId;
+            const payload = { [GOAL_KEY]: newGoal };
+            if (activeUserId && res?.[USER_BUCKETS_KEY] && typeof res[USER_BUCKETS_KEY] === 'object') {
+              const buckets = { ...res[USER_BUCKETS_KEY] };
+              buckets[activeUserId] = { ...(buckets[activeUserId] || {}), dailyGoal: newGoal };
+              payload[USER_BUCKETS_KEY] = buckets;
+            }
+            chrome.storage.local.set(payload);
           });
         } catch (_) {}
       }
 
       if (event.data.type === 'CLEAR_SESSION') {
         const today = getTodaySessionDate();
+        const cleanSession = { date: today, hits: 0, errors: 0, total: 0 };
         try {
-          chrome.storage.local.set({
-            [STORAGE_KEY]: [],
-            [SESSION_KEY]: { date: today, hits: 0, errors: 0, total: 0 }
-          }, () => {
-            window.postMessage({
-              source: 'QG_CAVEIRA_EXTENSION',
-              type: 'SESSION_CLEARED'
-            }, '*');
+          chrome.storage.local.get([ACTIVE_USER_KEY, USER_BUCKETS_KEY], (res) => {
+            const activeUserId = res?.[ACTIVE_USER_KEY] || cachedActiveUserId;
+            const payload = {
+              [STORAGE_KEY]: [],
+              [SESSION_KEY]: cleanSession
+            };
+            if (activeUserId && res?.[USER_BUCKETS_KEY] && typeof res[USER_BUCKETS_KEY] === 'object') {
+              const buckets = { ...res[USER_BUCKETS_KEY] };
+              buckets[activeUserId] = {
+                ...(buckets[activeUserId] || {}),
+                questions: [],
+                session: cleanSession
+              };
+              payload[USER_BUCKETS_KEY] = buckets;
+            }
+            chrome.storage.local.set(payload, () => {
+              window.postMessage({
+                source: 'QG_CAVEIRA_EXTENSION',
+                type: 'SESSION_CLEARED'
+              }, '*');
+            });
           });
         } catch (_) {}
       }
@@ -495,6 +582,15 @@
             const newQuestions = changes[STORAGE_KEY].newValue || [];
             postSyncUpdate(newQuestions, cachedActiveUserId);
           }
+          if ((changes[SESSION_KEY] || changes[GOAL_KEY]) && cachedActiveUserId) {
+            chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, GOAL_KEY], (res) => {
+              if (chrome.runtime.lastError || isBridgeDestroyed) return;
+              postSyncUpdate(res?.[STORAGE_KEY] || [], cachedActiveUserId, {
+                session: res?.[SESSION_KEY],
+                dailyGoal: res?.[GOAL_KEY]
+              });
+            });
+          }
           if (changes[COURSE_INDEX_CACHE_KEY]) {
             deliverCourseIndexCache(changes[COURSE_INDEX_CACHE_KEY].newValue || { latest: null, byLesson: {} });
           }
@@ -508,7 +604,17 @@
       chrome.runtime.onMessage.addListener((msg) => {
         if (isBridgeDestroyed || !isExtensionContextValid()) return;
         if (msg && msg.type === 'PUSH_CAVEIRA_SYNC' && msg.payload && cachedActiveUserId) {
-          postSyncUpdate(msg.payload.questions || [], cachedActiveUserId);
+          postSyncUpdate(msg.payload.questions || [], cachedActiveUserId, {
+            session: msg.payload.session,
+            dailyGoal: msg.payload.dailyGoal
+          });
+        }
+        if (msg && msg.type === 'PUSH_COURSE_LESSON_COMPLETE' && msg.payload) {
+          window.postMessage({
+            source: 'QG_CAVEIRA_EXTENSION',
+            type: 'COURSE_LESSON_COMPLETE_REQUEST',
+            payload: msg.payload
+          }, '*');
         }
       });
     } catch (_) {}
