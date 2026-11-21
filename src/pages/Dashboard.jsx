@@ -394,7 +394,7 @@ export default function Dashboard() {
       <section className="glass-card rounded-xl p-3.5 sm:p-4 mb-4 border border-slate-200 dark:border-slate-800">
         <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-100 dark:border-slate-800">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-amber-500">
+            <div className="w-7 h-7 rounded-lg bg-sky-500/10 dark:bg-sky-500/15 border border-sky-500/25 flex items-center justify-center text-sky-600 dark:text-sky-400">
               <Target className="w-3.5 h-3.5" />
             </div>
             <div>
@@ -444,7 +444,7 @@ export default function Dashboard() {
               <button
                 type="button"
                 onClick={() => navigate('/estudos?tab=revisoes')}
-                className="shrink-0 h-7 px-3 rounded-lg text-[11px] font-black bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-[#8FA88B] dark:hover:bg-[#9FB79B] dark:text-[#0D0F10] flex items-center gap-1 transition-colors cursor-pointer"
+                className="shrink-0 h-7 px-3 rounded-lg text-[11px] font-black bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 flex items-center gap-1 transition-colors cursor-pointer"
               >
                 <span>{pendingReviewsCount > 0 ? 'Revisar agora' : 'Ver revisões'}</span>
                 <ArrowRight className="w-3 h-3" />

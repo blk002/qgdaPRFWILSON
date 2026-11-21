@@ -52,12 +52,12 @@ function EditalVerticalizadoView({ subjectsList, onOpenConfig }) {
 
   if (subjectsList.length === 0) {
     return (
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-6 text-center flex flex-col items-center gap-3">
-        <div className="w-11 h-11 rounded-xl bg-slate-100 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-amber-500">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-5 text-center flex flex-col items-center gap-2.5">
+        <div className="w-10 h-10 rounded-xl bg-sky-500/10 dark:bg-sky-500/15 border border-sky-500/25 flex items-center justify-center text-sky-600 dark:text-sky-400">
           <BookOpen className="w-5 h-5" />
         </div>
-        <div className="max-w-md space-y-1">
-          <h3 className="text-base font-black text-slate-800 dark:text-slate-100">
+        <div className="max-w-md space-y-0.5">
+          <h3 className="text-sm font-black text-slate-800 dark:text-slate-100">
             Seu Edital ainda está vazio
           </h3>
           <p className="text-xs text-slate-500 dark:text-slate-400">
@@ -67,7 +67,7 @@ function EditalVerticalizadoView({ subjectsList, onOpenConfig }) {
         <button
           type="button"
           onClick={onOpenConfig}
-          className="h-8 px-3.5 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-[#8FA88B] dark:hover:bg-[#9FB79B] dark:text-[#0D0F10] flex items-center gap-1.5 transition-colors cursor-pointer"
+          className="h-8 px-3.5 rounded-lg text-xs font-black bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 flex items-center gap-1.5 transition-colors cursor-pointer"
         >
           <Plus className="w-3.5 h-3.5" />
           <span>Cadastrar Disciplinas</span>
@@ -77,9 +77,9 @@ function EditalVerticalizadoView({ subjectsList, onOpenConfig }) {
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2.5">
       {/* Barra de Filtros Compacta */}
-      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-2.5 flex flex-col lg:flex-row lg:items-center justify-between gap-2">
         <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 flex-1">
           <div className="relative flex-1 max-w-sm">
             <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -88,7 +88,7 @@ function EditalVerticalizadoView({ subjectsList, onOpenConfig }) {
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               placeholder="Buscar disciplina ou assunto..."
-              className="w-full h-8 pl-8 pr-7 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-xs text-slate-800 dark:text-slate-100 outline-none focus:border-amber-500"
+              className="w-full h-8 pl-8 pr-7 rounded-lg border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-xs text-slate-800 dark:text-slate-100 outline-none focus:border-sky-500"
             />
             {searchQuery && (
               <button
@@ -185,7 +185,7 @@ function EditalVerticalizadoView({ subjectsList, onOpenConfig }) {
                   </div>
 
                   <div className="flex items-center gap-1.5 shrink-0">
-                    <span className="text-xs font-black tabular-nums text-emerald-600 dark:text-[#8FA88B]">
+                    <span className="text-xs font-black tabular-nums text-sky-600 dark:text-sky-400">
                       {subPct}%
                     </span>
                     <button
@@ -202,7 +202,7 @@ function EditalVerticalizadoView({ subjectsList, onOpenConfig }) {
                 <div className="w-full bg-slate-100 dark:bg-slate-850 h-1.5 rounded-full overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all duration-300 ${
-                      subPct === 100 ? 'bg-emerald-500' : 'bg-emerald-600 dark:bg-[#8FA88B]'
+                      subPct === 100 ? 'bg-emerald-500' : 'bg-gradient-to-r from-sky-500 to-teal-400'
                     }`}
                     style={{ width: `${subPct}%` }}
                   />
@@ -237,7 +237,7 @@ function EditalVerticalizadoView({ subjectsList, onOpenConfig }) {
                               </div>
                               <div className="mt-1 w-full bg-slate-200/80 dark:bg-slate-900 h-1 rounded-full overflow-hidden">
                                 <div
-                                  className={`h-full rounded-full ${isDone ? 'bg-emerald-500' : 'bg-emerald-600 dark:bg-[#8FA88B]'}`}
+                                  className={`h-full rounded-full ${isDone ? 'bg-emerald-500' : 'bg-gradient-to-r from-sky-500 to-teal-400'}`}
                                   style={{ width: `${tPct}%` }}
                                 />
                               </div>
@@ -347,9 +347,9 @@ export default function CentralEstudos() {
   ];
 
   return (
-    <div className="fade-in w-full pb-8 space-y-3.5">
+    <div className="fade-in w-full pb-6 space-y-2.5">
       {/* Cabeçalho Clean sem Caixa Pesada */}
-      <div className="space-y-2">
+      <div className="space-y-1.5">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2 min-w-0">
             <button
@@ -370,7 +370,7 @@ export default function CentralEstudos() {
             <button
               type="button"
               onClick={() => handleOpenTutorial(currentTabMeta.tutorialStep)}
-              className="h-8 px-2.5 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-850 flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="h-7 px-2.5 rounded-lg text-xs font-semibold text-slate-500 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-850 flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <Info className="w-3.5 h-3.5" />
               <span>Ajuda</span>
@@ -378,7 +378,7 @@ export default function CentralEstudos() {
             <button
               type="button"
               onClick={() => navigate('/config')}
-              className="h-8 px-3 rounded-lg text-xs font-black bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-[#8FA88B] dark:hover:bg-[#9FB79B] dark:text-[#0D0F10] flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="h-7 px-3 rounded-lg text-xs font-black bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 flex items-center gap-1.5 transition-colors cursor-pointer"
             >
               <Settings className="w-3.5 h-3.5" />
               <span>+ Ajustar Edital</span>
@@ -395,7 +395,7 @@ export default function CentralEstudos() {
                 key={item.path}
                 type="button"
                 onClick={() => navigate(item.path)}
-                className="inline-flex items-center gap-1 font-medium text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-slate-100 transition-colors cursor-pointer"
+                className="inline-flex items-center gap-1 font-medium text-slate-500 hover:text-sky-600 dark:text-slate-400 dark:hover:text-sky-400 transition-colors cursor-pointer"
               >
                 <ItemIcon className="w-3 h-3" />
                 <span>{item.label}</span>
@@ -406,11 +406,11 @@ export default function CentralEstudos() {
       </div>
 
       {/* Faixa Global Fina de Progresso do Edital */}
-      <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3.5 py-2.5 space-y-1.5">
+      <div className="rounded-lg bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-3 py-2 space-y-1.5">
         <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1 text-xs">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="font-bold text-slate-800 dark:text-slate-100">
-              Conteúdos concluídos <strong className="tabular-nums">{completionPct}%</strong>
+              Conteúdos concluídos <strong className="tabular-nums text-sky-600 dark:text-sky-400">{completionPct}%</strong>
             </span>
             <span className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
               {completedLessons} de {totalLessons} aulas • {subjectsList.length} {subjectsList.length === 1 ? 'disciplina' : 'disciplinas'}
@@ -418,7 +418,7 @@ export default function CentralEstudos() {
           </div>
 
           <div className="flex items-center gap-1.5 text-[11px]">
-            <Clock className="w-3 h-3 text-slate-400 shrink-0" />
+            <Clock className="w-3 h-3 text-sky-500 dark:text-sky-400 shrink-0" />
             {estimatedDate?.short ? (
               <span className={`font-medium ${
                 examDateConfigured && estimatedDate.isLate
@@ -435,7 +435,7 @@ export default function CentralEstudos() {
 
         <div className="w-full h-1 rounded-full bg-slate-100 dark:bg-slate-850 overflow-hidden">
           <div
-            className="h-full rounded-full bg-emerald-500 dark:bg-[#8FA88B] transition-all duration-300"
+            className="h-full rounded-full bg-gradient-to-r from-sky-500 to-teal-400 transition-all duration-300"
             style={{ width: `${completionPct}%` }}
           />
         </div>
@@ -445,7 +445,7 @@ export default function CentralEstudos() {
       {showOnboardingBanner && (
         <div className="rounded-lg px-3 py-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <div className="flex items-center gap-2 text-xs text-slate-700 dark:text-slate-200">
-            <Sparkles className="w-3.5 h-3.5 text-amber-500 shrink-0" />
+            <Sparkles className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400 shrink-0" />
             <span>
               <strong>Primeira vez aqui?</strong> Faça o guia rápido de 1 minuto para dominar a Central de Estudos.
             </span>
@@ -455,7 +455,7 @@ export default function CentralEstudos() {
             <button
               type="button"
               onClick={() => handleOpenTutorial(0)}
-              className="h-7 px-2.5 rounded-md text-[11px] font-black bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-[#8FA88B] dark:hover:bg-[#9FB79B] dark:text-[#0D0F10] transition-colors cursor-pointer"
+              className="h-7 px-2.5 rounded-md text-[11px] font-black bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 transition-colors cursor-pointer"
             >
               Iniciar Tutorial
             </button>
@@ -481,13 +481,13 @@ export default function CentralEstudos() {
                 key={tabItem.id}
                 type="button"
                 onClick={() => handleTabChange(tabItem.id)}
-                className={`flex items-center gap-1.5 px-3 pb-2.5 pt-1 border-b-2 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap ${
+                className={`flex items-center gap-1.5 px-3 pb-2 pt-1 border-b-2 text-xs font-bold uppercase tracking-wider transition-colors cursor-pointer whitespace-nowrap ${
                   isActive
-                    ? 'border-amber-500 text-slate-900 dark:text-white'
+                    ? 'border-sky-500 dark:border-sky-400 text-slate-900 dark:text-white'
                     : 'border-transparent text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
-                <TabIcon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-amber-500' : ''}`} />
+                <TabIcon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-sky-500 dark:text-sky-400' : ''}`} />
                 <span>{tabItem.label}</span>
                 {tabItem.id === 'revisoes' && dueReviewsCount > 0 && (
                   <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full leading-none tabular-nums bg-red-500 text-white">
@@ -510,9 +510,9 @@ export default function CentralEstudos() {
         ) : (
           <Suspense
             fallback={
-              <div className="flex items-center justify-center py-12">
-                <div className="flex flex-col items-center gap-2.5">
-                  <div className="w-7 h-7 border-3 border-amber-500 border-t-transparent rounded-full animate-spin" />
+              <div className="flex items-center justify-center py-10">
+                <div className="flex flex-col items-center gap-2">
+                  <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
                   <span className="text-[11px] font-bold text-slate-400 uppercase tracking-widest">
                     Carregando {currentTabMeta.label}...
                   </span>

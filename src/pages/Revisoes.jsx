@@ -211,33 +211,33 @@ export default function Revisoes() {
   });
 
   return (
-    <div className="fade-in w-full pb-10">
+    <div className="fade-in w-full pb-6">
       
-      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mb-6 flex flex-col lg:flex-row gap-6 justify-between items-start lg:items-center dark:bg-slate-900 dark:border-slate-800">
-        <div className="flex items-center gap-4">
-          <div className="bg-red-100 p-3 rounded-full shrink-0"><BrainCircuit className="text-red-600 w-6 h-6 sm:w-8 sm:h-8" /></div>
+      <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200/80 mb-3 flex flex-col lg:flex-row gap-3 justify-between items-start lg:items-center dark:bg-slate-900 dark:border-slate-800">
+        <div className="flex items-center gap-3">
+          <div className="bg-red-100 dark:bg-red-500/15 border border-red-200 dark:border-red-500/25 p-2 rounded-lg shrink-0"><BrainCircuit className="text-red-600 dark:text-red-400 w-5 h-5" /></div>
           <div>
-            <h2 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">C.C.R. (Centro de Comando de Retenção)</h2>
-            <p className="text-slate-500 text-xs sm:text-sm dark:text-slate-400">Auditoria do Algoritmo FSRS de Espaçamento.</p>
+            <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 leading-tight">C.C.R. (Centro de Comando de Retenção)</h2>
+            <p className="text-slate-500 text-xs dark:text-slate-400">Auditoria do Algoritmo FSRS de Espaçamento.</p>
           </div>
         </div>
         
-        <div className="flex flex-wrap gap-3 w-full lg:w-auto">
-          <div className="flex-1 min-w-[100px] lg:w-32 bg-slate-50 border border-slate-200 rounded-lg p-3 text-center dark:bg-slate-950 dark:border-slate-800">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Acerto Global</p>
-            <p className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100">
+        <div className="flex flex-wrap gap-2 w-full lg:w-auto">
+          <div className="flex-1 min-w-[90px] lg:w-28 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-center dark:bg-slate-850 dark:border-slate-800">
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Acerto Global</p>
+            <p className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 tabular-nums">
               {reviewStats.totalDone > 0 ? Math.round((reviewStats.correct / reviewStats.totalDone) * 100) : 0}%
             </p>
           </div>
-          <div className="flex-1 min-w-[100px] lg:w-32 bg-slate-50 border border-slate-200 rounded-lg p-3 text-center dark:bg-slate-950 dark:border-slate-800">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1" title="Média de todas as revisões feitas">Saúde da Memória</p>
-            <p className={`text-xl sm:text-2xl font-black ${avgMemoryHealth >= 80 ? 'text-emerald-500' : avgMemoryHealth >= 70 ? 'text-yellow-500' : 'text-red-500'}`}>
+          <div className="flex-1 min-w-[90px] lg:w-28 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-center dark:bg-slate-850 dark:border-slate-800">
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider" title="Média de todas as revisões feitas">Saúde da Memória</p>
+            <p className={`text-base sm:text-lg font-black tabular-nums ${avgMemoryHealth >= 80 ? 'text-emerald-500' : avgMemoryHealth >= 70 ? 'text-yellow-500' : 'text-red-500'}`}>
               {avgMemoryHealth}%
             </p>
           </div>
-          <div className="flex-1 min-w-[100px] lg:w-32 bg-slate-50 border border-slate-200 rounded-lg p-3 text-center dark:bg-slate-950 dark:border-slate-800">
-            <p className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Sequência</p>
-            <p className="text-xl sm:text-2xl font-black text-orange-500 flex items-center justify-center gap-1">
+          <div className="flex-1 min-w-[90px] lg:w-28 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-center dark:bg-slate-850 dark:border-slate-800">
+            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Sequência</p>
+            <p className="text-base sm:text-lg font-black text-orange-500 flex items-center justify-center gap-1 tabular-nums">
               🔥 {reviewStats.streak}
             </p>
           </div>
@@ -458,59 +458,66 @@ export default function Revisoes() {
           )}
         </>
       ) : (
-        <div className="text-center p-12 bg-white border-2 border-dashed border-slate-200 rounded-xl text-slate-500 flex flex-col items-center mb-8 shadow-sm dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800">
-          <CheckCircle className="w-12 h-12 text-emerald-400 mb-3" />
-          <h3 className="text-lg font-bold text-slate-700 dark:text-slate-200">Missões Concluídas!</h3>
-          <p className="text-sm mt-1">O seu cérebro está aquecido. Vá para o seu Ciclo avançar o edital.</p>
+        <div className="px-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-600 flex flex-wrap items-center justify-between gap-2 mb-3 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800">
+          <div className="flex items-center gap-2.5">
+            <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
+            <div>
+              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-tight">Missões Concluídas!</h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">Fila de revisões FSRS zerada. Avance a fila no seu Cronograma.</p>
+            </div>
+          </div>
+          <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
+            100% Em Dia
+          </span>
         </div>
       )}
 
       {/* PAINEL #13: PREVISÃO DE CARGA FSRS (7 DIAS) + ADIANTAMENTO TÁTICO + CURVA DE ESQUECIMENTO */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 mt-6">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mt-3">
         {/* Previsão de 7 Dias + Adiantamento Tático */}
-        <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 p-4 sm:p-5 flex flex-col justify-between">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+        <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 flex flex-col justify-between">
+          <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
             <div>
-              <h3 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
-                <Zap className="w-4 h-4 text-amber-400" /> Previsão de Carga FSRS (Próximos 7 Dias)
+              <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
+                <Zap className="w-4 h-4 text-sky-500 dark:text-sky-400" /> Previsão de Carga FSRS (Próximos 7 Dias)
               </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Total agendado na semana: <strong>{totalNext7Days} cartões</strong> • Clique em <strong>⚡ Adiantar</strong> para puxar um dia pesado para hoje.
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                Total na semana: <strong>{totalNext7Days} cartões</strong> • Clique em <strong>⚡ Adiantar</strong> para puxar para hoje.
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-7 gap-1.5 sm:gap-2.5 items-end pt-4">
+          <div className="grid grid-cols-7 gap-1.5 items-end pt-1">
             {next7DaysForecast.map(day => {
               const barHeightPct = day.total > 0 ? Math.max(18, Math.round((day.total / maxForecastCount) * 100)) : 8;
               const isHeavy = day.total >= 10;
               return (
                 <div
                   key={day.dateStr}
-                  className="flex flex-col items-center bg-slate-50 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 rounded-xl p-2 transition-all"
+                  className="flex flex-col items-center bg-slate-50 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 rounded-lg p-1.5 transition-all"
                 >
                   <span className="text-[10px] font-black uppercase text-slate-500 dark:text-slate-400 truncate max-w-full">
                     {day.offset === 1 ? 'Amanhã' : day.label.split(' ')[0]}
                   </span>
-                  <span className="text-[10px] font-mono text-slate-400 mb-2">{day.shortDate}</span>
+                  <span className="text-[9px] font-mono text-slate-400 mb-1">{day.shortDate}</span>
 
-                  <div className="w-full h-24 bg-slate-200/60 dark:bg-slate-900 rounded-lg flex flex-col justify-end p-1 overflow-hidden relative">
+                  <div className="w-full h-12 bg-slate-200/60 dark:bg-slate-900 rounded-md flex flex-col justify-end p-1 overflow-hidden relative">
                     <div
-                      className={`w-full rounded-md transition-all duration-300 ${
+                      className={`w-full rounded-sm transition-all duration-300 ${
                         day.total === 0
                           ? 'bg-slate-300 dark:bg-slate-800'
                           : isHeavy
                           ? 'bg-gradient-to-t from-red-600 to-amber-500'
-                          : 'bg-gradient-to-t from-purple-600 to-blue-500'
+                          : 'bg-gradient-to-t from-sky-600 to-teal-400'
                       }`}
                       style={{ height: `${barHeightPct}%` }}
                     />
-                    <span className="absolute inset-x-0 top-1.5 text-center font-black text-xs text-slate-800 dark:text-white">
+                    <span className="absolute inset-x-0 top-1 text-center font-black text-xs text-slate-800 dark:text-white">
                       {day.total}
                     </span>
                   </div>
 
-                  <div className="text-[9px] font-bold text-slate-400 mt-1.5 flex items-center gap-1">
+                  <div className="text-[9px] font-bold text-slate-400 mt-1 flex items-center gap-1">
                     <span title="Questões Caveira">💀{day.caveiraCount}</span>
                   </div>
 
@@ -519,7 +526,7 @@ export default function Revisoes() {
                     disabled={day.total === 0}
                     onClick={() => advanceFutureReviews(day.dateStr)}
                     title={day.total > 0 ? `Adiantar ${day.total} revisões de ${day.shortDate} para hoje` : 'Sem revisões agendadas'}
-                    className="mt-2 w-full py-1 px-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-amber-500/15 hover:bg-amber-500 text-amber-400 hover:text-slate-950 border border-amber-500/30 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
+                    className="mt-1.5 w-full py-1 px-1 rounded-md text-[9px] font-black uppercase tracking-wider bg-sky-500/10 hover:bg-sky-500 text-sky-600 dark:text-sky-400 hover:text-white border border-sky-500/25 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer"
                   >
                     ⚡ Adiantar
                   </button>
@@ -530,34 +537,34 @@ export default function Revisoes() {
         </div>
 
         {/* Curva de Esquecimento de Ebbinghaus / FSRS */}
-        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-2xl shadow-lg border border-slate-200 dark:border-slate-800 p-4 sm:p-5 flex flex-col justify-between">
+        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 flex flex-col justify-between">
           <div>
             <div className="flex items-center justify-between gap-2 mb-1">
-              <h3 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-2">
+              <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
                 <Activity className="w-4 h-4 text-emerald-400" /> Curva de Esquecimento FSRS
               </h3>
-              <span className="text-xs font-black px-2.5 py-0.5 rounded-lg bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">
+              <span className="text-[11px] font-black px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 border border-emerald-500/30">
                 Estab. Média: {typeof avgStabilityDays === 'number' && !isNaN(avgStabilityDays) ? avgStabilityDays.toFixed(1) : '0.0'}d
               </span>
             </div>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
-              Projeção de retenção da sua memória ao longo dos dias sem revisar (Meta FSRS: revisar ao atingir <strong>90%</strong>).
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2.5">
+              Projeção de retenção ao longo dos dias (Meta FSRS: revisar ao atingir <strong>90%</strong>).
             </p>
           </div>
 
-          <div className="space-y-2.5 my-auto">
+          <div className="space-y-1.5 my-auto">
             {forgettingCurvePoints.map(pt => {
               const isAboveTarget = pt.retention >= 90;
               const isWarning = pt.retention >= 75 && pt.retention < 90;
               return (
-                <div key={pt.daysElapsed} className="space-y-1">
-                  <div className="flex justify-between items-center text-xs font-bold">
+                <div key={pt.daysElapsed} className="space-y-0.5">
+                  <div className="flex justify-between items-center text-[11px] font-bold">
                     <span className="text-slate-600 dark:text-slate-300 font-mono">{pt.label}</span>
-                    <span className={isAboveTarget ? 'text-emerald-400' : isWarning ? 'text-amber-400' : 'text-red-400'}>
-                      {pt.retention}% de retenção estimada
+                    <span className={isAboveTarget ? 'text-emerald-500 dark:text-emerald-400' : isWarning ? 'text-amber-500 dark:text-amber-400' : 'text-red-500 dark:text-red-400'}>
+                      {pt.retention}% estimada
                     </span>
                   </div>
-                  <div className="w-full h-2.5 bg-slate-100 dark:bg-slate-850 rounded-full overflow-hidden relative">
+                  <div className="w-full h-2 bg-slate-100 dark:bg-slate-850 rounded-full overflow-hidden relative">
                     <div
                       className={`h-full rounded-full transition-all duration-500 ${
                         isAboveTarget ? 'bg-emerald-500' : isWarning ? 'bg-amber-500' : 'bg-red-500'
@@ -570,34 +577,34 @@ export default function Revisoes() {
             })}
           </div>
 
-          <div className="mt-4 pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
-            <span>🎯 Gatilho ideal de revisão: <strong>90%</strong></span>
-            <span>🃏 Cartões monitorados: <strong>{reviews.length}</strong></span>
+          <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
+            <span>🎯 Gatilho ideal: <strong>90%</strong></span>
+            <span>🃏 Monitorados: <strong>{reviews.length}</strong></span>
           </div>
         </div>
       </div>
 
-      <div className="bg-slate-900 rounded-xl shadow-lg border border-slate-800 overflow-hidden mt-6">
-        <div className="p-4 sm:p-5 border-b border-slate-800 flex justify-between items-center bg-slate-800/50">
-          <h3 className="text-sm sm:text-base font-black text-white uppercase tracking-wider flex items-center gap-2">
-            <CalendarDays className="w-5 h-5 text-blue-400"/> Mapeamento FSRS (Heatmap)
+      <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden mt-3">
+        <div className="p-3 sm:p-3.5 border-b border-slate-800 flex justify-between items-center bg-slate-850/60">
+          <h3 className="text-xs sm:text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-sky-400"/> Mapeamento FSRS (Heatmap)
           </h3>
-          <div className="flex items-center gap-2 sm:gap-4">
-            <span className="text-white font-bold text-sm bg-slate-800 px-3 py-1 rounded-full border border-slate-700">{mesesNomes[rMonth]} {rYear}</span>
+          <div className="flex items-center gap-2">
+            <span className="text-white font-bold text-xs bg-slate-800 px-2.5 py-1 rounded-md border border-slate-700">{mesesNomes[rMonth]} {rYear}</span>
             <div className="flex gap-1">
-              <button onClick={() => setReviewCalendarDate(new Date(rYear, rMonth - 1, 1))} className="p-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-white transition-colors"><ChevronLeft className="w-4 h-4" /></button>
-              <button onClick={() => setReviewCalendarDate(new Date())} className="px-2.5 py-1 bg-slate-700 hover:bg-slate-600 rounded-md text-white text-xs font-bold transition-colors" title="Voltar para o mês atual">Hoje</button>
-              <button onClick={() => setReviewCalendarDate(new Date(rYear, rMonth + 1, 1))} className="p-1.5 bg-slate-700 hover:bg-slate-600 rounded-md text-white transition-colors"><ChevronRight className="w-4 h-4" /></button>
+              <button onClick={() => setReviewCalendarDate(new Date(rYear, rMonth - 1, 1))} className="p-1 bg-slate-800 hover:bg-slate-700 rounded-md text-white transition-colors border border-slate-700"><ChevronLeft className="w-3.5 h-3.5" /></button>
+              <button onClick={() => setReviewCalendarDate(new Date())} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded-md text-white text-[11px] font-bold transition-colors border border-slate-700" title="Voltar para o mês atual">Hoje</button>
+              <button onClick={() => setReviewCalendarDate(new Date(rYear, rMonth + 1, 1))} className="p-1 bg-slate-800 hover:bg-slate-700 rounded-md text-white transition-colors border border-slate-700"><ChevronRight className="w-3.5 h-3.5" /></button>
             </div>
           </div>
         </div>
         
-        <div className="p-3 sm:p-5">
-          <div className="grid grid-cols-7 gap-1 sm:gap-2 mb-2">
-            {diasSemana.map(dia => <div key={dia} className="text-center font-black text-slate-500 uppercase tracking-widest text-[9px] sm:text-xs dark:text-slate-400">{dia}</div>)}
+        <div className="p-2.5 sm:p-3.5">
+          <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-1.5">
+            {diasSemana.map(dia => <div key={dia} className="text-center font-black text-slate-500 uppercase tracking-widest text-[9px] sm:text-[11px] dark:text-slate-400">{dia}</div>)}
           </div>
-          <div className="grid grid-cols-7 gap-1 sm:gap-2">
-            {rBlanks.map((_, i) => <div key={`blank-${i}`} className="min-h-[4rem] sm:min-h-[6rem] bg-slate-800/30 rounded-lg"></div>)}
+          <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
+            {rBlanks.map((_, i) => <div key={`blank-${i}`} className="min-h-[3.5rem] sm:min-h-[4.5rem] bg-slate-850/40 rounded-lg"></div>)}
             {rDays.map(day => {
               const d = new Date(rYear, rMonth, day);
               const dateStr = getLocalDateStr(d);
@@ -605,14 +612,14 @@ export default function Revisoes() {
               const isTodayStr = dateStr === todayStr;
               const isPast = dateStr < todayStr;
               
-              let heatClass = "bg-slate-800 border-slate-700";
-              if (isTodayStr) heatClass = "bg-blue-900/40 border-blue-500 ring-1 ring-blue-500/50 shadow-[inset_0_0_15px_rgba(59,130,246,0.2)]";
-              else if (isPast) heatClass = "bg-slate-800/30 border-slate-800 opacity-60";
-              else if (dayRevs.length > 8) heatClass = "bg-red-900/20 border-red-800 shadow-[inset_0_0_10px_rgba(220,38,38,0.15)]";
+              let heatClass = "bg-slate-850 border-slate-800";
+              if (isTodayStr) heatClass = "bg-sky-900/35 border-sky-500 ring-1 ring-sky-500/40";
+              else if (isPast) heatClass = "bg-slate-850/35 border-slate-800 opacity-60";
+              else if (dayRevs.length > 8) heatClass = "bg-red-900/20 border-red-800";
               else if (dayRevs.length > 4) heatClass = "bg-orange-900/20 border-orange-800/60";
 
               return (
-                <div key={day} className={`min-h-[4.5rem] sm:min-h-[6rem] p-1.5 sm:p-2 rounded-lg flex flex-col border transition-all ${heatClass}`}>
+                <div key={day} className={`min-h-[3.5rem] sm:min-h-[4.5rem] p-1 sm:p-1.5 rounded-lg flex flex-col border transition-all ${heatClass}`}>
                   <div className="flex justify-between items-start mb-1 gap-1">
                     <span className={`font-black text-[10px] sm:text-xs ${isTodayStr ? 'text-blue-400' : isPast ? 'text-slate-500' : 'text-slate-300'}`}>{day}</span>
                     {dayRevs.length > 0 && (

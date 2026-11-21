@@ -277,31 +277,31 @@ export default function Ciclo() {
   }, [completedToday.length, todayTotalSlots, setTriggerConfetti]);
 
   return (
-    <div className="fade-in w-full pb-10">
+    <div className="fade-in w-full pb-6">
       
       
-      <div className="mb-6">
-        <div className="flex items-center gap-3 mb-4">
-          <Target className="text-blue-600 w-7 h-7" />
-          <h2 className="text-2xl font-black text-slate-800 tracking-tight dark:text-slate-100">Conversor de Edital (Teoria ➔ Questões)</h2>
+      <div className="mb-3">
+        <div className="flex items-center gap-2 mb-2.5">
+          <Target className="text-sky-500 dark:text-sky-400 w-5 h-5" />
+          <h2 className="text-base sm:text-lg font-black text-slate-800 tracking-tight dark:text-slate-100">Conversor de Edital (Teoria ➔ Questões)</h2>
         </div>
 
         {pendingReviews.length > 0 && (
-          <div className="bg-red-50 border-2 border-red-200 rounded-xl p-4 sm:p-5 mb-6 shadow-sm relative overflow-hidden dark:bg-red-950/20 dark:border-red-900/50">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-red-200 rounded-bl-full opacity-50 pointer-events-none dark:bg-red-900/20"></div>
+          <div className="bg-red-50 border border-red-200 rounded-xl p-3 sm:p-3.5 mb-3 shadow-xs relative overflow-hidden dark:bg-red-950/20 dark:border-red-900/50">
+            <div className="absolute top-0 right-0 w-16 h-16 bg-red-200 rounded-bl-full opacity-40 pointer-events-none dark:bg-red-900/20"></div>
             
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 mb-4 relative z-10">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3 relative z-10">
               <div>
-                <h3 className="font-black text-red-800 flex items-center gap-2 text-lg dark:text-red-400">
-                  <AlertTriangle className="w-5 h-5"/> Prioridade Zero: Blindar Memória
+                <h3 className="font-black text-red-800 flex items-center gap-2 text-sm sm:text-base dark:text-red-400">
+                  <AlertTriangle className="w-4 h-4"/> Prioridade Zero: Blindar Memória
                 </h3>
-                <p className="text-xs text-red-600 mt-1 font-bold max-w-2xl dark:text-red-500/90">
-                  A regra de ouro do alto rendimento: limpe a sua fila de revisões FSRS antes de absorver qualquer conteúdo novo. A sua aprovação não está no que estuda hoje, está no que não esquece amanhã.
+                <p className="text-xs text-red-600 mt-0.5 font-semibold max-w-2xl dark:text-red-500/90">
+                  Limpe sua fila de revisões FSRS antes de absorver conteúdo novo.
                 </p>
               </div>
-              <div className="bg-red-600 text-white text-xs font-black px-4 py-2 rounded-lg whitespace-nowrap shadow-sm self-start sm:self-auto flex flex-col items-center leading-none">
-                <span className="text-[10px] opacity-80 mb-0.5">CARTÕES FSRS</span>
-                <span className="text-xl">{pendingReviews.length}</span>
+              <div className="bg-red-600 text-white text-xs font-black px-3 py-1.5 rounded-lg whitespace-nowrap shadow-xs self-start sm:self-auto flex items-center gap-2 leading-none">
+                <span className="text-[10px] opacity-85 uppercase">FSRS</span>
+                <span className="text-base">{pendingReviews.length}</span>
               </div>
             </div>
             
@@ -357,72 +357,62 @@ export default function Ciclo() {
         </div>
       )}
 
-      <div className="bg-white dark:bg-slate-900 p-5 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 mb-6 overflow-hidden">
-        <div className="flex flex-wrap justify-between items-center gap-2 mb-3 border-b border-slate-100 dark:border-slate-800 pb-2.5">
-          <h3 className="text-xs font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-2">
-            <Flame className="w-4 h-4 text-orange-500" /> Progresso de Execução (Blocos de Hoje)
+      <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 mb-3 overflow-hidden">
+        <div className="flex flex-wrap justify-between items-center gap-2 mb-2 border-b border-slate-100 dark:border-slate-800 pb-2">
+          <h3 className="text-[11px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
+            <Flame className="w-3.5 h-3.5 text-orange-500" /> Progresso de Execução (Blocos de Hoje)
           </h3>
-          <div className="bg-blue-50 text-blue-700 border-blue-200 dark:bg-blue-500/20 dark:text-blue-300 border dark:border-blue-500/30 px-3 py-1 rounded-full text-[11px] font-black uppercase flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-blue-500 dark:bg-blue-400"></span>
+          <div className="bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-300 border dark:border-sky-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase flex items-center gap-1.5">
+            <span className="w-1.5 h-1.5 rounded-full bg-sky-500 dark:bg-sky-400"></span>
             Queimar Teoria: {completedToday.length} / {todayTotalSlots} Slots
           </div>
         </div>
         
-        <div className="flex gap-4 overflow-x-auto custom-scrollbar pb-3 pt-2 snap-x">
+        <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1.5 pt-1 snap-x">
           {Object.values(subjects).map(sub => {
             const progress = getSubjectProgress(sub.id);
-            const radius = 34;
+            const radius = 18;
             const circumference = 2 * Math.PI * radius;
             const strokeDashoffset = circumference - (progress / 100) * circumference;
             const isDone = progress === 100;
 
             return (
-              <div key={sub.id} className={`min-w-[115px] sm:min-w-[125px] shrink-0 snap-start rounded-xl p-3 flex flex-col items-center justify-center gap-2.5 relative overflow-hidden transition-all shadow-xs border ${isDone ? 'bg-emerald-50 border-emerald-200 hover:border-emerald-400 dark:bg-emerald-900/20 dark:border-emerald-800/50 dark:hover:border-emerald-600' : 'bg-slate-50 border-slate-200 hover:border-slate-300 dark:bg-slate-800/80 dark:border-slate-700/80 dark:hover:border-slate-500'}`}>
-                
-                {isDone && <div className="absolute inset-0 bg-gradient-to-t from-emerald-500/10 to-transparent pointer-events-none"></div>}
-
-                <div className="relative flex items-center justify-center group z-10">
-                  <svg className="transform -rotate-90 w-14 h-14 sm:w-16 sm:h-16 drop-shadow-md overflow-visible" viewBox="0 0 100 100">
+              <div key={sub.id} className={`min-w-[140px] sm:min-w-[155px] shrink-0 snap-start rounded-lg px-2.5 py-2 flex items-center gap-2.5 relative overflow-hidden transition-all border ${isDone ? 'bg-emerald-50 border-emerald-200 hover:border-emerald-400 dark:bg-emerald-900/20 dark:border-emerald-800/50 dark:hover:border-emerald-600' : 'bg-slate-50 border-slate-200 hover:border-slate-300 dark:bg-slate-850 dark:border-slate-800 dark:hover:border-slate-700'}`}>
+                <div className="relative flex items-center justify-center shrink-0">
+                  <svg className="transform -rotate-90 w-9 h-9 overflow-visible" viewBox="0 0 48 48">
                     <defs>
                       <linearGradient id={`grad-cycle-${sub.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor={isDone ? '#10b981' : '#c084fc'} />
-                        <stop offset="100%" stopColor={isDone ? '#059669' : '#3b82f6'} />
+                        <stop offset="0%" stopColor={isDone ? '#10b981' : '#38bdf8'} />
+                        <stop offset="100%" stopColor={isDone ? '#059669' : '#2dd4bf'} />
                       </linearGradient>
-                      <filter id={`glow-cycle-${sub.id}`} x="-20%" y="-20%" width="140%" height="140%">
-                        <feGaussianBlur stdDeviation="3" result="blur" />
-                        <feComposite in="SourceGraphic" in2="blur" operator="over" />
-                      </filter>
                     </defs>
-                    <circle cx="50" cy="50" r={radius} stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-200 dark:text-slate-700" />
+                    <circle cx="24" cy="24" r={radius} stroke="currentColor" strokeWidth="4.5" fill="transparent" className="text-slate-200 dark:text-slate-800" />
                     <circle 
-                      cx="50" cy="50" r={radius} 
+                      cx="24" cy="24" r={radius} 
                       stroke={`url(#grad-cycle-${sub.id})`} 
-                      strokeWidth="8" fill="transparent" 
+                      strokeWidth="4.5" fill="transparent" 
                       strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} 
                       strokeLinecap="round" 
                       className="transition-all duration-1000 ease-out origin-center" 
-                      filter={`url(#glow-cycle-${sub.id})`}
                     />
                   </svg>
-                  <div className="absolute inset-0 flex flex-col items-center justify-center">
-                    <span className={`text-xs font-black ${isDone ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-white'}`}>{progress}%</span>
-                  </div>
+                  <span className={`absolute text-[9px] font-black tabular-nums ${isDone ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-white'}`}>{progress}%</span>
                 </div>
 
-                <div className="w-full text-center z-10">
-                  <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 uppercase truncate block px-1" title={sub.name}>{sub.name}</span>
+                <div className="min-w-0 flex-1">
+                  <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 uppercase truncate block leading-tight" title={sub.name}>{sub.name}</span>
+                  <span className="text-[9px] text-slate-400 dark:text-slate-500 font-medium block mt-0.5">{isDone ? 'Concluída' : 'Em andamento'}</span>
                 </div>
-                
               </div>
             );
           })}
         </div>
       </div>
 
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
         <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">
-          <Layers className="w-4 h-4 text-blue-500" /> Fila de Conteúdo Novo / Avanço
-          <span className="text-[10px] bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold ml-1">
+          <Layers className="w-4 h-4 text-sky-500 dark:text-sky-400" /> Fila de Conteúdo Novo / Avanço
+          <span className="text-[10px] bg-slate-200 dark:bg-slate-850 text-slate-600 dark:text-slate-300 px-2 py-0.5 rounded-full font-bold ml-1">
             {shownDays.length} {shownDays.length === 1 ? 'dia' : 'dias'}
           </span>
         </h3>
@@ -516,9 +506,9 @@ export default function Ciclo() {
       <div 
         ref={scrollContainerRef}
         id="cycle-scroll-container" 
-        className="overflow-x-auto pt-5 pb-5 custom-scrollbar-x"
+        className="overflow-x-auto pt-3 pb-3 custom-scrollbar-x"
       >
-        <div className="flex gap-2.5 sm:gap-4 items-stretch w-full min-w-max">
+        <div className="flex gap-2.5 sm:gap-3 items-stretch w-full min-w-max">
           {(() => {
             const simulatedIncrements = {};
             const isSubDoneWithSim = (sub, simMap) => {
@@ -615,20 +605,20 @@ export default function Ciclo() {
               if (week !== weekOffset) return null;
 
               return (
-                <div id={`cycle-day-${dayIndex}`} key={dayIndex} className={`flex-1 min-w-[290px] sm:min-w-[310px] md:min-w-[325px] max-w-[380px] flex flex-col rounded-2xl border transition-all mt-2 ${
-                    isToday ? 'border-blue-500/80 bg-slate-50 shadow-xl ring-4 ring-blue-500/10 relative dark:bg-slate-900 dark:border-blue-500/80 dark:ring-blue-500/10' : 'border-slate-200/80 bg-white opacity-90 hover:opacity-100 dark:border-slate-800 dark:bg-slate-900/70'
+                <div id={`cycle-day-${dayIndex}`} key={dayIndex} className={`flex-1 min-w-[245px] sm:min-w-[260px] max-w-[300px] flex flex-col rounded-xl border transition-all mt-2 ${
+                    isToday ? 'border-sky-500/80 bg-slate-50 shadow-md ring-2 ring-sky-500/15 relative dark:bg-slate-900 dark:border-sky-500/80 dark:ring-sky-500/10' : 'border-slate-200/80 bg-white opacity-95 hover:opacity-100 dark:border-slate-800 dark:bg-slate-900/80'
                 }`}>
                   {isToday && (
-                     <div className="absolute -top-3.5 sm:-top-4 left-1/2 transform -translate-x-1/2 bg-blue-600 text-white text-[10px] sm:text-xs font-black uppercase tracking-wider px-3 sm:px-4 py-1.5 rounded-full shadow-md z-10 border-2 border-white dark:border-slate-900 whitespace-nowrap">
+                     <div className="absolute -top-3 left-1/2 transform -translate-x-1/2 bg-sky-600 dark:bg-sky-500 dark:text-slate-950 text-white text-[10px] font-black uppercase tracking-wider px-2.5 py-0.5 rounded-full shadow-xs z-10 border border-white dark:border-slate-900 whitespace-nowrap">
                        Ordem do Dia
                      </div>
                   )}
 
-                  <div className={`p-3 sm:p-4 text-center border-b flex flex-col gap-1 rounded-t-2xl ${isToday ? 'border-blue-200 bg-blue-100/40 pt-5 sm:pt-6 dark:border-blue-500/25 dark:bg-blue-950/35' : 'border-slate-100 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-950/50'}`}>
-                    <span className={`text-[10px] sm:text-xs font-black uppercase tracking-widest ${isToday ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400 dark:text-slate-400'}`}>
+                  <div className={`p-2.5 text-center border-b flex flex-col gap-0.5 rounded-t-xl ${isToday ? 'border-sky-200 bg-sky-50/70 pt-3.5 dark:border-sky-500/25 dark:bg-sky-950/25' : 'border-slate-100 bg-slate-50/70 dark:border-slate-800 dark:bg-slate-950/40'}`}>
+                    <span className={`text-[10px] font-black uppercase tracking-widest ${isToday ? 'text-sky-600 dark:text-sky-400' : 'text-slate-400 dark:text-slate-400'}`}>
                       {dateInfo.title} • {dateInfo.dateStr}
                     </span>
-                    <span className={`font-black text-xl sm:text-2xl md:text-3xl tracking-tight ${isToday ? 'text-slate-800 dark:text-white' : 'text-slate-700 dark:text-slate-300'}`}>
+                    <span className={`font-black text-base sm:text-lg tracking-tight ${isToday ? 'text-slate-800 dark:text-white' : 'text-slate-700 dark:text-slate-200'}`}>
                       {cycleScheduleType === 'weekly' ? (dateInfo.weekDayName || `DIA ${dayIndex + 1}`) : `DIA ${dayIndex + 1}`}
                     </span>
                     {isToday && cycleScheduleType === 'weekly' && cycleCarryoverOffset > 0 && (
@@ -689,21 +679,21 @@ export default function Ciclo() {
                     )}
                   </div>
 
-                  <div className="p-2 sm:p-4 flex flex-col gap-2 sm:gap-4 flex-1">
+                  <div className="p-2 flex flex-col gap-2 flex-1">
                     {daySubjects.length === 0 && (
-                      <div className="flex flex-col items-center justify-center text-center p-6 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30 flex-1 min-h-[160px] gap-2">
-                        <Calendar className="w-6 h-6 text-slate-400 dark:text-slate-600" />
-                        <span className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
+                      <div className="flex flex-col items-center justify-center text-center p-3 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/40 dark:bg-slate-900/30 flex-1 min-h-[88px] gap-1.5">
+                        <Calendar className="w-5 h-5 text-slate-400 dark:text-slate-600" />
+                        <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wider">
                           Dia Livre / Descanso
                         </span>
-                        <p className="text-[10px] text-slate-400 dark:text-slate-500 max-w-[210px] leading-relaxed">
-                          Nenhum bloco agendado neste dia. Para programar matérias aqui, clique no dia pelo Calendário.
+                        <p className="text-[10px] text-slate-400 dark:text-slate-500 max-w-[190px] leading-snug">
+                          Nenhum bloco agendado. Clique no dia pelo Calendário para programar.
                         </p>
                         {!isPast && (
                           <button
                             type="button"
                             onClick={() => navigate('/calendario')}
-                            className="mt-1 px-3 py-1.5 rounded-lg text-[10px] font-black uppercase tracking-wider bg-blue-50 hover:bg-blue-600 text-blue-600 hover:text-white dark:bg-blue-950/50 dark:text-blue-400 dark:hover:bg-blue-600 dark:hover:text-white border border-blue-200 dark:border-blue-800/60 transition-colors cursor-pointer"
+                            className="mt-0.5 px-2.5 py-1 rounded-lg text-[10px] font-black uppercase tracking-wider bg-sky-50 hover:bg-sky-600 text-sky-600 hover:text-white dark:bg-sky-950/40 dark:text-sky-400 dark:hover:bg-sky-500 dark:hover:text-slate-950 border border-sky-200 dark:border-sky-800/60 transition-colors cursor-pointer"
                           >
                             Agendar no Calendário
                           </button>
@@ -752,25 +742,25 @@ export default function Ciclo() {
                                 {isDoubled ? '⚡ DOBRADA' : isReplaced ? '🔄 SUBST.' : (subject.block || 'B?')}
                               </span>
                             </div>
-                            <div className="p-4 flex flex-col items-center justify-center text-center gap-1.5 flex-1 min-h-[140px]">
+                            <div className="p-2.5 flex flex-col items-center justify-center text-center gap-1 flex-1 min-h-[82px]">
                               {wasStudied ? (
                                 <>
-                                  <CheckCircle className="w-6 h-6 text-emerald-500 mb-1" />
-                                  <span className="text-xs font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
+                                  <CheckCircle className="w-4 h-4 text-emerald-500" />
+                                  <span className="text-[11px] font-black text-emerald-700 dark:text-emerald-400 uppercase tracking-wide">
                                     Dia estudado
                                   </span>
                                   <span className="text-[10px] text-slate-500 dark:text-slate-400">
-                                    {formatMinutesToFriendly(pastMinutes)} registrados neste dia
+                                    {formatMinutesToFriendly(pastMinutes)} registrados
                                   </span>
                                 </>
                               ) : (
                                 <>
-                                  <Clock className="w-6 h-6 text-slate-400 dark:text-slate-500 mb-1" />
-                                  <span className="text-xs font-black text-slate-500 dark:text-slate-400 uppercase tracking-wide">
+                                  <Clock className="w-4 h-4 text-slate-400 dark:text-slate-500" />
+                                  <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-wide">
                                     Não Estudado
                                   </span>
-                                  <span className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight max-w-[200px]">
-                                    A fila não avançou e começou em <strong className="text-blue-500 font-bold">Hoje</strong>.
+                                  <span className="text-[10px] text-slate-400 dark:text-slate-500 leading-tight max-w-[190px]">
+                                    Fila retomada em <strong className="text-sky-500 font-bold">Hoje</strong>.
                                   </span>
                                 </>
                               )}
@@ -891,11 +881,11 @@ export default function Ciclo() {
                             <span className="text-[9px] font-black bg-white/30 dark:bg-slate-900/50 dark:text-white px-1.5 py-0.5 rounded backdrop-blur-sm shrink-0">{subject.block || 'B?'}</span>
                           </div>
 
-                          <div className="p-2.5 sm:p-3.5 flex flex-col gap-2.5 flex-1 justify-center">
+                          <div className="p-2.5 flex flex-col gap-2 flex-1 justify-center">
                             {isSlotCompleted ? (
-                              <div className="text-center py-4 fade-in flex flex-col items-center">
-                                <CheckCircle className="w-8 h-8 text-emerald-500 mb-2" />
-                                <span className="text-xs font-black text-emerald-700 uppercase tracking-wider">Teoria Queimada!</span>
+                              <div className="py-2 fade-in flex items-center justify-center gap-2">
+                                <CheckCircle className="w-4 h-4 text-emerald-500 shrink-0" />
+                                <span className="text-xs font-black text-emerald-600 dark:text-emerald-400 uppercase tracking-wider">Teoria Queimada!</span>
                               </div>
                             ) : activeTopic ? (
                               <>

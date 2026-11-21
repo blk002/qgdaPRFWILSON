@@ -497,8 +497,8 @@ export default function App() {
         {/* Logo / Topo */}
         <div className={`py-2.5 border-b border-slate-200/60 dark:border-slate-800 flex items-center ${isSidebarCollapsed ? 'flex-col gap-1.5 px-1.5' : 'justify-between px-3'}`}>
           <Link to="/" className="flex items-center gap-2.5 min-w-0" title="QG da PRF">
-            <div className="p-1.5 bg-slate-100 dark:bg-slate-850 rounded-lg border border-slate-200 dark:border-slate-700 shrink-0">
-              <Award className="text-amber-500 w-4 h-4" />
+            <div className="p-1.5 bg-sky-500/10 dark:bg-sky-500/15 rounded-lg border border-sky-500/25 shrink-0">
+              <Award className="text-sky-600 dark:text-sky-400 w-4 h-4" />
             </div>
             {!isSidebarCollapsed && (
               <div className="min-w-0">
@@ -506,7 +506,7 @@ export default function App() {
                   <h1 className="text-sm font-black tracking-wider text-slate-800 dark:text-white uppercase leading-none">
                     QG DA PRF
                   </h1>
-                  {isSyncing && <RefreshCw className="w-3 h-3 text-emerald-500 animate-spin" />}
+                  {isSyncing && <RefreshCw className="w-3 h-3 text-sky-400 animate-spin" />}
                 </div>
                 <span className="text-[9px] font-semibold tracking-widest uppercase text-slate-400 dark:text-slate-500 block mt-0.5">
                   Centro de Comando
@@ -543,7 +543,7 @@ export default function App() {
                   <span className="text-[10px] font-bold uppercase tracking-wider block truncate">{getCurrentPatente().name}</span>
                   <div className="w-20 bg-slate-200 dark:bg-slate-800 rounded-full h-1 mt-1 overflow-hidden">
                     <div
-                      className="bg-amber-500 h-full transition-all duration-1000"
+                      className="bg-gradient-to-r from-sky-500 to-teal-400 h-full transition-all duration-1000"
                       style={{ width: `${Math.min(100, (userStats.xp % 1000) / 10)}%` }}
                     />
                   </div>
@@ -584,10 +584,10 @@ export default function App() {
                     {({ isActive }) => (
                       <>
                         {isActive && (
-                          <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r bg-amber-500" />
+                          <span className="absolute left-0 top-1.5 bottom-1.5 w-0.5 rounded-r bg-sky-400" />
                         )}
                         <div className={`flex items-center min-w-0 ${isSidebarCollapsed ? 'justify-center' : 'gap-2'}`}>
-                          <tab.icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-amber-400 dark:text-amber-400' : ''}`} />
+                          <tab.icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-sky-400' : ''}`} />
                           {!isSidebarCollapsed && <span className="truncate">{tab.label}</span>}
                         </div>
                         {tab.count > 0 && (
@@ -717,7 +717,7 @@ export default function App() {
                   to={tab.id}
                   className={({ isActive }) => `flex items-center gap-1.5 py-1.5 px-2.5 rounded-lg transition-all whitespace-nowrap text-xs font-semibold tracking-tight ${
                     isActive
-                      ? 'bg-slate-900 text-white dark:bg-slate-850 dark:text-amber-400 dark:border dark:border-slate-700 shadow-none'
+                      ? 'bg-slate-900 text-white dark:bg-slate-850 dark:text-sky-400 dark:border dark:border-slate-700 shadow-none'
                       : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-100 border border-transparent'
                   }`}
                 >

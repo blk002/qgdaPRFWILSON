@@ -6,24 +6,24 @@
   --font-sans: 'Inter', 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   --font-display: 'Inter', 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   
-  /* Paleta Grafite Fosco (Dark Mode Limpo, Conciso e Sem Fadiga Visual) */
-  --color-slate-950: #0D0F10; /* Canvas principal */
-  --color-slate-900: #16181A; /* Superfície de cards e sidebar */
-  --color-slate-850: #1F2226; /* Superfície aninhada / inputs / botões secundários */
-  --color-slate-800: #2A2E33; /* Bordas hairline nítidas e divisores */
-  --color-slate-700: #3A3F47; /* Bordas hover e controles interativos */
-  --color-slate-600: #525866;
-  --color-slate-500: #71767F;
-  --color-slate-400: #9CA3AF;
-  --color-slate-300: #D1D5DB;
+  /* Paleta Aço Noturno (Dark Mode Original QG da PRF com Contraste em Camadas) */
+  --color-slate-950: #0B0D12; /* Canvas principal */
+  --color-slate-900: #13161F; /* Superfície de cards e sidebar */
+  --color-slate-850: #1B202C; /* Superfície aninhada / inputs / botões secundários */
+  --color-slate-800: #252C3D; /* Bordas hairline nítidas e divisores */
+  --color-slate-700: #343E54; /* Bordas hover e controles interativos */
+  --color-slate-600: #525D75;
+  --color-slate-500: #737E96;
+  --color-slate-400: #9CA6BC;
+  --color-slate-300: #D0D7E5;
   --color-slate-200: #E2E8F0;
   --color-slate-100: #F1F5F9;
   --color-slate-50: #F8FAFC;
 
-  /* Paleta Tática Neutra */
-  --color-tactical-blue: #16181A;
-  --color-tactical-slate: #1F2226;
-  --color-tactical-dark: #0D0F10;
+  /* Paleta Tática PRF */
+  --color-tactical-blue: #13161F;
+  --color-tactical-slate: #1B202C;
+  --color-tactical-dark: #0B0D12;
 
   --color-blue-50: var(--theme-blue-50, #eff6ff);
   --color-blue-100: var(--theme-blue-100, #dbeafe);
@@ -115,7 +115,7 @@
 
 :where(.dark, .dark *) .custom-scrollbar-x,
 .dark .custom-scrollbar-x {
-  scrollbar-color: #3A3F47 #0D0F10;
+  scrollbar-color: #343E54 #0B0D12;
 }
 
 .custom-scrollbar-x::-webkit-scrollbar {
@@ -130,8 +130,8 @@
 
 :where(.dark, .dark *) .custom-scrollbar-x::-webkit-scrollbar-track,
 .dark .custom-scrollbar-x::-webkit-scrollbar-track {
-  background: #0D0F10;
-  border: 1px solid #2A2E33;
+  background: #0B0D12;
+  border: 1px solid #252C3D;
 }
 
 .custom-scrollbar-x::-webkit-scrollbar-thumb {
@@ -142,7 +142,7 @@
 }
 
 .custom-scrollbar-x::-webkit-scrollbar-thumb:hover {
-  background: #64748b;
+  background: #0284c7;
 }
 
 .custom-scrollbar-x::-webkit-scrollbar-thumb:active {
@@ -151,13 +151,13 @@
 
 :where(.dark, .dark *) .custom-scrollbar-x::-webkit-scrollbar-thumb,
 .dark .custom-scrollbar-x::-webkit-scrollbar-thumb {
-  background: #3A3F47;
-  border: 2px solid #0D0F10;
+  background: #343E54;
+  border: 2px solid #0B0D12;
 }
 
 :where(.dark, .dark *) .custom-scrollbar-x::-webkit-scrollbar-thumb:hover,
 .dark .custom-scrollbar-x::-webkit-scrollbar-thumb:hover {
-  background: #6B7280;
+  background: #38BDF8;
   box-shadow: none;
 }
 

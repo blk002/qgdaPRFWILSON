@@ -222,36 +222,39 @@ export default function Estatisticas() {
   ];
 
   const renderCircularChart = (progress, label, valueText, subText, colorStart, colorEnd) => {
-    const radius = 46;
+    const radius = 27;
     const circumference = 2 * Math.PI * radius;
     const strokeDashoffset = circumference - (progress / 100) * circumference;
 
     return (
-      <div className="flex flex-col items-center justify-center p-2">
-        <div className="relative flex flex-col items-center justify-center group hover:scale-105 transition-transform duration-300">
-          <svg className="transform -rotate-90 w-32 h-32 sm:w-40 sm:h-40 drop-shadow-md" viewBox="0 0 120 120">
+      <div className="flex items-center gap-3 p-2 w-full">
+        <div className="relative flex items-center justify-center shrink-0">
+          <svg className="transform -rotate-90 w-16 h-16" viewBox="0 0 68 68">
             <defs>
               <linearGradient id={`grad-${label.replace(/\s+/g, '')}`} x1="0%" y1="0%" x2="100%" y2="100%">
                 <stop offset="0%" stopColor={colorStart} />
                 <stop offset="100%" stopColor={colorEnd} />
               </linearGradient>
             </defs>
-            <circle cx="60" cy="60" r={radius} stroke="currentColor" strokeWidth="12" fill="transparent" className="text-slate-200" />
+            <circle cx="34" cy="34" r={radius} stroke="currentColor" strokeWidth="6.5" fill="transparent" className="text-slate-200 dark:text-slate-800" />
             <circle 
-              cx="60" cy="60" r={radius} 
+              cx="34" cy="34" r={radius} 
               stroke={`url(#grad-${label.replace(/\s+/g, '')})`} 
-              strokeWidth="12" fill="transparent" 
+              strokeWidth="6.5" fill="transparent" 
               strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} 
               strokeLinecap="round" 
               className="transition-all duration-1000 ease-out" 
             />
           </svg>
-          <div className="absolute inset-0 flex flex-col items-center justify-center">
-            <span className="text-[10px] sm:text-xs font-black text-slate-400 uppercase tracking-widest mb-0.5">{label}</span>
-            <span className="text-3xl sm:text-4xl font-black text-slate-800 leading-none tracking-tighter dark:text-slate-100">{valueText}</span>
-          </div>
+          <span className="absolute text-xs font-black text-slate-800 dark:text-slate-100 tabular-nums">{progress}%</span>
         </div>
-        {subText && <span className="text-[10px] font-bold text-slate-500 mt-4 bg-slate-100 px-3 py-1.5 rounded-full border border-slate-200 shadow-sm dark:bg-slate-800 dark:text-slate-400 dark:border-slate-800">{subText}</span>}
+        <div className="min-w-0 flex-1">
+          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider block">{label}</span>
+          <span className="text-xl sm:text-2xl font-black text-slate-800 dark:text-slate-100 leading-tight tabular-nums block">{valueText}</span>
+          {subText && (
+            <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block truncate">{subText}</span>
+          )}
+        </div>
       </div>
     );
   };
@@ -329,95 +332,92 @@ export default function Estatisticas() {
         </div>
       )}
 
-      <div className="bg-white p-4 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4 dark:bg-slate-900 dark:border-slate-800">
-         <div className="flex items-center gap-4">
-            <div className="bg-blue-100 p-3 rounded-full shrink-0"><PieChart className="text-blue-600 w-6 h-6 sm:w-8 sm:h-8" /></div>
+      <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200 mb-3 flex flex-col sm:flex-row sm:items-center justify-between gap-3 dark:bg-slate-900 dark:border-slate-800">
+         <div className="flex items-center gap-3">
+            <div className="bg-sky-500/10 dark:bg-sky-500/15 border border-sky-500/25 p-2 rounded-lg shrink-0"><PieChart className="text-sky-600 dark:text-sky-400 w-5 h-5" /></div>
             <div>
-               <h2 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">Dashboard de Desempenho</h2>
-               <p className="text-slate-500 text-xs sm:text-sm dark:text-slate-400">Acompanhe seu avanço detalhado por disciplina e assunto.</p>
+               <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 leading-tight">Dashboard de Desempenho</h2>
+               <p className="text-slate-500 text-xs dark:text-slate-400">Acompanhe seu avanço detalhado por disciplina e assunto.</p>
             </div>
          </div>
          <button
            onClick={() => window.print()}
-           className="no-print bg-slate-900 dark:bg-slate-800 hover:bg-blue-600 dark:hover:bg-blue-600 text-white px-5 py-2.5 rounded-xl text-xs font-black uppercase tracking-wider shadow-md hover:scale-[1.02] active:scale-95 transition-all flex items-center gap-2 justify-center cursor-pointer shrink-0 border border-slate-200 dark:border-slate-700 hover:border-transparent dark:hover:border-transparent"
+           className="no-print bg-slate-100 dark:bg-slate-850 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-800 dark:text-white px-3.5 py-1.5 rounded-lg text-xs font-bold uppercase tracking-wider transition-colors flex items-center gap-1.5 justify-center cursor-pointer shrink-0 border border-slate-200 dark:border-slate-700"
          >
-           <Printer className="w-4 h-4 text-blue-400" />
+           <Printer className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400" />
            <span>Gerar Relatório (PDF)</span>
          </button>
       </div>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-6">
-        <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 dark:bg-slate-900 dark:border-slate-800 flex flex-col items-center min-h-[300px] justify-center">
-          <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest mb-6 dark:text-slate-100">Equilíbrio Operacional</h3>
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-3 mb-3">
+        <div className="bg-white rounded-xl border border-slate-200 p-3.5 dark:bg-slate-900 dark:border-slate-800 flex flex-col items-center min-h-[220px] justify-center">
+          <h3 className="text-xs font-black text-slate-800 uppercase tracking-widest mb-2 dark:text-slate-100">Equilíbrio Operacional</h3>
           {stats.length > 0 ? (
-            <div className="w-full h-[300px]">
+            <div className="w-full h-[210px]">
               <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
-                <RadarChart cx="50%" cy="50%" outerRadius="80%" data={radarData}>
-                  <PolarGrid stroke="#e2e8f0" />
-                  <PolarAngleAxis dataKey="subject" tick={{ fill: '#64748b', fontSize: 10, fontWeight: 'bold' }} />
+                <RadarChart cx="50%" cy="50%" outerRadius="78%" data={radarData}>
+                  <PolarGrid stroke={isDarkMode ? '#252C3D' : '#e2e8f0'} />
+                  <PolarAngleAxis dataKey="subject" tick={{ fill: isDarkMode ? '#9CA6BC' : '#64748b', fontSize: 10, fontWeight: 'bold' }} />
                   <PolarRadiusAxis angle={30} domain={[0, 100]} tick={false} axisLine={false} />
                   <Radar
                     name="Evolução"
                     dataKey="A"
-                    stroke="#3b82f6"
-                    fill="#3b82f6"
-                    fillOpacity={0.5}
+                    stroke="#0ea5e9"
+                    fill="#0ea5e9"
+                    fillOpacity={0.4}
                   />
                 </RadarChart>
               </ResponsiveContainer>
-              <p className="text-[10px] text-slate-400 font-bold uppercase mt-4 text-center">O radar mostra seu equilíbrio entre as frentes do edital e constância física.</p>
+              <p className="text-[10px] text-slate-400 font-bold uppercase mt-1 text-center">Equilíbrio entre frentes do edital e constância física.</p>
             </div>
           ) : (
-            <div className="flex flex-col items-center justify-center py-10 opacity-50">
-              <BarChart2 className="w-12 h-12 text-slate-300 mb-2" />
+            <div className="flex flex-col items-center justify-center py-6 opacity-50">
+              <BarChart2 className="w-9 h-9 text-slate-300 mb-1.5" />
               <p className="text-[10px] font-black uppercase text-slate-400 tracking-widest">Sem dados para análise radar</p>
             </div>
           )}
         </div>
 
-         <div className="bg-gradient-to-r from-slate-900 to-blue-900 rounded-2xl p-6 border border-slate-800 shadow-xl overflow-hidden relative">
-          <div className="absolute top-0 right-0 p-8 opacity-10">
-             <Activity className="w-32 h-32 text-white" />
-          </div>
-          <div className="relative z-10 flex flex-col md:flex-row items-center gap-6 h-full justify-between">
+         <div className="bg-white dark:bg-slate-900 rounded-xl p-3.5 border border-slate-200 dark:border-slate-800 overflow-hidden relative flex flex-col justify-center">
+          <div className="relative z-10 flex flex-col sm:flex-row items-center gap-4 justify-between">
              {/* Left Column: Description & Status */}
-             <div className="flex-1 space-y-4">
+             <div className="flex-1 space-y-2.5 w-full">
                 <div>
-                   <div className="flex items-center gap-2 mb-2">
-                      <FastForward className="w-5 h-5 text-blue-400" />
-                      <h3 className="text-sm font-black text-white uppercase tracking-widest">Sprint Semanal: Missão de Elite</h3>
+                   <div className="flex items-center gap-1.5 mb-1">
+                      <FastForward className="w-4 h-4 text-sky-500 dark:text-sky-400" />
+                      <h3 className="text-xs font-black text-slate-800 dark:text-white uppercase tracking-widest">Sprint Semanal: Missão de Elite</h3>
                    </div>
-                   <p className="text-slate-400 text-xs leading-relaxed">Meta de {weeklySprint.goalHours}h semanais. Mantenha a constância para subir de patente.</p>
+                   <p className="text-slate-500 dark:text-slate-400 text-xs leading-snug">Meta de {weeklySprint.goalHours}h semanais para constância de aprovação.</p>
                 </div>
-                <div className="flex gap-4">
-                   <div className="bg-slate-800/80 border border-slate-700/50 p-3 rounded-xl min-w-[100px]">
+                <div className="grid grid-cols-2 gap-2.5">
+                   <div className="bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700/60 p-2.5 rounded-lg">
                       <span className="text-[9px] font-black text-slate-400 block uppercase">Realizado</span>
-                      <span className="text-sm font-black text-blue-400">{Math.floor(weeklySprint.currentMinutes / 60)}h {(weeklySprint.currentMinutes % 60)}min</span>
+                      <span className="text-sm font-black text-sky-600 dark:text-sky-400 tabular-nums">{Math.floor(weeklySprint.currentMinutes / 60)}h {(weeklySprint.currentMinutes % 60)}min</span>
                    </div>
-                   <div className="bg-slate-800/80 border border-slate-700/50 p-3 rounded-xl min-w-[100px]">
+                   <div className="bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-700/60 p-2.5 rounded-lg">
                       <span className="text-[9px] font-black text-slate-400 block uppercase">Status</span>
-                      <span className="text-sm font-black text-white">
+                      <span className="text-sm font-black text-slate-800 dark:text-white">
                          {(weeklySprint.currentMinutes / (weeklySprint.goalHours * 60)) >= 1 ? '🥇 CUMPRIDA' : '⚡ EM CURSO'}
                       </span>
                    </div>
                 </div>
-                <div className="flex justify-between items-center bg-white/5 p-3 rounded-xl border border-white/10">
-                   <div className="flex flex-col">
+                <div className="flex justify-between items-center bg-slate-50 dark:bg-slate-850 px-3 py-2 rounded-lg border border-slate-200 dark:border-slate-700/60">
+                   <div className="flex items-baseline gap-2">
                      <span className="text-[9px] font-black uppercase text-slate-400">Saldo XP</span>
-                     <span className="text-xl font-black text-white">{userStats.xp.toLocaleString()}</span>
+                     <span className="text-base font-black text-slate-800 dark:text-white tabular-nums">{userStats.xp.toLocaleString()}</span>
                    </div>
-                   <div className="px-2.5 py-1 bg-blue-500 text-white rounded text-[9px] font-black">NAVY SEAL STATUS</div>
+                   <div className="px-2 py-0.5 bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30 rounded text-[9px] font-black">OPERACIONAL</div>
                 </div>
              </div>
 
              {/* Right Column: Circular SVG Progress Ring */}
              <div className="flex flex-col items-center justify-center shrink-0">
-                <div className="relative w-32 h-32 flex items-center justify-center">
-                   <svg className="transform -rotate-90 w-32 h-32" viewBox="0 0 100 100">
-                      <circle cx="50" cy="50" r="40" stroke="#1e293b" strokeWidth="8" fill="transparent" />
+                <div className="relative w-24 h-24 flex items-center justify-center">
+                   <svg className="transform -rotate-90 w-24 h-24" viewBox="0 0 100 100">
+                      <circle cx="50" cy="50" r="40" stroke="currentColor" strokeWidth="8" fill="transparent" className="text-slate-200 dark:text-slate-800" />
                       <circle 
                          cx="50" cy="50" r="40" 
-                         stroke="#3b82f6" 
+                         stroke="#0ea5e9" 
                          strokeWidth="8" 
                          fill="transparent" 
                          strokeDasharray={2 * Math.PI * 40} 
@@ -427,7 +427,7 @@ export default function Estatisticas() {
                       />
                    </svg>
                    <div className="absolute inset-0 flex flex-col items-center justify-center">
-                      <span className="text-xl font-black text-white">{Math.round(sprintProgress)}%</span>
+                      <span className="text-lg font-black text-slate-800 dark:text-white tabular-nums">{Math.round(sprintProgress)}%</span>
                       <span className="text-[9px] font-black text-slate-400 uppercase">Meta</span>
                    </div>
                 </div>
@@ -436,33 +436,39 @@ export default function Estatisticas() {
         </div>
       </div>
 
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm mb-6 flex flex-col sm:flex-row items-center justify-around gap-6 p-6 sm:p-8 dark:bg-slate-900 dark:border-slate-800">
-        {renderCircularChart(overallProgress, 'Avanço', `${overallProgress}%`, 'Edital Global', '#d946ef', '#2563eb')}
-        {renderCircularChart(overallProgress, 'Aulas', `${completedEdital}`, `de ${totalEdital || 0} Teóricas`, '#10b981', '#0ea5e9')}
-        {renderCircularChart(subjectsPercent, 'Concluídas', `${subjectsFinished}`, `de ${stats.length} Matérias`, '#f59e0b', '#ef4444')}
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-3">
+        <div className="bg-white rounded-xl border border-slate-200 p-1.5 dark:bg-slate-900 dark:border-slate-800">
+          {renderCircularChart(overallProgress, 'Avanço', `${overallProgress}%`, 'Edital Global', '#0ea5e9', '#2dd4bf')}
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-1.5 dark:bg-slate-900 dark:border-slate-800">
+          {renderCircularChart(overallProgress, 'Aulas', `${completedEdital}`, `de ${totalEdital || 0} Teóricas`, '#14b8a6', '#38bdf8')}
+        </div>
+        <div className="bg-white rounded-xl border border-slate-200 p-1.5 dark:bg-slate-900 dark:border-slate-800">
+          {renderCircularChart(subjectsPercent, 'Concluídas', `${subjectsFinished}`, `de ${stats.length} Matérias`, '#f59e0b', '#fb923c')}
+        </div>
       </div>
 
       {/* Gráfico de Evolução de Estudos */}
-      <div className="bg-white rounded-2xl border border-slate-200 shadow-sm p-6 mb-6 dark:bg-slate-900 dark:border-slate-800">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 pb-4 border-b border-slate-100 dark:border-slate-800/80">
+      <div className="bg-white rounded-xl border border-slate-200 p-3.5 sm:p-4 mb-3 dark:bg-slate-900 dark:border-slate-800">
+        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 mb-3 pb-2.5 border-b border-slate-100 dark:border-slate-800">
           <div>
-            <h3 className="text-sm font-black text-slate-800 uppercase tracking-widest dark:text-slate-100 flex items-center gap-2">
-              <span className="w-2.5 h-2.5 rounded-full bg-blue-500 animate-pulse"></span>
+            <h3 className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-widest dark:text-slate-100 flex items-center gap-2">
+              <span className="w-2 h-2 rounded-full bg-sky-500"></span>
               Evolução Temporal dos Estudos
             </h3>
-            <p className="text-slate-500 text-xs mt-1 dark:text-slate-400 font-bold uppercase tracking-wide">
+            <p className="text-slate-500 text-[11px] mt-0.5 dark:text-slate-400 font-bold uppercase tracking-wide">
               Análise de rendimento e horas acumuladas por período
             </p>
           </div>
           
-          <div className="flex bg-slate-100 dark:bg-slate-800 p-1 rounded-xl border border-slate-200/50 dark:border-slate-700/50 shadow-inner no-print">
+          <div className="flex bg-slate-100 dark:bg-slate-850 p-1 rounded-lg border border-slate-200/80 dark:border-slate-700/70 no-print">
             {[7, 15, 30].map(days => (
               <button
                 key={days}
                 onClick={() => setChartDays(days)}
-                className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${
+                className={`px-2.5 py-1 rounded-md text-[10px] font-black uppercase transition-all ${
                   chartDays === days 
-                    ? 'bg-blue-600 text-white shadow-sm' 
+                    ? 'bg-sky-600 text-white dark:bg-sky-500 dark:text-slate-950' 
                     : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200'
                 }`}
               >
@@ -472,7 +478,7 @@ export default function Estatisticas() {
           </div>
         </div>
 
-        <div className="w-full h-[250px] sm:h-[300px]">
+        <div className="w-full h-[210px] sm:h-[240px]">
           <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
