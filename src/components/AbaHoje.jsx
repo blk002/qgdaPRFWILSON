@@ -396,14 +396,14 @@ export default function AbaHoje({ onGoToTab }) {
                     }`}
                   >
                     {/* Faixa Topo do Bloco: Dia da Semana, XX/MM + Tempo Total */}
-                    <div className="px-3 py-1.5 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-2 text-[11px]">
+                    <div className="px-3 py-2 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-2 text-xs sm:text-sm">
                       <div className="flex items-center gap-1.5 font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">
-                        <Calendar className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400 shrink-0" />
+                        <Calendar className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
                         <span>{todayHeaderLabel}</span>
                       </div>
                       {totalTimeText && !block.isSlotCompleted && (
-                        <div className="flex items-center gap-1 text-xs font-black text-amber-600 dark:text-amber-300 tabular-nums">
-                          {block.spd > 1 && <Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-300" />}
+                        <div className="flex items-center gap-1 text-xs sm:text-sm font-black text-amber-600 dark:text-amber-300 tabular-nums">
+                          {block.spd > 1 && <Zap className="w-4 h-4 text-amber-500 dark:text-amber-300" />}
                           <span>Tempo total: {totalTimeText}</span>
                         </div>
                       )}
@@ -413,12 +413,12 @@ export default function AbaHoje({ onGoToTab }) {
                     <div className={`p-3 m-2 rounded-lg border bg-white dark:bg-slate-900 ${borderColorClass} space-y-2.5`}>
                       {/* Cabeçalho: DISCIPLINA -> TÓPICO */}
                       <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100 dark:border-slate-800">
-                        <div className={`text-xs font-black uppercase tracking-wide truncate ${textColorClass}`}>
+                        <div className={`text-sm font-black uppercase tracking-wide truncate ${textColorClass}`}>
                           {block.subject.name}
                           {block.activeTopic?.name ? ` → ${block.activeTopic.name}` : ''}
                         </div>
                         {(block.isReplaced || block.isDoubled) && (
-                          <span className="text-[9px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-850 text-slate-500 dark:text-slate-300 shrink-0 uppercase">
+                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-850 text-slate-500 dark:text-slate-300 shrink-0 uppercase">
                             {block.isReplaced ? 'Subst.' : '2x'}
                           </span>
                         )}
@@ -434,21 +434,21 @@ export default function AbaHoje({ onGoToTab }) {
                       ) : block.activeTopic ? (
                         <>
                           {/* Linha AULA X/Y */}
-                          <div className="flex items-center justify-between text-[11px] font-bold text-slate-600 dark:text-slate-300">
+                          <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
                             <span className="uppercase tracking-wider">
                               {block.blockCount > 1
                                 ? `Aulas ${startNum}–${endNum}/${block.currentTotal}`
                                 : `Aula ${startNum}/${block.currentTotal}`}
                             </span>
                             {block.spd > 1 && (
-                              <span className="text-[10px] font-black text-sky-600 dark:text-sky-400">
+                              <span className="text-[11px] font-black text-sky-600 dark:text-sky-400">
                                 {block.spd}x ativo
                               </span>
                             )}
                           </div>
 
                           {/* Lista de Aulas com Nome + MM:SS (spd) */}
-                          <div className="space-y-1">
+                          <div className="space-y-1.5">
                             {block.plannedLessons.map((les, lIdx) => {
                               const origSec = Number(les.origSec) || parseDurationToSeconds(les.durStr) || 0;
                               const accelSec = Number(les.accelSec) || (origSec > 0 ? Math.round(origSec / block.spd) : 0);
@@ -460,13 +460,13 @@ export default function AbaHoje({ onGoToTab }) {
                               return (
                                 <div
                                   key={lIdx}
-                                  className="flex items-start justify-between gap-3 text-xs leading-snug"
+                                  className="flex items-start justify-between gap-3 text-sm leading-snug"
                                 >
                                   <span className="font-semibold text-slate-800 dark:text-slate-100 break-words flex-1 min-w-0">
                                     • {les.name}
                                   </span>
                                   {durationLabel && (
-                                    <span className="text-xs font-mono font-black text-amber-600 dark:text-amber-300 shrink-0 flex items-center gap-1 tabular-nums">
+                                    <span className="text-sm font-mono font-black text-amber-600 dark:text-amber-300 shrink-0 flex items-center gap-1 tabular-nums">
                                       <Clock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-300" />
                                       {durationLabel}
                                     </span>
@@ -481,17 +481,17 @@ export default function AbaHoje({ onGoToTab }) {
                             <button
                               type="button"
                               onClick={() => openLessonModal(block, true)}
-                              className="h-8 px-2.5 rounded-lg text-[11px] font-black uppercase tracking-wide bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                              className="h-9 px-3 rounded-lg text-xs font-black uppercase tracking-wide bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                             >
-                              <PlayCircle className="w-3.5 h-3.5 shrink-0" />
+                              <PlayCircle className="w-4 h-4 shrink-0" />
                               <span className="truncate">Aula Assistida</span>
                             </button>
                             <button
                               type="button"
                               onClick={() => openLessonModal(block, false)}
-                              className="h-8 px-2.5 rounded-lg text-[11px] font-black uppercase tracking-wide bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-850 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                              className="h-9 px-3 rounded-lg text-xs font-black uppercase tracking-wide bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-850 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                             >
-                              <Target className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400 shrink-0" />
+                              <Target className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
                               <span className="truncate">Exercícios da Aula</span>
                             </button>
                           </div>

@@ -916,7 +916,7 @@ export default function Calendario() {
                     className={`min-h-[4.75rem] md:min-h-[5.75rem] min-w-0 p-1.5 rounded-lg flex flex-col transition-all group ${bgClass}`}
                     title={isPast ? "Dia já concluído / passado" : "Clique para gerenciar matérias deste dia"}
                   >
-                    <div className="flex items-center justify-between gap-1 pb-1 mb-1 border-b border-slate-100 dark:border-slate-800/80 text-[10px] leading-none">
+                    <div className="flex items-center justify-between gap-1 pb-1 mb-1 border-b border-slate-100 dark:border-slate-800/80 text-xs leading-none">
                       <div className="flex items-center gap-1 min-w-0">
                         <span className={`font-black tabular-nums ${isTodayReal ? 'text-sky-600 dark:text-sky-400' : ''}`}>
                           {dayMonthLabel}
@@ -925,20 +925,20 @@ export default function Calendario() {
                           <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" title="Dia com personalização manual avulsa" />
                         )}
                         {isTodayReal && (
-                          <span className="text-[8px] font-black uppercase text-sky-600 dark:text-sky-400">
+                          <span className="text-[9px] font-black uppercase text-sky-600 dark:text-sky-400">
                             Hoje
                           </span>
                         )}
                       </div>
 
                       {dayTimeLabel && (
-                        <span className="font-black text-[11px] text-amber-600 dark:text-amber-300 tabular-nums truncate">
+                        <span className="font-black text-xs text-amber-600 dark:text-amber-300 tabular-nums truncate">
                           {dayTimeLabel}
                         </span>
                       )}
 
                       {!isPast && (
-                        <span className="font-bold uppercase text-[9px] text-sky-600 dark:text-sky-400 group-hover:underline shrink-0">
+                        <span className="font-bold uppercase text-[11px] text-sky-600 dark:text-sky-400 group-hover:underline shrink-0">
                           Editar
                         </span>
                       )}
@@ -960,7 +960,7 @@ export default function Calendario() {
                             <React.Fragment key={idx}>
                               <span
                                 title={blockTooltip}
-                                className={`block mt-1 first:mt-0 text-[10px] sm:text-[11px] font-black uppercase leading-tight truncate transition-opacity ${textColorClass} ${
+                                className={`block mt-1 first:mt-0 text-xs font-black uppercase leading-tight truncate transition-opacity ${textColorClass} ${
                                   isDimmed ? 'opacity-20' : ''
                                 } ${isHighlighted ? 'underline underline-offset-2' : ''}`}
                               >
@@ -972,7 +972,7 @@ export default function Calendario() {
                                 lessonsList.map((les, lIdx) => (
                                   <span
                                     key={`${idx}-${lIdx}`}
-                                    className={`block pl-1.5 text-[10px] sm:text-[11px] font-semibold leading-snug break-words transition-opacity ${textColorClass} ${
+                                    className={`block pl-1.5 text-xs font-semibold leading-snug break-words transition-opacity ${textColorClass} ${
                                       isDimmed ? 'opacity-20' : 'opacity-95'
                                     }`}
                                     title={les.topicName && !les.name.includes(les.topicName) ? `${les.topicName} • ${les.name}${les.duration ? ` (${les.duration})` : ''}` : `${les.name}${les.duration ? ` (${les.duration})` : ''}`}
@@ -982,7 +982,7 @@ export default function Calendario() {
                                 ))
                               ) : item.count >= 1 ? (
                                 <span
-                                  className={`block pl-1.5 text-[10px] font-semibold leading-snug transition-opacity ${textColorClass} ${
+                                  className={`block pl-1.5 text-xs font-semibold leading-snug transition-opacity ${textColorClass} ${
                                     isDimmed ? 'opacity-20' : 'opacity-90'
                                   }`}
                                 >
