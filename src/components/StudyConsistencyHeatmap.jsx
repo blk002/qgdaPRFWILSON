@@ -55,58 +55,58 @@ export default function StudyConsistencyHeatmap() {
         </div>
       </div>
 
-      <div className="flex items-start">
-        {/* Rótulos dos dias da semana (Seg, Qua, Sex) */}
-        <div
-          className="grid gap-1.5 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest select-none pr-3 text-right shrink-0"
-          style={{
-            gridTemplateRows: 'repeat(7, minmax(0, 1fr))',
-            paddingTop: '60px',
-            height: '194px'
-          }}
-        >
-          <div className="h-3.5 flex items-center justify-end"></div>
-          <div className="h-3.5 flex items-center justify-end">Seg</div>
-          <div className="h-3.5 flex items-center justify-end"></div>
-          <div className="h-3.5 flex items-center justify-end">Qua</div>
-          <div className="h-3.5 flex items-center justify-end"></div>
-          <div className="h-3.5 flex items-center justify-end">Sex</div>
-          <div className="h-3.5 flex items-center justify-end"></div>
-        </div>
-
-        {/* Grade rolável dos últimos 12 meses */}
-        <div className="flex-1 overflow-x-auto custom-scrollbar pb-2 scroll-smooth">
-          <div className="w-max pt-10 pr-6 pl-3">
-            {/* Meses */}
-            <div className="relative h-3.5 mb-1.5 select-none w-full">
+      <div className="overflow-x-auto custom-scrollbar pt-2.5 pb-1">
+        <div className="w-full min-w-[720px]">
+          {/* Linha de Meses */}
+          <div className="flex items-end mb-1.5 select-none">
+            <div className="w-8 shrink-0 pr-2" />
+            <div
+              className="flex-1 grid gap-[3px] sm:gap-1 h-3.5"
+              style={{ gridTemplateColumns: 'repeat(53, minmax(0, 1fr))' }}
+            >
               {heatmapDataObj.weeks.map((weekStart, colIdx) => {
                 const isFirstWeekOfMonth =
                   colIdx === 0 ||
-                  heatmapDataObj.weeks[colIdx].getMonth() !== heatmapDataObj.weeks[colIdx - 1].getMonth();
+                  weekStart.getMonth() !== heatmapDataObj.weeks[colIdx - 1].getMonth();
 
-                if (!isFirstWeekOfMonth) return null;
-
-                // Cada coluna tem largura w-3.5 (14px) + gap-1.5 (6px) = 20px
-                const leftPos = colIdx * 20;
+                const collidesWithNextMonth =
+                  colIdx === 0 &&
+                  heatmapDataObj.weeks[1] &&
+                  heatmapDataObj.weeks[1].getMonth() !== weekStart.getMonth();
 
                 return (
-                  <div
-                    key={colIdx}
-                    className="absolute text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest text-left"
-                    style={{ left: `${leftPos}px` }}
-                  >
-                    {MESES_ABREV[weekStart.getMonth()]}
+                  <div key={colIdx} className="relative">
+                    {isFirstWeekOfMonth && !collidesWithNextMonth && (
+                      <span className="absolute left-0 top-0 whitespace-nowrap text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest">
+                        {MESES_ABREV[weekStart.getMonth()]}
+                      </span>
+                    )}
                   </div>
                 );
               })}
             </div>
+          </div>
 
-            {/* Grade de quadradinhos (371 células: 7 linhas x 53 colunas) */}
+          {/* Rótulos da semana + Grade de quadradinhos (371 células: 7 linhas x 53 colunas) */}
+          <div className="flex items-stretch">
             <div
-              className="grid grid-flow-col gap-1.5"
+              className="w-8 shrink-0 pr-2 grid gap-[3px] sm:gap-1 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest select-none text-right"
+              style={{ gridTemplateRows: 'repeat(7, minmax(0, 1fr))' }}
+            >
+              <div className="flex items-center justify-end leading-none" />
+              <div className="flex items-center justify-end leading-none">Seg</div>
+              <div className="flex items-center justify-end leading-none" />
+              <div className="flex items-center justify-end leading-none">Qua</div>
+              <div className="flex items-center justify-end leading-none" />
+              <div className="flex items-center justify-end leading-none">Sex</div>
+              <div className="flex items-center justify-end leading-none" />
+            </div>
+
+            <div
+              className="flex-1 grid grid-flow-col gap-[3px] sm:gap-1"
               style={{
-                gridTemplateRows: 'repeat(7, minmax(0, 1fr))',
-                height: '134px'
+                gridTemplateColumns: 'repeat(53, minmax(0, 1fr))',
+                gridTemplateRows: 'repeat(7, minmax(0, 1fr))'
               }}
             >
               {heatmapDataObj.days.map((cellDate, idx) => {
@@ -131,6 +131,7 @@ export default function StudyConsistencyHeatmap() {
                 const dayNum = cellDate.getDate();
 
                 const colIdx = Math.floor(idx / 7);
+                const rowIdx = idx % 7;
                 let tooltipAlignClass = 'left-1/2 -translate-x-1/2';
                 if (colIdx < 5) {
                   tooltipAlignClass = 'left-0';
@@ -138,14 +139,19 @@ export default function StudyConsistencyHeatmap() {
                   tooltipAlignClass = 'right-0 left-auto';
                 }
 
+                const tooltipVerticalClass =
+                  rowIdx < 2
+                    ? 'top-full mt-2 -translate-y-1 group-hover/cell:translate-y-0'
+                    : 'bottom-full mb-2 translate-y-1 group-hover/cell:translate-y-0';
+
                 return (
                   <div
                     key={idx}
-                    className={`w-3.5 h-3.5 rounded-[3px] border flex items-center justify-center transition-all group/cell relative cursor-default hover:scale-110 hover:z-30 ${heatClass}`}
+                    className={`w-full aspect-square rounded-[3px] border flex items-center justify-center transition-all group/cell relative cursor-default hover:scale-110 hover:z-30 ${heatClass}`}
                   >
                     {!isFuture && (
                       <div
-                        className={`absolute bottom-full ${tooltipAlignClass} mb-2 w-max bg-slate-950/95 text-white text-[10.5px] font-semibold py-1.5 px-3 rounded-lg opacity-0 pointer-events-none group-hover/cell:opacity-100 transition-all duration-150 translate-y-1 group-hover/cell:translate-y-0 z-50 shadow-lg border border-slate-800 text-center`}
+                        className={`absolute ${tooltipVerticalClass} ${tooltipAlignClass} w-max bg-slate-950/95 text-white text-[10.5px] font-semibold py-1.5 px-3 rounded-lg opacity-0 pointer-events-none group-hover/cell:opacity-100 transition-all duration-150 z-50 shadow-lg border border-slate-800 text-center`}
                       >
                         <p className="text-slate-200 font-bold">
                           {dayNum} de {monthName} de {cellDate.getFullYear()}
