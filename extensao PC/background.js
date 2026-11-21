@@ -50,31 +50,35 @@ function normalizeSession(rawSession) {
   };
 }
 
-// Reinjetar scripts automaticamente em abas já abertas ao instalar/atualizar a extensão
+// Reinjetar scripts automaticamente em abas ativas/carregadas ao instalar/atualizar a extensão (ignora abas descartadas para evitar "An unknown error occurred when fetching the script")
 async function reinjectOpenTabs() {
   if (!chrome.scripting || !chrome.tabs) return;
   try {
     const qgTabs = await chrome.tabs.query({ url: QG_URL_PATTERNS });
     for (const tab of qgTabs) {
-      if (tab.id) {
-        chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['qg_bridge.js']
-        }).catch(() => {});
+      if (tab.id && !tab.discarded && tab.status === 'complete') {
+        try {
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['qg_bridge.js']
+          });
+        } catch (_) {}
       }
     }
 
     const caveiraTabs = await chrome.tabs.query({ url: CAVEIRA_URL_PATTERNS });
     for (const tab of caveiraTabs) {
-      if (tab.id) {
-        chrome.scripting.insertCSS({
-          target: { tabId: tab.id },
-          files: ['content.css']
-        }).catch(() => {});
-        chrome.scripting.executeScript({
-          target: { tabId: tab.id },
-          files: ['treeMatcher.js', 'caveiraResolver.js', 'content.js']
-        }).catch(() => {});
+      if (tab.id && !tab.discarded && tab.status === 'complete') {
+        try {
+          await chrome.scripting.insertCSS({
+            target: { tabId: tab.id },
+            files: ['content.css']
+          });
+          await chrome.scripting.executeScript({
+            target: { tabId: tab.id },
+            files: ['treeMatcher.js', 'caveiraResolver.js', 'content.js']
+          });
+        } catch (_) {}
       }
     }
   } catch (_) {}
