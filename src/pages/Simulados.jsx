@@ -211,11 +211,30 @@ export default function Simulados() {
                 </thead>
                 <tbody className="divide-y divide-slate-100">
                   {simulados.map(sim => {
-                    const reprovouCorte = (15 > sim.b1Liquida) || (10 > sim.b2Liquida) || (10 > sim.b3Liquida) || (50 > sim.liquida);
+                    const hasBlockBreakdown = sim.b1Liquida !== undefined && sim.b2Liquida !== undefined && sim.b3Liquida !== undefined;
+                    const reprovouCorte = hasBlockBreakdown
+                      ? ((15 > sim.b1Liquida) || (10 > sim.b2Liquida) || (10 > sim.b3Liquida) || (50 > sim.liquida))
+                      : (sim.pct !== undefined ? Number(sim.pct) < 50 : 50 > sim.liquida);
                     
                     return (
                     <tr key={sim.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors dark:bg-slate-950">
-                      <td className="p-3 sm:p-4 font-semibold text-slate-700 dark:text-slate-200">{sim.data}</td>
+                      <td className="p-3 sm:p-4 font-semibold text-slate-700 dark:text-slate-200">
+                        <div>{sim.data}</div>
+                        {(sim.title || sim.source === 'caveira') && (
+                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                            {sim.source === 'caveira' && (
+                              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-500 border border-sky-500/30">
+                                Caveira
+                              </span>
+                            )}
+                            {sim.title && (
+                              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate max-w-[200px]" title={sim.title}>
+                                {sim.title}
+                              </span>
+                            )}
+                          </div>
+                        )}
+                      </td>
                       <td className={`p-3 sm:p-4 text-center font-bold ${(15 > sim.b1Liquida) ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}`}>{sim.b1Liquida !== undefined ? sim.b1Liquida : '-'}</td>
                       <td className={`p-3 sm:p-4 text-center font-bold ${(10 > sim.b2Liquida) ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}`}>{sim.b2Liquida !== undefined ? sim.b2Liquida : '-'}</td>
                       <td className={`p-3 sm:p-4 text-center font-bold ${(10 > sim.b3Liquida) ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}`}>{sim.b3Liquida !== undefined ? sim.b3Liquida : '-'}</td>

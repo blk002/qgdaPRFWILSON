@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v1.6.0 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v2.0.0 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -21,6 +21,12 @@
   const COURSE_INDEX_CACHE_KEY = 'qg_caveira_course_index_cache';
   const FILTER_CORRECTION_MEMORY_KEY = 'qg_caveira_filter_memory';
   const FILTER_ID_MEMORY_KEY = 'qg_caveira_filter_id_memory_v1';
+  const FILTER_MEMORY_CLOUD_KEY = 'qg_filter_memory_cloud';
+  const TODAY_MISSION_KEY = 'qg_today_mission';
+  const SUBJECT_SPEEDS_KEY = 'qg_subject_speeds';
+  const PENDING_CATALOG_KEY = 'qg_pending_course_catalog';
+  const PENDING_SIMULADOS_KEY = 'qg_pending_simulados_import';
+  const PENDING_PDF_KEY = 'qg_pending_pdf_study';
   const LAST_FILTER_DIAG_KEY = 'qg_caveira_last_filter_diag';
   const DEFAULT_PREFS_KEY = 'qg_caveira_default_prefs';
   const SUBJECT_TREE_CACHE_KEY = 'qg_caveira_subject_tree_cache';
@@ -37,6 +43,14 @@
   let pendingResolverResult = null;
   let lastCapturedCourseSignature = '';
   let currentCourseIndexStatus = null;
+  let cachedTodayMission = null;
+  let todayMissionIdx = 0;
+  let cachedSubjectSpeeds = {};
+  let pdfReadingSeconds = 0;
+  let pdfTimerInterval = null;
+  let lastPlaygroundSpeedApplied = 0;
+  const lessonCompletionStateByUrl = new Map();
+  const observedVideos = new WeakSet();
   const peekedCourseUrls = new Set();
 
   function isCoursePage() {
@@ -45,6 +59,54 @@
     } catch (_) {
       return false;
     }
+  }
+
+  function isCoursePlaygroundPage() {
+    try {
+      return /\/courses\/.*\/playground/i.test(window.location.pathname);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function isCourseCatalogPage() {
+    try {
+      return /\/courses\/\d+/i.test(window.location.pathname) && !isCoursePlaygroundPage();
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function isQuestionsPage() {
+    try {
+      return /\/questions/i.test(window.location.pathname);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function isSimuladosPage() {
+    try {
+      return /\/(?:teams|personal-practice-exams|practice-exams|simulados)/i.test(window.location.pathname);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function isPdfSummariesPage() {
+    try {
+      return /\/(?:smart-summaries|resumos)/i.test(window.location.pathname);
+    } catch (_) {
+      return false;
+    }
+  }
+
+  function flushPendingQgEvents() {
+    try {
+      if (isExtensionContextValid() && chrome.runtime && chrome.runtime.sendMessage) {
+        chrome.runtime.sendMessage({ type: 'FLUSH_PENDING_QG_EVENTS' }).catch(() => {});
+      }
+    } catch (_) {}
   }
 
   function compactQuestionsForStorage(questions, maxItems = MAX_BUCKET_QUESTIONS) {
@@ -156,6 +218,7 @@
   function teardownInstance() {
     isDestroyed = true;
     if (timerInterval) clearInterval(timerInterval);
+    if (pdfTimerInterval) clearInterval(pdfTimerInterval);
     if (scanIntervalId) clearInterval(scanIntervalId);
     if (scanDebounceTimer) clearTimeout(scanDebounceTimer);
     if (promptDismissTimer) clearTimeout(promptDismissTimer);
@@ -185,11 +248,36 @@
   function loadInitialState() {
     if (!isExtensionContextValid()) return;
     try {
-      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, GOAL_KEY, ACTIVE_USER_KEY, ACTIVE_USER_LABEL_KEY, PENDING_FILTER_KEY, LAST_FILTER_DIAG_KEY], (res) => {
-        if (chrome.runtime.lastError || isDestroyed) return;
-        cachedActiveUserId = res?.[ACTIVE_USER_KEY] || null;
-        cachedActiveUserLabel = res?.[ACTIVE_USER_LABEL_KEY] || '';
-        updateHudUser();
+      chrome.storage.local.get(
+        [STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, GOAL_KEY, ACTIVE_USER_KEY, ACTIVE_USER_LABEL_KEY, PENDING_FILTER_KEY, LAST_FILTER_DIAG_KEY, TODAY_MISSION_KEY, SUBJECT_SPEEDS_KEY, FILTER_ID_MEMORY_KEY, FILTER_MEMORY_CLOUD_KEY],
+        (res) => {
+          if (chrome.runtime.lastError || isDestroyed) return;
+          cachedActiveUserId = res?.[ACTIVE_USER_KEY] || null;
+          cachedActiveUserLabel = res?.[ACTIVE_USER_LABEL_KEY] || '';
+          if (res?.[TODAY_MISSION_KEY]) cachedTodayMission = res[TODAY_MISSION_KEY];
+          if (res?.[SUBJECT_SPEEDS_KEY] && typeof res[SUBJECT_SPEEDS_KEY] === 'object') {
+            cachedSubjectSpeeds = res[SUBJECT_SPEEDS_KEY];
+          }
+          // #56: Mescla memória de filtros vinda da nuvem sem perder seleções locais mais novas
+          const cloudMem = res?.[FILTER_MEMORY_CLOUD_KEY];
+          if (cloudMem && typeof cloudMem === 'object' && Object.keys(cloudMem).length > 0) {
+            const localMem = (res?.[FILTER_ID_MEMORY_KEY] && typeof res[FILTER_ID_MEMORY_KEY] === 'object')
+              ? { ...res[FILTER_ID_MEMORY_KEY] }
+              : {};
+            let mergedChanged = false;
+            Object.entries(cloudMem).forEach(([k, v]) => {
+              if (!v || typeof v !== 'object') return;
+              if (!localMem[k] || (Number(v.updatedAt) || 0) > (Number(localMem[k].updatedAt) || 0)) {
+                localMem[k] = v;
+                mergedChanged = true;
+              }
+            });
+            if (mergedChanged) {
+              chrome.storage.local.set({ [FILTER_ID_MEMORY_KEY]: localMem });
+            }
+          }
+          updateHudUser();
+          updateContextualHud();
         const savedDiag = res?.[LAST_FILTER_DIAG_KEY];
         if (savedDiag && savedDiag.savedAt && (Date.now() - savedDiag.savedAt) < 25000) {
           if (savedDiag.diagLog) lastFilterDiagnosticLog = savedDiag.diagLog;
@@ -295,6 +383,14 @@
             cachedDailyGoal = Number(changes[GOAL_KEY].newValue) || 50;
             updateHudGoal();
           }
+          if (changes[TODAY_MISSION_KEY]) {
+            cachedTodayMission = changes[TODAY_MISSION_KEY].newValue || null;
+            updateContextualHud();
+          }
+          if (changes[SUBJECT_SPEEDS_KEY]) {
+            cachedSubjectSpeeds = changes[SUBJECT_SPEEDS_KEY].newValue || {};
+            updateContextualHud();
+          }
         }
       });
     } catch (_) {}
@@ -313,6 +409,319 @@
         }
       });
     } catch (_) {}
+  }
+
+  // --- HELPERS DAS 15 INTEGRAÇÕES v2.0.0 (#1, #2, #27, #29, #30, #31) ---
+  function resolveSubjectSpeedForContext(contextTitle = '') {
+    if (!cachedSubjectSpeeds || typeof cachedSubjectSpeeds !== 'object') return 1;
+    const normCtx = normalizeFilterText(contextTitle);
+    const inferred = inferSubjectFromLessons([contextTitle], contextTitle) || '';
+    const normInf = normalizeFilterText(inferred);
+    for (const [subName, spd] of Object.entries(cachedSubjectSpeeds)) {
+      const sNorm = normalizeFilterText(subName);
+      if (!sNorm) continue;
+      if ((normInf && (sNorm === normInf || sNorm.includes(normInf) || normInf.includes(sNorm))) ||
+          (normCtx && (normCtx.includes(sNorm) || sNorm.includes(normCtx)))) {
+        const num = Number(spd);
+        if (Number.isFinite(num) && num >= 0.5 && num <= 4) return num;
+      }
+    }
+    return 1;
+  }
+
+  function applySubjectVideoSpeedInPlayground() {
+    if (!isCoursePlaygroundPage()) return;
+    const lessonTitle = currentCourseIndexStatus?.lessonTitle || extractCourseLessonTitle() || document.title || '';
+    const targetSpeed = resolveSubjectSpeedForContext(lessonTitle);
+    const speedBadge = document.getElementById('qg-hud-speed-badge');
+    if (speedBadge) {
+      if (targetSpeed !== 1) {
+        speedBadge.style.display = 'inline-flex';
+        speedBadge.textContent = `⚡ Velocidade QG: ${targetSpeed}x`;
+      } else {
+        speedBadge.style.display = 'none';
+      }
+    }
+    if (targetSpeed === 1 && lastPlaygroundSpeedApplied === 0) return;
+    lastPlaygroundSpeedApplied = targetSpeed;
+
+    try {
+      document.querySelectorAll('video').forEach((v) => {
+        if (v && Number.isFinite(targetSpeed) && Math.abs((v.playbackRate || 1) - targetSpeed) > 0.01) {
+          v.playbackRate = targetSpeed;
+        }
+        if (v && !observedVideos.has(v)) {
+          observedVideos.add(v);
+          v.addEventListener('ended', () => {
+            showLessonCompletedBanner();
+          });
+        }
+      });
+      // Fallback seguro via postMessage para player embarcado (quando suportado)
+      document.querySelectorAll('iframe').forEach((fr) => {
+        try {
+          if (fr?.contentWindow && targetSpeed !== 1) {
+            fr.contentWindow.postMessage({ method: 'setPlaybackRate', value: targetSpeed }, '*');
+          }
+        } catch (_) {}
+      });
+    } catch (_) {}
+  }
+
+  function showLessonCompletedBanner() {
+    const banner = document.getElementById('qg-hud-course-completed-banner');
+    if (banner) {
+      banner.style.display = 'flex';
+    }
+  }
+
+  function detectCurrentPlaygroundLessonCompleted() {
+    try {
+      const videoId = new URLSearchParams(window.location.search || '').get('course_video_id') || '';
+      const activeItems = Array.from(document.querySelectorAll('.q-item--active, [class*="active-lesson"], [class*="selected"], a[href*="course_video_id"]'))
+        .filter((el) => !videoId || String(el.getAttribute('href') || el.innerHTML || '').includes(videoId));
+
+      for (const el of activeItems) {
+        const chk = el.querySelector('.q-checkbox[aria-checked="true"], input[type="checkbox"]:checked, .q-toggle[aria-checked="true"]');
+        if (chk) return true;
+        const icons = Array.from(el.querySelectorAll('.material-icons, i, svg'));
+        if (icons.some((ic) => /check_circle|task_alt|done_all/i.test((ic.textContent || '') + ' ' + (ic.className || '')))) {
+          return true;
+        }
+      }
+      // Também verifica botão/toggle principal de "Concluir aula" na toolbar do player
+      const toggleBtns = Array.from(document.querySelectorAll('.q-checkbox[aria-checked], .q-btn, button')).filter((el) => {
+        if (el.closest('#qg-caveira-hud')) return false;
+        const txt = normalizeFilterText(el.innerText || el.textContent || '');
+        return txt.includes('aula concluida') || txt.includes('concluida');
+      });
+      if (toggleBtns.some((b) => b.getAttribute('aria-checked') === 'true' || b.classList.contains('bg-positive') || /aula\s+concluida/.test(normalizeFilterText(b.innerText || '')))) {
+        return true;
+      }
+    } catch (_) {}
+    return false;
+  }
+
+  function observeLessonCompletionOnPlayground() {
+    if (!isCoursePlaygroundPage()) return;
+    const key = window.location.href;
+    const isNowCompleted = detectCurrentPlaygroundLessonCompleted();
+    const prev = lessonCompletionStateByUrl.get(key);
+    if (prev === false && isNowCompleted === true) {
+      showLessonCompletedBanner();
+    }
+    lessonCompletionStateByUrl.set(key, isNowCompleted);
+  }
+
+  function scrapeCourseCatalogAndSync() {
+    const modulesMap = new Map();
+    const courseIdMatch = window.location.pathname.match(/\/courses\/(\d+)/i);
+    const courseId = courseIdMatch ? courseIdMatch[1] : '12';
+    const courseName = (document.querySelector('h1, h2, .text-h5, .text-h6')?.innerText || 'Curso Caveira PRF').trim();
+
+    const activeModEl = document.querySelector('.q-item--active, [aria-selected="true"].q-item, [class*="module"].active');
+    const activeModName = (activeModEl?.innerText || activeModEl?.textContent || '').split(/\r?\n/)[0]?.trim() || courseName;
+
+    const lessonLinks = Array.from(document.querySelectorAll('a[href*="course_video_id"], [data-course-video-id], .q-expansion-item, .q-item'))
+      .filter((el) => !el.closest('#qg-caveira-hud') && isElementVisible(el));
+
+    const lessons = [];
+    const seenLessonKeys = new Set();
+
+    lessonLinks.forEach((el) => {
+      const href = el.getAttribute('href') || el.querySelector('a[href*="course_video_id"]')?.getAttribute('href') || '';
+      let videoId = el.getAttribute('data-course-video-id') || '';
+      if (!videoId && href) {
+        const m = href.match(/course_video_id=(\d+)/i);
+        if (m) videoId = m[1];
+      }
+      const rawText = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      if (!rawText || rawText.length < 4 || rawText.length > 180) return;
+      if (!href && !/\d{1,2}:\d{2}/.test(rawText) && !/\baula\b/i.test(rawText)) return;
+
+      const durMatch = rawText.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
+      let durationMin = 0;
+      if (durMatch) {
+        durationMin = durMatch[3] !== undefined
+          ? Math.round(Number(durMatch[1]) * 60 + Number(durMatch[2]) + Number(durMatch[3]) / 60)
+          : Math.max(1, Math.round(Number(durMatch[1]) + Number(durMatch[2]) / 60));
+      }
+      const title = rawText
+        .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, '')
+        .replace(/\b(?:assistir|conclu[íi]da|play_arrow|check_circle|done)\b/gi, '')
+        .trim();
+      if (!title || title.length < 3) return;
+      const dedupKey = videoId ? `vid:${videoId}` : normalizeCourseIndexKey(title);
+      if (seenLessonKeys.has(dedupKey)) return;
+      seenLessonKeys.add(dedupKey);
+
+      const completed = Boolean(
+        el.querySelector('.q-checkbox[aria-checked="true"], input[type="checkbox"]:checked') ||
+        Array.from(el.querySelectorAll('.material-icons, i')).some((i) => /check_circle|task_alt|done/i.test(i.textContent || ''))
+      );
+      const url = href
+        ? (href.startsWith('http') ? href : `${window.location.origin}${href.startsWith('/') ? '' : '/'}${href}`)
+        : '';
+
+      lessons.push({ id: videoId || null, title, durationMin, completed, url });
+    });
+
+    // Agrupa sob o módulo ativo ou cabeçalho visível
+    if (lessons.length > 0) {
+      modulesMap.set(activeModName, { name: activeModName, lessons });
+    }
+
+    const payload = {
+      courseId,
+      courseName,
+      modules: Array.from(modulesMap.values()),
+      syncedAt: Date.now()
+    };
+
+    try {
+      chrome.storage.local.set({ [PENDING_CATALOG_KEY]: payload }, () => {
+        flushPendingQgEvents();
+      });
+    } catch (_) {}
+
+    return { modulesCount: payload.modules.length, lessonsCount: lessons.length };
+  }
+
+  function scrapeSimuladosAndImport() {
+    const cards = Array.from(document.querySelectorAll('.q-card, table tbody tr, .q-item'))
+      .filter((el) => !el.closest('#qg-caveira-hud') && isElementVisible(el));
+    const results = [];
+    const seen = new Set();
+
+    cards.forEach((card, idx) => {
+      const text = (card.innerText || card.textContent || '').replace(/\n+/g, ' | ').replace(/\s+/g, ' ').trim();
+      if (!text || text.length < 10) return;
+
+      const scoreRatioMatch = text.match(/(\d{1,3})\s*(?:\/|de)\s*(\d{1,3})/i);
+      const pctMatch = text.match(/(\d{1,3}(?:[.,]\d+)?)\s*%/);
+      if (!scoreRatioMatch && !pctMatch) return;
+
+      const total = scoreRatioMatch ? Number(scoreRatioMatch[2]) : 120;
+      const hits = scoreRatioMatch ? Number(scoreRatioMatch[1]) : Math.round(((parseFloat(pctMatch[1].replace(',', '.')) || 0) / 100) * total);
+      if (!total || hits > total) return;
+
+      const pct = pctMatch ? Math.round(parseFloat(pctMatch[1].replace(',', '.'))) : Math.round((hits / total) * 100);
+      const dateMatch = text.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/) || text.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+      const dataStr = dateMatch
+        ? (dateMatch[3] ? `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}` : dateMatch[1])
+        : getTodaySessionDate();
+
+      const parts = text.split('|').map(s => s.trim()).filter(s => s.length >= 4 && !/^\d{2}\/\d{2}\/\d{4}$/.test(s) && !/^\d+%$/.test(s));
+      const title = (parts[0] || `Simulado Caveira #${idx + 1}`).slice(0, 90);
+      const href = card.getAttribute('href') || card.querySelector('a')?.getAttribute('href') || '';
+      const idMatch = href.match(/(\d{2,})/);
+      const caveiraId = idMatch ? `sim_${idMatch[1]}` : `sim_${normalizeCourseIndexKey(title).slice(0, 32)}_${dataStr}_${hits}`;
+      if (seen.has(caveiraId)) return;
+      seen.add(caveiraId);
+
+      results.push({
+        caveiraId,
+        title,
+        data: dataStr,
+        total,
+        hits,
+        errors: Math.max(0, total - hits),
+        pct,
+        liquida: hits - Math.max(0, total - hits),
+        ...(href ? { url: href.startsWith('http') ? href : `${window.location.origin}${href}` } : {})
+      });
+    });
+
+    if (results.length > 0) {
+      try {
+        chrome.storage.local.set({ [PENDING_SIMULADOS_KEY]: { simulados: results, savedAt: Date.now() } }, () => {
+          flushPendingQgEvents();
+        });
+      } catch (_) {}
+    }
+    return results.length;
+  }
+
+  function startPdfTimerLoop() {
+    if (pdfTimerInterval) return;
+    pdfTimerInterval = setInterval(() => {
+      if (isDestroyed) return;
+      if (isPdfSummariesPage() && !document.hidden) {
+        pdfReadingSeconds += 1;
+        const timerEl = document.getElementById('qg-pdf-timer-text');
+        if (timerEl) {
+          const m = Math.floor(pdfReadingSeconds / 60);
+          const s = pdfReadingSeconds % 60;
+          timerEl.textContent = `📄 Lendo PDF • ${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        }
+      }
+    }, 1000);
+  }
+
+  function updateContextualHud() {
+    const ctxBox = document.getElementById('qg-hud-contextual-actions');
+    if (!ctxBox) return;
+
+    const missionRow = document.getElementById('qg-ctx-today-mission');
+    const catalogRow = document.getElementById('qg-ctx-course-catalog');
+    const simRow = document.getElementById('qg-ctx-simulados');
+    const pdfRow = document.getElementById('qg-ctx-pdf-tracker');
+
+    let anyVisible = false;
+
+    // #27 Missão de Hoje em /questions
+    if (missionRow) {
+      const subjects = Array.isArray(cachedTodayMission?.subjects) ? cachedTodayMission.subjects : [];
+      if (isQuestionsPage() && subjects.length > 0) {
+        const pending = subjects.filter(s => !s.completed);
+        const list = pending.length > 0 ? pending : subjects;
+        const picked = list[todayMissionIdx % list.length];
+        const btn = document.getElementById('qg-btn-today-mission');
+        if (btn && picked) {
+          btn.textContent = `⚡ Missão: ${picked.name}`;
+          btn.title = picked.topic ? `${picked.name} → ${picked.topic}` : picked.name;
+        }
+        const nextBtn = document.getElementById('qg-btn-today-next');
+        if (nextBtn) nextBtn.style.display = list.length > 1 ? 'inline-flex' : 'none';
+        missionRow.style.display = 'flex';
+        anyVisible = true;
+      } else {
+        missionRow.style.display = 'none';
+      }
+    }
+
+    // #1 Catálogo de Cursos em /courses/:id
+    if (catalogRow) {
+      if (isCourseCatalogPage()) {
+        catalogRow.style.display = 'flex';
+        anyVisible = true;
+      } else {
+        catalogRow.style.display = 'none';
+      }
+    }
+
+    // #2 Importar Simulados em /teams e /personal-practice-exams
+    if (simRow) {
+      if (isSimuladosPage()) {
+        simRow.style.display = 'flex';
+        anyVisible = true;
+      } else {
+        simRow.style.display = 'none';
+      }
+    }
+
+    // #31 Tracker de PDF em /smart-summaries
+    if (pdfRow) {
+      if (isPdfSummariesPage()) {
+        startPdfTimerLoop();
+        pdfRow.style.display = 'flex';
+        anyVisible = true;
+      } else {
+        pdfRow.style.display = 'none';
+      }
+    }
+
+    ctxBox.style.display = anyVisible ? 'flex' : 'none';
   }
 
   // --- 1. CRIAÇÃO DO HUD FLUTUANTE ---
@@ -392,12 +801,34 @@
         </div>
 
         <div id="qg-hud-course-actions" style="display:none;flex-direction:column;gap:5px;margin-top:8px;">
+          <span id="qg-hud-speed-badge" style="display:none;align-self:flex-start;background:rgba(14,165,233,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.35);border-radius:6px;padding:2px 7px;font-size:9px;font-weight:900;text-transform:uppercase;">⚡ 1.5x</span>
+          <div id="qg-hud-course-completed-banner" style="display:none;flex-direction:column;gap:5px;padding:7px 9px;border-radius:8px;background:rgba(16,185,129,0.16);border:1px solid rgba(16,185,129,0.45);font-size:10px;font-weight:800;color:#6ee7b7;">
+            <span>🎉 Aula concluída detectada!</span>
+            <button type="button" id="qg-btn-banner-complete" style="width:100%;background:#10b981;color:#052e16;border:none;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:900;text-transform:uppercase;cursor:pointer;">✅ Registrar Aula no QG Agora</button>
+          </div>
           <button type="button" id="qg-btn-course-practice" style="width:100%;background:linear-gradient(90deg,#0284c7,#2563eb);color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:10px;font-weight:900;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 3px 10px rgba(2,132,199,0.3);">
             <span>🎯 Resolver Questões desta Aula</span>
           </button>
           <button type="button" id="qg-btn-course-complete" style="width:100%;background:rgba(16,185,129,0.14);color:#6ee7b7;border:1px solid rgba(16,185,129,0.35);border-radius:8px;padding:6px 10px;font-size:10px;font-weight:800;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;">
             <span>✅ Marcar Aula Assistida no QG</span>
           </button>
+        </div>
+
+        <div id="qg-hud-contextual-actions" style="display:none;flex-direction:column;gap:5px;margin-top:8px;">
+          <div id="qg-ctx-today-mission" style="display:none;gap:4px;align-items:center;">
+            <button type="button" id="qg-btn-today-mission" style="flex:1;background:linear-gradient(90deg,#0ea5e9,#0284c7);color:#fff;border:none;border-radius:8px;padding:6px 9px;font-size:10px;font-weight:900;text-transform:uppercase;cursor:pointer;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">⚡ Missão de Hoje</button>
+            <button type="button" id="qg-btn-today-next" style="background:rgba(14,165,233,0.18);color:#38bdf8;border:1px solid rgba(56,189,248,0.35);border-radius:8px;padding:6px 8px;font-size:10px;font-weight:900;cursor:pointer;" title="Próxima matéria de hoje">↻</button>
+          </div>
+          <div id="qg-ctx-course-catalog" style="display:none;">
+            <button type="button" id="qg-btn-sync-catalog" style="width:100%;background:rgba(14,165,233,0.18);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);border-radius:8px;padding:7px 10px;font-size:10px;font-weight:900;text-transform:uppercase;cursor:pointer;">🔄 Sincronizar Curso com QG</button>
+          </div>
+          <div id="qg-ctx-simulados" style="display:none;">
+            <button type="button" id="qg-btn-import-simulados" style="width:100%;background:rgba(168,85,247,0.2);color:#e9d5ff;border:1px solid rgba(168,85,247,0.45);border-radius:8px;padding:7px 10px;font-size:10px;font-weight:900;text-transform:uppercase;cursor:pointer;">📊 Importar Simulados para o QG</button>
+          </div>
+          <div id="qg-ctx-pdf-tracker" style="display:none;flex-direction:column;gap:4px;padding:7px 9px;border-radius:8px;background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.35);">
+            <span id="qg-pdf-timer-text" style="font-size:10px;font-weight:800;color:#5eead4;">📄 Lendo PDF • 00:00</span>
+            <button type="button" id="qg-btn-log-pdf" style="width:100%;background:#14b8a6;color:#042f2e;border:none;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:900;text-transform:uppercase;cursor:pointer;">✅ Registrar Estudo por PDF no QG</button>
+          </div>
         </div>
 
         <div id="qg-hud-history-box" style="display: none;"></div>
@@ -595,6 +1026,95 @@
         }, 2000);
       }
     });
+
+    hud.querySelector('#qg-btn-banner-complete')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      hud.querySelector('#qg-btn-course-complete')?.click();
+      const banner = document.getElementById('qg-hud-course-completed-banner');
+      if (banner) banner.style.display = 'none';
+    });
+
+    hud.querySelector('#qg-btn-today-next')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      todayMissionIdx += 1;
+      updateContextualHud();
+    });
+
+    hud.querySelector('#qg-btn-today-mission')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const subjects = Array.isArray(cachedTodayMission?.subjects) ? cachedTodayMission.subjects : [];
+      if (subjects.length === 0) return;
+      const pending = subjects.filter(s => !s.completed);
+      const list = pending.length > 0 ? pending : subjects;
+      const picked = list[todayMissionIdx % list.length];
+      if (picked) {
+        applyCaveiraPracticeFilter({
+          subject: picked.name,
+          topic: picked.topic || '',
+          lessons: picked.lesson ? [picked.lesson] : [],
+          fallbackTopic: picked.topic || ''
+        });
+      }
+    });
+
+    hud.querySelector('#qg-btn-sync-catalog')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const btn = e.currentTarget;
+      const res = scrapeCourseCatalogAndSync();
+      if (btn) {
+        const orig = btn.textContent;
+        btn.textContent = res.lessonsCount > 0
+          ? `✓ ${res.lessonsCount} aulas enviadas ao QG!`
+          : '⚠️ Abra um módulo para listar aulas';
+        setTimeout(() => {
+          if (btn && btn.isConnected) btn.textContent = orig;
+        }, 2500);
+      }
+    });
+
+    hud.querySelector('#qg-btn-import-simulados')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const btn = e.currentTarget;
+      const count = scrapeSimuladosAndImport();
+      if (btn) {
+        const orig = btn.textContent;
+        btn.textContent = count > 0
+          ? `✓ ${count} simulado(s) enviado(s) ao QG!`
+          : '⚠️ Nenhum resultado visível nesta tela';
+        setTimeout(() => {
+          if (btn && btn.isConnected) btn.textContent = orig;
+        }, 2500);
+      }
+    });
+
+    hud.querySelector('#qg-btn-log-pdf')?.addEventListener('click', (e) => {
+      e.stopPropagation();
+      const btn = e.currentTarget;
+      const mins = Math.max(1, Math.round(pdfReadingSeconds / 60));
+      const heading = (document.querySelector('h1, h2, .text-h5, .text-h6')?.innerText || document.title || 'PDF Interativo Caveira').trim();
+      const subject = inferSubjectFromLessons([heading], heading) || '';
+      const logItem = { title: heading, subject, minutes: mins, url: window.location.href, loggedAt: Date.now() };
+      try {
+        chrome.storage.local.get([PENDING_PDF_KEY], (res) => {
+          const prevArr = Array.isArray(res?.[PENDING_PDF_KEY]) ? res[PENDING_PDF_KEY] : [];
+          chrome.storage.local.set({ [PENDING_PDF_KEY]: [...prevArr, logItem] }, () => {
+            flushPendingQgEvents();
+          });
+        });
+      } catch (_) {}
+      pdfReadingSeconds = 0;
+      const timerEl = document.getElementById('qg-pdf-timer-text');
+      if (timerEl) timerEl.textContent = '📄 Lendo PDF • 00:00';
+      if (btn) {
+        const orig = btn.textContent;
+        btn.textContent = `✓ +${mins} min enviados ao QG!`;
+        setTimeout(() => {
+          if (btn && btn.isConnected) btn.textContent = orig;
+        }, 2200);
+      }
+    });
+
+    updateContextualHud();
 
     const btnMin = hud.querySelector('#qg-btn-min');
     btnMin.addEventListener('click', (e) => {
@@ -5288,15 +5808,61 @@
 
     const nowIso = new Date().toISOString();
     const resolvedOwnerId = cachedActiveUserId || question.ownerUserId || null;
+    const buildAttemptsList = (prevObj, nextObj) => {
+      const list = [];
+      const addAttempt = (a) => {
+        if (!a) return;
+        const ts = a.timestamp || nowIso;
+        const ms = new Date(ts).getTime() || 0;
+        const hit = Boolean(a.hit);
+        const userChoice = String(a.userChoice || '');
+        const durationSeconds = Number(a.durationSeconds) || 0;
+        const dup = list.some(ex => {
+          const exMs = new Date(ex.timestamp || 0).getTime() || 0;
+          return Math.abs(exMs - ms) <= 5000 && Boolean(ex.hit) === hit && String(ex.userChoice || '') === userChoice;
+        });
+        if (!dup) list.push({ timestamp: ts, hit, userChoice, durationSeconds });
+      };
+      if (prevObj) {
+        if (Array.isArray(prevObj.attempts) && prevObj.attempts.length > 0) {
+          prevObj.attempts.forEach(addAttempt);
+        } else if (prevObj.timestamp || prevObj.userChoice) {
+          addAttempt({
+            timestamp: prevObj.timestamp || prevObj.updatedAt,
+            hit: prevObj.hit,
+            userChoice: prevObj.userChoice,
+            durationSeconds: prevObj.durationSeconds
+          });
+        }
+      }
+      if (!isMetadataUpdateOnly) {
+        addAttempt({
+          timestamp: nextObj.timestamp || nowIso,
+          hit: nextObj.hit,
+          userChoice: nextObj.userChoice,
+          durationSeconds: nextObj.durationSeconds
+        });
+      }
+      return list;
+    };
+
     const existingIdx = questionsCache.findIndex(q => q && q.id === question.id);
     if (existingIdx >= 0) {
       const prev = questionsCache[existingIdx];
+      const communityCorrectPct = question.communityCorrectPct !== undefined ? question.communityCorrectPct : prev.communityCorrectPct;
+      const communityErrorPct = question.communityErrorPct !== undefined
+        ? question.communityErrorPct
+        : (communityCorrectPct !== undefined && communityCorrectPct !== null ? Math.max(0, Math.min(100, Math.round(100 - communityCorrectPct))) : prev.communityErrorPct);
+      const hitVal = Boolean(question.hit !== undefined ? question.hit : prev.hit);
       questionsCache[existingIdx] = {
         ...prev,
         ...question,
         ...(resolvedOwnerId ? { ownerUserId: resolvedOwnerId } : {}),
+        attempts: buildAttemptsList(prev, question),
         teacherComment: question.teacherComment || prev.teacherComment || '',
-        userNote: question.userNote !== undefined ? question.userNote : (prev.userNote || ''),
+        commentSource: question.commentSource || prev.commentSource || ((question.teacherComment || prev.teacherComment) ? 'professor' : ''),
+        userNote: (question.userNote !== undefined && question.userNote !== '') ? question.userNote : (prev.userNote || ''),
+        ...(communityCorrectPct !== undefined && communityCorrectPct !== null ? { communityCorrectPct, communityErrorPct, isPegadinha: communityErrorPct >= 65, isAvoidableError: !hitVal && communityCorrectPct >= 65 } : {}),
         alternatives: (Array.isArray(question.alternatives) && question.alternatives.length > 0)
           ? question.alternatives
           : (prev.alternatives || null),
@@ -5306,6 +5872,7 @@
       questionsCache.unshift({
         ...question,
         ...(resolvedOwnerId ? { ownerUserId: resolvedOwnerId } : {}),
+        attempts: buildAttemptsList(null, question),
         updatedAt: question.updatedAt || nowIso
       });
     }
@@ -5828,58 +6395,184 @@
     return '';
   }
 
+  function extractCommunityStatsFromNode(rootNode) {
+    if (!rootNode) return null;
+    const text = (rootNode.innerText || rootNode.textContent || '').replace(/\s+/g, ' ').trim();
+    if (!text) return null;
+    let correctPct = null;
+    let errorPct = null;
+    const corrMatch = text.match(/(\d{1,3}(?:[.,]\d+)?)\s*%\s*(?:acert|corret)|(?:acertos?|acertaram)[^%\d]{0,20}(\d{1,3}(?:[.,]\d+)?)\s*%/i);
+    if (corrMatch) {
+      correctPct = Math.round(parseFloat((corrMatch[1] || corrMatch[2]).replace(',', '.')));
+    }
+    const errMatch = text.match(/(\d{1,3}(?:[.,]\d+)?)\s*%\s*(?:err|incorret)|(?:erros?|erraram)[^%\d]{0,20}(\d{1,3}(?:[.,]\d+)?)\s*%/i);
+    if (errMatch) {
+      errorPct = Math.round(parseFloat((errMatch[1] || errMatch[2]).replace(',', '.')));
+    }
+    if (correctPct !== null && (correctPct < 0 || correctPct > 100)) correctPct = null;
+    if (errorPct !== null && (errorPct < 0 || errorPct > 100)) errorPct = null;
+    if (correctPct === null && errorPct !== null) correctPct = Math.max(0, Math.min(100, 100 - errorPct));
+    if (errorPct === null && correctPct !== null) errorPct = Math.max(0, Math.min(100, 100 - correctPct));
+    if (correctPct === null) return null;
+    return { communityCorrectPct: correctPct, communityErrorPct: errorPct };
+  }
+
+  function extractPrivateNoteFromCard(card) {
+    if (!card) return '';
+    const panels = Array.from(card.querySelectorAll('.q-tab-panel, [role="tabpanel"]'));
+    for (const p of panels) {
+      if (!isElementVisible(p)) continue;
+      const ta = p.querySelector('textarea');
+      if (ta && ta.value && ta.value.trim().length > 2) {
+        return ta.value.trim().slice(0, 1000);
+      }
+      const ce = p.querySelector('[contenteditable="true"]');
+      if (ce && ce.innerText && ce.innerText.trim().length > 2) {
+        return ce.innerText.trim().slice(0, 1000);
+      }
+      const savedNote = p.querySelector('.note-content, .anotacao, p, .q-item__label');
+      if (savedNote && savedNote.innerText) {
+        const t = savedNote.innerText.trim();
+        if (t.length > 3 && !/nenhuma anota|digite sua anota|adicionar anota/i.test(t)) {
+          return t.slice(0, 1000);
+        }
+      }
+    }
+    return '';
+  }
+
+  function extractCharlieOrStudentCommentFromCard(card) {
+    if (!card) return '';
+    const panels = Array.from(card.querySelectorAll('.q-tab-panel, [role="tabpanel"], .comments-list, .q-list'));
+    for (const node of panels) {
+      if (!isElementVisible(node)) continue;
+      const txt = (node.innerText || node.textContent || '').replace(/\n{3,}/g, '\n\n').trim();
+      if (!txt || txt.length <= 50) continue;
+      if (
+        /^(?:carregando|gerando|nenhum coment|pergunte ao charlie|digite seu coment)/i.test(txt) ||
+        txt.includes('Estatísticas da questão')
+      ) {
+        continue;
+      }
+      return txt.slice(0, 2500);
+    }
+    return '';
+  }
+
   function triggerSilentTeacherCommentCapture(card, qId) {
     if (!card || !qId || autoCommentAttemptedQIds.has(qId)) return;
-    if (extractTeacherCommentFromCard(card)) {
-      autoCommentAttemptedQIds.add(qId);
-      return;
-    }
+    autoCommentAttemptedQIds.add(qId);
+
     const tabs = Array.from(card.querySelectorAll('.q-tab, [role="tab"], button, .q-btn')).filter(el => {
       if (!el || el.closest('#qg-caveira-hud') || !isElementVisible(el)) return false;
       const r = el.getBoundingClientRect();
       return r.width >= 30 && r.height >= 18 && r.height <= 56;
     });
-    const teacherTab = tabs.find(t => {
-      const tText = normalizeFilterText(t.innerText || t.textContent);
-      return (
-        tText === 'comentario do professor' ||
-        tText === 'comentarios do professor' ||
-        tText === 'gabarito comentado' ||
-        tText === 'professor' ||
-        (tText.includes('comentario') && tText.includes('professor')) ||
-        tText === 'comentario'
-      );
-    });
-    if (!teacherTab) return;
 
-    autoCommentAttemptedQIds.add(qId);
+    const findTab = (matcher) => tabs.find(t => matcher(normalizeFilterText(t.innerText || t.textContent)));
+    const teacherTab = findTab(tText =>
+      tText === 'comentario do professor' ||
+      tText === 'comentarios do professor' ||
+      tText === 'gabarito comentado' ||
+      tText === 'professor' ||
+      (tText.includes('comentario') && tText.includes('professor')) ||
+      tText === 'comentario'
+    );
+    const charlieTab = findTab(tText => tText.includes('charlie'));
+    const studentTab = findTab(tText => tText === 'comentarios' || tText === 'comentarios alunos' || (tText.includes('coment') && !tText.includes('professor')));
+    const notesTab = findTab(tText => tText.includes('anotac'));
+    const statsTab = findTab(tText => tText.includes('estatist'));
+
     const activeTabBefore = tabs.find(t =>
       t.getAttribute('aria-selected') === 'true' ||
       t.classList.contains('q-tab--active') ||
       /\bactive\b/i.test(t.className || '')
     ) || null;
 
-    const alreadyOnTeacherTab = activeTabBefore === teacherTab;
-    if (!alreadyOnTeacherTab) {
-      teacherTab.click();
+    const patch = {};
+    // Verifica estatísticas e comentário visíveis imediatamente
+    const inlineStats = extractCommunityStatsFromNode(card.querySelector('.stats-box') || card);
+    if (inlineStats) Object.assign(patch, inlineStats);
+
+    const immediateProf = extractTeacherCommentFromCard(card);
+    if (immediateProf) {
+      patch.teacherComment = immediateProf;
+      patch.commentSource = 'professor';
     }
 
-    const checkAndRestore = (shouldRestore) => {
-      if (isDestroyed || !card.isConnected) return;
-      const captured = extractTeacherCommentFromCard(card);
-      if (captured) {
-        const existing = questionsCache.find(item => item && item.id === qId);
-        if (existing && !existing.teacherComment) {
-          saveQuestion({ ...existing, teacherComment: captured }, true);
-        }
-      }
-      if (shouldRestore && !alreadyOnTeacherTab && activeTabBefore && activeTabBefore.isConnected) {
-        activeTabBefore.click();
-      }
+    const waitMs = (ms) => new Promise(r => setTimeout(r, ms));
+    const saveScrollAndClick = async (tabEl, delay = 260) => {
+      if (!tabEl || !card.isConnected || isDestroyed) return false;
+      const yBefore = window.scrollY;
+      tabEl.click();
+      if (Math.abs(window.scrollY - yBefore) > 4) window.scrollTo({ top: yBefore, behavior: 'instant' });
+      await waitMs(delay);
+      return !isDestroyed && card.isConnected;
     };
 
-    setTimeout(() => checkAndRestore(false), 260);
-    setTimeout(() => checkAndRestore(true), 600);
+    (async () => {
+      try {
+        const existing = questionsCache.find(item => item && item.id === qId) || {};
+        if (!patch.teacherComment && !existing.teacherComment && teacherTab && teacherTab !== activeTabBefore) {
+          if (await saveScrollAndClick(teacherTab, 320)) {
+            const profTxt = extractTeacherCommentFromCard(card);
+            if (profTxt) {
+              patch.teacherComment = profTxt;
+              patch.commentSource = 'professor';
+            }
+          }
+        }
+
+        // #3 Fallback Charlie IA ou Comentário da Comunidade se Professor estiver vazio
+        if (!patch.teacherComment && !existing.teacherComment && charlieTab) {
+          if (await saveScrollAndClick(charlieTab, 300)) {
+            const cTxt = extractCharlieOrStudentCommentFromCard(card);
+            if (cTxt) {
+              patch.teacherComment = cTxt;
+              patch.commentSource = 'charlie';
+            }
+          }
+        }
+        if (!patch.teacherComment && !existing.teacherComment && studentTab) {
+          if (await saveScrollAndClick(studentTab, 280)) {
+            const sTxt = extractCharlieOrStudentCommentFromCard(card);
+            if (sTxt) {
+              patch.teacherComment = sTxt;
+              patch.commentSource = 'aluno';
+            }
+          }
+        }
+
+        // #3 Captura Anotações privadas
+        if (notesTab && !existing.userNote) {
+          if (await saveScrollAndClick(notesTab, 220)) {
+            const noteTxt = extractPrivateNoteFromCard(card);
+            if (noteTxt) patch.userNote = noteTxt;
+          }
+        }
+
+        // #12 Captura % de acertos da comunidade (Estatísticas)
+        if (!patch.communityCorrectPct && existing.communityCorrectPct === undefined && statsTab) {
+          if (await saveScrollAndClick(statsTab, 220)) {
+            const st = extractCommunityStatsFromNode(card.querySelector('.q-tab-panel') || card);
+            if (st) Object.assign(patch, st);
+          }
+        }
+
+        if (activeTabBefore && activeTabBefore.isConnected) {
+          const yBefore = window.scrollY;
+          activeTabBefore.click();
+          if (Math.abs(window.scrollY - yBefore) > 4) window.scrollTo({ top: yBefore, behavior: 'instant' });
+        }
+
+        if (Object.keys(patch).length > 0 && card.isConnected && !isDestroyed) {
+          const latest = questionsCache.find(item => item && item.id === qId);
+          if (latest) {
+            saveQuestion({ ...latest, ...patch }, true);
+          }
+        }
+      } catch (_) {}
+    })();
   }
 
   // --- 7. VARREDURA DE CARDS E DETECÇÃO DE VIEWPORT ---
@@ -5891,8 +6584,12 @@
     createHud();
     if (!isStorageLoaded) return;
 
+    updateContextualHud();
+
     if (isCoursePage()) {
       scanCourseVideoIndex();
+      applySubjectVideoSpeedInPlayground();
+      observeLessonCompletionOnPlayground();
     } else {
       const courseActionsEl = document.getElementById('qg-hud-course-actions');
       if (courseActionsEl) courseActionsEl.style.display = 'none';
@@ -5927,13 +6624,13 @@
         }
       }
 
-      // Se a questão já estava salva e ainda não tem o Comentário do Professor, captura automaticamente!
+      // Se a questão já estava salva e falta comentário, nota privada ou estatística da comunidade, captura silenciosamente!
       if (savedQuestionIds.has(qId)) {
         const existing = questionsCache.find(item => item && item.id === qId);
-        if (existing && !existing.teacherComment) {
-          const commentTxt = extractTeacherCommentFromCard(card);
+        if (existing && (!existing.teacherComment || existing.communityCorrectPct === undefined)) {
+          const commentTxt = !existing.teacherComment ? extractTeacherCommentFromCard(card) : '';
           if (commentTxt) {
-            saveQuestion({ ...existing, teacherComment: commentTxt }, true);
+            saveQuestion({ ...existing, teacherComment: commentTxt, commentSource: 'professor' }, true);
           } else if (isCardAnswered(card) && !autoCommentAttemptedQIds.has(qId)) {
             setTimeout(() => triggerSilentTeacherCommentCapture(card, qId), 350);
           }
@@ -5966,7 +6663,7 @@
             saveQuestion(questionData, false);
             renderQuestionHistory(qId, true);
             showPrompt(questionData);
-            if (!questionData.teacherComment) {
+            if (!questionData.teacherComment || questionData.communityCorrectPct === undefined || !questionData.userNote) {
               setTimeout(() => triggerSilentTeacherCommentCapture(card, qId), 380);
             }
           }

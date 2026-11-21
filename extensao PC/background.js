@@ -234,6 +234,23 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === 'FLUSH_PENDING_QG_EVENTS') {
+    (async () => {
+      try {
+        const qgTabs = chrome.tabs ? await chrome.tabs.query({ url: QG_URL_PATTERNS }) : [];
+        for (const tab of (qgTabs || [])) {
+          if (tab.id && !tab.discarded) {
+            chrome.tabs.sendMessage(tab.id, { type: 'FLUSH_PENDING_QG_EVENTS' }).catch(() => {});
+          }
+        }
+        sendResponse({ success: true, tabs: (qgTabs || []).length });
+      } catch (_) {
+        sendResponse({ success: false });
+      }
+    })();
+    return true;
+  }
+
   if (message.type === 'OPEN_QG_LESSON_COMPLETE') {
     (async () => {
       try {

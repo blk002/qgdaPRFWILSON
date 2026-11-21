@@ -86,10 +86,14 @@ export default function DueloFPS() {
   const [runHistory, setRunHistory] = useState<AnsweredHistoryItem[]>([]);
   const [vadeMecumFilter, setVadeMecumFilter] = useState<'ALL' | 'CTB' | 'CONTRAN'>('ALL');
   const [vadeMecumSearch, setVadeMecumSearch] = useState<string>('');
+  const [deckMode, setDeckMode] = useState<'default' | 'caveira'>('default');
+
+  const rawCaveiraQuestions = useStore((s: any) => s.caveiraQuestions);
 
   // Registro de assertivas já vistas para evitar repetição 100% igual
   const seenStatementsRef = useRef<Set<string>>(new Set());
   const seenCuratedIdsRef = useRef<Set<string>>(new Set());
+  const seenCaveiraIdsRef = useRef<Set<string>>(new Set());
   const usedBaseIdsInCycleRef = useRef<{ CTB: Set<string>; CONTRAN: Set<string> }>({
     CTB: new Set(),
     CONTRAN: new Set(),
@@ -98,6 +102,42 @@ export default function DueloFPS() {
   const containerRef = useRef<HTMLDivElement | null>(null);
   const executionTimerRef = useRef<number | null>(null);
   const [isFullscreen, setIsFullscreen] = useState<boolean>(false);
+
+  const caveiraBloco2Deck: ActiveRoundQuestion[] = useMemo(() => {
+    const list: any[] = Array.isArray(rawCaveiraQuestions) ? rawCaveiraQuestions : [];
+    const filtered = list.filter((q) => {
+      if (!q || !q.id || String(q.id).startsWith('fps-')) return false;
+      const hay = `${q.bloco || ''} ${q.canonicalSubject || ''} ${q.subject || ''} ${q.topic || ''}`;
+      const isBloco2 = q.bloco === 'Bloco II' || /tr[âa]nsito|ctb|contran/i.test(hay);
+      if (!isBloco2) return false;
+      const content = String(q.content || '').trim();
+      if (content.length < 20) return false;
+      const corr = String(q.correctChoice || '').trim().toUpperCase();
+      const isCE = ['C', 'E', 'CERTO', 'ERRADO'].includes(corr) && (!Array.isArray(q.alternatives) || q.alternatives.length <= 2);
+      return isCE;
+    });
+
+    // Prioriza erros reais do Caveira antes de acertos
+    const sorted = [...filtered].sort((a, b) => {
+      if (Boolean(a.hit) !== Boolean(b.hit)) return a.hit ? 1 : -1;
+      return new Date(b.timestamp || 0).getTime() - new Date(a.timestamp || 0).getTime();
+    });
+
+    return sorted.map((q) => {
+      const corr = String(q.correctChoice || '').trim().toUpperCase();
+      const isContran = /contran|resolu[çc]/i.test(`${q.canonicalSubject || ''} ${q.subject || ''} ${q.topic || ''} ${q.content || ''}`);
+      return {
+        id: `caveira-${q.id}`,
+        uniqueHash: `caveira-${q.id}`,
+        category: isContran ? 'CONTRAN' : 'CTB',
+        topic: q.topic || q.canonicalSubject || 'Bloco II • Caveira',
+        legalBasis: `Caveira ${q.id} (${q.hit ? 'Acerto' : 'Erro Real'})`,
+        statement: String(q.content || '').trim(),
+        answer: corr === 'C' || corr === 'CERTO',
+        explanation: String(q.teacherComment || q.userNote || 'Questão real importada do seu histórico do Projeto Caveira.').trim(),
+      };
+    });
+  }, [rawCaveiraQuestions]);
 
   useEffect(() => {
     return () => {
@@ -206,10 +246,22 @@ export default function DueloFPS() {
     []
   );
 
-  // Constrói questão priorizando o banco de questões de elite Cebraspe PRF
+  // Constrói questão priorizando o modo selecionado ou banco curado Cebraspe PRF
   const buildUniqueQuestion = useCallback(
     (targetCategory: QuestionCategory, topicOverride?: PRFTopicMetadata): ActiveRoundQuestion => {
       totalGeneratedCountRef.current += 1;
+
+      if (deckMode === 'caveira' && caveiraBloco2Deck.length > 0 && !topicOverride) {
+        let pool = caveiraBloco2Deck.filter((q) => !seenCaveiraIdsRef.current.has(q.id));
+        if (pool.length === 0) {
+          seenCaveiraIdsRef.current.clear();
+          pool = caveiraBloco2Deck;
+        }
+        const chosen = pool[Math.floor(Math.random() * pool.length)];
+        seenCaveiraIdsRef.current.add(chosen.id);
+        persistSeenStatement(chosen.statement);
+        return chosen;
+      }
 
       // 1. Prioriza banco curado de elite Cebraspe PRF dos 10 tópicos mais cobrados
       if (!topicOverride) {
@@ -234,7 +286,7 @@ export default function DueloFPS() {
         return q;
       }
     },
-    [persistSeenStatement]
+    [persistSeenStatement, deckMode, caveiraBloco2Deck]
   );
 
   // Alternância Estrita: Rodada 1 = CTB, Rodada 2 = CONTRAN...
@@ -255,6 +307,7 @@ export default function DueloFPS() {
     setDeathReason(null);
     setLastFeedbackBanner(null);
     seenCuratedIdsRef.current.clear();
+    seenCaveiraIdsRef.current.clear();
 
     const firstCategory: QuestionCategory = 'CTB';
     const firstQ = buildUniqueQuestion(firstCategory);
@@ -602,7 +655,43 @@ export default function DueloFPS() {
         </nav>
 
         {/* Controles & Botões da Direita */}
-        <div className="flex items-center gap-2.5 shrink-0">
+        <div className="flex items-center gap-2 shrink-0 flex-wrap">
+          {/* Seletor de Deck: Padrão PRF vs Meus Erros Reais do Caveira (#34) */}
+          <div className="flex items-center bg-zinc-900 border border-zinc-800 rounded-xl p-0.5 text-[10px] font-black uppercase">
+            <button
+              type="button"
+              onClick={() => setDeckMode('default')}
+              className={`px-2 py-1 rounded-lg transition-colors cursor-pointer ${
+                deckMode === 'default'
+                  ? 'bg-sky-500 text-slate-950'
+                  : 'text-zinc-400 hover:text-zinc-200'
+              }`}
+              title="Banco oficial CTB + CONTRAN"
+            >
+              🎯 Padrão PRF
+            </button>
+            <button
+              type="button"
+              disabled={caveiraBloco2Deck.length === 0}
+              onClick={() => setDeckMode('caveira')}
+              className={`px-2 py-1 rounded-lg transition-colors flex items-center gap-1 ${
+                caveiraBloco2Deck.length === 0
+                  ? 'text-zinc-600 cursor-not-allowed opacity-50'
+                  : deckMode === 'caveira'
+                  ? 'bg-rose-500 text-white cursor-pointer'
+                  : 'text-zinc-300 hover:text-rose-300 cursor-pointer'
+              }`}
+              title={
+                caveiraBloco2Deck.length === 0
+                  ? 'Resolva questões Certo/Errado de Bloco II (CTB/CONTRAN) no Projeto Caveira para habilitar'
+                  : `Treinar ${caveiraBloco2Deck.length} questões C/E reais do seu histórico Caveira (erros primeiro)`
+              }
+            >
+              <Skull className="w-3 h-3" />
+              <span>Erros Caveira ({caveiraBloco2Deck.length})</span>
+            </button>
+          </div>
+
           {/* Áudio Mudo */}
           <button
             type="button"

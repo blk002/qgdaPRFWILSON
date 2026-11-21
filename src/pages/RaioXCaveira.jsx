@@ -5,8 +5,14 @@ import {
   RefreshCw, Download, Upload, Trash2, CheckCircle2, XCircle,
   BookOpen, ChevronDown, ChevronUp, Copy, Check,
   BrainCircuit, Skull, Search, MessageSquarePlus, Save, Scale, Layers, Sparkles,
-  Crosshair, ArrowRight, TrendingDown
+  Crosshair, ArrowRight, TrendingDown, Video, Flame
 } from 'lucide-react';
+import {
+  findCourseVideoMatch,
+  computeOvercomingStats,
+  computeForgettingCurveByDiscipline,
+  extractPrfMemorizationRows
+} from '../utils/caveiraAnalytics';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
 
@@ -155,6 +161,7 @@ function formatDurationHMS(totalSec) {
 export default function RaioXCaveira() {
   const {
     caveiraQuestions = [],
+    caveiraCourseIndexMap = {},
     importCaveiraQuestions,
     updateCaveiraQuestion,
     deleteCaveiraQuestion,
@@ -168,7 +175,7 @@ export default function RaioXCaveira() {
   const [selectedBloco, setSelectedBloco] = useState('all'); // 'all' | 'Bloco I' | 'Bloco II' | 'Bloco III'
   const [selectedSubject, setSelectedSubject] = useState('all');
   const [selectedTopic, setSelectedTopic] = useState('all');
-  const [filterType, setFilterType] = useState('all'); // 'all' | 'errors' | 'hits' | 'guesses' | 'attention' | 'theory'
+  const [filterType, setFilterType] = useState('all'); // 'all' | 'errors' | 'hits' | 'guesses' | 'avoidable' | 'pegadinha' | 'attention' | 'theory'
   const [searchQuery, setSearchQuery] = useState('');
   const [expandedSubject, setExpandedSubject] = useState(null);
   const [editingNoteId, setEditingNoteId] = useState(null);
@@ -180,6 +187,10 @@ export default function RaioXCaveira() {
   const [copiedExtensionPath, setCopiedExtensionPath] = useState(false);
   const [selectedLegalDevice, setSelectedLegalDevice] = useState(null);
   const [topicReportScope, setTopicReportScope] = useState('all'); // 'all' | 'bloco2' | 'fps'
+  const [showForgettingMap, setShowForgettingMap] = useState(false);
+  const [showDecorebaTable, setShowDecorebaTable] = useState(false);
+  const [decorebaCategory, setDecorebaCategory] = useState('Todos');
+  const [decorebaSearch, setDecorebaSearch] = useState('');
 
   // Escuta detecção e reset da extensão via bridge (sincronização centralizada em App.jsx)
   useEffect(() => {
@@ -532,6 +543,36 @@ export default function RaioXCaveira() {
     };
   }, [enrichedQuestions, topicReportScope]);
 
+  // Estatísticas derivadas: Superação (#73), Erros Evitáveis & Pegadinhas (#12), Mapa de Esquecimento (#63), Tabela Decoreba (#74)
+  const overcomingStats = useMemo(() => computeOvercomingStats(blockScopedQuestions), [blockScopedQuestions]);
+  const avoidableCount = useMemo(
+    () => blockScopedQuestions.filter(q => q.isAvoidableError || (!q.hit && Number(q.communityCorrectPct) >= 65)).length,
+    [blockScopedQuestions]
+  );
+  const pegadinhaCount = useMemo(
+    () => blockScopedQuestions.filter(q => q.isPegadinha || Number(q.communityErrorPct) >= 65).length,
+    [blockScopedQuestions]
+  );
+  const forgettingCurveRows = useMemo(
+    () => computeForgettingCurveByDiscipline(blockScopedQuestions),
+    [blockScopedQuestions]
+  );
+  const decorebaRows = useMemo(
+    () => extractPrfMemorizationRows(blockScopedQuestions),
+    [blockScopedQuestions]
+  );
+  const filteredDecorebaRows = useMemo(() => {
+    const qLower = decorebaSearch.trim().toLowerCase();
+    return decorebaRows.filter(row => {
+      if (decorebaCategory !== 'Todos' && row.category !== decorebaCategory) return false;
+      if (qLower) {
+        const hay = `${row.highlight} ${row.snippet} ${row.subject} ${row.questionId}`.toLowerCase();
+        if (!hay.includes(qLower)) return false;
+      }
+      return true;
+    });
+  }, [decorebaRows, decorebaCategory, decorebaSearch]);
+
   // Lista de Questões Filtrada para o Caderno Tático
   const filteredQuestions = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
@@ -548,6 +589,8 @@ export default function RaioXCaveira() {
       if (filterType === 'errors' && q.hit) return false;
       if (filterType === 'hits' && !q.hit) return false;
       if (filterType === 'guesses' && q.confidence !== 'chute' && q.confidence !== 'duvida') return false;
+      if (filterType === 'avoidable' && !(q.isAvoidableError || (!q.hit && Number(q.communityCorrectPct) >= 65))) return false;
+      if (filterType === 'pegadinha' && !(q.isPegadinha || Number(q.communityErrorPct) >= 65)) return false;
       if (filterType === 'attention' && (q.hit || q.errorReason !== 'atencao')) return false;
       if (filterType === 'theory' && (q.hit || (q.errorReason && q.errorReason !== 'conteudo'))) return false;
 
@@ -938,6 +981,247 @@ export default function RaioXCaveira() {
           </div>
         );
       })()}
+
+      {/* 2.2. BARRA TÁTICA DE INTELIGÊNCIA CAVEIRA (SUPERAÇÃO, ERROS EVITÁVEIS, ESQUECIMENTO & DECOREBA) */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
+              <Flame className="w-3.5 h-3.5 text-amber-400" /> Taxa de Superação
+            </span>
+            <p className="text-xl font-black text-slate-800 dark:text-white mt-0.5 tabular-nums">
+              {overcomingStats.initiallyMissedRetried > 0 ? `${overcomingStats.ratePct}%` : '—'}
+            </p>
+            <span className="text-[10px] text-slate-500 font-semibold">
+              {overcomingStats.overcomeCount}/{overcomingStats.initiallyMissedRetried} erros superados ({overcomingStats.retriedCount} refeitas)
+            </span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setFilterType(filterType === 'avoidable' ? 'all' : 'avoidable');
+            const el = document.getElementById('caderno-questoes');
+            if (el) el.scrollIntoView({ behavior: 'smooth' });
+          }}
+          className={`glass-card rounded-2xl p-3.5 border text-left transition-all cursor-pointer flex items-center justify-between gap-2 ${
+            filterType === 'avoidable'
+              ? 'border-amber-400 bg-amber-500/10'
+              : 'border-slate-200 dark:border-slate-800 hover:border-amber-500/40'
+          }`}
+        >
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1">
+              <AlertTriangle className="w-3.5 h-3.5" /> Erros Evitáveis (&ge;65% acerto)
+            </span>
+            <p className="text-xl font-black text-slate-800 dark:text-white mt-0.5 tabular-nums">
+              {avoidableCount}
+            </p>
+            <span className="text-[10px] text-slate-500 font-semibold">
+              Clique para filtrar no Caderno
+            </span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setShowForgettingMap(v => !v)}
+          className={`glass-card rounded-2xl p-3.5 border text-left transition-all cursor-pointer flex items-center justify-between gap-2 ${
+            showForgettingMap
+              ? 'border-sky-400 bg-sky-500/10'
+              : 'border-slate-200 dark:border-slate-800 hover:border-sky-500/40'
+          }`}
+        >
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-sky-400 flex items-center gap-1">
+              <Clock className="w-3.5 h-3.5" /> Curva de Esquecimento
+            </span>
+            <p className="text-xl font-black text-slate-800 dark:text-white mt-0.5 tabular-nums">
+              {forgettingCurveRows.length} mat.
+            </p>
+            <span className="text-[10px] text-sky-400 font-bold uppercase">
+              {showForgettingMap ? '▲ Ocultar Mapa' : '▼ Abrir Mapa 0–30d+'}
+            </span>
+          </div>
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setShowDecorebaTable(v => !v)}
+          className={`glass-card rounded-2xl p-3.5 border text-left transition-all cursor-pointer flex items-center justify-between gap-2 ${
+            showDecorebaTable
+              ? 'border-teal-400 bg-teal-500/10'
+              : 'border-slate-200 dark:border-slate-800 hover:border-teal-500/40'
+          }`}
+        >
+          <div>
+            <span className="text-[10px] font-black uppercase tracking-wider text-teal-400 flex items-center gap-1">
+              <Scale className="w-3.5 h-3.5" /> Tabela Decoreba PRF
+            </span>
+            <p className="text-xl font-black text-slate-800 dark:text-white mt-0.5 tabular-nums">
+              {decorebaRows.length} itens
+            </p>
+            <span className="text-[10px] text-teal-400 font-bold uppercase">
+              {showDecorebaTable ? '▲ Ocultar Tabela' : '▼ Prazos, Multas & Penas'}
+            </span>
+          </div>
+        </button>
+      </div>
+
+      {/* PAINEL #63: MAPA DE ESQUECIMENTO REAL POR DISCIPLINA */}
+      {showForgettingMap && (
+        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-sky-500/30 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200/70 dark:border-slate-800">
+            <div>
+              <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
+                <Clock className="w-4 h-4 text-sky-400" /> Mapa de Esquecimento Real por Disciplina
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Comparativo da taxa de acerto entre questões recentes (0–7d) e antigas (16–30d / 30d+). Quedas sinalizam urgência de revisão.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowForgettingMap(false)}
+              className="text-xs font-bold text-slate-400 hover:text-white cursor-pointer"
+            >
+              Fechar ✕
+            </button>
+          </div>
+
+          {forgettingCurveRows.length === 0 ? (
+            <p className="text-xs text-slate-400 py-4 text-center">Resolva mais questões com datas variadas para calcular o decaimento por disciplina.</p>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full text-left text-xs min-w-[600px]">
+                <thead className="text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800">
+                  <tr>
+                    <th className="py-2 pr-3 font-black">Disciplina</th>
+                    <th className="py-2 px-2 text-center font-black">0–7 dias</th>
+                    <th className="py-2 px-2 text-center font-black">8–15 dias</th>
+                    <th className="py-2 px-2 text-center font-black">16–30 dias</th>
+                    <th className="py-2 px-2 text-center font-black">30d+</th>
+                    <th className="py-2 pl-2 text-center font-black">Tendência</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-slate-200/50 dark:divide-slate-800/80">
+                  {forgettingCurveRows.map((row) => {
+                    const renderBucket = (b) => {
+                      if (!b || b.pct === null) return <span className="text-slate-600">—</span>;
+                      const badge = b.pct >= 75
+                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
+                        : b.pct >= 55
+                        ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
+                        : 'bg-red-500/15 text-red-400 border-red-500/30';
+                      return (
+                        <span className={`inline-block px-2 py-0.5 rounded-md border font-mono font-bold ${badge}`}>
+                          {b.pct}% <span className="text-[10px] opacity-75">({b.total})</span>
+                        </span>
+                      );
+                    };
+                    return (
+                      <tr key={row.discipline} className="hover:bg-slate-800/30">
+                        <td className="py-2.5 pr-3 font-bold text-slate-800 dark:text-slate-100">{row.discipline}</td>
+                        <td className="py-2.5 px-2 text-center">{renderBucket(row.buckets.b0_7)}</td>
+                        <td className="py-2.5 px-2 text-center">{renderBucket(row.buckets.b8_15)}</td>
+                        <td className="py-2.5 px-2 text-center">{renderBucket(row.buckets.b16_30)}</td>
+                        <td className="py-2.5 px-2 text-center">{renderBucket(row.buckets.b30p)}</td>
+                        <td className="py-2.5 pl-2 text-center font-mono font-bold">
+                          {row.decayDelta === null ? (
+                            <span className="text-slate-500">—</span>
+                          ) : row.decayDelta < -5 ? (
+                            <span className="text-red-400">{row.decayDelta}% ↓</span>
+                          ) : row.decayDelta > 5 ? (
+                            <span className="text-emerald-400">+{row.decayDelta}% ↑</span>
+                          ) : (
+                            <span className="text-slate-400">Estável</span>
+                          )}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* PAINEL #74: TABELA AUTOMÁTICA DE PRAZOS, MULTAS & PENAS (DECOREBA PRF) */}
+      {showDecorebaTable && (
+        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-teal-500/30 space-y-3">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200/70 dark:border-slate-800">
+            <div>
+              <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
+                <Scale className="w-4 h-4 text-teal-400" /> Tabela Decoreba PRF (Prazos, Multas &amp; Penas)
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Extraída automaticamente dos seus bizus, comentários e questões do Caveira.
+              </p>
+            </div>
+            <div className="flex flex-wrap items-center gap-1.5">
+              {['Todos', 'Prazo', 'Multa/CTB', 'Pena'].map((cat) => (
+                <button
+                  key={cat}
+                  type="button"
+                  onClick={() => setDecorebaCategory(cat)}
+                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase cursor-pointer border ${
+                    decorebaCategory === cat
+                      ? 'bg-teal-500 text-slate-950 border-teal-400'
+                      : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-white'
+                  }`}
+                >
+                  {cat}
+                </button>
+              ))}
+              <input
+                type="text"
+                value={decorebaSearch}
+                onChange={(e) => setDecorebaSearch(e.target.value)}
+                placeholder="Filtrar prazo/valor..."
+                className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-100 outline-none focus:border-teal-400 w-36"
+              />
+            </div>
+          </div>
+
+          {filteredDecorebaRows.length === 0 ? (
+            <p className="text-xs text-slate-400 py-4 text-center">Nenhum prazo, multa ou pena encontrado neste filtro.</p>
+          ) : (
+            <div className="space-y-1.5 max-h-[340px] overflow-y-auto custom-scrollbar pr-1">
+              {filteredDecorebaRows.map((row) => (
+                <div
+                  key={row.id}
+                  className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
+                >
+                  <div className="space-y-0.5 min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="px-2 py-0.5 rounded bg-teal-500/15 text-teal-400 border border-teal-500/30 font-black text-[10px] uppercase">
+                        {row.category}
+                      </span>
+                      <span className="font-black text-amber-400">{row.highlight}</span>
+                      <span className="text-[10px] text-slate-400 font-semibold">• {row.subject} ({row.sourceLabel})</span>
+                    </div>
+                    <p className="text-slate-600 dark:text-slate-300 leading-snug">{row.snippet}</p>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setSearchQuery(row.questionId);
+                      setFilterType('all');
+                      const el = document.getElementById('caderno-questoes');
+                      if (el) el.scrollIntoView({ behavior: 'smooth' });
+                    }}
+                    className="shrink-0 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-sky-600 text-sky-400 hover:text-white font-mono text-[11px] font-bold transition-colors cursor-pointer"
+                  >
+                    {row.questionId} ➔
+                  </button>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
 
       {/* 2.5. RELATÓRIO TÁTICO: ASSUNTOS MAIS ERRADOS (ZONA CRÍTICA) & MAIS ACERTADOS (ZONA BLINDADA) */}
       <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 space-y-4">
@@ -1527,6 +1811,8 @@ export default function RaioXCaveira() {
             {[
               { id: 'all', label: `Todas (${blockScopedQuestions.length})` },
               { id: 'errors', label: `✗ Erros (${stats.errors})` },
+              { id: 'avoidable', label: `⚠️ Evitáveis (${avoidableCount})` },
+              { id: 'pegadinha', label: `💀 Pegadinhas (${pegadinhaCount})` },
               { id: 'hits', label: `✓ Acertos (${stats.hits})` },
               { id: 'guesses', label: `🎲 Dúvida/Chute (${stats.guessesOrDoubtsTotal})` }
             ].map(f => (
@@ -1584,6 +1870,7 @@ export default function RaioXCaveira() {
               const isEditingThisNote = editingNoteId === q.id;
               const isCommentOpen = Boolean(expandedComments[q.id]);
               const cleanTopic = (q.topic && q.topic !== q.subject && q.topic !== q.canonicalSubject) ? q.topic : null;
+              const videoMatch = findCourseVideoMatch(q, caveiraCourseIndexMap);
 
               return (
                 <div
@@ -1619,6 +1906,24 @@ export default function RaioXCaveira() {
                             ➔ {cleanTopic}
                           </span>
                         )}
+
+                        {(q.isAvoidableError || (!q.hit && Number(q.communityCorrectPct) >= 65)) && (
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30">
+                            ⚠️ Evitável ({q.communityCorrectPct}% acertaram)
+                          </span>
+                        )}
+
+                        {(q.isPegadinha || Number(q.communityErrorPct) >= 65) && (
+                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-300 border border-purple-500/30">
+                            💀 Pegadinha ({q.communityErrorPct}% erraram)
+                          </span>
+                        )}
+
+                        {Array.isArray(q.attempts) && q.attempts.length >= 2 && (
+                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-200 border border-slate-700">
+                            {q.attempts.slice(-4).map(a => a?.hit ? '✓' : '✗').join(' → ')} ({q.attempts.length}x)
+                          </span>
+                        )}
                       </div>
 
                       {/* Direita: Gabarito + Tempo + Ações */}
@@ -1634,6 +1939,23 @@ export default function RaioXCaveira() {
                         <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-850 px-2 py-1 rounded-lg">
                           ⏱️ {q.durationSeconds}s
                         </span>
+
+                        {videoMatch && (
+                          <a
+                            href={videoMatch.url}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            onClick={() => {
+                              try { navigator.clipboard?.writeText(`${videoMatch.mmss} ${videoMatch.topicLabel}`); } catch (_) {}
+                              toast.info(`Abrindo aula em ${videoMatch.mmss}`);
+                            }}
+                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 border border-sky-500/30 text-[11px] font-black uppercase transition-colors"
+                            title={`Rever em ${videoMatch.lessonTitle} (${videoMatch.topicLabel || videoMatch.mmss})`}
+                          >
+                            <Video className="w-3.5 h-3.5" />
+                            <span>{videoMatch.mmss}</span>
+                          </a>
+                        )}
 
                         <button
                           type="button"
@@ -1779,7 +2101,18 @@ export default function RaioXCaveira() {
                           onClick={() => toggleComment(q.id)}
                           className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 cursor-pointer"
                         >
-                          🎓 {isCommentOpen ? 'Ocultar Comentário do Professor' : 'Ver Comentário do Professor'}
+                          {q.commentSource === 'charlie'
+                            ? '🤖'
+                            : q.commentSource === 'aluno'
+                            ? '💬'
+                            : '🎓'}{' '}
+                          {isCommentOpen
+                            ? 'Ocultar Comentário'
+                            : q.commentSource === 'charlie'
+                            ? 'Ver Explicação Charlie IA'
+                            : q.commentSource === 'aluno'
+                            ? 'Ver Comentário Comunidade'
+                            : 'Ver Comentário do Professor'}
                           {isCommentOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
                         </button>
                       )}
@@ -1794,7 +2127,13 @@ export default function RaioXCaveira() {
                           exit={{ height: 0, opacity: 0 }}
                           className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/25 text-xs sm:text-sm text-slate-200 leading-relaxed whitespace-pre-line overflow-hidden"
                         >
-                          <span className="font-bold text-blue-300 block mb-1">🎓 Comentário do Professor / Gabarito:</span>
+                          <span className="font-bold text-blue-300 block mb-1">
+                            {q.commentSource === 'charlie'
+                              ? '🤖 Explicação Charlie IA:'
+                              : q.commentSource === 'aluno'
+                              ? '💬 Comentário mais curtido da Comunidade:'
+                              : '🎓 Comentário do Professor / Gabarito:'}
+                          </span>
                           {q.teacherComment}
                         </motion.div>
                       )}

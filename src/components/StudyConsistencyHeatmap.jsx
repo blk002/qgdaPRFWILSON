@@ -5,7 +5,25 @@ const MESES_ABREV = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Se
 const MESES_NOMES = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
 
 export default function StudyConsistencyHeatmap() {
-  const { studyHistory = {}, getLocalDateStr } = useStore();
+  const { studyHistory = {}, caveiraQuestions = [], getLocalDateStr } = useStore();
+
+  const questionsByDate = useMemo(() => {
+    const map = {};
+    (Array.isArray(caveiraQuestions) ? caveiraQuestions : []).forEach((q) => {
+      if (!q) return;
+      const rawTs = q.timestamp || q.updatedAt;
+      if (!rawTs) return;
+      const d = new Date(rawTs);
+      if (isNaN(d.getTime())) return;
+      const dateStr = getLocalDateStr
+        ? getLocalDateStr(d)
+        : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+      if (!map[dateStr]) map[dateStr] = { total: 0, hits: 0 };
+      map[dateStr].total += 1;
+      if (q.hit) map[dateStr].hits += 1;
+    });
+    return map;
+  }, [caveiraQuestions, getLocalDateStr]);
 
   const heatmapDataObj = useMemo(() => {
     const today = new Date();
@@ -34,6 +52,7 @@ export default function StudyConsistencyHeatmap() {
   const totalHours = Math.round(
     Object.values(studyHistory || {}).reduce((acc, val) => acc + (Number(val) || 0), 0) / 60
   );
+  const totalCaveiraCount = Array.isArray(caveiraQuestions) ? caveiraQuestions.length : 0;
   const nowRef = new Date();
 
   return (
@@ -45,13 +64,18 @@ export default function StudyConsistencyHeatmap() {
             Consistência de Estudos (Últimos 12 Meses)
           </h3>
           <p className="text-slate-500 text-[11px] mt-0.5 dark:text-slate-400 font-bold uppercase tracking-wide">
-            Visualização diária da sua dedicação operacional à PRF
+            Teoria + Questões do Caveira integradas por dia
           </p>
         </div>
-        <div className="shrink-0">
+        <div className="shrink-0 flex flex-wrap items-center gap-1.5">
           <span className="text-[11px] font-black bg-sky-500/10 text-sky-600 dark:text-sky-400 px-3 py-1 rounded-lg border border-sky-500/25 uppercase tracking-wider tabular-nums">
             {totalHours} {totalHours === 1 ? 'hora total' : 'horas totais'}
           </span>
+          {totalCaveiraCount > 0 && (
+            <span className="text-[11px] font-black bg-teal-500/10 text-teal-600 dark:text-teal-400 px-2.5 py-1 rounded-lg border border-teal-500/25 uppercase tracking-wider tabular-nums">
+              {totalCaveiraCount} {totalCaveiraCount === 1 ? 'questão' : 'questões'}
+            </span>
+          )}
         </div>
       </div>
 
@@ -112,18 +136,21 @@ export default function StudyConsistencyHeatmap() {
               {heatmapDataObj.days.map((cellDate, idx) => {
                 const dateStr = getLocalDateStr(cellDate);
                 const minutes = studyHistory[dateStr] || 0;
+                const qDay = questionsByDate[dateStr] || { total: 0, hits: 0 };
+                const effectiveLoad = minutes + qDay.total * 2;
+                const qAccPct = qDay.total > 0 ? Math.round((qDay.hits / qDay.total) * 100) : 0;
                 const isFuture = cellDate > nowRef;
 
                 let heatClass = 'bg-slate-200/60 border-slate-300/20 dark:bg-slate-850 dark:border-slate-800';
                 if (isFuture) {
                   heatClass = 'bg-slate-100/10 border-dashed border-slate-200/5 dark:bg-slate-800/5 dark:border-slate-700/5 opacity-15 pointer-events-none';
-                } else if (minutes > 0 && minutes <= 30) {
+                } else if (effectiveLoad > 0 && effectiveLoad <= 30) {
                   heatClass = 'bg-sky-500/20 border-transparent';
-                } else if (minutes > 30 && minutes <= 60) {
+                } else if (effectiveLoad > 30 && effectiveLoad <= 60) {
                   heatClass = 'bg-sky-500/40 border-transparent';
-                } else if (minutes > 60 && minutes <= 120) {
+                } else if (effectiveLoad > 60 && effectiveLoad <= 120) {
                   heatClass = 'bg-sky-500/70 border-transparent';
-                } else if (minutes > 120) {
+                } else if (effectiveLoad > 120) {
                   heatClass = 'bg-gradient-to-br from-sky-400 to-teal-400 border-transparent shadow-[0_0_8px_rgba(56,189,248,0.28)]';
                 }
 
@@ -156,9 +183,21 @@ export default function StudyConsistencyHeatmap() {
                         <p className="text-slate-200 font-bold">
                           {dayNum} de {monthName} de {cellDate.getFullYear()}
                         </p>
-                        <p className="text-sky-400 font-extrabold mt-0.5">
-                          {minutes > 0 ? `⚡ ${minutes} min estudados` : '💤 Nenhum estudo registrado'}
-                        </p>
+                        {minutes > 0 && (
+                          <p className="text-sky-400 font-extrabold mt-0.5">
+                            ⚡ {minutes} min estudados
+                          </p>
+                        )}
+                        {qDay.total > 0 && (
+                          <p className="text-teal-400 font-extrabold mt-0.5">
+                            🎯 {qDay.total} {qDay.total === 1 ? 'questão' : 'questões'} Caveira ({qAccPct}% acerto)
+                          </p>
+                        )}
+                        {minutes === 0 && qDay.total === 0 && (
+                          <p className="text-slate-400 font-bold mt-0.5">
+                            💤 Nenhum estudo registrado
+                          </p>
+                        )}
                       </div>
                     )}
                   </div>

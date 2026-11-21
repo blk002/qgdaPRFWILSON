@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useStore, cleanAlternativeText } from '../store/useStore';
-import { BrainCircuit, CheckCircle2, XCircle, ArrowRight, Calendar, Save } from 'lucide-react';
+import { findCourseVideoMatch } from '../utils/caveiraAnalytics';
+import { BrainCircuit, CheckCircle2, XCircle, ArrowRight, Calendar, Save, Video } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const KNOWN_CAVEIRA_ALTERNATIVES = {
@@ -21,7 +22,7 @@ const KNOWN_CAVEIRA_ALTERNATIVES = {
 };
 
 export default function CaveiraReviewQuestionModal({ review, onClose, inline = false, onCompleted }) {
-  const { handleReviewSubmit, caveiraQuestions = [], updateCaveiraQuestion, updateFsrsCard, getLocalDateStr, getTodayDate } = useStore();
+  const { handleReviewSubmit, caveiraQuestions = [], caveiraCourseIndexMap = {}, updateCaveiraQuestion, updateFsrsCard, getLocalDateStr, getTodayDate } = useStore();
 
   // Resolve dados completos da questão mesmo se o cartão for antigo (pré-migração)
   const qData = useMemo(() => {
@@ -74,9 +75,22 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
       hit: storeMatch ? Boolean(storeMatch.hit) : Boolean(review.questionData?.hit),
       confidence: storeMatch?.confidence || review.questionData?.confidence || 'sabia',
       userNote: storeMatch?.userNote || review.questionData?.userNote || '',
-      teacherComment: storeMatch?.teacherComment || review.questionData?.teacherComment || ''
+      teacherComment: storeMatch?.teacherComment || review.questionData?.teacherComment || '',
+      commentSource: storeMatch?.commentSource || review.questionData?.commentSource || '',
+      communityCorrectPct: storeMatch?.communityCorrectPct ?? review.questionData?.communityCorrectPct ?? null,
+      communityErrorPct: storeMatch?.communityErrorPct ?? review.questionData?.communityErrorPct ?? null,
+      isPegadinha: Boolean(storeMatch?.isPegadinha ?? review.questionData?.isPegadinha),
+      isAvoidableError: Boolean(storeMatch?.isAvoidableError ?? review.questionData?.isAvoidableError),
+      attempts: Array.isArray(storeMatch?.attempts) ? storeMatch.attempts : (review.questionData?.attempts || []),
+      courseVideoUrl: storeMatch?.courseVideoUrl || review.questionData?.courseVideoUrl || '',
+      courseTimestampSec: storeMatch?.courseTimestampSec ?? review.questionData?.courseTimestampSec
     };
   }, [review, caveiraQuestions]);
+
+  const videoMatch = useMemo(
+    () => findCourseVideoMatch(qData, caveiraCourseIndexMap),
+    [qData, caveiraCourseIndexMap]
+  );
   
   // Opção marcada nesta rodada de revisão
   const [selectedChoice, setSelectedChoice] = useState(null);
@@ -235,6 +249,36 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
               <span className="text-[11px] font-black uppercase bg-red-500/15 text-red-400 border border-red-500/25 px-2.5 py-1 rounded-lg">
                 ✗ Errou no Caveira
               </span>
+            )}
+            {qData.isAvoidableError && (
+              <span className="text-[10px] font-black uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2 py-1 rounded-lg">
+                ⚠️ Erro Evitável ({qData.communityCorrectPct}% acertaram)
+              </span>
+            )}
+            {qData.isPegadinha && (
+              <span className="text-[10px] font-black uppercase bg-purple-500/15 text-purple-300 border border-purple-500/30 px-2 py-1 rounded-lg">
+                💀 Pegadinha ({qData.communityErrorPct}% erraram)
+              </span>
+            )}
+            {Array.isArray(qData.attempts) && qData.attempts.length >= 2 && (
+              <span className="text-[10px] font-mono font-bold bg-slate-800/80 text-slate-200 border border-slate-700 px-2 py-1 rounded-lg">
+                {qData.attempts.slice(-4).map(a => a?.hit ? '✓' : '✗').join(' → ')} ({qData.attempts.length}x)
+              </span>
+            )}
+            {videoMatch && (
+              <a
+                href={videoMatch.url}
+                target="_blank"
+                rel="noopener noreferrer"
+                onClick={() => {
+                  try { navigator.clipboard?.writeText(`${videoMatch.mmss} ${videoMatch.topicLabel}`); } catch (_) {}
+                }}
+                className="inline-flex items-center gap-1 text-[10px] font-black uppercase bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 border border-sky-500/30 px-2.5 py-1 rounded-lg transition-colors"
+                title={`Ir para ${videoMatch.lessonTitle} (${videoMatch.topicLabel || videoMatch.mmss})`}
+              >
+                <Video className="w-3 h-3" />
+                <span>Rever na Aula ({videoMatch.mmss})</span>
+              </a>
             )}
           </div>
 
@@ -423,7 +467,11 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
                 <div className="mt-3 p-3 rounded-xl bg-blue-500/10 border border-blue-500/25 text-xs text-blue-100">
                   <div className="flex items-center justify-between gap-2 mb-1">
                     <span className="font-bold text-blue-300 flex items-center gap-1.5">
-                      🎓 Comentário do Professor / Gabarito Comentado:
+                      {qData.commentSource === 'charlie'
+                        ? '🤖 Explicação Charlie IA:'
+                        : qData.commentSource === 'aluno'
+                        ? '💬 Comentário da Comunidade:'
+                        : '🎓 Comentário do Professor / Gabarito Comentado:'}
                     </span>
                     <button
                       type="button"

@@ -880,17 +880,36 @@ export default function Ciclo() {
                           ) : activeTopic ? (
                             <>
                               {/* Linha AULA X/Y */}
-                              <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+                              <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
                                 <span className="uppercase tracking-wider">
                                   {blockCount > 1
                                     ? `Aulas ${startNum}–${endNum}/${currentTotal}`
                                     : `Aula ${startNum}/${currentTotal}`}
                                 </span>
-                                {spd > 1 && (
-                                  <span className="text-[11px] font-black text-sky-600 dark:text-sky-400">
-                                    {spd}x ativo
-                                  </span>
-                                )}
+                                <div className="flex items-center gap-1.5">
+                                  {(() => {
+                                    const firstIdx = plannedLessons?.[0]?.index ?? currentCompleted;
+                                    const lesHref = activeTopic?.lessons?.[firstIdx]?.caveiraUrl
+                                      || (subject?.caveiraCourseId ? `https://app.caveira.com/courses/${subject.caveiraCourseId}` : '');
+                                    return lesHref ? (
+                                      <a
+                                        href={lesHref}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-sky-500/15 hover:bg-sky-500/25 text-sky-600 dark:text-sky-400 border border-sky-500/30 text-[10px] font-black uppercase tracking-wider transition-colors"
+                                        title="Abrir videoaula no Caveira"
+                                      >
+                                        <PlayCircle className="w-3 h-3" />
+                                        <span>Vídeo</span>
+                                      </a>
+                                    ) : null;
+                                  })()}
+                                  {spd > 1 && (
+                                    <span className="text-[11px] font-black text-sky-600 dark:text-sky-400">
+                                      {spd}x ativo
+                                    </span>
+                                  )}
+                                </div>
                               </div>
 
                               {/* Lista de Aulas com Nome + MM:SS (spd) */}

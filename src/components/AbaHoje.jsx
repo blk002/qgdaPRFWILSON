@@ -475,17 +475,36 @@ export default function AbaHoje({ onGoToTab }) {
                       ) : block.activeTopic ? (
                         <>
                           {/* Linha AULA X/Y */}
-                          <div className="flex items-center justify-between text-xs font-bold text-slate-600 dark:text-slate-300">
+                          <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
                             <span className="uppercase tracking-wider">
                               {block.blockCount > 1
                                 ? `Aulas ${startNum}–${endNum}/${block.currentTotal}`
                                 : `Aula ${startNum}/${block.currentTotal}`}
                             </span>
-                            {block.spd > 1 && (
-                              <span className="text-[11px] font-black text-sky-600 dark:text-sky-400">
-                                {block.spd}x ativo
-                              </span>
-                            )}
+                            <div className="flex items-center gap-2">
+                              {(() => {
+                                const firstIdx = block.plannedLessons?.[0]?.index ?? block.currentCompleted;
+                                const lesHref = block.activeTopic?.lessons?.[firstIdx]?.caveiraUrl
+                                  || (block.subject?.caveiraCourseId ? `https://app.caveira.com/courses/${block.subject.caveiraCourseId}` : '');
+                                return lesHref ? (
+                                  <a
+                                    href={lesHref}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/15 hover:bg-sky-500/25 text-sky-600 dark:text-sky-400 border border-sky-500/30 text-[10px] font-black uppercase tracking-wider transition-colors"
+                                    title="Abrir videoaula diretamente no Caveira"
+                                  >
+                                    <PlayCircle className="w-3 h-3" />
+                                    <span>Abrir Videoaula</span>
+                                  </a>
+                                ) : null;
+                              })()}
+                              {block.spd > 1 && (
+                                <span className="text-[11px] font-black text-sky-600 dark:text-sky-400">
+                                  {block.spd}x ativo
+                                </span>
+                              )}
+                            </div>
                           </div>
 
                           {/* Lista de Aulas com Nome + MM:SS (spd) */}
@@ -497,6 +516,7 @@ export default function AbaHoje({ onGoToTab }) {
                                 accelSec > 0
                                   ? `${formatSecondsToClock(accelSec)}${block.spd > 1 ? ` (${block.spd}x)` : ''}`
                                   : les.durStr || '';
+                              const directUrl = block.activeTopic?.lessons?.[les.index ?? lIdx]?.caveiraUrl || '';
 
                               return (
                                 <div
@@ -505,6 +525,17 @@ export default function AbaHoje({ onGoToTab }) {
                                 >
                                   <span className="font-semibold text-slate-800 dark:text-slate-100 break-words flex-1 min-w-0">
                                     • {les.name}
+                                    {directUrl && (
+                                      <a
+                                        href={directUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="ml-1.5 inline-flex items-center text-[10px] font-black text-sky-500 hover:text-sky-400 underline underline-offset-2"
+                                        title="Abrir esta aula no Caveira"
+                                      >
+                                        ▶️
+                                      </a>
+                                    )}
                                   </span>
                                   {durationLabel && (
                                     <span className="text-sm font-mono font-black text-amber-600 dark:text-amber-300 shrink-0 flex items-center gap-1 tabular-nums">

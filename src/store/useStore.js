@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { PATENTES, MEDALHAS } from '../hooks/useGamification';
 import { PET_FOODS, PET_LEVELS } from '../data/petConstants';
 import { parseDurationToSeconds, calculateLessonsForGoal } from '../lib/durationHelpers';
+import { normalizeCourseLookupKey } from '../lib/courseIndexParser';
 import {
   cleanAlternativeText,
   cleanAltText,
@@ -21,6 +22,83 @@ export {
 };
 
 const CAVEIRA_OWNER_KEY = 'prf_caveira_owner_id';
+
+const mergeAttempts = (prev = null, incoming = {}) => {
+  const list = [];
+  const pushUnique = (entry) => {
+    if (!entry || typeof entry !== 'object') return;
+    const ts = entry.timestamp || new Date().toISOString();
+    const tsMs = new Date(ts).getTime() || 0;
+    const hit = Boolean(entry.hit);
+    const userChoice = String(entry.userChoice || '');
+    const durationSeconds = Number(entry.durationSeconds) || 0;
+    const dup = list.some(existing => {
+      const exMs = new Date(existing.timestamp || 0).getTime() || 0;
+      return Math.abs(exMs - tsMs) <= 5000 && Boolean(existing.hit) === hit && String(existing.userChoice || '') === userChoice;
+    });
+    if (!dup) {
+      list.push({ timestamp: ts, hit, userChoice, durationSeconds });
+    }
+  };
+
+  if (prev && typeof prev === 'object') {
+    if (Array.isArray(prev.attempts) && prev.attempts.length > 0) {
+      prev.attempts.forEach(pushUnique);
+    } else if (prev.timestamp || prev.updatedAt || prev.userChoice) {
+      pushUnique({
+        timestamp: prev.timestamp || prev.updatedAt,
+        hit: prev.hit,
+        userChoice: prev.userChoice,
+        durationSeconds: prev.durationSeconds
+      });
+    }
+  }
+
+  if (Array.isArray(incoming.attempts) && incoming.attempts.length > 0) {
+    incoming.attempts.forEach(pushUnique);
+  } else if (incoming.timestamp || incoming.userChoice !== undefined || incoming.hit !== undefined) {
+    const incomingTs = incoming.timestamp || incoming.updatedAt || new Date().toISOString();
+    const incomingMs = new Date(incomingTs).getTime() || 0;
+    const latest = list.length > 0 ? list[list.length - 1] : null;
+    const latestMs = latest ? (new Date(latest.timestamp || 0).getTime() || 0) : 0;
+    const changedResult = latest && (Boolean(latest.hit) !== Boolean(incoming.hit) || String(latest.userChoice || '') !== String(incoming.userChoice || ''));
+    if (!latest || Math.abs(incomingMs - latestMs) > 5000 || (changedResult && incomingMs >= latestMs)) {
+      pushUnique({
+        timestamp: incomingTs,
+        hit: incoming.hit,
+        userChoice: incoming.userChoice,
+        durationSeconds: incoming.durationSeconds
+      });
+    }
+  }
+
+  return list.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+};
+
+const enrichCaveiraQuestionPayload = (prev = null, incoming = {}) => {
+  const merged = prev ? { ...prev, ...incoming } : { ...incoming };
+  const attempts = mergeAttempts(prev, incoming);
+  const communityCorrectPct = incoming.communityCorrectPct !== undefined && incoming.communityCorrectPct !== null
+    ? Number(incoming.communityCorrectPct)
+    : (prev?.communityCorrectPct !== undefined && prev?.communityCorrectPct !== null ? Number(prev.communityCorrectPct) : null);
+  const communityErrorPct = incoming.communityErrorPct !== undefined && incoming.communityErrorPct !== null
+    ? Number(incoming.communityErrorPct)
+    : (communityCorrectPct !== null ? Math.max(0, Math.min(100, Math.round(100 - communityCorrectPct))) : (prev?.communityErrorPct ?? null));
+  const hitVal = Boolean(merged.hit);
+  return {
+    ...merged,
+    attempts,
+    ...(communityCorrectPct !== null && Number.isFinite(communityCorrectPct) ? { communityCorrectPct } : {}),
+    ...(communityErrorPct !== null && Number.isFinite(communityErrorPct) ? { communityErrorPct } : {}),
+    isPegadinha: communityErrorPct !== null && Number.isFinite(communityErrorPct) ? communityErrorPct >= 65 : Boolean(merged.isPegadinha),
+    isAvoidableError: !hitVal && communityCorrectPct !== null && Number.isFinite(communityCorrectPct) ? communityCorrectPct >= 65 : false,
+    commentSource: incoming.commentSource || prev?.commentSource || (merged.teacherComment ? 'professor' : ''),
+    ...(incoming.courseVideoUrl || prev?.courseVideoUrl ? { courseVideoUrl: incoming.courseVideoUrl || prev?.courseVideoUrl } : {}),
+    ...(incoming.courseTimestampSec !== undefined || prev?.courseTimestampSec !== undefined
+      ? { courseTimestampSec: incoming.courseTimestampSec ?? prev?.courseTimestampSec }
+      : {})
+  };
+};
 
 const getInitialLocalCaveiraQuestions = () => {
   try {
@@ -1544,8 +1622,9 @@ export const useStore = create(
         const isNew = existingIdx === -1;
 
         if (isNew) {
-          updatedList.unshift(question);
-          if (question.hit) {
+          const enriched = enrichCaveiraQuestionPayload(null, question);
+          updatedList.unshift(enriched);
+          if (enriched.hit) {
             addXP(25, `Questão Caveira ${question.id} Acertada`);
             setCoins(c => c + 3);
           } else {
@@ -1553,7 +1632,7 @@ export const useStore = create(
           }
           boostPetWithStudy('review');
         } else {
-          updatedList[existingIdx] = { ...updatedList[existingIdx], ...question };
+          updatedList[existingIdx] = enrichCaveiraQuestionPayload(updatedList[existingIdx], question);
         }
 
         set({ caveiraQuestions: updatedList });
@@ -1585,10 +1664,10 @@ export const useStore = create(
           const prev = map.get(q.id);
           if (!prev) {
             newCount++;
-            map.set(q.id, q);
+            map.set(q.id, enrichCaveiraQuestionPayload(null, q));
           } else {
             const prevIsNewer = Boolean(prev.updatedAt && (!q.updatedAt || prev.updatedAt > q.updatedAt));
-            const mergedItem = prevIsNewer
+            const baseMerged = prevIsNewer
               ? {
                   ...prev,
                   ...q,
@@ -1596,7 +1675,7 @@ export const useStore = create(
                   errorReason: prev.errorReason,
                   fsrsRequested: prev.fsrsRequested,
                   priorityReview: prev.priorityReview,
-                  userNote: prev.userNote !== undefined ? prev.userNote : (q.userNote || ''),
+                  userNote: (prev.userNote !== undefined && prev.userNote !== '') ? prev.userNote : (q.userNote || ''),
                   teacherComment: prev.teacherComment || q.teacherComment || '',
                   alternatives: (Array.isArray(q.alternatives) && q.alternatives.length > (Array.isArray(prev.alternatives) ? prev.alternatives.length : 0))
                     ? q.alternatives
@@ -1607,11 +1686,12 @@ export const useStore = create(
                   ...prev,
                   ...q,
                   teacherComment: q.teacherComment || prev.teacherComment || '',
-                  userNote: q.userNote !== undefined ? q.userNote : (prev.userNote || ''),
+                  userNote: (q.userNote !== undefined && q.userNote !== '') ? q.userNote : (prev.userNote || ''),
                   alternatives: (Array.isArray(q.alternatives) && q.alternatives.length >= (Array.isArray(prev.alternatives) ? prev.alternatives.length : 0))
                     ? q.alternatives
                     : (prev.alternatives || null)
                 };
+            const mergedItem = enrichCaveiraQuestionPayload(prev, baseMerged);
 
             if (
               prev.confidence !== mergedItem.confidence ||
@@ -1620,6 +1700,9 @@ export const useStore = create(
               Boolean(prev.priorityReview) !== Boolean(mergedItem.priorityReview) ||
               (prev.userNote || '') !== (mergedItem.userNote || '') ||
               (prev.teacherComment || '') !== (mergedItem.teacherComment || '') ||
+              (prev.commentSource || '') !== (mergedItem.commentSource || '') ||
+              prev.communityCorrectPct !== mergedItem.communityCorrectPct ||
+              (Array.isArray(prev.attempts) ? prev.attempts.length : 0) !== (Array.isArray(mergedItem.attempts) ? mergedItem.attempts.length : 0) ||
               prev.hit !== mergedItem.hit ||
               prev.subject !== mergedItem.subject ||
               prev.topic !== mergedItem.topic ||
@@ -3539,6 +3622,257 @@ export const useStore = create(
       },
 
       setCaveiraSessionStats: (sessionStats) => set({ caveiraSessionStats: sessionStats }),
+
+      setCaveiraFilterMemory: (memory) => {
+        if (!memory || typeof memory !== 'object') return;
+        const prev = get().caveiraFilterMemory || {};
+        const merged = { ...prev, ...memory };
+        try {
+          if (JSON.stringify(prev) === JSON.stringify(merged)) return;
+        } catch (_) {}
+        set({ caveiraFilterMemory: merged });
+      },
+
+      setCaveiraCourseIndexMap: (entryOrMap) => {
+        if (!entryOrMap || typeof entryOrMap !== 'object') return;
+        const prev = get().caveiraCourseIndexMap || {};
+        const next = { ...prev };
+        let changed = false;
+
+        const parseTimestampTopics = (rawText = '') => {
+          const lines = String(rawText || '').split(/\r?\n/);
+          const parsed = [];
+          lines.forEach((raw) => {
+            const m = raw.match(/[[( ]?(\d{1,2}):(\d{2})(?::(\d{2}))?[\])]?\s*[-–—:|]*\s*(.+)/);
+            if (!m) return;
+            const hasHours = m[3] !== undefined;
+            const h = hasHours ? Number(m[1]) : 0;
+            const min = hasHours ? Number(m[2]) : Number(m[1]);
+            const sec = hasHours ? Number(m[3]) : Number(m[2]);
+            const seconds = h * 3600 + min * 60 + sec;
+            const mmss = hasHours
+              ? `${String(h).padStart(2, '0')}:${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`
+              : `${String(min).padStart(2, '0')}:${String(sec).padStart(2, '0')}`;
+            const label = String(m[4] || '').trim();
+            if (label && seconds >= 0) {
+              parsed.push({ label, mmss, seconds });
+            }
+          });
+          return parsed;
+        };
+
+        const upsertEntry = (key, rawEntry) => {
+          if (!key || !rawEntry || typeof rawEntry !== 'object') return;
+          const rawText = rawEntry.bizusRawText || rawEntry.rawIndexText || '';
+          const topics = Array.isArray(rawEntry.topics) && rawEntry.topics.length > 0
+            ? rawEntry.topics
+            : parseTimestampTopics(rawText);
+          const candidate = {
+            url: rawEntry.url || prev[key]?.url || '',
+            title: rawEntry.lessonTitle || rawEntry.title || prev[key]?.title || key,
+            subject: rawEntry.subject || prev[key]?.subject || '',
+            moduleName: rawEntry.moduleName || prev[key]?.moduleName || '',
+            topics: topics.length > 0 ? topics : (prev[key]?.topics || []),
+            subtopics: Array.isArray(rawEntry.subtopics) ? rawEntry.subtopics : (prev[key]?.subtopics || []),
+            updatedAt: rawEntry.updatedAt || Date.now()
+          };
+          if (JSON.stringify(prev[key]) !== JSON.stringify(candidate)) {
+            next[key] = candidate;
+            changed = true;
+          }
+        };
+
+        if (entryOrMap.byLesson && typeof entryOrMap.byLesson === 'object') {
+          Object.entries(entryOrMap.byLesson).forEach(([k, val]) => upsertEntry(k, val));
+          if (entryOrMap.latest && entryOrMap.latest.lessonTitle) {
+            upsertEntry(normalizeCourseLookupKey(entryOrMap.latest.lessonTitle), entryOrMap.latest);
+          }
+        } else {
+          Object.entries(entryOrMap).forEach(([k, val]) => upsertEntry(k, val));
+        }
+
+        if (changed) {
+          // Limita a 250 aulas indexadas mais recentes para manter o snapshot enxuto
+          const entries = Object.entries(next).sort((a, b) => (b[1]?.updatedAt || 0) - (a[1]?.updatedAt || 0)).slice(0, 250);
+          set({ caveiraCourseIndexMap: Object.fromEntries(entries) });
+        }
+      },
+
+      importCaveiraSimulados: (items = []) => {
+        if (!Array.isArray(items) || items.length === 0) return 0;
+        const { simulados = [], getLocalDateStr, addXP, updateMissionProgress } = get();
+        const today = getLocalDateStr();
+        const existingKeys = new Set(
+          simulados.map(s => s?.caveiraId ? `id:${s.caveiraId}` : `td:${normalizeCourseLookupKey(s?.title || '')}|${s?.data || ''}`)
+        );
+        const toAdd = [];
+        items.forEach((item, idx) => {
+          if (!item || typeof item !== 'object') return;
+          const dateStr = /^\d{4}-\d{2}-\d{2}$/.test(String(item.data || '')) ? item.data : today;
+          const title = String(item.title || 'Simulado Projeto Caveira').trim();
+          const key = item.caveiraId ? `id:${item.caveiraId}` : `td:${normalizeCourseLookupKey(title)}|${dateStr}`;
+          if (existingKeys.has(key)) return;
+          existingKeys.add(key);
+
+          const total = Number(item.total) || 0;
+          const hits = Number(item.hits) || 0;
+          const errors = item.errors !== undefined && item.errors !== null ? Number(item.errors) : Math.max(0, total - hits);
+          const pct = item.pct !== undefined && item.pct !== null
+            ? Number(item.pct)
+            : (total > 0 ? Math.round((hits / total) * 100) : 0);
+          const liquida = item.liquida !== undefined && item.liquida !== null
+            ? Number(item.liquida)
+            : (hits - errors);
+
+          toAdd.push({
+            id: Date.now() + idx,
+            data: dateStr,
+            title,
+            source: 'caveira',
+            caveiraId: item.caveiraId || null,
+            total,
+            hits,
+            errors,
+            pct,
+            liquida,
+            ...(item.b1Liquida !== undefined ? { b1Liquida: Number(item.b1Liquida) } : {}),
+            ...(item.b2Liquida !== undefined ? { b2Liquida: Number(item.b2Liquida) } : {}),
+            ...(item.b3Liquida !== undefined ? { b3Liquida: Number(item.b3Liquida) } : {}),
+            ...(item.url ? { url: item.url } : {})
+          });
+        });
+
+        if (toAdd.length === 0) return 0;
+        const nextSimulados = [...simulados, ...toAdd].sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')));
+        set({ simulados: nextSimulados });
+        addXP(150 * toAdd.length, `${toAdd.length} Simulado(s) do Caveira importado(s)`);
+        updateMissionProgress?.('simulado', toAdd.length);
+        return toAdd.length;
+      },
+
+      logCaveiraPdfStudy: ({ title = 'PDF Interativo', subject = '', minutes = 5 } = {}) => {
+        const mins = Math.max(1, Math.min(480, Math.round(Number(minutes) || 1)));
+        const { addStudyMinutes, setCoins, addXP, boostPetWithStudy } = get();
+        addStudyMinutes(mins);
+        addXP(Math.min(200, mins * 2), `Leitura de PDF (${subject || title}): ${mins} min`);
+        setCoins(c => c + Math.min(25, Math.max(2, Math.ceil(mins / 3))));
+        boostPetWithStudy?.('study');
+        toast.success(`📄 +${mins} min de PDF (${subject || title}) registrados no QG!`);
+        return mins;
+      },
+
+      syncCourseCatalogFromCaveira: (catalog) => {
+        if (!catalog || !Array.isArray(catalog.modules) || catalog.modules.length === 0) {
+          return { matchedSubjects: 0, updatedLessons: 0, addedLessons: 0 };
+        }
+        const { subjects = {} } = get();
+        const nextSubjects = { ...subjects };
+        let matchedSubjects = 0;
+        let updatedLessons = 0;
+        let addedLessons = 0;
+
+        const normModuleMatch = (subName, modName) => {
+          const s = normalizeCourseLookupKey(subName);
+          const m = normalizeCourseLookupKey(modName);
+          if (!s || !m) return false;
+          if (s === m || m.includes(s) || s.includes(m)) return true;
+          const sTokens = s.split(' ').filter(w => w.length > 3);
+          return sTokens.length > 0 && sTokens.every(tok => m.includes(tok));
+        };
+
+        const parseMinToClock = (minVal) => {
+          const mins = Number(minVal);
+          if (!Number.isFinite(mins) || mins <= 0) return '';
+          const totalSec = Math.round(mins * 60);
+          const h = Math.floor(totalSec / 3600);
+          const m = Math.floor((totalSec % 3600) / 60);
+          const s = totalSec % 60;
+          return h > 0
+            ? `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`
+            : `${String(m).padStart(2, '0')}:${String(s).padStart(2, '0')}`;
+        };
+
+        catalog.modules.forEach((mod) => {
+          if (!mod || !mod.name || !Array.isArray(mod.lessons) || mod.lessons.length === 0) return;
+          const targetEntry = Object.entries(nextSubjects).find(([, sub]) => normModuleMatch(sub?.name, mod.name));
+          if (!targetEntry) return;
+
+          const [subId, subObj] = targetEntry;
+          matchedSubjects++;
+          const topics = Array.isArray(subObj.topics) ? subObj.topics.map(t => ({
+            ...t,
+            lessons: Array.isArray(t.lessons) ? t.lessons.map(l => ({ ...l })) : []
+          })) : [];
+
+          if (topics.length === 0) {
+            topics.push({
+              id: `top_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              name: mod.name,
+              completed: mod.lessons.filter(l => l.completed).length,
+              total: mod.lessons.length,
+              lessons: mod.lessons.map(l => ({
+                name: l.title,
+                duration: parseMinToClock(l.durationMin),
+                completed: Boolean(l.completed),
+                ...(l.url ? { caveiraUrl: l.url } : {}),
+                ...(l.id ? { caveiraVideoId: l.id } : {})
+              }))
+            });
+            addedLessons += mod.lessons.length;
+          } else {
+            mod.lessons.forEach((les) => {
+              if (!les || !les.title) return;
+              const normTitle = normalizeCourseLookupKey(les.title);
+              let matched = false;
+              for (const topic of topics) {
+                const idx = (topic.lessons || []).findIndex(existing => {
+                  const en = normalizeCourseLookupKey(existing?.name || '');
+                  return en && (en === normTitle || (normTitle.length >= 8 && en.includes(normTitle)) || (en.length >= 8 && normTitle.includes(en)));
+                });
+                if (idx >= 0) {
+                  const cur = topic.lessons[idx];
+                  topic.lessons[idx] = {
+                    ...cur,
+                    ...(les.url ? { caveiraUrl: les.url } : {}),
+                    ...(les.id ? { caveiraVideoId: les.id } : {}),
+                    ...(les.durationMin > 0 && !cur.duration ? { duration: parseMinToClock(les.durationMin) } : {})
+                  };
+                  updatedLessons++;
+                  matched = true;
+                  break;
+                }
+              }
+              if (!matched) {
+                const firstTopic = topics[0];
+                firstTopic.lessons = Array.isArray(firstTopic.lessons) ? firstTopic.lessons : [];
+                firstTopic.lessons.push({
+                  name: les.title,
+                  duration: parseMinToClock(les.durationMin),
+                  completed: Boolean(les.completed),
+                  ...(les.url ? { caveiraUrl: les.url } : {}),
+                  ...(les.id ? { caveiraVideoId: les.id } : {})
+                });
+                firstTopic.total = Math.max(Number(firstTopic.total) || 0, firstTopic.lessons.length);
+                if (les.completed) {
+                  firstTopic.completed = Math.min(firstTopic.total, (Number(firstTopic.completed) || 0) + 1);
+                }
+                addedLessons++;
+              }
+            });
+          }
+
+          nextSubjects[subId] = {
+            ...subObj,
+            ...(catalog.courseId ? { caveiraCourseId: catalog.courseId } : {}),
+            topics
+          };
+        });
+
+        if (matchedSubjects > 0) {
+          set({ subjects: nextSubjects });
+        }
+        return { matchedSubjects, updatedLessons, addedLessons };
+      },
 
       setSubjectGoal: (subjectId, minutes) => set(state => ({
         subjectGoals: {
