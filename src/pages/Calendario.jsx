@@ -972,7 +972,7 @@ export default function Calendario() {
                                 lessonsList.map((les, lIdx) => (
                                   <span
                                     key={`${idx}-${lIdx}`}
-                                    className={`block pl-1.5 text-xs font-semibold leading-snug break-words transition-opacity ${textColorClass} ${
+                                    className={`block pl-1.5 text-[11px] font-medium leading-snug break-words transition-opacity ${textColorClass} ${
                                       isDimmed ? 'opacity-20' : 'opacity-95'
                                     }`}
                                     title={les.topicName && !les.name.includes(les.topicName) ? `${les.topicName} • ${les.name}${les.duration ? ` (${les.duration})` : ''}` : `${les.name}${les.duration ? ` (${les.duration})` : ''}`}
@@ -982,7 +982,7 @@ export default function Calendario() {
                                 ))
                               ) : item.count >= 1 ? (
                                 <span
-                                  className={`block pl-1.5 text-xs font-semibold leading-snug transition-opacity ${textColorClass} ${
+                                  className={`block pl-1.5 text-[11px] font-medium leading-snug transition-opacity ${textColorClass} ${
                                     isDimmed ? 'opacity-20' : 'opacity-90'
                                   }`}
                                 >
