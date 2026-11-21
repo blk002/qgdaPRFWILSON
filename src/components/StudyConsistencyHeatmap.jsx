@@ -37,7 +37,7 @@ export default function StudyConsistencyHeatmap() {
   const nowRef = new Date();
 
   return (
-    <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 transition-all">
+    <div className="w-fit max-w-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 sm:p-4 transition-all">
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-2.5 pb-3 border-b border-slate-100 dark:border-slate-800">
         <div>
           <h3 className="text-xs sm:text-sm font-black text-slate-800 uppercase tracking-widest dark:text-slate-100 flex items-center gap-2">
@@ -56,13 +56,13 @@ export default function StudyConsistencyHeatmap() {
       </div>
 
       <div className="overflow-x-auto custom-scrollbar pt-2.5 pb-1">
-        <div className="w-full min-w-[720px]">
+        <div className="w-max">
           {/* Linha de Meses */}
           <div className="flex items-end mb-1.5 select-none">
             <div className="w-8 shrink-0 pr-2" />
             <div
-              className="flex-1 grid gap-[3px] sm:gap-1 h-3.5"
-              style={{ gridTemplateColumns: 'repeat(53, minmax(0, 1fr))' }}
+              className="grid gap-1 h-3.5"
+              style={{ gridTemplateColumns: 'repeat(53, 12px)' }}
             >
               {heatmapDataObj.weeks.map((weekStart, colIdx) => {
                 const isFirstWeekOfMonth =
@@ -90,7 +90,7 @@ export default function StudyConsistencyHeatmap() {
           {/* Rótulos da semana + Grade de quadradinhos (371 células: 7 linhas x 53 colunas) */}
           <div className="flex items-start">
             <div
-              className="w-8 shrink-0 pr-2 grid gap-y-1 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest select-none text-right"
+              className="w-8 shrink-0 pr-2 grid gap-1 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest select-none text-right"
               style={{ gridTemplateRows: 'repeat(7, 12px)' }}
             >
               <div className="flex items-center justify-end leading-none" />
@@ -103,9 +103,9 @@ export default function StudyConsistencyHeatmap() {
             </div>
 
             <div
-              className="flex-1 grid grid-flow-col gap-x-[3px] sm:gap-x-1 gap-y-1 justify-items-center"
+              className="grid grid-flow-col gap-1"
               style={{
-                gridTemplateColumns: 'repeat(53, minmax(0, 1fr))',
+                gridTemplateColumns: 'repeat(53, 12px)',
                 gridTemplateRows: 'repeat(7, 12px)'
               }}
             >
