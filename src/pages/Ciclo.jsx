@@ -21,7 +21,6 @@ export default function Ciclo() {
     currentDayIndex,
     advanceDay,
     getActiveTopic,
-    getSubjectProgress,
     getRelativeDateInfo,
     getLocalDateStr,
     setClassConfirmModal,
@@ -278,64 +277,55 @@ export default function Ciclo() {
 
   return (
     <div className="fade-in w-full pb-6">
-      
-      
-      <div className="mb-3">
-        <div className="flex items-center gap-2 mb-2.5">
-          <Target className="text-sky-500 dark:text-sky-400 w-5 h-5" />
-          <h2 className="text-base sm:text-lg font-black text-slate-800 tracking-tight dark:text-slate-100">Conversor de Edital (Teoria ➔ Questões)</h2>
-        </div>
-
-        {pendingReviews.length > 0 && (
-          <div className="bg-red-50 border border-red-200 rounded-xl p-3 sm:p-3.5 mb-3 shadow-xs relative overflow-hidden dark:bg-red-950/20 dark:border-red-900/50">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-red-200 rounded-bl-full opacity-40 pointer-events-none dark:bg-red-900/20"></div>
-            
-            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3 relative z-10">
-              <div>
-                <h3 className="font-black text-red-800 flex items-center gap-2 text-sm sm:text-base dark:text-red-400">
-                  <AlertTriangle className="w-4 h-4"/> Prioridade Zero: Blindar Memória
-                </h3>
-                <p className="text-xs text-red-600 mt-0.5 font-semibold max-w-2xl dark:text-red-500/90">
-                  Limpe sua fila de revisões FSRS antes de absorver conteúdo novo.
-                </p>
-              </div>
-              <div className="bg-red-600 text-white text-xs font-black px-3 py-1.5 rounded-lg whitespace-nowrap shadow-xs self-start sm:self-auto flex items-center gap-2 leading-none">
-                <span className="text-[10px] opacity-85 uppercase">FSRS</span>
-                <span className="text-base">{pendingReviews.length}</span>
-              </div>
+      {pendingReviews.length > 0 && (
+        <div className="bg-red-50 border border-red-200 rounded-xl p-3 sm:p-3.5 mb-3 shadow-xs relative overflow-hidden dark:bg-red-950/20 dark:border-red-900/50">
+          <div className="absolute top-0 right-0 w-16 h-16 bg-red-200 rounded-bl-full opacity-40 pointer-events-none dark:bg-red-900/20"></div>
+          
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5 mb-3 relative z-10">
+            <div>
+              <h3 className="font-black text-red-800 flex items-center gap-2 text-sm sm:text-base dark:text-red-400">
+                <AlertTriangle className="w-4 h-4"/> Prioridade Zero: Blindar Memória
+              </h3>
+              <p className="text-xs text-red-600 mt-0.5 font-semibold max-w-2xl dark:text-red-500/90">
+                Limpe sua fila de revisões FSRS antes de absorver conteúdo novo.
+              </p>
             </div>
-            
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 relative z-10">
-              {pendingReviews.map(rev => {
-                const sub = subjects[rev.subjectId];
-                const isCaveira = Boolean(rev.isCaveiraQuestion || rev.questionData || String(rev.id || '').startsWith('rev_caveira_'));
-                const subName = rev.customSubjectName || rev.questionData?.canonicalSubject || sub?.name || 'Revisão FSRS';
-                const subColor = sub?.color || (isCaveira ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400');
-                const thermo = getThermometer(rev.lastPerformance);
-                
-                return (
-                  <div key={rev.id} className="bg-white p-3 rounded-lg border border-red-100 shadow-sm flex flex-col justify-between hover:border-red-300 transition-colors dark:bg-slate-900">
-                    <div>
-                      <div className="flex justify-between items-start mb-2">
-                        <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase truncate max-w-[65%] ${subColor}`}>
-                          {subName}
-                        </span>
-                        <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 ${thermo.color}`} title={thermo.label}>
-                          {thermo.icon} {Math.round(rev.lastPerformance * 100 || 0)}%
-                        </div>
-                      </div>
-                      <p className="text-xs font-bold text-slate-800 leading-tight mb-2 line-clamp-2 dark:text-slate-100" title={rev.topicName}>{rev.topicName}</p>
-                    </div>
-                    <button onClick={() => { navigate('/revisoes'); }} className="mt-2 w-full py-1.5 bg-red-100 hover:bg-red-500 text-red-700 hover:text-white border border-red-200 rounded text-[11px] font-black transition-all flex items-center justify-center gap-1 cursor-pointer dark:bg-red-900/30 dark:border-red-800/50 dark:text-red-400 dark:hover:bg-red-600 dark:hover:text-white">
-                      <Activity className="w-3 h-3"/> Executar Revisão
-                    </button>
-                  </div>
-                );
-              })}
+            <div className="bg-red-600 text-white text-xs font-black px-3 py-1.5 rounded-lg whitespace-nowrap shadow-xs self-start sm:self-auto flex items-center gap-2 leading-none">
+              <span className="text-[10px] opacity-85 uppercase">FSRS</span>
+              <span className="text-base">{pendingReviews.length}</span>
             </div>
           </div>
-        )}
-      </div>
+          
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 relative z-10">
+            {pendingReviews.map(rev => {
+              const sub = subjects[rev.subjectId];
+              const isCaveira = Boolean(rev.isCaveiraQuestion || rev.questionData || String(rev.id || '').startsWith('rev_caveira_'));
+              const subName = rev.customSubjectName || rev.questionData?.canonicalSubject || sub?.name || 'Revisão FSRS';
+              const subColor = sub?.color || (isCaveira ? 'bg-purple-500/15 text-purple-400 border border-purple-500/30' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400');
+              const thermo = getThermometer(rev.lastPerformance);
+              
+              return (
+                <div key={rev.id} className="bg-white p-3 rounded-lg border border-red-100 shadow-sm flex flex-col justify-between hover:border-red-300 transition-colors dark:bg-slate-900">
+                  <div>
+                    <div className="flex justify-between items-start mb-2">
+                      <span className={`text-[9px] font-black px-1.5 py-0.5 rounded uppercase truncate max-w-[65%] ${subColor}`}>
+                        {subName}
+                      </span>
+                      <div className={`text-[9px] font-bold px-1.5 py-0.5 rounded border flex items-center gap-1 ${thermo.color}`} title={thermo.label}>
+                        {thermo.icon} {Math.round(rev.lastPerformance * 100 || 0)}%
+                      </div>
+                    </div>
+                    <p className="text-xs font-bold text-slate-800 leading-tight mb-2 line-clamp-2 dark:text-slate-100" title={rev.topicName}>{rev.topicName}</p>
+                  </div>
+                  <button onClick={() => { navigate('/revisoes'); }} className="mt-2 w-full py-1.5 bg-red-100 hover:bg-red-500 text-red-700 hover:text-white border border-red-200 rounded text-[11px] font-black transition-all flex items-center justify-center gap-1 cursor-pointer dark:bg-red-900/30 dark:border-red-800/50 dark:text-red-400 dark:hover:bg-red-600 dark:hover:text-white">
+                    <Activity className="w-3 h-3"/> Executar Revisão
+                  </button>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
 
       {completedToday.length === todayTotalSlots && completedToday.length > 0 && (
         <div className="bg-emerald-500 p-5 md:p-6 rounded-2xl shadow-md mb-6 flex flex-col md:flex-row items-center justify-between gap-5 text-white fade-in border border-emerald-600">
@@ -356,58 +346,6 @@ export default function Ciclo() {
           )}
         </div>
       )}
-
-      <div className="bg-white dark:bg-slate-900 p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 mb-3 overflow-hidden">
-        <div className="flex flex-wrap justify-between items-center gap-2 mb-2 border-b border-slate-100 dark:border-slate-800 pb-2">
-          <h3 className="text-[11px] font-black text-slate-600 dark:text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-            <Flame className="w-3.5 h-3.5 text-orange-500" /> Progresso de Execução (Blocos de Hoje)
-          </h3>
-          <div className="bg-sky-50 text-sky-700 border-sky-200 dark:bg-sky-500/15 dark:text-sky-300 border dark:border-sky-500/30 px-2.5 py-0.5 rounded-full text-[10px] font-black uppercase flex items-center gap-1.5">
-            <span className="w-1.5 h-1.5 rounded-full bg-sky-500 dark:bg-sky-400"></span>
-            Queimar Teoria: {completedToday.length} / {todayTotalSlots} Slots
-          </div>
-        </div>
-        
-        <div className="flex gap-2 overflow-x-auto custom-scrollbar pb-1.5 pt-1 snap-x">
-          {Object.values(subjects).map(sub => {
-            const progress = getSubjectProgress(sub.id);
-            const radius = 18;
-            const circumference = 2 * Math.PI * radius;
-            const strokeDashoffset = circumference - (progress / 100) * circumference;
-            const isDone = progress === 100;
-
-            return (
-              <div key={sub.id} className={`min-w-[140px] sm:min-w-[155px] shrink-0 snap-start rounded-lg px-2.5 py-2 flex items-center gap-2.5 relative overflow-hidden transition-all border ${isDone ? 'bg-emerald-50 border-emerald-200 hover:border-emerald-400 dark:bg-emerald-900/20 dark:border-emerald-800/50 dark:hover:border-emerald-600' : 'bg-slate-50 border-slate-200 hover:border-slate-300 dark:bg-slate-850 dark:border-slate-800 dark:hover:border-slate-700'}`}>
-                <div className="relative flex items-center justify-center shrink-0">
-                  <svg className="transform -rotate-90 w-9 h-9 overflow-visible" viewBox="0 0 48 48">
-                    <defs>
-                      <linearGradient id={`grad-cycle-${sub.id}`} x1="0%" y1="0%" x2="100%" y2="100%">
-                        <stop offset="0%" stopColor={isDone ? '#10b981' : '#38bdf8'} />
-                        <stop offset="100%" stopColor={isDone ? '#059669' : '#2dd4bf'} />
-                      </linearGradient>
-                    </defs>
-                    <circle cx="24" cy="24" r={radius} stroke="currentColor" strokeWidth="4.5" fill="transparent" className="text-slate-200 dark:text-slate-800" />
-                    <circle 
-                      cx="24" cy="24" r={radius} 
-                      stroke={`url(#grad-cycle-${sub.id})`} 
-                      strokeWidth="4.5" fill="transparent" 
-                      strokeDasharray={circumference} strokeDashoffset={strokeDashoffset} 
-                      strokeLinecap="round" 
-                      className="transition-all duration-1000 ease-out origin-center" 
-                    />
-                  </svg>
-                  <span className={`absolute text-[9px] font-black tabular-nums ${isDone ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-800 dark:text-white'}`}>{progress}%</span>
-                </div>
-
-                <div className="min-w-0 flex-1">
-                  <span className="text-[10px] font-bold text-slate-700 dark:text-slate-200 uppercase truncate block leading-tight" title={sub.name}>{sub.name}</span>
-                  <span className="text-[9px] text-slate-400 dark:text-slate-500 font-medium block mt-0.5">{isDone ? 'Concluída' : 'Em andamento'}</span>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      </div>
 
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-2.5">
         <h3 className="text-xs font-black text-slate-400 uppercase tracking-wider flex items-center gap-2">

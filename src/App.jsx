@@ -15,9 +15,9 @@ const TreinoTAF = React.lazy(() => import('./pages/TreinoTAF'));
 const Simulados = React.lazy(() => import('./pages/Simulados'));
 const Loja = React.lazy(() => import('./pages/Loja'));
 const CentralEstudos = React.lazy(() => import('./pages/CentralEstudos'));
+const Revisoes = React.lazy(() => import('./pages/Revisoes'));
 const Config = React.lazy(() => import('./pages/Config'));
 const Pet = React.lazy(() => import('./pages/Pet'));
-const RaioXCaveira = React.lazy(() => import('./pages/RaioXCaveira'));
 const DueloFPS = React.lazy(() => import('./pages/DueloFPS'));
 
 import { Routes, Route, Link, NavLink, useLocation, Navigate } from 'react-router-dom';
@@ -450,8 +450,7 @@ export default function App() {
     {
       title: 'Estudo',
       items: [
-        { id: '/estudos', label: 'Central de Estudos', icon: Library, count: allDueToday.length },
-        { id: '/caveira', label: 'Raio-X Caveira', icon: Skull },
+        { id: '/estudos', label: 'Central de Estudos', icon: Library },
         { id: '/simulados', label: 'Simulados', icon: TargetIcon },
       ]
     },
@@ -459,6 +458,7 @@ export default function App() {
       title: 'Desempenho',
       items: [
         { id: '/carreira', label: 'Carreira', icon: Award },
+        { id: '/revisoes', label: 'Revisões', icon: BrainCircuit, count: allDueToday.length },
         { id: '/taf', label: 'Treino TAF', icon: Dumbbell },
         { id: '/duelo', label: 'Duelo CTB', icon: Crosshair },
       ]
@@ -761,14 +761,14 @@ export default function App() {
                   <Route path="/carreira" element={<Dashboard />} />
                   <Route path="/duelo" element={<DueloFPS />} />
 
-                  <Route path="/revisoes" element={<Navigate to="/estudos?tab=revisoes" replace />} />
+                  <Route path="/revisoes" element={<Revisoes />} />
                   <Route path="/ciclo" element={<Navigate to="/estudos?tab=cronograma" replace />} />
                   <Route path="/calendario" element={<Navigate to="/estudos?tab=calendario" replace />} />
                   <Route path="/estatisticas" element={<Navigate to="/estudos?tab=historico" replace />} />
 
                   <Route path="/taf" element={<TreinoTAF />} />
                   <Route path="/simulados" element={<Simulados />} />
-                  <Route path="/caveira" element={<RaioXCaveira />} />
+                  <Route path="/caveira" element={<Navigate to="/estudos?tab=caveira" replace />} />
                   <Route path="/pet" element={<Pet />} />
                   <Route path="/loja" element={<Loja />} />
                   <Route path="/config" element={<Config availableColors={availableColors} />} />

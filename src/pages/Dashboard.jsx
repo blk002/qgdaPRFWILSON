@@ -443,7 +443,7 @@ export default function Dashboard() {
               </p>
               <button
                 type="button"
-                onClick={() => navigate('/estudos?tab=revisoes')}
+                onClick={() => navigate('/revisoes')}
                 className="shrink-0 h-7 px-3 rounded-lg text-[11px] font-black bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 flex items-center gap-1 transition-colors cursor-pointer"
               >
                 <span>{pendingReviewsCount > 0 ? 'Revisar agora' : 'Ver revisões'}</span>

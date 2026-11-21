@@ -10,18 +10,18 @@ import {
 } from 'lucide-react';
 
 const Ciclo = React.lazy(() => import('./Ciclo'));
-const Revisoes = React.lazy(() => import('./Revisoes'));
+const RaioXCaveira = React.lazy(() => import('./RaioXCaveira'));
 const Estatisticas = React.lazy(() => import('./Estatisticas'));
 const Calendario = React.lazy(() => import('./Calendario'));
 
 const TUTORIAL_SEEN_KEY = 'qg_central_tutorial_seen';
 
-const VALID_TABS = new Set(['hoje', 'cronograma', 'revisoes', 'historico', 'calendario', 'edital']);
+const VALID_TABS = new Set(['hoje', 'cronograma', 'caveira', 'historico', 'calendario', 'edital']);
 
 const TAB_CONFIG = [
   { id: 'hoje', label: 'Hoje', icon: Zap, tutorialStep: 0 },
   { id: 'cronograma', label: 'Cronograma', icon: Repeat, tutorialStep: 2 },
-  { id: 'revisoes', label: 'Revisões', icon: BrainCircuit, tutorialStep: 3 },
+  { id: 'caveira', label: 'Raio-X Caveira', icon: Skull, tutorialStep: 3 },
   { id: 'historico', label: 'Histórico', icon: BarChart2, tutorialStep: 5 },
   { id: 'calendario', label: 'Calendário', icon: CalendarIcon, tutorialStep: 4 },
   { id: 'edital', label: 'Edital', icon: BookOpen, tutorialStep: 1 }
@@ -279,9 +279,7 @@ export default function CentralEstudos() {
 
   const {
     subjects = {},
-    reviews = [],
     targetExamDate,
-    getLocalDateStr,
     getEstimatedCompletionDate
   } = useStore();
 
@@ -301,12 +299,6 @@ export default function CentralEstudos() {
     const pct = total > 0 ? Math.round((done / total) * 100) : 0;
     return { totalLessons: total, completedLessons: done, completionPct: pct };
   }, [subjectsList]);
-
-  const todayStr = getLocalDateStr ? getLocalDateStr() : '';
-  const dueReviewsCount = useMemo(
-    () => (reviews || []).filter(r => r && (!todayStr || r.nextDateStr <= todayStr)).length,
-    [reviews, todayStr]
-  );
 
   const estimatedDate = getEstimatedCompletionDate ? getEstimatedCompletionDate() : null;
   const examDateConfigured = Boolean(targetExamDate && targetExamDate !== '2026-08-15');
@@ -342,7 +334,7 @@ export default function CentralEstudos() {
   };
 
   const quickModuleLinks = [
-    { label: 'Raio-X Caveira', path: '/caveira', icon: Skull },
+    { label: 'Revisões FSRS', path: '/revisoes', icon: BrainCircuit },
     { label: 'Simulados', path: '/simulados', icon: Target },
     { label: 'Duelo CTB', path: '/duelo', icon: Crosshair },
     { label: 'Carreira', path: '/carreira', icon: Award }
@@ -491,11 +483,6 @@ export default function CentralEstudos() {
               >
                 <TabIcon className={`w-3.5 h-3.5 shrink-0 ${isActive ? 'text-sky-500 dark:text-sky-400' : ''}`} />
                 <span>{tabItem.label}</span>
-                {tabItem.id === 'revisoes' && dueReviewsCount > 0 && (
-                  <span className="text-[10px] font-black px-1.5 py-0.5 rounded-full leading-none tabular-nums bg-red-500 text-white">
-                    {dueReviewsCount}
-                  </span>
-                )}
               </button>
             );
           })}
@@ -525,7 +512,7 @@ export default function CentralEstudos() {
             }
           >
             {activeTab === 'cronograma' && <Ciclo />}
-            {activeTab === 'revisoes' && <Revisoes />}
+            {activeTab === 'caveira' && <RaioXCaveira />}
             {activeTab === 'historico' && <Estatisticas />}
             {activeTab === 'calendario' && <Calendario />}
           </Suspense>
