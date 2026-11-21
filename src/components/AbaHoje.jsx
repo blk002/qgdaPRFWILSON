@@ -25,6 +25,14 @@ import {
 
 const SHORT_WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
 
+function formatDurationHMS(totalSec) {
+  const safe = Math.max(0, Math.round(Number(totalSec) || 0));
+  const h = Math.floor(safe / 3600);
+  const m = Math.floor((safe % 3600) / 60);
+  const s = safe % 60;
+  return [h, m, s].map((v) => String(v).padStart(2, '0')).join(':');
+}
+
 const isCaveiraCard = (rev) =>
   Boolean(
     rev?.isCaveiraQuestion ||
@@ -56,6 +64,7 @@ export default function AbaHoje({ onGoToTab }) {
     futureScheduleRules = [],
     subjectTimeGoal = {},
     reviews = [],
+    caveiraQuestions = [],
     getLocalDateStr,
     getCycleIndexForDate,
     setClassConfirmModal,
@@ -63,6 +72,16 @@ export default function AbaHoje({ onGoToTab }) {
   } = useStore();
 
   const [reviewIdx, setReviewIdx] = useState(0);
+
+  const caveiraStats = useMemo(() => {
+    const list = Array.isArray(caveiraQuestions) ? caveiraQuestions.filter(Boolean) : [];
+    const total = list.length;
+    const hits = list.filter((q) => q && q.hit).length;
+    const errors = list.filter((q) => q && !q.hit).length;
+    const totalSeconds = list.reduce((acc, q) => acc + (Number(q?.durationSeconds) || 0), 0);
+    const avgTimeSec = total > 0 ? Math.round(totalSeconds / total) : 0;
+    return { total, hits, errors, totalSeconds, avgTimeSec };
+  }, [caveiraQuestions]);
 
   const todayDateStr = useMemo(
     () => (getLocalDateStr ? getLocalDateStr() : ''),
@@ -605,8 +624,55 @@ export default function AbaHoje({ onGoToTab }) {
         </section>
       </div>
 
-      <div className="mt-4">
+      <div className="mt-4 flex flex-col xl:flex-row items-stretch gap-3">
         <StudyConsistencyHeatmap />
+
+        <div className="flex-1 min-w-[240px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 sm:p-4 flex flex-col justify-between divide-y divide-slate-100 dark:divide-slate-800">
+          <div className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+            <span className="text-[11px] font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
+              Questões Respondidas
+            </span>
+            <span className="text-lg font-black text-slate-800 dark:text-white tabular-nums">
+              {caveiraStats.total}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+            <span className="text-[11px] font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
+              Acertos
+            </span>
+            <span className="text-lg font-black text-[#0891b2] dark:text-[#06b6d4] tabular-nums">
+              {caveiraStats.hits}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+            <span className="text-[11px] font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
+              Erros
+            </span>
+            <span className="text-lg font-black text-[#dc2626] dark:text-[#ef4444] tabular-nums">
+              {caveiraStats.errors}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+              Tempo total gasto
+            </span>
+            <span className="text-base font-extrabold text-slate-800 dark:text-white tabular-nums">
+              {formatDurationHMS(caveiraStats.totalSeconds)}
+            </span>
+          </div>
+
+          <div className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
+            <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400">
+              Tempo médio por questão
+            </span>
+            <span className="text-base font-extrabold text-slate-800 dark:text-white tabular-nums">
+              {formatDurationHMS(caveiraStats.avgTimeSec)}
+            </span>
+          </div>
+        </div>
       </div>
     </div>
   );
