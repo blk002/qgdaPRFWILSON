@@ -88,10 +88,10 @@ export default function StudyConsistencyHeatmap() {
           </div>
 
           {/* Rótulos da semana + Grade de quadradinhos (371 células: 7 linhas x 53 colunas) */}
-          <div className="flex items-stretch">
+          <div className="flex items-start">
             <div
-              className="w-8 shrink-0 pr-2 grid gap-[3px] sm:gap-1 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest select-none text-right"
-              style={{ gridTemplateRows: 'repeat(7, minmax(0, 1fr))' }}
+              className="w-8 shrink-0 pr-2 grid gap-y-1 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest select-none text-right"
+              style={{ gridTemplateRows: 'repeat(7, 12px)' }}
             >
               <div className="flex items-center justify-end leading-none" />
               <div className="flex items-center justify-end leading-none">Seg</div>
@@ -103,10 +103,10 @@ export default function StudyConsistencyHeatmap() {
             </div>
 
             <div
-              className="flex-1 grid grid-flow-col gap-[3px] sm:gap-1"
+              className="flex-1 grid grid-flow-col gap-x-[3px] sm:gap-x-1 gap-y-1 justify-items-center"
               style={{
                 gridTemplateColumns: 'repeat(53, minmax(0, 1fr))',
-                gridTemplateRows: 'repeat(7, minmax(0, 1fr))'
+                gridTemplateRows: 'repeat(7, 12px)'
               }}
             >
               {heatmapDataObj.days.map((cellDate, idx) => {
@@ -147,7 +147,7 @@ export default function StudyConsistencyHeatmap() {
                 return (
                   <div
                     key={idx}
-                    className={`w-full aspect-square rounded-[3px] border flex items-center justify-center transition-all group/cell relative cursor-default hover:scale-110 hover:z-30 ${heatClass}`}
+                    className={`w-3 h-3 rounded-[3px] border flex items-center justify-center transition-all group/cell relative cursor-default hover:scale-110 hover:z-30 ${heatClass}`}
                   >
                     {!isFuture && (
                       <div
@@ -170,13 +170,13 @@ export default function StudyConsistencyHeatmap() {
       </div>
 
       {/* Legenda de intensidades */}
-      <div className="flex flex-wrap items-center justify-end gap-2.5 mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-[10px] font-black uppercase text-slate-400 tracking-wider">
+      <div className="flex flex-wrap items-center justify-end gap-2 mt-3 pt-2.5 border-t border-slate-100 dark:border-slate-800 text-[10px] font-black uppercase text-slate-400 tracking-wider">
         <span>Menos</span>
-        <div className="w-3.5 h-3.5 rounded-[3px] bg-slate-200/60 dark:bg-slate-850 border border-slate-300/20 dark:border-slate-800"></div>
-        <div className="w-3.5 h-3.5 rounded-[3px] bg-sky-500/20"></div>
-        <div className="w-3.5 h-3.5 rounded-[3px] bg-sky-500/40"></div>
-        <div className="w-3.5 h-3.5 rounded-[3px] bg-sky-500/70"></div>
-        <div className="w-3.5 h-3.5 rounded-[3px] bg-gradient-to-br from-sky-400 to-teal-400 shadow-[0_0_8px_rgba(56,189,248,0.28)]"></div>
+        <div className="w-3 h-3 rounded-[3px] bg-slate-200/60 dark:bg-slate-850 border border-slate-300/20 dark:border-slate-800"></div>
+        <div className="w-3 h-3 rounded-[3px] bg-sky-500/20"></div>
+        <div className="w-3 h-3 rounded-[3px] bg-sky-500/40"></div>
+        <div className="w-3 h-3 rounded-[3px] bg-sky-500/70"></div>
+        <div className="w-3 h-3 rounded-[3px] bg-gradient-to-br from-sky-400 to-teal-400 shadow-[0_0_8px_rgba(56,189,248,0.28)]"></div>
         <span>Mais</span>
       </div>
     </div>
