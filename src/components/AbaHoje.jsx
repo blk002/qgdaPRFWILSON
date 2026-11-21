@@ -1,6 +1,7 @@
 import React, { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import CaveiraReviewQuestionModal from './CaveiraReviewQuestionModal';
+import StudyConsistencyHeatmap from './StudyConsistencyHeatmap';
 import {
   parseDurationToSeconds,
   formatSecondsToClock,
@@ -602,6 +603,10 @@ export default function AbaHoje({ onGoToTab }) {
             </div>
           )}
         </section>
+      </div>
+
+      <div className="mt-4">
+        <StudyConsistencyHeatmap />
       </div>
     </div>
   );
