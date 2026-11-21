@@ -16,6 +16,8 @@ const Simulados = React.lazy(() => import('./pages/Simulados'));
 const Loja = React.lazy(() => import('./pages/Loja'));
 const CentralEstudos = React.lazy(() => import('./pages/CentralEstudos'));
 const Revisoes = React.lazy(() => import('./pages/Revisoes'));
+const Estatisticas = React.lazy(() => import('./pages/Estatisticas'));
+const Edital = React.lazy(() => import('./pages/Edital'));
 const Config = React.lazy(() => import('./pages/Config'));
 const Pet = React.lazy(() => import('./pages/Pet'));
 const DueloFPS = React.lazy(() => import('./pages/DueloFPS'));
@@ -25,7 +27,7 @@ import { Toaster, toast } from 'sonner';
 import { AnimatePresence, motion } from 'framer-motion';
 import { 
   Search, Library, Clock, Calendar as CalendarIcon, Repeat, Dumbbell, 
-  Target as TargetIcon, Store, Settings, Award, BrainCircuit, 
+  Target as TargetIcon, Store, Settings, Award, BrainCircuit, BarChart2, BookOpen,
   X, Check, ArrowRight, ShieldCheck, Trophy, Sun, Moon, Coins, 
   AlertTriangle, Info, LogOut, Shield, RefreshCw, Dog, Skull, Crosshair, ListFilter,
   PanelLeftClose, PanelLeftOpen
@@ -459,6 +461,8 @@ export default function App() {
       items: [
         { id: '/carreira', label: 'Carreira', icon: Award },
         { id: '/revisoes', label: 'Revisões', icon: BrainCircuit, count: allDueToday.length },
+        { id: '/estatisticas', label: 'Histórico', icon: BarChart2 },
+        { id: '/edital', label: 'Edital', icon: BookOpen },
         { id: '/taf', label: 'Treino TAF', icon: Dumbbell },
         { id: '/duelo', label: 'Duelo CTB', icon: Crosshair },
       ]
@@ -764,7 +768,9 @@ export default function App() {
                   <Route path="/revisoes" element={<Revisoes />} />
                   <Route path="/ciclo" element={<Navigate to="/estudos?tab=cronograma" replace />} />
                   <Route path="/calendario" element={<Navigate to="/estudos?tab=calendario" replace />} />
-                  <Route path="/estatisticas" element={<Navigate to="/estudos?tab=historico" replace />} />
+                  <Route path="/estatisticas" element={<Estatisticas />} />
+                  <Route path="/historico" element={<Navigate to="/estatisticas" replace />} />
+                  <Route path="/edital" element={<Edital />} />
 
                   <Route path="/taf" element={<TreinoTAF />} />
                   <Route path="/simulados" element={<Simulados />} />
