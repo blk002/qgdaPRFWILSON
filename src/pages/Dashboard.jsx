@@ -391,42 +391,42 @@ export default function Dashboard() {
       </section>
 
       {/* MISSÃO DE HOJE */}
-      <section className="glass-card rounded-2xl p-4 sm:p-5 mb-6 border border-slate-200 dark:border-slate-800/90">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800/80">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-blue-500/15 border border-blue-500/25 flex items-center justify-center text-blue-600 dark:text-blue-400">
-              <Target className="w-4 h-4" />
+      <section className="glass-card rounded-xl p-3.5 sm:p-4 mb-4 border border-slate-200 dark:border-slate-800">
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-100 dark:border-slate-800">
+          <div className="flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-slate-100 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 flex items-center justify-center text-amber-500">
+              <Target className="w-3.5 h-3.5" />
             </div>
             <div>
-              <h3 className="text-sm sm:text-base font-black text-slate-800 dark:text-slate-100 leading-tight">Missão de Hoje</h3>
-              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Resumo operacional imediato para acelerar sua aprovação</p>
+              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 leading-tight">Missão de Hoje</h3>
+              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Prioridades imediatas para hoje</p>
             </div>
           </div>
-          <span className="text-[11px] font-bold px-2.5 py-1 rounded-full bg-slate-100 text-slate-600 dark:bg-slate-850 dark:text-slate-300 border border-slate-200/80 dark:border-slate-700/80 tabular-nums">
+          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 dark:bg-slate-850 dark:text-slate-300 border border-slate-200 dark:border-slate-700 tabular-nums uppercase">
             {new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}
           </span>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
+        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
           {/* Coluna 1: Revisões FSRS */}
-          <div className="rounded-xl p-4 bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between gap-3">
-            <div className="flex items-start justify-between gap-3">
+          <div className="rounded-lg p-3 bg-slate-50/90 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between gap-2.5">
+            <div className="flex items-start justify-between gap-2">
               <div>
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">Revisões FSRS</span>
-                <div className="mt-1 flex items-baseline gap-2">
-                  <span className={`text-2xl sm:text-3xl font-black tabular-nums leading-none ${pendingReviewsCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">Revisões FSRS</span>
+                <div className="mt-0.5 flex items-baseline gap-2">
+                  <span className={`text-xl sm:text-2xl font-black tabular-nums leading-none ${pendingReviewsCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                     {pendingReviewsCount}
                   </span>
                   <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
                     {pendingReviewsCount === 0
-                      ? 'Tudo em dia por hoje!'
+                      ? 'Tudo em dia por hoje'
                       : pendingReviewsCount === 1
                         ? 'questão aguardando revisão'
                         : 'questões aguardando revisão'}
                   </span>
                 </div>
               </div>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${
+              <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${
                 pendingReviewsCount > 0
                   ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80'
                   : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80'
@@ -435,32 +435,32 @@ export default function Dashboard() {
               </span>
             </div>
 
-            <div className="flex items-center justify-between gap-2 pt-1">
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+            <div className="flex items-center justify-between gap-2 pt-0.5">
+              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
                 {pendingReviewsCount > 0
-                  ? 'Elimine sua fila de retenção antes de avançar na teoria.'
-                  : 'Memória consolidada. Excelente constância tática.'}
+                  ? 'Elimine sua fila antes da teoria.'
+                  : 'Memória em dia.'}
               </p>
               <button
                 type="button"
                 onClick={() => navigate('/estudos?tab=revisoes')}
-                className="shrink-0 h-8 px-3 rounded-lg text-xs font-bold bg-blue-600 hover:bg-blue-700 text-white flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                className="shrink-0 h-7 px-3 rounded-lg text-[11px] font-black bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-[#8FA88B] dark:hover:bg-[#9FB79B] dark:text-[#0D0F10] flex items-center gap-1 transition-colors cursor-pointer"
               >
                 <span>{pendingReviewsCount > 0 ? 'Revisar agora' : 'Ver revisões'}</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="w-3 h-3" />
               </button>
             </div>
           </div>
 
           {/* Coluna 2: Blocos do Ciclo de Hoje */}
-          <div className="rounded-xl p-4 bg-slate-50/80 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between gap-3">
-            <div className="flex items-start justify-between gap-3">
+          <div className="rounded-lg p-3 bg-slate-50/90 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between gap-2.5">
+            <div className="flex items-start justify-between gap-2">
               <div>
-                <span className="text-[11px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1.5">
-                  <Calendar className="w-3.5 h-3.5 text-blue-500" /> Ciclo de Hoje
+                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
+                  <Calendar className="w-3 h-3 text-slate-400" /> Ciclo de Hoje
                 </span>
-                <div className="mt-1 flex items-baseline gap-2">
-                  <span className="text-2xl sm:text-3xl font-black tabular-nums text-slate-800 dark:text-slate-100 leading-none">
+                <div className="mt-0.5 flex items-baseline gap-2">
+                  <span className="text-xl sm:text-2xl font-black tabular-nums text-slate-800 dark:text-slate-100 leading-none">
                     {todayBlocks.length > 0 ? `${completedBlocksCount}/${todayBlocks.length}` : '0'}
                   </span>
                   <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
@@ -473,22 +473,22 @@ export default function Dashboard() {
                 </div>
               </div>
               {todayBlocks.length > 0 && (
-                <span className={`text-[10px] font-black px-2 py-0.5 rounded-full uppercase ${
+                <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${
                   completedBlocksCount === todayBlocks.length
                     ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80'
-                    : 'bg-blue-100 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300 border border-blue-200 dark:border-blue-800/80'
+                    : 'bg-slate-200 text-slate-700 dark:bg-slate-900 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
                 }`}>
                   {Math.round((completedBlocksCount / todayBlocks.length) * 100)}%
                 </span>
               )}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
-              <div className="flex flex-wrap items-center gap-1.5 min-w-0 flex-1">
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
+              <div className="flex flex-wrap items-center gap-1 min-w-0 flex-1">
                 {todayBlocks.slice(0, 5).map((block) => (
                   <span
                     key={block.slotIdx}
-                    className={`inline-flex items-center gap-1 text-[10px] font-bold px-2 py-0.5 rounded-md truncate max-w-[140px] ${block.color} ${block.completed ? 'opacity-60 line-through' : ''}`}
+                    className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded truncate max-w-[130px] ${block.color} ${block.completed ? 'opacity-60 line-through' : ''}`}
                     title={`${block.name}${block.completed ? ' (concluído)' : ''}`}
                   >
                     {block.completed && <CheckIcon className="w-2.5 h-2.5 shrink-0" />}
@@ -504,10 +504,10 @@ export default function Dashboard() {
               <button
                 type="button"
                 onClick={() => navigate('/estudos?tab=cronograma')}
-                className="shrink-0 h-8 px-3 rounded-lg text-xs font-bold bg-slate-800 hover:bg-slate-900 dark:bg-slate-800 dark:hover:bg-slate-700 text-white border border-slate-700/50 flex items-center gap-1.5 transition-colors cursor-pointer shadow-xs"
+                className="shrink-0 h-7 px-3 rounded-lg text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-900 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700 flex items-center gap-1 transition-colors cursor-pointer"
               >
                 <span>Ir para o Ciclo</span>
-                <ArrowRight className="w-3.5 h-3.5" />
+                <ArrowRight className="w-3 h-3" />
               </button>
             </div>
           </div>
