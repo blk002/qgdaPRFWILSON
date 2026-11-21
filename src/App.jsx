@@ -84,7 +84,7 @@ export default function App() {
     caveiraFilterMemory, cycle, currentDayIndex, completedToday,
     completedTodayDate, calendarOverrides, futureScheduleRules,
     cycleScheduleType, cycleWeekStart, cycleCarryoverOffset,
-    getCycleIndexForDate
+    getCycleIndexForDate, studyHistory, caveiraDailyGoal
   } = useStore();
   
   const [promotionModal, setPromotionModal] = useState(null);
@@ -632,6 +632,40 @@ export default function App() {
           payload: { memory: caveiraFilterMemory }
         }, '*');
       }
+
+      // #5: Credenciais de sessão para sync direto Extensão -> Supabase (sem depender da aba do QG aberta)
+      if (session?.access_token && session?.user?.id) {
+        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
+        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+        if (supabaseUrl && anonKey && !supabaseUrl.includes('placeholder')) {
+          window.postMessage({
+            source: 'QG_WEB_APP',
+            type: 'QG_PRF_SYNC_CLOUD_CREDS',
+            payload: {
+              supabaseUrl,
+              anonKey,
+              accessToken: session.access_token,
+              refreshToken: session.refresh_token || '',
+              expiresAt: session.expires_at || 0,
+              userId: session.user.id
+            }
+          }, '*');
+        }
+      }
+
+      // #4: Estado de revisões pendentes & streak do dia para alarmes/notificações em segundo plano
+      const pendingReviewsCount = (reviews || []).filter(r => r && r.nextDateStr <= todayDateStr).length;
+      const streakActiveToday = Boolean((studyHistory?.[todayDateStr] || 0) > 0);
+      window.postMessage({
+        source: 'QG_WEB_APP',
+        type: 'QG_PRF_SYNC_REMINDER_STATE',
+        payload: {
+          pendingReviewsCount,
+          streakActiveToday,
+          todayDate: todayDateStr,
+          dailyGoal: Number(caveiraDailyGoal) || 50
+        }
+      }, '*');
     } catch (_) {}
   }, [
     session,
@@ -648,6 +682,9 @@ export default function App() {
     cycleCarryoverOffset,
     caveiraFilterMemory,
     courseIndexCache,
+    reviews,
+    studyHistory,
+    caveiraDailyGoal,
     getLocalDateStr,
     getCycleIndexForDate
   ]);

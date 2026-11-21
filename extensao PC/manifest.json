@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "QG da PRF — Rastreador Caveira",
-  "version": "2.0.0",
+  "version": "2.1.0",
   "description": "Rastreia e diagnostica cada questão resolvida no Projeto Caveira, sincronizando pontos fortes e fracos no QG da PRF.",
   "icons": {
     "16": "icons/icon16.png",
@@ -11,7 +11,9 @@
   "permissions": [
     "storage",
     "tabs",
-    "scripting"
+    "scripting",
+    "alarms",
+    "notifications"
   ],
   "host_permissions": [
     "*://*.caveira.com/*",
@@ -22,6 +24,8 @@
     "*://projetocaveira.com.br/*",
     "*://*.projetocaveira.com/*",
     "*://projetocaveira.com/*",
+    "*://*.mediadelivery.net/*",
+    "*://*.supabase.co/*",
     "http://localhost:*/*",
     "http://127.0.0.1:*/*",
     "https://blk002.github.io/*"
@@ -49,8 +53,31 @@
         "*://*.projetocaveira.com/*",
         "*://projetocaveira.com/*"
       ],
+      "js": ["api_sniffer.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": [
+        "*://*.caveira.com/*",
+        "*://caveira.com/*",
+        "*://*.caveira.com.br/*",
+        "*://caveira.com.br/*",
+        "*://*.projetocaveira.com.br/*",
+        "*://projetocaveira.com.br/*",
+        "*://*.projetocaveira.com/*",
+        "*://projetocaveira.com/*"
+      ],
       "js": ["treeMatcher.js", "caveiraResolver.js", "content.js"],
       "css": ["content.css"],
+      "run_at": "document_idle"
+    },
+    {
+      "matches": [
+        "*://*.mediadelivery.net/*"
+      ],
+      "js": ["player_bridge.js"],
+      "all_frames": true,
       "run_at": "document_idle"
     },
     {

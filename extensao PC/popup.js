@@ -220,6 +220,48 @@ document.addEventListener('DOMContentLoaded', () => {
     sel.addEventListener('change', save);
   })();
 
+  // Toggle de alertas em 2º plano (#4) & status do Sync Direto (#5)
+  (function initBackgroundFeatures() {
+    const notifCb = document.getElementById('pref-notifications');
+    const syncEl = document.getElementById('direct-sync-status');
+
+    const renderStatus = () => {
+      chrome.storage.local.get(['qg_notifications_enabled', 'qg_cloud_auth', 'qg_last_direct_cloud_sync'], (r) => {
+        if (notifCb) {
+          notifCb.checked = r.qg_notifications_enabled !== false;
+        }
+        if (syncEl) {
+          if (r.qg_cloud_auth?.accessToken && r.qg_cloud_auth?.userId) {
+            const last = r.qg_last_direct_cloud_sync;
+            if (last) {
+              const dt = new Date(last);
+              const hm = `${String(dt.getHours()).padStart(2, '0')}:${String(dt.getMinutes()).padStart(2, '0')}`;
+              syncEl.textContent = `☁️ Sync Direto Supabase: Ativo (último às ${hm})`;
+            } else {
+              syncEl.textContent = '☁️ Sync Direto Supabase: Ativo (sem QG aberto)';
+            }
+            syncEl.style.color = '#6ee7b7';
+          } else {
+            syncEl.textContent = '☁️ Sync Direto: abra o QG 1x para vincular';
+            syncEl.style.color = '#fbbf24';
+          }
+        }
+      });
+    };
+
+    renderStatus();
+    if (notifCb) {
+      notifCb.addEventListener('change', () => {
+        chrome.storage.local.set({ qg_notifications_enabled: notifCb.checked });
+      });
+    }
+    chrome.storage.onChanged.addListener((changes, area) => {
+      if (area === 'local' && (changes.qg_cloud_auth || changes.qg_last_direct_cloud_sync || changes.qg_notifications_enabled)) {
+        renderStatus();
+      }
+    });
+  })();
+
   // Botão Abrir QG da PRF
   document.getElementById('btn-open-qg').addEventListener('click', async () => {
     const targetUrl = 'https://blk002.github.io/qgdaPRFWILSON/#/estudos?tab=caveira';

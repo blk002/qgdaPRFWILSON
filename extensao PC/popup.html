@@ -130,7 +130,7 @@
   <div class="header">
     <div class="logo-badge">💀</div>
     <div class="title">
-      <h1>QG da PRF • Caveira <span id="ext-version" style="font-size:10px;color:#a1a1aa;opacity:0.9;">v2.0.0</span></h1>
+      <h1>QG da PRF • Caveira <span id="ext-version" style="font-size:10px;color:#a1a1aa;opacity:0.9;">v2.1.0</span></h1>
       <p>Rastreador de Questões</p>
     </div>
   </div>
@@ -200,6 +200,13 @@
       <option value="5">5 alternativas</option>
     </select>
     <p style="font-size:9px;color:#71717a;margin-top:6px;font-weight:600;">Usado quando o site não enviar a escolha.</p>
+    <div style="margin-top:8px;padding-top:8px;border-top:1px solid rgba(255,255,255,0.06);display:flex;flex-direction:column;gap:5px;">
+      <label style="display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:700;color:#bae6fd;cursor:pointer;">
+        <input type="checkbox" id="pref-notifications" checked>
+        <span>🔔 Alertas FSRS &amp; Streak em 2º plano</span>
+      </label>
+      <div id="direct-sync-status" style="font-size:9.5px;font-weight:700;color:#94a3b8;">☁️ Sync Direto: verificando...</div>
+    </div>
   </div>
 
   <button class="btn btn-primary" id="btn-open-qg">

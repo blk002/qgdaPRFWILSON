@@ -1,7 +1,7 @@
 // QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1 — Detecção Inteligente por Scroll & Viewport)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v2.0.0 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v2.1.0 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -24,6 +24,8 @@
   const FILTER_MEMORY_CLOUD_KEY = 'qg_filter_memory_cloud';
   const TODAY_MISSION_KEY = 'qg_today_mission';
   const SUBJECT_SPEEDS_KEY = 'qg_subject_speeds';
+  const PLAYER_SPEED_KEY = 'qg_player_target_speed';
+  const PLAYER_SEEK_KEY = 'qg_player_pending_seek';
   const PENDING_CATALOG_KEY = 'qg_pending_course_catalog';
   const PENDING_SIMULADOS_KEY = 'qg_pending_simulados_import';
   const PENDING_PDF_KEY = 'qg_pending_pdf_study';
@@ -49,6 +51,11 @@
   let pdfReadingSeconds = 0;
   let pdfTimerInterval = null;
   let lastPlaygroundSpeedApplied = 0;
+  let lastSeekUrlApplied = '';
+  let apiCourseCatalogCache = null;
+  const apiQuestionCache = new Map();
+  let apiSimuladosCache = [];
+  let handleApiSnifferMessageRef = null;
   const lessonCompletionStateByUrl = new Map();
   const observedVideos = new WeakSet();
   const peekedCourseUrls = new Set();
@@ -241,6 +248,9 @@
     if (handleDocumentKeydownRef) {
       document.removeEventListener('keydown', handleDocumentKeydownRef);
     }
+    if (handleApiSnifferMessageRef) {
+      window.removeEventListener('message', handleApiSnifferMessageRef);
+    }
   }
 
   window.addEventListener('qg-caveira-teardown', teardownInstance, { once: true });
@@ -407,9 +417,89 @@
           applyCaveiraPracticeFilter(msg.payload);
           sendResponse({ ok: true });
         }
+        if (msg && msg.type === 'PLAYER_VIDEO_ENDED') {
+          showLessonCompletedBanner();
+          sendResponse({ ok: true });
+        }
       });
     } catch (_) {}
   }
+
+  // Listener passivo do Sniffer de API (#2 — MAIN world -> Isolated world)
+  function classifySubjectBloco(subjectName = '') {
+    const s = normalizeFilterText(subjectName);
+    if (!s) return 'Bloco I';
+    if (/transito|ctb|contran|resolucao|habilitacao|sinalizacao/.test(s)) return 'Bloco II';
+    if (/constitucional|administrativo|penal|processual|direitos humanos|legislacao especial|leis especiais/.test(s)) return 'Bloco III';
+    return 'Bloco I';
+  }
+
+  handleApiSnifferMessageRef = (event) => {
+    if (isDestroyed || event.source !== window) return;
+    const msg = event.data;
+    if (!msg || msg.source !== 'QG_CAVEIRA_API_SNIFFER') return;
+
+    if (msg.type === 'API_COURSE_CATALOG' && msg.payload && Array.isArray(msg.payload.modules)) {
+      const prevCount = Array.isArray(apiCourseCatalogCache?.modules) ? apiCourseCatalogCache.modules.length : 0;
+      if (msg.payload.modules.length >= prevCount) {
+        apiCourseCatalogCache = msg.payload;
+      }
+      return;
+    }
+
+    if (msg.type === 'API_QUESTION_DATA' && Array.isArray(msg.payload?.questions)) {
+      msg.payload.questions.forEach((aq) => {
+        if (!aq || !aq.id) return;
+        const prevApi = apiQuestionCache.get(aq.id) || {};
+        const mergedApi = { ...prevApi, ...aq };
+        apiQuestionCache.set(aq.id, mergedApi);
+
+        const existing = questionsCache.find((q) => q && q.id === aq.id);
+        if (existing) {
+          const needsComment = !existing.teacherComment && mergedApi.teacherComment;
+          const needsStats = existing.communityCorrectPct === undefined && mergedApi.communityCorrectPct !== undefined;
+          const needsNote = !existing.userNote && mergedApi.userNote;
+          if (needsComment || needsStats || needsNote) {
+            saveQuestion({
+              ...existing,
+              ...(needsComment ? { teacherComment: mergedApi.teacherComment, commentSource: mergedApi.commentSource || 'professor' } : {}),
+              ...(needsStats ? { communityCorrectPct: mergedApi.communityCorrectPct, communityErrorPct: mergedApi.communityErrorPct } : {}),
+              ...(needsNote ? { userNote: mergedApi.userNote } : {})
+            }, true);
+          }
+        }
+      });
+      return;
+    }
+
+    if (msg.type === 'API_SIMULADOS_DATA' && Array.isArray(msg.payload?.simulados)) {
+      const nextMap = new Map();
+      apiSimuladosCache.forEach((s) => { if (s?.caveiraId || s?.title) nextMap.set(s.caveiraId || s.title, s); });
+      msg.payload.simulados.forEach((rawSim) => {
+        if (!rawSim) return;
+        let b1 = 0; let b2 = 0; let b3 = 0; let hasBlocks = false;
+        if (Array.isArray(rawSim.subjectScores) && rawSim.subjectScores.length > 0) {
+          hasBlocks = true;
+          rawSim.subjectScores.forEach((sc) => {
+            const b = classifySubjectBloco(sc.name);
+            const val = Number(sc.liquida) || ((Number(sc.hits) || 0) - (Number(sc.errors) || 0));
+            if (b === 'Bloco I') b1 += val;
+            else if (b === 'Bloco II') b2 += val;
+            else b3 += val;
+          });
+        }
+        const enriched = {
+          ...rawSim,
+          data: rawSim.data || getTodaySessionDate(),
+          ...(hasBlocks ? { b1Liquida: b1, b2Liquida: b2, b3Liquida: b3 } : {})
+        };
+        const key = enriched.caveiraId || `${enriched.title}|${enriched.data}`;
+        nextMap.set(key, enriched);
+      });
+      apiSimuladosCache = Array.from(nextMap.values());
+    }
+  };
+  window.addEventListener('message', handleApiSnifferMessageRef);
 
   // --- HELPERS DAS 15 INTEGRAÇÕES v2.0.0 (#1, #2, #27, #29, #30, #31) ---
   function resolveSubjectSpeedForContext(contextTitle = '') {
@@ -442,8 +532,33 @@
         speedBadge.style.display = 'none';
       }
     }
-    if (targetSpeed === 1 && lastPlaygroundSpeedApplied === 0) return;
-    lastPlaygroundSpeedApplied = targetSpeed;
+
+    // #1 + #28: Auto-seek no iframe mediadelivery.net quando ?t=<segundos> estiver na URL
+    try {
+      if (window.location.href !== lastSeekUrlApplied) {
+        lastSeekUrlApplied = window.location.href;
+        const seekParam = Number(new URLSearchParams(window.location.search || '').get('t'));
+        if (Number.isFinite(seekParam) && seekParam > 0) {
+          chrome.storage.local.set({ [PLAYER_SEEK_KEY]: { seconds: seekParam, savedAt: Date.now() } }, () => {
+            if (chrome.runtime?.sendMessage) {
+              chrome.runtime.sendMessage({ type: 'SEEK_VIDEO_TO', payload: { seconds: seekParam } }).catch(() => {});
+            }
+          });
+        }
+      }
+    } catch (_) {}
+
+    // #1 + #30: Enviar velocidade para o iframe player_bridge.js via storage + runtime message
+    if (targetSpeed !== lastPlaygroundSpeedApplied) {
+      lastPlaygroundSpeedApplied = targetSpeed;
+      try {
+        chrome.storage.local.set({ [PLAYER_SPEED_KEY]: { speed: targetSpeed, updatedAt: Date.now() } }, () => {
+          if (chrome.runtime?.sendMessage) {
+            chrome.runtime.sendMessage({ type: 'APPLY_PLAYER_SPEED', payload: { speed: targetSpeed } }).catch(() => {});
+          }
+        });
+      } catch (_) {}
+    }
 
     try {
       document.querySelectorAll('video').forEach((v) => {
@@ -456,14 +571,6 @@
             showLessonCompletedBanner();
           });
         }
-      });
-      // Fallback seguro via postMessage para player embarcado (quando suportado)
-      document.querySelectorAll('iframe').forEach((fr) => {
-        try {
-          if (fr?.contentWindow && targetSpeed !== 1) {
-            fr.contentWindow.postMessage({ method: 'setPlaybackRate', value: targetSpeed }, '*');
-          }
-        } catch (_) {}
       });
     } catch (_) {}
   }
@@ -566,14 +673,31 @@
       lessons.push({ id: videoId || null, title, durationMin, completed, url });
     });
 
-    // Agrupa sob o módulo ativo ou cabeçalho visível
+    // Mescla módulos capturados passivamente pela API (#2 — todos os módulos de 1 vez)
+    const apiMods = Array.isArray(apiCourseCatalogCache?.modules) ? apiCourseCatalogCache.modules : [];
+    apiMods.forEach((m) => {
+      if (m && m.name && Array.isArray(m.lessons) && m.lessons.length > 0) {
+        modulesMap.set(m.name, m);
+      }
+    });
     if (lessons.length > 0) {
-      modulesMap.set(activeModName, { name: activeModName, lessons });
+      const existingMod = modulesMap.get(activeModName);
+      if (existingMod && Array.isArray(existingMod.lessons)) {
+        const byTitle = new Map(existingMod.lessons.map(l => [normalizeCourseIndexKey(l.title), l]));
+        lessons.forEach(l => {
+          const k = normalizeCourseIndexKey(l.title);
+          if (!byTitle.has(k)) byTitle.set(k, l);
+        });
+        modulesMap.set(activeModName, { name: activeModName, lessons: Array.from(byTitle.values()) });
+      } else {
+        modulesMap.set(activeModName, { name: activeModName, lessons });
+      }
     }
 
+    const totalLessonsCount = Array.from(modulesMap.values()).reduce((sum, m) => sum + (m.lessons?.length || 0), 0);
     const payload = {
-      courseId,
-      courseName,
+      courseId: apiCourseCatalogCache?.courseId || courseId,
+      courseName: apiCourseCatalogCache?.courseName || courseName,
       modules: Array.from(modulesMap.values()),
       syncedAt: Date.now()
     };
@@ -584,7 +708,7 @@
       });
     } catch (_) {}
 
-    return { modulesCount: payload.modules.length, lessonsCount: lessons.length };
+    return { modulesCount: payload.modules.length, lessonsCount: totalLessonsCount };
   }
 
   function scrapeSimuladosAndImport() {
@@ -592,6 +716,15 @@
       .filter((el) => !el.closest('#qg-caveira-hud') && isElementVisible(el));
     const results = [];
     const seen = new Set();
+
+    // Prioriza simulados ricos vindos da API (com B1/B2/B3 quando disponíveis)
+    apiSimuladosCache.forEach((sim) => {
+      if (!sim) return;
+      const key = sim.caveiraId || `${sim.title}|${sim.data || ''}`;
+      if (seen.has(key)) return;
+      seen.add(key);
+      results.push(sim);
+    });
 
     cards.forEach((card, idx) => {
       const text = (card.innerText || card.textContent || '').replace(/\n+/g, ' | ').replace(/\s+/g, ' ').trim();
@@ -6490,20 +6623,38 @@
     ) || null;
 
     const patch = {};
+    // #2: Primeiro aproveita dados já capturados passivamente da API (zero cliques em abas)
+    const apiData = apiQuestionCache.get(qId);
+    if (apiData) {
+      if (apiData.teacherComment) {
+        patch.teacherComment = apiData.teacherComment;
+        patch.commentSource = apiData.commentSource || 'professor';
+      }
+      if (apiData.communityCorrectPct !== undefined) {
+        patch.communityCorrectPct = apiData.communityCorrectPct;
+        patch.communityErrorPct = apiData.communityErrorPct;
+      }
+      if (apiData.userNote) {
+        patch.userNote = apiData.userNote;
+      }
+    }
+
     // Verifica estatísticas e comentário visíveis imediatamente
     const inlineStats = extractCommunityStatsFromNode(card.querySelector('.stats-box') || card);
-    if (inlineStats) Object.assign(patch, inlineStats);
+    if (inlineStats && patch.communityCorrectPct === undefined) Object.assign(patch, inlineStats);
 
     const immediateProf = extractTeacherCommentFromCard(card);
-    if (immediateProf) {
+    if (immediateProf && !patch.teacherComment) {
       patch.teacherComment = immediateProf;
       patch.commentSource = 'professor';
     }
 
     const waitMs = (ms) => new Promise(r => setTimeout(r, ms));
+    let didClickTab = false;
     const saveScrollAndClick = async (tabEl, delay = 260) => {
       if (!tabEl || !card.isConnected || isDestroyed) return false;
       const yBefore = window.scrollY;
+      didClickTab = true;
       tabEl.click();
       if (Math.abs(window.scrollY - yBefore) > 4) window.scrollTo({ top: yBefore, behavior: 'instant' });
       await waitMs(delay);
@@ -6544,7 +6695,7 @@
         }
 
         // #3 Captura Anotações privadas
-        if (notesTab && !existing.userNote) {
+        if (notesTab && !patch.userNote && !existing.userNote) {
           if (await saveScrollAndClick(notesTab, 220)) {
             const noteTxt = extractPrivateNoteFromCard(card);
             if (noteTxt) patch.userNote = noteTxt;
@@ -6552,14 +6703,14 @@
         }
 
         // #12 Captura % de acertos da comunidade (Estatísticas)
-        if (!patch.communityCorrectPct && existing.communityCorrectPct === undefined && statsTab) {
+        if (patch.communityCorrectPct === undefined && existing.communityCorrectPct === undefined && statsTab) {
           if (await saveScrollAndClick(statsTab, 220)) {
             const st = extractCommunityStatsFromNode(card.querySelector('.q-tab-panel') || card);
             if (st) Object.assign(patch, st);
           }
         }
 
-        if (activeTabBefore && activeTabBefore.isConnected) {
+        if (didClickTab && activeTabBefore && activeTabBefore.isConnected) {
           const yBefore = window.scrollY;
           activeTabBefore.click();
           if (Math.abs(window.scrollY - yBefore) > 4) window.scrollTo({ top: yBefore, behavior: 'instant' });

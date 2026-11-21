@@ -22,6 +22,8 @@
   const PENDING_CATALOG_KEY = 'qg_pending_course_catalog';
   const PENDING_SIMULADOS_KEY = 'qg_pending_simulados_import';
   const PENDING_PDF_KEY = 'qg_pending_pdf_study';
+  const CLOUD_AUTH_KEY = 'qg_cloud_auth';
+  const REMINDER_STATE_KEY = 'qg_reminder_state';
   const MAX_BUCKET_QUESTIONS = 1500;
   let suppressFilterEchoUntil = 0;
   let isBridgeDestroyed = false;
@@ -481,6 +483,19 @@
 
       if (event.data.type === 'USER_SIGNED_OUT') {
         switchUserBucket(null);
+        try { chrome.storage.local.remove([CLOUD_AUTH_KEY, REMINDER_STATE_KEY]); } catch (_) {}
+      }
+
+      if (event.data.type === 'QG_PRF_SYNC_CLOUD_CREDS' && event.data.payload?.userId) {
+        try {
+          chrome.storage.local.set({ [CLOUD_AUTH_KEY]: { ...event.data.payload, updatedAt: Date.now() } });
+        } catch (_) {}
+      }
+
+      if (event.data.type === 'QG_PRF_SYNC_REMINDER_STATE' && event.data.payload) {
+        try {
+          chrome.storage.local.set({ [REMINDER_STATE_KEY]: { ...event.data.payload, updatedAt: Date.now() } });
+        } catch (_) {}
       }
 
       if (event.data.type === 'FETCH_CAVEIRA_DATA') {
