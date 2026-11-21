@@ -55,13 +55,13 @@ export default function StudyConsistencyHeatmap() {
         </div>
       </div>
 
-      <div className="overflow-x-auto custom-scrollbar pt-2.5 pb-1">
+      <div className="overflow-x-auto no-scrollbar md:overflow-visible pt-2.5 pb-1">
         <div className="w-max">
           {/* Linha de Meses */}
           <div className="flex items-end mb-1.5 select-none">
             <div className="w-8 shrink-0 pr-2" />
             <div
-              className="grid gap-1 h-3.5"
+              className="grid gap-[3px] h-3.5"
               style={{ gridTemplateColumns: 'repeat(53, 12px)' }}
             >
               {heatmapDataObj.weeks.map((weekStart, colIdx) => {
@@ -90,7 +90,7 @@ export default function StudyConsistencyHeatmap() {
           {/* Rótulos da semana + Grade de quadradinhos (371 células: 7 linhas x 53 colunas) */}
           <div className="flex items-start">
             <div
-              className="w-8 shrink-0 pr-2 grid gap-1 text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest select-none text-right"
+              className="w-8 shrink-0 pr-2 grid gap-[3px] text-[9px] font-black text-slate-400 dark:text-slate-500 uppercase tracking-widest select-none text-right"
               style={{ gridTemplateRows: 'repeat(7, 12px)' }}
             >
               <div className="flex items-center justify-end leading-none" />
@@ -103,7 +103,7 @@ export default function StudyConsistencyHeatmap() {
             </div>
 
             <div
-              className="grid grid-flow-col gap-1"
+              className="grid grid-flow-col gap-[3px]"
               style={{
                 gridTemplateColumns: 'repeat(53, 12px)',
                 gridTemplateRows: 'repeat(7, 12px)'
@@ -133,16 +133,16 @@ export default function StudyConsistencyHeatmap() {
                 const colIdx = Math.floor(idx / 7);
                 const rowIdx = idx % 7;
                 let tooltipAlignClass = 'left-1/2 -translate-x-1/2';
-                if (colIdx < 5) {
+                if (colIdx < 8) {
                   tooltipAlignClass = 'left-0';
-                } else if (colIdx > 47) {
+                } else if (colIdx > 43) {
                   tooltipAlignClass = 'right-0 left-auto';
                 }
 
                 const tooltipVerticalClass =
                   rowIdx < 2
-                    ? 'top-full mt-2 -translate-y-1 group-hover/cell:translate-y-0'
-                    : 'bottom-full mb-2 translate-y-1 group-hover/cell:translate-y-0';
+                    ? 'top-full mt-2'
+                    : 'bottom-full mb-2';
 
                 return (
                   <div
@@ -151,7 +151,7 @@ export default function StudyConsistencyHeatmap() {
                   >
                     {!isFuture && (
                       <div
-                        className={`absolute ${tooltipVerticalClass} ${tooltipAlignClass} w-max bg-slate-950/95 text-white text-[10.5px] font-semibold py-1.5 px-3 rounded-lg opacity-0 pointer-events-none group-hover/cell:opacity-100 transition-all duration-150 z-50 shadow-lg border border-slate-800 text-center`}
+                        className={`hidden group-hover/cell:block pointer-events-none absolute ${tooltipVerticalClass} ${tooltipAlignClass} w-max bg-slate-950/95 text-white text-[10.5px] font-semibold py-1.5 px-3 rounded-lg z-50 shadow-lg border border-slate-800 text-center`}
                       >
                         <p className="text-slate-200 font-bold">
                           {dayNum} de {monthName} de {cellDate.getFullYear()}
