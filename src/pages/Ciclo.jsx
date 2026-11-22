@@ -760,8 +760,17 @@ export default function Ciclo() {
                       let goalMin = 0;
                       let spd = 1;
 
+                      const subjectTopicsList = subject.topics || [];
+                      const subjectTotalLessons = subjectTopicsList.reduce((acc, tp) => acc + (Number(tp?.total) || 0), 0);
+                      const subjectCompletedBase = subjectTopicsList.reduce(
+                        (acc, tp) => acc + Math.min(Number(tp?.total) || 0, Number(tp?.completed) || 0),
+                        0
+                      );
+                      const priorSubjectIncrement = simulatedIncrements[subjectId] || 0;
+                      const subjectCompletedBefore = subjectCompletedBase + priorSubjectIncrement;
+
                       if (!isSlotCompleted) {
-                        const increment = simulatedIncrements[subjectId] || 0;
+                        const increment = priorSubjectIncrement;
                         let tempIncrement = increment;
                         let found = false;
 
@@ -813,8 +822,13 @@ export default function Ciclo() {
                         }
                       }
 
-                      const startNum = currentCompleted + 1;
-                      const endNum = currentCompleted + blockCount;
+                      const displayTotalLessons = subjectTotalLessons > 0 ? subjectTotalLessons : currentTotal;
+                      const startBase = subjectTotalLessons > 0 ? subjectCompletedBefore : currentCompleted;
+                      const startNum = displayTotalLessons > 0 ? Math.min(displayTotalLessons, startBase + 1) : 1;
+                      const endNum = displayTotalLessons > 0 ? Math.min(displayTotalLessons, startBase + blockCount) : (startBase + blockCount);
+                      const aulaBadgeText = (blockCount > 1 && endNum > startNum)
+                        ? `Aulas ${startNum}–${endNum}/${displayTotalLessons}`
+                        : `Aula ${startNum}/${displayTotalLessons}`;
 
                       const openSlotModal = (skipPrePrompt) => {
                         if (!activeTopic || !setClassConfirmModal) return;
@@ -842,7 +856,7 @@ export default function Ciclo() {
                             isSlotCompleted ? 'border-emerald-300 dark:border-emerald-800/70 opacity-85' : borderColorClass
                           } space-y-2.5 transition-all min-w-0`}
                         >
-                          {/* Cabeçalho: DISCIPLINA -> TÓPICO */}
+                          {/* Cabeçalho: DISCIPLINA -> TÓPICO + AULA XX/YY em destaque */}
                           <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100 dark:border-slate-800">
                             <div
                               className={`text-xs sm:text-sm font-black uppercase tracking-wide truncate min-w-0 flex-1 ${textColorClass}`}
@@ -855,6 +869,11 @@ export default function Ciclo() {
                               {(isReplaced || isDoubled) && (
                                 <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-850 text-slate-500 dark:text-slate-300 uppercase">
                                   {isReplaced ? 'Subst.' : '2x'}
+                                </span>
+                              )}
+                              {!isSlotCompleted && activeTopic && displayTotalLessons > 0 && (
+                                <span className="px-2 py-0.5 rounded-md bg-sky-500/20 text-sky-700 dark:text-sky-200 border border-sky-500/45 text-[11px] font-black uppercase tracking-wider tabular-nums shadow-xs">
+                                  {aulaBadgeText}
                                 </span>
                               )}
                               {!isSlotCompleted && activeTopic && (
@@ -879,20 +898,6 @@ export default function Ciclo() {
                             </div>
                           ) : activeTopic ? (
                             <>
-                              {/* Linha AULA X/Y */}
-                              <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
-                                <span className="uppercase tracking-wider">
-                                  {blockCount > 1
-                                    ? `Aulas ${startNum}–${endNum}/${currentTotal}`
-                                    : `Aula ${startNum}/${currentTotal}`}
-                                </span>
-                                {spd > 1 && (
-                                  <span className="text-[11px] font-black text-sky-600 dark:text-sky-400">
-                                    {spd}x ativo
-                                  </span>
-                                )}
-                              </div>
-
                               {/* Lista de Aulas com Nome + Abrir Videoaula + MM:SS (spd) */}
                               <div className="space-y-1.5">
                                 {plannedLessons.map((les, lIdx) => {

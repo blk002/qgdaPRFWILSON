@@ -254,9 +254,18 @@ export default function AbaHoje({ onGoToTab }) {
         let goalMin = 0;
         const spd = Math.max(0.5, Number(subject.speed) || 1);
 
+        const subjectTopics = subject.topics || [];
+        const subjectTotalLessons = subjectTopics.reduce((acc, tp) => acc + (Number(tp?.total) || 0), 0);
+        const subjectCompletedBase = subjectTopics.reduce(
+          (acc, tp) => acc + Math.min(Number(tp?.total) || 0, Number(tp?.completed) || 0),
+          0
+        );
+        const priorSubjectIncrement = simulatedIncrements[subjectId] || 0;
+        const subjectCompletedBefore = subjectCompletedBase + priorSubjectIncrement;
+
         if (!isSlotCompleted) {
-          let tempIncrement = simulatedIncrements[subjectId] || 0;
-          const topics = subject.topics || [];
+          let tempIncrement = priorSubjectIncrement;
+          const topics = subjectTopics;
 
           for (const t of topics) {
             const remaining = (Number(t.total) || 0) - (Number(t.completed) || 0);
@@ -320,6 +329,8 @@ export default function AbaHoje({ onGoToTab }) {
           activeTopic,
           currentCompleted,
           currentTotal,
+          subjectCompletedBefore,
+          subjectTotalLessons,
           blockCount,
           blockOrigSec,
           blockAccelSec,
@@ -421,8 +432,13 @@ export default function AbaHoje({ onGoToTab }) {
               {theoryBlocks.map((block) => {
                 const textColorClass = getSubjectTextColorClass(block.subject?.color);
                 const borderColorClass = getSubjectAccentBorderClass(block.subject?.color);
-                const startNum = block.currentCompleted + 1;
-                const endNum = block.currentCompleted + block.blockCount;
+                const displayTotalLessons = block.subjectTotalLessons > 0 ? block.subjectTotalLessons : block.currentTotal;
+                const startBase = block.subjectTotalLessons > 0 ? block.subjectCompletedBefore : block.currentCompleted;
+                const startNum = displayTotalLessons > 0 ? Math.min(displayTotalLessons, startBase + 1) : 1;
+                const endNum = displayTotalLessons > 0 ? Math.min(displayTotalLessons, startBase + block.blockCount) : (startBase + block.blockCount);
+                const aulaBadgeText = (block.blockCount > 1 && endNum > startNum)
+                  ? `Aulas ${startNum}–${endNum}/${displayTotalLessons}`
+                  : `Aula ${startNum}/${displayTotalLessons}`;
                 const totalTimeText = block.blockAccelSec > 0
                   ? formatSecondsToFriendly(block.blockAccelSec)
                   : '';
@@ -436,33 +452,43 @@ export default function AbaHoje({ onGoToTab }) {
                         : 'border-slate-200 dark:border-slate-800'
                     }`}
                   >
-                    {/* Faixa Topo do Bloco: Dia da Semana, XX/MM + Tempo Total */}
-                    <div className="px-3 py-2 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-2 text-xs sm:text-sm">
-                      <div className="flex items-center gap-1.5 font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide">
+                    {/* Faixa Topo do Bloco: Dia da Semana, XX/MM + Tempo Total Centralizado */}
+                    <div className="px-3 py-2 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 grid grid-cols-3 items-center gap-2 text-xs sm:text-sm">
+                      <div className="flex items-center gap-1.5 font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide justify-self-start">
                         <Calendar className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
                         <span>{todayHeaderLabel}</span>
                       </div>
-                      {totalTimeText && !block.isSlotCompleted && (
-                        <div className="flex items-center gap-1 text-xs sm:text-sm font-black text-amber-600 dark:text-amber-300 tabular-nums">
+                      {totalTimeText && !block.isSlotCompleted ? (
+                        <div className="flex items-center justify-center gap-1 text-xs sm:text-sm font-black text-amber-600 dark:text-amber-300 tabular-nums justify-self-center whitespace-nowrap">
                           {block.spd > 1 && <Zap className="w-4 h-4 text-amber-500 dark:text-amber-300" />}
                           <span>Tempo total: {totalTimeText}</span>
                         </div>
+                      ) : (
+                        <div />
                       )}
+                      <div />
                     </div>
 
                     {/* Caixa da Disciplina + Aulas + Botões */}
                     <div className={`p-3 m-2 rounded-lg border bg-white dark:bg-slate-900 ${borderColorClass} space-y-2.5`}>
-                      {/* Cabeçalho: DISCIPLINA -> TÓPICO */}
+                      {/* Cabeçalho: DISCIPLINA -> TÓPICO + AULA XX/YY em destaque */}
                       <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100 dark:border-slate-800">
-                        <div className={`text-sm font-black uppercase tracking-wide truncate ${textColorClass}`}>
+                        <div className={`text-sm font-black uppercase tracking-wide truncate min-w-0 flex-1 ${textColorClass}`}>
                           {block.subject.name}
                           {block.activeTopic?.name ? ` → ${block.activeTopic.name}` : ''}
                         </div>
-                        {(block.isReplaced || block.isDoubled) && (
-                          <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-850 text-slate-500 dark:text-slate-300 shrink-0 uppercase">
-                            {block.isReplaced ? 'Subst.' : '2x'}
-                          </span>
-                        )}
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {(block.isReplaced || block.isDoubled) && (
+                            <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-850 text-slate-500 dark:text-slate-300 uppercase">
+                              {block.isReplaced ? 'Subst.' : '2x'}
+                            </span>
+                          )}
+                          {!block.isSlotCompleted && block.activeTopic && displayTotalLessons > 0 && (
+                            <span className="px-2.5 py-0.5 rounded-md bg-sky-500/20 text-sky-700 dark:text-sky-200 border border-sky-500/45 text-xs font-black uppercase tracking-wider tabular-nums shadow-xs">
+                              {aulaBadgeText}
+                            </span>
+                          )}
+                        </div>
                       </div>
 
                       {block.isSlotCompleted ? (
@@ -474,20 +500,6 @@ export default function AbaHoje({ onGoToTab }) {
                         </div>
                       ) : block.activeTopic ? (
                         <>
-                          {/* Linha AULA X/Y */}
-                          <div className="flex items-center justify-between gap-2 text-xs font-bold text-slate-600 dark:text-slate-300">
-                            <span className="uppercase tracking-wider">
-                              {block.blockCount > 1
-                                ? `Aulas ${startNum}–${endNum}/${block.currentTotal}`
-                                : `Aula ${startNum}/${block.currentTotal}`}
-                            </span>
-                            {block.spd > 1 && (
-                              <span className="text-[11px] font-black text-sky-600 dark:text-sky-400">
-                                {block.spd}x ativo
-                              </span>
-                            )}
-                          </div>
-
                           {/* Lista de Aulas com Nome + Abrir Videoaula + MM:SS (spd) */}
                           <div className="space-y-1.5">
                             {block.plannedLessons.map((les, lIdx) => {
