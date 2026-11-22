@@ -15,6 +15,14 @@ const STOP_WORDS = new Set([
 
 const GENERIC_TIMESTAMP_LABEL_RX = /^(?:saudac(?:ao|oes)(?:\s+iniciais?)?|introducao(?:\s+(?:geral|inicial|(?:a|ao|da|do)\s+(?:aula|tema|modulo|disciplina|curso|ctb)))?|apresentacao(?:\s+(?:inicial|geral|da\s+aula|do\s+tema|do\s+curso))?|boas[\s-]+vindas|abertura|inicio(?:\s+da\s+aula)?|encerramento|consideracoes\s+finais|conclusao|finalizacao|despedida|avisos?(?:\s+gerais|\s+importantes)?)$/i;
 
+const DOMAIN_WEAK_TOKENS = new Set([
+  'veiculo', 'veiculos', 'condutor', 'condutores', 'via', 'vias', 'pista',
+  'circulacao', 'crime', 'crimes', 'pena', 'penas', 'processo', 'acao',
+  'estado', 'publico', 'publica', 'servidor', 'servidores', 'administracao',
+  'federal', 'nacional', 'sistema', 'seguranca', 'texto', 'frase', 'palavra',
+  'palavras', 'oracao', 'oracoes'
+]);
+
 const tokenize = (str) =>
   normalizeCourseLookupKey(str)
     .replace(/[^\p{L}\p{N}\s]/gu, ' ')
@@ -144,6 +152,7 @@ export function findCourseVideoMatch(question, caveiraCourseIndexMap = {}) {
     .filter((tok) => !qSubTokens.has(tok) || tokenize(leafRaw).includes(tok));
   if (specificTopicTokens.length === 0) return null;
 
+  const strongTopicTokens = specificTopicTokens.filter((tok) => !DOMAIN_WEAK_TOKENS.has(tok));
   const contentTokens = Array.from(new Set(tokenize((question.content || '').slice(0, 220))))
     .filter((tok) => !specificTopicTokens.includes(tok));
 
@@ -168,6 +177,7 @@ export function findCourseVideoMatch(question, caveiraCourseIndexMap = {}) {
     ));
     const entryTitleTokenSet = new Set(tokenize(`${entry.title || ''} ${entry.moduleName || ''}`));
     const entryTitleMatch = collectTokenMatches(specificTopicTokens, entryTitleTokenSet);
+    const entryTitleStrongMatch = collectTokenMatches(strongTopicTokens, entryTitleTokenSet);
 
     const topicsList = Array.isArray(entry.topics) ? entry.topics : [];
     let matchedInsideTopics = false;
@@ -185,22 +195,35 @@ export function findCourseVideoMatch(question, caveiraCourseIndexMap = {}) {
           tLabelNorm.includes(p) || (tLabelNorm.length >= 8 && p.includes(tLabelNorm))
         ));
         const labelMatch = collectTokenMatches(specificTopicTokens, tLabelTokenSet);
+        const labelStrongMatch = collectTokenMatches(strongTopicTokens, tLabelTokenSet);
         const contentMatchOnLabel = collectTokenMatches(contentTokens, tLabelTokenSet);
 
-        const qualified = Boolean(
-          labelPhraseMatch ||
-          (titlePhraseMatch && labelMatch.hits >= 1) ||
-          labelMatch.hits >= 2 ||
-          (labelMatch.hits === 1 && labelMatch.maxLen >= 6 && (entryTitleMatch.hits >= 1 || contentMatchOnLabel.hits >= 1))
-        );
+        let qualified = false;
+        if (strongTopicTokens.length > 0) {
+          qualified = Boolean(
+            labelPhraseMatch ||
+            (titlePhraseMatch && labelStrongMatch.hits >= 1) ||
+            labelStrongMatch.hits >= 2 ||
+            (labelStrongMatch.hits === 1 && (labelMatch.hits >= 2 || entryTitleMatch.hits >= 1 || contentMatchOnLabel.hits >= 1))
+          );
+        } else {
+          const weakCoverage = specificTopicTokens.length > 0 ? (labelMatch.hits / specificTopicTokens.length) : 0;
+          qualified = Boolean(
+            labelPhraseMatch ||
+            (titlePhraseMatch && labelMatch.hits >= 1) ||
+            (labelMatch.hits >= 2 && weakCoverage >= 0.6)
+          );
+        }
         if (!qualified) return;
 
         matchedInsideTopics = true;
         const score =
-          (labelPhraseMatch ? 12 : 0) +
+          (labelPhraseMatch ? 14 : 0) +
           (titlePhraseMatch ? 6 : 0) +
-          labelMatch.hits * 4 +
-          entryTitleMatch.hits * 2 +
+          labelStrongMatch.hits * 6 +
+          entryTitleStrongMatch.hits * 3 +
+          labelMatch.hits * 2 +
+          entryTitleMatch.hits * 1.5 +
           Math.min(contentMatchOnLabel.hits, 3) * 1.5 +
           (sameDiscipline ? 1 : 0);
 
@@ -214,15 +237,25 @@ export function findCourseVideoMatch(question, caveiraCourseIndexMap = {}) {
 
     if (!matchedInsideTopics) {
       const contentMatchOnTitle = collectTokenMatches(contentTokens, entryTitleTokenSet);
-      const qualifiedLessonOnly = Boolean(
-        titlePhraseMatch ||
-        entryTitleMatch.hits >= 2 ||
-        (entryTitleMatch.hits === 1 && entryTitleMatch.maxLen >= 7 && sameDiscipline && (contentMatchOnTitle.hits >= 1 || entryTitleMatch.maxLen >= 8))
-      );
+      let qualifiedLessonOnly = false;
+      if (strongTopicTokens.length > 0) {
+        qualifiedLessonOnly = Boolean(
+          titlePhraseMatch ||
+          (entryTitleStrongMatch.hits >= 1 && entryTitleMatch.hits >= 2) ||
+          (entryTitleStrongMatch.hits >= 1 && entryTitleStrongMatch.maxLen >= 7 && sameDiscipline && (contentMatchOnTitle.hits >= 1 || entryTitleStrongMatch.maxLen >= 8))
+        );
+      } else {
+        const weakTitleCoverage = specificTopicTokens.length > 0 ? (entryTitleMatch.hits / specificTopicTokens.length) : 0;
+        qualifiedLessonOnly = Boolean(
+          titlePhraseMatch ||
+          (entryTitleMatch.hits >= 2 && weakTitleCoverage >= 0.6)
+        );
+      }
       if (qualifiedLessonOnly) {
         const lessonScore =
-          (titlePhraseMatch ? 10 : 0) +
-          entryTitleMatch.hits * 3.5 +
+          (titlePhraseMatch ? 12 : 0) +
+          entryTitleStrongMatch.hits * 5 +
+          entryTitleMatch.hits * 2 +
           Math.min(contentMatchOnTitle.hits, 2) * 1.5 +
           (sameDiscipline ? 1 : 0);
         if (lessonScore > bestScore) {
@@ -237,8 +270,15 @@ export function findCourseVideoMatch(question, caveiraCourseIndexMap = {}) {
   if (!bestEntry || !bestEntry.url) return null;
 
   const seconds = Math.max(0, Number(bestTopic?.seconds) || 0);
+  let targetUrl = appendTimestampToUrl(bestEntry.url, seconds);
+  if (bestEntry.title && !String(targetUrl).includes('#qg_lesson=')) {
+    const cleanUrl = String(targetUrl).split('#')[0];
+    const subjectHint = question.canonicalSubject || question.subject || bestEntry.subject || '';
+    targetUrl = `${cleanUrl}#qg_lesson=${encodeURIComponent(bestEntry.title)}${subjectHint ? `&qg_subject=${encodeURIComponent(subjectHint)}` : ''}`;
+  }
+
   return {
-    url: appendTimestampToUrl(bestEntry.url, seconds),
+    url: targetUrl,
     mmss: bestTopic?.mmss || formatSecondsAsClock(seconds),
     seconds,
     lessonTitle: bestEntry.title || 'Aula do Caveira',
