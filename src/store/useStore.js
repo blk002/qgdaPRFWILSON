@@ -6,6 +6,12 @@ import { PET_FOODS, PET_LEVELS } from '../data/petConstants';
 import { parseDurationToSeconds, calculateLessonsForGoal } from '../lib/durationHelpers';
 import { normalizeCourseLookupKey } from '../lib/courseIndexParser';
 import {
+  LOCAL_TEST_ACCOUNT,
+  createLocalTestSession,
+  isLocalTestUser,
+  persistLocalTestSession,
+} from '../lib/localTestAuth';
+import {
   cleanAlternativeText,
   cleanAltText,
   THEME_DEFINITIONS,
@@ -362,8 +368,20 @@ export const useStore = create(
         };
       }),
       
+      signInLocalTest: async () => {
+        persistLocalTestSession(true);
+        const localSession = createLocalTestSession();
+        get().setSession(localSession);
+        await get().loadFromCloud();
+        return localSession;
+      },
+
       signOut: async () => {
-        await supabase.auth.signOut();
+        const isLocal = isLocalTestUser(get().user);
+        persistLocalTestSession(false);
+        if (!isLocal) {
+          await supabase.auth.signOut();
+        }
         set({ session: null, user: null, caveiraQuestions: [], reviews: [], hasCompletedInitialCloudSync: false });
         localStorage.removeItem('prf-qg-storage');
         localStorage.removeItem('prf_qg_backups');
@@ -388,6 +406,55 @@ export const useStore = create(
           set({ caveiraQuestions: [] });
         }
         try { localStorage.setItem(CAVEIRA_OWNER_KEY, user.id); } catch (_) {}
+
+        // Modo Conta Local de Teste (isolado apenas em localStorage, sem acessar Supabase)
+        if (isLocalTestUser(user)) {
+          const snap = readLocalSnapshot();
+          const hasValidTestSnap = Boolean(snap && snap.userId === user.id && snap.data);
+          const safeCaveira = isForeignCaveiraCache ? [] : (get().caveiraQuestions || []);
+          const baseState = hasValidTestSnap
+            ? normalizeHydratedState(snap.data, safeCaveira)
+            : getCleanInitialState();
+
+          if (!baseState.userStats?.displayName || baseState.userStats.displayName === 'Guerreiro PRF') {
+            baseState.userStats = {
+              ...(baseState.userStats || {}),
+              displayName: LOCAL_TEST_ACCOUNT.displayName,
+            };
+          }
+
+          set({
+            ...baseState,
+            caveiraQuestions: baseState.caveiraQuestions || safeCaveira,
+            isSyncing: false,
+            isLoadingFromCloud: false,
+            hasCompletedInitialCloudSync: true,
+            hasUnsyncedChanges: false,
+            lastSyncedAt: new Date().toISOString(),
+          });
+
+          get().syncDayRollover();
+          get().checkAndResetWeekly();
+          get().checkAndAdvanceSeason();
+          get().checkAndResetDailyMissions();
+          get().syncAndRepairCaveiraReviews?.();
+          writeLocalSnapshot(get(), { dirty: false, savedAt: new Date().toISOString() });
+          try {
+            window.postMessage(
+              {
+                source: 'QG_WEB_APP',
+                type: 'SET_ACTIVE_USER',
+                payload: {
+                  userId: user.id,
+                  userEmail: user.email || '',
+                  userLabel: LOCAL_TEST_ACCOUNT.displayName,
+                },
+              },
+              '*'
+            );
+          } catch (_) {}
+          return true;
+        }
 
         // Cancela timers pendentes de pré-carga para impedir gravação do estado inicial vazio
         clearTimeout(useStore._localDebounceTimer);
@@ -708,6 +775,21 @@ export const useStore = create(
         const { allowEmptyOverwrite = false } = options || {};
         const { user, isLoadingFromCloud, isSavingToCloud, hasCompletedInitialCloudSync, lastSyncedAt, ...state } = get();
         if (!user || isLoadingFromCloud) return;
+        if (isLocalTestUser(user)) {
+          const nowIso = new Date().toISOString();
+          writeLocalSnapshot(get(), { dirty: false, savedAt: nowIso });
+          try {
+            localStorage.setItem('prf_caveira_questions', JSON.stringify(get().caveiraQuestions || []));
+            localStorage.setItem(CAVEIRA_OWNER_KEY, user.id);
+          } catch (_) {}
+          set({
+            isSavingToCloud: false,
+            savePending: false,
+            hasUnsyncedChanges: false,
+            lastSyncedAt: nowIso,
+          });
+          return true;
+        }
         if (!hasCompletedInitialCloudSync && !allowEmptyOverwrite) {
           console.warn('🛑 [Nuvem] Auto-save bloqueado antes da sincronização inicial concluir.');
           return;
@@ -943,7 +1025,7 @@ export const useStore = create(
         useStore._lastDeltaCheckAt = now;
 
         const { session, hasCompletedInitialCloudSync, isLoadingFromCloud, isSavingToCloud, lastSyncedAt } = get();
-        if (!session?.user?.id || !hasCompletedInitialCloudSync || isLoadingFromCloud || isSavingToCloud) {
+        if (!session?.user?.id || isLocalTestUser(session) || !hasCompletedInitialCloudSync || isLoadingFromCloud || isSavingToCloud) {
           return false;
         }
         if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
@@ -966,7 +1048,7 @@ export const useStore = create(
       subscribeToCloudRealtime: () => {
         const { session, hasCompletedInitialCloudSync } = get();
         const userId = session?.user?.id;
-        if (!userId || !hasCompletedInitialCloudSync) return;
+        if (!userId || isLocalTestUser(session) || !hasCompletedInitialCloudSync) return;
         if (useStore._realtimeChannel && useStore._realtimeUserId === userId) return;
 
         get().unsubscribeFromCloudRealtime();

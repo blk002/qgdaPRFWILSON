@@ -1,5 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabaseClient';
+import { matchesLocalTestCredentials } from '../lib/localTestAuth';
+import { useStore } from '../store/useStore';
 import { Shield, Mail, Lock, Loader2, AlertCircle, LogIn, UserPlus, CheckCircle2, RefreshCw, Eye, EyeOff } from 'lucide-react';
 import { Toaster, toast } from 'sonner';
 
@@ -195,6 +197,11 @@ export default function Login() {
         setFeedback(successObj);
         toast.success('Conta criada! Verifique seu e-mail para confirmar.');
       } else {
+        if (matchesLocalTestCredentials(cleanEmail, password)) {
+          await useStore.getState().signInLocalTest();
+          toast.success('Login na conta local de teste realizado (salvo apenas neste navegador).');
+          return;
+        }
         const { error } = await supabase.auth.signInWithPassword({
           email: cleanEmail,
           password

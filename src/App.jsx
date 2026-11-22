@@ -1,6 +1,11 @@
 import React, { useState, useEffect, useMemo, Suspense, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { supabase } from './lib/supabaseClient';
+import {
+  createLocalTestSession,
+  hasStoredLocalTestSession,
+  isLocalTestUser,
+} from './lib/localTestAuth';
 import Login from './components/Login';
 import { useStore } from './store/useStore';
 import Dashboard from './pages/Dashboard';
@@ -340,6 +345,16 @@ export default function App() {
       console.log(`🔐 [Auth] Evento detectado: ${event}`);
 
       if (event === 'INITIAL_SESSION' || event === 'SIGNED_IN') {
+        if (!session && event === 'INITIAL_SESSION' && hasStoredLocalTestSession()) {
+          const localSession = createLocalTestSession();
+          setSession(localSession);
+          if (!useStore.getState().isLoadingFromCloud) {
+            setTimeout(async () => {
+              await loadFromCloud();
+            }, 150);
+          }
+          return;
+        }
         setSession(session);
         if (session?.user) {
           // Bloqueio de segurança: se já estivermos carregando, não dispare de novo
@@ -355,6 +370,9 @@ export default function App() {
           useStore.setState({ isSyncing: false, isLoadingFromCloud: false });
         }
       } else if (event === 'SIGNED_OUT') {
+        if (isLocalTestUser(useStore.getState().user) && hasStoredLocalTestSession()) {
+          return;
+        }
         useStore.getState().unsubscribeFromCloudRealtime?.();
         setSession(null);
         useStore.setState({ isSyncing: false, isLoadingFromCloud: false });
@@ -370,8 +388,9 @@ export default function App() {
   // --- SUPABASE REALTIME + DELTA CHECK (#5 Sync Instantâneo PC <-> Mobile) ---
   useEffect(() => {
     const userId = session?.user?.id;
+    const isLocalTest = isLocalTestUser(useStore.getState().user);
     const ready = useStore.getState().hasCompletedInitialCloudSync;
-    if (!userId || isSyncing || !ready) {
+    if (!userId || isLocalTest || isSyncing || !ready) {
       if (!userId) {
         useStore.getState().unsubscribeFromCloudRealtime?.();
       }
