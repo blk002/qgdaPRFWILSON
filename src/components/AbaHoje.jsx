@@ -481,42 +481,14 @@ export default function AbaHoje({ onGoToTab }) {
                                 ? `Aulas ${startNum}–${endNum}/${block.currentTotal}`
                                 : `Aula ${startNum}/${block.currentTotal}`}
                             </span>
-                            <div className="flex items-center gap-2">
-                              {(() => {
-                                const buildCaveiraLessonHref = (baseUrl, lessonName = '', subjectName = '') => {
-                                  if (!baseUrl) return '';
-                                  const cleanBase = String(baseUrl).split('#')[0];
-                                  if (!lessonName) return cleanBase;
-                                  return `${cleanBase}#qg_lesson=${encodeURIComponent(lessonName)}${subjectName ? `&qg_subject=${encodeURIComponent(subjectName)}` : ''}`;
-                                };
-                                const firstIdx = block.plannedLessons?.[0]?.index ?? block.currentCompleted;
-                                const firstLessonName = block.plannedLessons?.[0]?.name || block.activeTopic?.lessons?.[firstIdx]?.name || '';
-                                const rawHref = block.activeTopic?.lessons?.[firstIdx]?.caveiraUrl
-                                  || block.subject?.caveiraModuleUrl
-                                  || (block.subject?.caveiraCourseId ? `https://app.caveira.com/courses/${block.subject.caveiraCourseId}` : '');
-                                const lesHref = buildCaveiraLessonHref(rawHref, firstLessonName, block.subject?.name);
-                                return lesHref ? (
-                                  <a
-                                    href={lesHref}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/15 hover:bg-sky-500/25 text-sky-600 dark:text-sky-400 border border-sky-500/30 text-[10px] font-black uppercase tracking-wider transition-colors"
-                                    title="Abrir videoaula diretamente no Caveira"
-                                  >
-                                    <PlayCircle className="w-3 h-3" />
-                                    <span>Abrir Videoaula</span>
-                                  </a>
-                                ) : null;
-                              })()}
-                              {block.spd > 1 && (
-                                <span className="text-[11px] font-black text-sky-600 dark:text-sky-400">
-                                  {block.spd}x ativo
-                                </span>
-                              )}
-                            </div>
+                            {block.spd > 1 && (
+                              <span className="text-[11px] font-black text-sky-600 dark:text-sky-400">
+                                {block.spd}x ativo
+                              </span>
+                            )}
                           </div>
 
-                          {/* Lista de Aulas com Nome + MM:SS (spd) */}
+                          {/* Lista de Aulas com Nome + Abrir Videoaula + MM:SS (spd) */}
                           <div className="space-y-1.5">
                             {block.plannedLessons.map((les, lIdx) => {
                               const origSec = Number(les.origSec) || parseDurationToSeconds(les.durStr) || 0;
@@ -528,29 +500,35 @@ export default function AbaHoje({ onGoToTab }) {
                               const rawDirectUrl = block.activeTopic?.lessons?.[les.index ?? lIdx]?.caveiraUrl
                                 || block.subject?.caveiraModuleUrl
                                 || (block.subject?.caveiraCourseId ? `https://app.caveira.com/courses/${block.subject.caveiraCourseId}` : '');
-                              const directUrl = rawDirectUrl
-                                ? `${String(rawDirectUrl).split('#')[0]}#qg_lesson=${encodeURIComponent(les.name || '')}${block.subject?.name ? `&qg_subject=${encodeURIComponent(block.subject.name)}` : ''}`
+                              const cleanBase = rawDirectUrl ? String(rawDirectUrl).split('#')[0] : '';
+                              const directUrl = cleanBase
+                                ? (les.name
+                                    ? `${cleanBase}#qg_lesson=${encodeURIComponent(les.name)}${block.subject?.name ? `&qg_subject=${encodeURIComponent(block.subject.name)}` : ''}`
+                                    : cleanBase)
                                 : '';
 
                               return (
                                 <div
                                   key={lIdx}
-                                  className="flex items-start justify-between gap-3 text-sm leading-snug"
+                                  className="flex items-center justify-between gap-3 text-sm leading-snug"
                                 >
-                                  <span className="font-semibold text-slate-800 dark:text-slate-100 break-words flex-1 min-w-0">
-                                    • {les.name}
+                                  <div className="flex items-center flex-wrap gap-2 flex-1 min-w-0">
+                                    <span className="font-semibold text-slate-800 dark:text-slate-100 break-words min-w-0">
+                                      • {les.name}
+                                    </span>
                                     {directUrl && (
                                       <a
                                         href={directUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
-                                        className="ml-1.5 inline-flex items-center text-[10px] font-black text-sky-500 hover:text-sky-400 underline underline-offset-2"
-                                        title="Abrir esta aula no Caveira"
+                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/15 hover:bg-sky-500/25 text-sky-600 dark:text-sky-400 border border-sky-500/30 text-[10px] font-black uppercase tracking-wider transition-colors shrink-0"
+                                        title={`Abrir "${les.name}" diretamente no Caveira`}
                                       >
-                                        ▶️
+                                        <PlayCircle className="w-3 h-3 shrink-0" />
+                                        <span>Abrir Videoaula</span>
                                       </a>
                                     )}
-                                  </span>
+                                  </div>
                                   {durationLabel && (
                                     <span className="text-sm font-mono font-black text-amber-600 dark:text-amber-300 shrink-0 flex items-center gap-1 tabular-nums">
                                       <Clock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-300" />
