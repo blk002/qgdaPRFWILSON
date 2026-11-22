@@ -142,8 +142,61 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       }
     }
 
-    // 2. Detectar simulados / exames / turmas
-    const simArr = Array.isArray(root.practice_exams)
+    // 2. Detectar simulados / exames / turmas (bloqueando rankings/classificações de outros candidatos)
+    const isRankingUrl = /\/(?:ranking|rankings|leaderboard|classificacao|classification|participants|students|users|positions|podium|top-?\d*)\b|[?&](?:ranking|leaderboard|page_ranking)=/i.test(String(url || ''));
+
+    const looksLikeRankingRow = (item) => {
+      if (!item || typeof item !== 'object') return true;
+      const hasRankingOrCandidateField = Boolean(
+        item.position !== undefined ||
+        item.rank !== undefined ||
+        item.ranking !== undefined ||
+        item.placement !== undefined ||
+        item.colocacao !== undefined ||
+        item.nickname ||
+        item.username ||
+        item.avatar ||
+        item.avatar_url ||
+        item.student ||
+        item.student_name ||
+        item.candidate ||
+        item.user ||
+        (item.user_name && !item.exam_name && !item.title)
+      );
+      if (hasRankingOrCandidateField) return true;
+
+      const hasExamField = Boolean(
+        item.exam_id ||
+        item.practice_exam_id ||
+        item.exam_name ||
+        item.practice_exam ||
+        item.finished_at ||
+        item.completed_at ||
+        item.started_at ||
+        item.total_questions !== undefined ||
+        item.questions_count !== undefined ||
+        Array.isArray(item.subjects) ||
+        Array.isArray(item.disciplines)
+      );
+      if (!hasExamField) return true;
+
+      const rawTitle = String(
+        item.title ||
+        item.exam_name ||
+        item.practice_exam?.title ||
+        item.practice_exam?.name ||
+        item.name ||
+        ''
+      ).trim();
+      if (/^#?\d{1,5}\s*[º°ª]?$/.test(rawTitle) || /^caveira\s+\d{3,}$/i.test(rawTitle)) {
+        return true;
+      }
+      return false;
+    };
+
+    let simArr = isRankingUrl
+      ? null
+      : Array.isArray(root.practice_exams)
       ? root.practice_exams
       : Array.isArray(root.exams)
       ? root.exams
@@ -153,9 +206,16 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       ? [root]
       : null;
 
+    if (simArr && simArr.length > 1) {
+      const distinctUsers = new Set(simArr.map((x) => x?.user_id ?? x?.student_id ?? x?.participant_id).filter(Boolean));
+      if (distinctUsers.size > 1) {
+        simArr = null;
+      }
+    }
+
     if (simArr && simArr.length > 0) {
       const normalizedSims = simArr.map((sim) => {
-        if (!sim || typeof sim !== 'object') return null;
+        if (!sim || typeof sim !== 'object' || looksLikeRankingRow(sim)) return null;
         const total = Number(sim.total_questions ?? sim.questions_count ?? sim.total ?? ((Number(sim.hits) || 0) + (Number(sim.errors) || 0) + (Number(sim.blank) || 0)));
         const hits = Number(sim.hits ?? sim.correct_answers ?? sim.correct ?? 0);
         if (!total || total <= 0) return null;
@@ -171,9 +231,17 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
               liquida: s?.net_score !== undefined ? Number(s.net_score) : (Number(s?.hits ?? s?.correct ?? 0) - Number(s?.errors ?? s?.wrong ?? 0)),
             }))
           : [];
+        const title = String(
+          sim.title ||
+          sim.exam_name ||
+          sim.practice_exam?.title ||
+          sim.practice_exam?.name ||
+          sim.name ||
+          'Simulado Caveira'
+        ).trim();
         return {
           caveiraId: sim.id ? `sim_${sim.id}` : undefined,
-          title: String(sim.title || sim.name || sim.exam_name || 'Simulado Caveira').trim(),
+          title,
           data: /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : undefined,
           total,
           hits,

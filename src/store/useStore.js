@@ -3798,6 +3798,7 @@ export const useStore = create(
           if (!item || typeof item !== 'object') return;
           const dateStr = /^\d{4}-\d{2}-\d{2}$/.test(String(item.data || '')) ? item.data : today;
           const title = String(item.title || 'Simulado Projeto Caveira').trim();
+          if (/^#?\d{1,5}\s*[º°ª]?$/.test(title) || /^caveira\s+\d{3,}$/i.test(title)) return;
           const key = item.caveiraId ? `id:${item.caveiraId}` : `td:${normalizeCourseLookupKey(title)}|${dateStr}`;
           if (existingKeys.has(key)) return;
           existingKeys.add(key);

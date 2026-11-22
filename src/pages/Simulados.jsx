@@ -19,6 +19,7 @@ export default function Simulados() {
   const [hoveredPoint, setHoveredPoint] = useState(null);
 
   const totalSimulados = simulados.length;
+  const caveiraSimuladosCount = simulados.filter(s => s?.source === 'caveira').length;
   const mediaLiquida = totalSimulados > 0 ? Math.round(simulados.reduce((acc, sim) => acc + sim.liquida, 0) / totalSimulados) : 0;
   const recorde = totalSimulados > 0 ? Math.max(...simulados.map(s => s.liquida)) : 0;
   
@@ -102,9 +103,28 @@ export default function Simulados() {
                 <p className="text-slate-500 text-xs sm:text-sm dark:text-slate-400">Sistema Cebraspe (Certa anula Errada).</p>
               </div>
             </div>
-            <button onClick={() => { setEditingSimulado(null); setShowModal(true); }} className="w-full sm:w-auto justify-center bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-md transition-colors">
-              <Plus className="w-4 h-4" /> Registrar Nota
-            </button>
+            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
+              {caveiraSimuladosCount > 0 && (
+                <button
+                  onClick={() => {
+                    setGlobalModal({
+                      type: 'confirm',
+                      variant: 'danger',
+                      title: 'Limpar Simulados do Caveira',
+                      message: `Remover os ${caveiraSimuladosCount} simulado(s) importados do Caveira? Seus simulados cadastrados manualmente serão mantidos.`,
+                      confirmText: 'Limpar',
+                      onConfirm: () => setSimulados(prev => prev.filter(s => s?.source !== 'caveira'))
+                    });
+                  }}
+                  className="w-full sm:w-auto justify-center bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 px-4 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-colors text-xs sm:text-sm"
+                >
+                  <Trash2 className="w-4 h-4" /> Limpar Caveira ({caveiraSimuladosCount})
+                </button>
+              )}
+              <button onClick={() => { setEditingSimulado(null); setShowModal(true); }} className="w-full sm:w-auto justify-center bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-md transition-colors">
+                <Plus className="w-4 h-4" /> Registrar Nota
+              </button>
+            </div>
           </div>
 
           {totalSimulados > 0 && (

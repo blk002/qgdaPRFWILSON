@@ -483,9 +483,13 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
 
     if (msg.type === 'API_SIMULADOS_DATA' && Array.isArray(msg.payload?.simulados)) {
       const nextMap = new Map();
-      apiSimuladosCache.forEach((s) => { if (s?.caveiraId || s?.title) nextMap.set(s.caveiraId || s.title, s); });
+      apiSimuladosCache.forEach((s) => {
+        if (s && !isRankingTitleOrRow('', s.title || '') && (s.caveiraId || s.title)) {
+          nextMap.set(s.caveiraId || s.title, s);
+        }
+      });
       msg.payload.simulados.forEach((rawSim) => {
-        if (!rawSim) return;
+        if (!rawSim || isRankingTitleOrRow('', rawSim.title || '')) return;
         let b1 = 0; let b2 = 0; let b3 = 0; let hasBlocks = false;
         if (Array.isArray(rawSim.subjectScores) && rawSim.subjectScores.length > 0) {
           hasBlocks = true;
@@ -734,6 +738,43 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     return { modulesCount: payload.modules.length, lessonsCount: totalLessonsCount };
   }
 
+  function isRankingTitleOrRow(text = '', title = '') {
+    const cleanTitle = String(title || '').trim();
+    const cleanText = String(text || '').trim();
+    if (/^#?\d{1,5}\s*[º°ª]?$/.test(cleanTitle)) return true;
+    if (/^caveira\s+\d{3,}$/i.test(cleanTitle)) return true;
+    if (/^\s*#?\d{1,5}\s*[º°ª]\b/.test(cleanText)) return true;
+    if (/(?:coloca[cç][aã]o|classifica[cç][aã]o|ranking)\b/i.test(cleanText) && !/meus?\s+simulados/i.test(cleanText)) {
+      return true;
+    }
+    return false;
+  }
+
+  function isInsideRankingSection(el) {
+    if (!el || typeof el.closest !== 'function') return false;
+    const tableWrap = el.closest('table, .q-table__container');
+    if (tableWrap) {
+      const headerText = Array.from(tableWrap.querySelectorAll('thead th, .q-table__top'))
+        .map((h) => (h.innerText || h.textContent || '').trim())
+        .join(' ');
+      if (/(?:posi[cç][aã]o|coloca[cç][aã]o|ranking|classifica[cç][aã]o|candidato|aluno|usu[aá]rio|apelido|nickname|p[oó]dio)/i.test(headerText)) {
+        return true;
+      }
+    }
+    let cur = el.parentElement;
+    for (let depth = 0; cur && depth < 6; depth += 1) {
+      const meta = `${cur.className || ''} ${cur.id || ''}`;
+      if (/ranking|leaderboard|podium|classificacao/i.test(meta)) return true;
+      const heading = cur.querySelector(':scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > .text-h6, :scope > .q-table__title, :scope > div > h1, :scope > div > h2, :scope > div > h3, :scope > div > h4, :scope > div > .text-h6');
+      const headingText = (heading?.innerText || heading?.textContent || '').trim();
+      if (/ranking|classifica[cç][aã]o|leaderboard|p[oó]dio|participantes/i.test(headingText)) {
+        return true;
+      }
+      cur = cur.parentElement;
+    }
+    return false;
+  }
+
   function scrapeSimuladosAndImport() {
     const cards = Array.from(document.querySelectorAll('.q-card, table tbody tr, .q-item'))
       .filter((el) => !el.closest('#qg-caveira-shadow-host, #qg-caveira-hud') && isElementVisible(el));
@@ -742,7 +783,7 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
 
     // Prioriza simulados ricos vindos da API (com B1/B2/B3 quando disponíveis)
     apiSimuladosCache.forEach((sim) => {
-      if (!sim) return;
+      if (!sim || isRankingTitleOrRow('', sim.title || '')) return;
       const key = sim.caveiraId || `${sim.title}|${sim.data || ''}`;
       if (seen.has(key)) return;
       seen.add(key);
@@ -750,8 +791,18 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     });
 
     cards.forEach((card, idx) => {
+      if (isInsideRankingSection(card)) return;
       const text = (card.innerText || card.textContent || '').replace(/\n+/g, ' | ').replace(/\s+/g, ' ').trim();
       if (!text || text.length < 10) return;
+
+      const href = card.getAttribute('href') || card.querySelector('a')?.getAttribute('href') || '';
+      const hasSimuladoHref = /\/(?:practice-exams|personal-practice-exams|simulados)\/\d+/i.test(href);
+      if (card.matches('tr') && !hasSimuladoHref && !/simulado|exame|prova|caderno|bloco|pessoal|turma/i.test(text)) {
+        return;
+      }
+      if (!hasSimuladoHref && !/simulado|exame|prova|acertos|erros|desempenho|nota|gabarito|quest[oõ]es/i.test(text)) {
+        return;
+      }
 
       const scoreRatioMatch = text.match(/(\d{1,3})\s*(?:\/|de)\s*(\d{1,3})/i);
       const pctMatch = text.match(/(\d{1,3}(?:[.,]\d+)?)\s*%/);
@@ -769,7 +820,7 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
 
       const parts = text.split('|').map(s => s.trim()).filter(s => s.length >= 4 && !/^\d{2}\/\d{2}\/\d{4}$/.test(s) && !/^\d+%$/.test(s));
       const title = (parts[0] || `Simulado Caveira #${idx + 1}`).slice(0, 90);
-      const href = card.getAttribute('href') || card.querySelector('a')?.getAttribute('href') || '';
+      if (isRankingTitleOrRow(text, title)) return;
       const idMatch = href.match(/(\d{2,})/);
       const caveiraId = idMatch ? `sim_${idMatch[1]}` : `sim_${normalizeCourseIndexKey(title).slice(0, 32)}_${dataStr}_${hits}`;
       if (seen.has(caveiraId)) return;
@@ -1242,7 +1293,7 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
         const orig = btn.textContent;
         btn.textContent = count > 0
           ? `✓ ${count} simulado(s) enviado(s) ao QG!`
-          : '⚠️ Nenhum resultado visível nesta tela';
+          : '⚠️ Nenhum simulado seu encontrado nesta tela';
         setTimeout(() => {
           if (btn && btn.isConnected) btn.textContent = orig;
         }, 2500);
