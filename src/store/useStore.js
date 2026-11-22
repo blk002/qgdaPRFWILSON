@@ -3711,6 +3711,11 @@ export const useStore = create(
 
       setCaveiraSessionStats: (sessionStats) => set({ caveiraSessionStats: sessionStats }),
 
+      setCaveiraPerformanceSnapshot: (snapshot) => {
+        if (!snapshot || typeof snapshot !== 'object') return;
+        set({ caveiraPerformanceSnapshot: snapshot });
+      },
+
       setCaveiraFilterMemory: (memory) => {
         if (!memory || typeof memory !== 'object') return;
         const prev = get().caveiraFilterMemory || {};
@@ -3843,14 +3848,17 @@ export const useStore = create(
             const h = Number(sc.hits) || 0;
             const e = Number(sc.errors) || 0;
             const bl = Number(sc.blank) || 0;
-            const tot = Number(sc.total) || (h + e + bl);
+            const canc = Number(sc.canceled) || 0;
+            const tot = Number(sc.total) || (h + e + bl + canc);
             const liq = sc.liquida !== undefined ? Number(sc.liquida) : (h - e);
             const pctVal = sc.pct !== undefined ? Number(sc.pct) : (tot > 0 ? Math.round((h / tot) * 100) : 0);
             return {
+              ...(sc.subjectId ? { subjectId: Number(sc.subjectId) } : {}),
               name: String(sc.name).trim(),
               hits: h,
               errors: e,
               blank: bl,
+              ...(canc > 0 ? { canceled: canc } : {}),
               total: tot,
               liquida: liq,
               pct: pctVal,
@@ -3865,7 +3873,14 @@ export const useStore = create(
           if (existingIdx >= 0) {
             const cur = nextSimulados[existingIdx];
             const addsBlocks = cur.b1Liquida === undefined && item.b1Liquida !== undefined;
-            const addsSubjects = normalizedSubjects.length > 0 && (!Array.isArray(cur.subjectScores) || cur.subjectScores.length < normalizedSubjects.length || normalizedSubjects.some((s, i) => cur.subjectScores[i]?.othersPct === undefined && s.othersPct !== undefined));
+            const addsSubjects = normalizedSubjects.length > 0 && (
+              !Array.isArray(cur.subjectScores) ||
+              cur.subjectScores.length < normalizedSubjects.length ||
+              normalizedSubjects.some((s, i) => (
+                (cur.subjectScores[i]?.othersPct === undefined && s.othersPct !== undefined) ||
+                (cur.subjectScores[i]?.subjectId === undefined && s.subjectId !== undefined)
+              ))
+            );
             const changesScore = (item.hits !== undefined && cur.hits !== hits) ||
               (item.errors !== undefined && cur.errors !== errors) ||
               (item.liquida !== undefined && cur.liquida !== liquida);
@@ -3888,6 +3903,7 @@ export const useStore = create(
                 hits: item.hits !== undefined ? hits : cur.hits,
                 errors: item.errors !== undefined ? errors : cur.errors,
                 ...(item.blank !== undefined ? { blank: Number(item.blank) } : {}),
+                ...(item.canceled !== undefined ? { canceled: Number(item.canceled) } : {}),
                 pct: item.pct !== undefined ? pct : cur.pct,
                 liquida: item.liquida !== undefined ? liquida : cur.liquida,
                 ...blockFields,
@@ -3912,6 +3928,7 @@ export const useStore = create(
             hits,
             errors,
             ...(item.blank !== undefined ? { blank: Number(item.blank) } : {}),
+            ...(item.canceled !== undefined ? { canceled: Number(item.canceled) } : {}),
             pct,
             liquida,
             ...blockFields,

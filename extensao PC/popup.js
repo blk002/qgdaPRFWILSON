@@ -8380,6 +8380,7 @@
   var DIAGNOSTIC_EVENTS_KEY = "qg_diagnostic_events";
   var SNIFFER_RECENT_EVENTS_KEY = "qg_sniffer_recent_events";
   var TREE_META_KEY = "qg_tree_meta";
+  var PERFORMANCE_SNAPSHOT_KEY = "qg_caveira_performance_snapshot";
   var SIMULADO_QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
   var SIMULADO_QUEUE_MAX_ATTEMPTS = 10;
   function normalizeFilterText(str) {
@@ -8408,7 +8409,7 @@
       ...rawSession.wasExplicitlyReset ? { wasExplicitlyReset: true } : {}
     };
   }
-  var SENSITIVE_KEY_RX = /(?:token|auth|cookie|password|passwd|secret|jwt|bearer|authorization|refresh_token|access_token|apikey|api_key)/i;
+  var SENSITIVE_KEY_RX = /(?:token|auth|cookie|password|passwd|secret|jwt|bearer|authorization|refresh_token|access_token|apikey|api_key|video_url|embed_url|signed|signature)/i;
   var JWT_STRING_RX = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+)?/g;
   function sanitizeDiagnosticData(input, depth = 0) {
     if (depth > 6) return "[depth-limit]";
@@ -8520,7 +8521,7 @@
 
   // extensao-src/entries/popup.entry.js
   var USER_BUCKETS_KEY = "qg_caveira_user_buckets";
-  var FIRST_PREFS = { examBoards: ["cebraspe", "caveira_ineditas", "caveira_adaptadas"], numberAlternatives: [2] };
+  var FIRST_PREFS = { examBoards: ["cebraspe", "caveira_ineditas", "caveira_adaptadas"], numberAlternatives: [2], status: "not_resolved" };
   var TREE_STALE_DAYS = 30;
   function renderAccountStatus(activeUserId, activeUserLabel) {
     const pill = document.getElementById("account-status-pill");
@@ -8652,7 +8653,8 @@
           DIAGNOSTIC_EVENTS_KEY,
           SNIFFER_RECENT_EVENTS_KEY,
           LAST_FILTER_DIAG_KEY,
-          TREE_META_KEY
+          TREE_META_KEY,
+          PERFORMANCE_SNAPSHOT_KEY
         ],
         async (r) => {
           const queue = pruneAndNormalizeQueue(r[PENDING_SIMULADOS_QUEUE_KEY]);
@@ -8673,11 +8675,14 @@
           }
           const snifferEvents = Array.isArray(r[SNIFFER_RECENT_EVENTS_KEY]) ? r[SNIFFER_RECENT_EVENTS_KEY] : [];
           const diagShapes = Array.isArray(r[DIAGNOSTIC_EVENTS_KEY]) ? r[DIAGNOSTIC_EVENTS_KEY] : [];
+          const perfSnap = r[PERFORMANCE_SNAPSHOT_KEY];
+          const perfSubjCount = perfSnap?.subjectsAndTopicsPerformance ? Object.keys(perfSnap.subjectsAndTopicsPerformance).length : 0;
           const snifferSummaryEl = document.getElementById("diag-sniffer-summary");
           if (snifferSummaryEl) {
             const lastEv = snifferEvents[snifferEvents.length - 1];
             const lastEvStr = lastEv ? `${lastEv.type}` : "nenhum ainda";
-            snifferSummaryEl.textContent = `Sniffer: ${snifferEvents.length} evento(s) (${lastEvStr}) • ${diagShapes.length} forma(s) diag.`;
+            const perfPart = perfSubjCount > 0 ? ` • Desempenho: ${perfSubjCount} disc.` : "";
+            snifferSummaryEl.textContent = `Sniffer: ${snifferEvents.length} evento(s) (${lastEvStr}) • ${diagShapes.length} forma(s)${perfPart}`;
           }
           const lastFilter = r[LAST_FILTER_DIAG_KEY];
           const resolverSummaryEl = document.getElementById("diag-resolver-summary");
@@ -8823,23 +8828,29 @@
     (function initPrefs() {
       const boxes = Array.from(document.querySelectorAll(".pref-board"));
       const sel = document.getElementById("pref-alts");
+      const statusSel = document.getElementById("pref-status");
       if (!boxes.length || !sel) return;
       const render = (p) => {
         boxes.forEach((b) => {
           b.checked = (p.examBoards || []).includes(b.value);
         });
         sel.value = p.numberAlternatives && p.numberAlternatives[0] ? String(p.numberAlternatives[0]) : "";
+        if (statusSel) {
+          statusSel.value = typeof p.status === "string" ? p.status : "not_resolved";
+        }
       };
       const save = () => {
         const p = {
           examBoards: boxes.filter((b) => b.checked).map((b) => b.value),
-          numberAlternatives: sel.value ? [Number(sel.value)] : []
+          numberAlternatives: sel.value ? [Number(sel.value)] : [],
+          status: statusSel ? statusSel.value : "not_resolved"
         };
         chrome.storage.local.set({ [DEFAULT_PREFS_KEY]: p });
       };
       chrome.storage.local.get([DEFAULT_PREFS_KEY], (r) => render(r[DEFAULT_PREFS_KEY] || FIRST_PREFS));
       boxes.forEach((b) => b.addEventListener("change", save));
       sel.addEventListener("change", save);
+      if (statusSel) statusSel.addEventListener("change", save);
     })();
     (function initBackgroundFeatures() {
       const notifCb = document.getElementById("pref-notifications");
@@ -8913,16 +8924,23 @@
           SNIFFER_RECENT_EVENTS_KEY,
           LAST_FILTER_DIAG_KEY,
           TREE_META_KEY,
+          PERFORMANCE_SNAPSHOT_KEY,
           "qg_cloud_auth_meta"
         ], resolve);
       });
       const dbStats = await getDbStats(currentUserId).catch(() => null);
+      const perfSnap = rawStore?.[PERFORMANCE_SNAPSHOT_KEY];
       const payload = sanitizeDiagnosticData({
         version: manifestVer,
         capturedAt: (/* @__PURE__ */ new Date()).toISOString(),
         diagnosticMode: Boolean(rawStore?.[DIAGNOSTIC_MODE_KEY]),
         treeMeta: rawStore?.[TREE_META_KEY] || null,
         authMeta: rawStore?.qg_cloud_auth_meta || null,
+        performanceSnapshotSummary: perfSnap ? {
+          capturedAt: perfSnap.capturedAt || null,
+          rangeDays: perfSnap.rangeDays || null,
+          subjectsCount: perfSnap.subjectsAndTopicsPerformance ? Object.keys(perfSnap.subjectsAndTopicsPerformance).length : 0
+        } : null,
         dbStats,
         pendingSimuladosQueue: pruneAndNormalizeQueue(rawStore?.[PENDING_SIMULADOS_QUEUE_KEY]),
         recentSnifferEvents: (rawStore?.[SNIFFER_RECENT_EVENTS_KEY] || []).slice(-20),

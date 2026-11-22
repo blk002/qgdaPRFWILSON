@@ -18,6 +18,7 @@ import {
   SNIFFER_RECENT_EVENTS_KEY,
   LAST_FILTER_DIAG_KEY,
   TREE_META_KEY,
+  PERFORMANCE_SNAPSHOT_KEY,
   getTodaySessionDate,
   normalizeSession,
   sanitizeDiagnosticData,
@@ -27,9 +28,9 @@ import {
   pruneAndNormalizeQueue,
 } from '../content/simuladosHelper.js';
 
-// Popup Script — QG da PRF Rastreador Caveira (v3.1.0 — Dexie + Diagnóstico + Fila ACK)
+// Popup Script — QG da PRF Rastreador Caveira (v3.2.0 — Dexie + Diagnóstico + Fila ACK + API Real)
 const USER_BUCKETS_KEY = 'qg_caveira_user_buckets';
-const FIRST_PREFS = { examBoards: ['cebraspe', 'caveira_ineditas', 'caveira_adaptadas'], numberAlternatives: [2] };
+const FIRST_PREFS = { examBoards: ['cebraspe', 'caveira_ineditas', 'caveira_adaptadas'], numberAlternatives: [2], status: 'not_resolved' };
 const TREE_STALE_DAYS = 30;
 
 function renderAccountStatus(activeUserId, activeUserLabel) {
@@ -181,6 +182,7 @@ document.addEventListener('DOMContentLoaded', () => {
         SNIFFER_RECENT_EVENTS_KEY,
         LAST_FILTER_DIAG_KEY,
         TREE_META_KEY,
+        PERFORMANCE_SNAPSHOT_KEY,
       ],
       async (r) => {
         const queue = pruneAndNormalizeQueue(r[PENDING_SIMULADOS_QUEUE_KEY]);
@@ -209,11 +211,14 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const snifferEvents = Array.isArray(r[SNIFFER_RECENT_EVENTS_KEY]) ? r[SNIFFER_RECENT_EVENTS_KEY] : [];
         const diagShapes = Array.isArray(r[DIAGNOSTIC_EVENTS_KEY]) ? r[DIAGNOSTIC_EVENTS_KEY] : [];
+        const perfSnap = r[PERFORMANCE_SNAPSHOT_KEY];
+        const perfSubjCount = perfSnap?.subjectsAndTopicsPerformance ? Object.keys(perfSnap.subjectsAndTopicsPerformance).length : 0;
         const snifferSummaryEl = document.getElementById('diag-sniffer-summary');
         if (snifferSummaryEl) {
           const lastEv = snifferEvents[snifferEvents.length - 1];
           const lastEvStr = lastEv ? `${lastEv.type}` : 'nenhum ainda';
-          snifferSummaryEl.textContent = `Sniffer: ${snifferEvents.length} evento(s) (${lastEvStr}) • ${diagShapes.length} forma(s) diag.`;
+          const perfPart = perfSubjCount > 0 ? ` • Desempenho: ${perfSubjCount} disc.` : '';
+          snifferSummaryEl.textContent = `Sniffer: ${snifferEvents.length} evento(s) (${lastEvStr}) • ${diagShapes.length} forma(s)${perfPart}`;
         }
 
         const lastFilter = r[LAST_FILTER_DIAG_KEY];
@@ -375,21 +380,27 @@ document.addEventListener('DOMContentLoaded', () => {
   (function initPrefs() {
     const boxes = Array.from(document.querySelectorAll('.pref-board'));
     const sel = document.getElementById('pref-alts');
+    const statusSel = document.getElementById('pref-status');
     if (!boxes.length || !sel) return;
     const render = (p) => {
       boxes.forEach((b) => { b.checked = (p.examBoards || []).includes(b.value); });
       sel.value = (p.numberAlternatives && p.numberAlternatives[0]) ? String(p.numberAlternatives[0]) : '';
+      if (statusSel) {
+        statusSel.value = typeof p.status === 'string' ? p.status : 'not_resolved';
+      }
     };
     const save = () => {
       const p = {
         examBoards: boxes.filter((b) => b.checked).map((b) => b.value),
         numberAlternatives: sel.value ? [Number(sel.value)] : [],
+        status: statusSel ? statusSel.value : 'not_resolved',
       };
       chrome.storage.local.set({ [DEFAULT_PREFS_KEY]: p });
     };
     chrome.storage.local.get([DEFAULT_PREFS_KEY], (r) => render(r[DEFAULT_PREFS_KEY] || FIRST_PREFS));
     boxes.forEach((b) => b.addEventListener('change', save));
     sel.addEventListener('change', save);
+    if (statusSel) statusSel.addEventListener('change', save);
   })();
 
   // Alertas FSRS & Status Sync Direto (tokens vivem somente em chrome.storage.session via background)
@@ -473,16 +484,23 @@ document.addEventListener('DOMContentLoaded', () => {
         SNIFFER_RECENT_EVENTS_KEY,
         LAST_FILTER_DIAG_KEY,
         TREE_META_KEY,
+        PERFORMANCE_SNAPSHOT_KEY,
         'qg_cloud_auth_meta',
       ], resolve);
     });
     const dbStats = await getDbStats(currentUserId).catch(() => null);
+    const perfSnap = rawStore?.[PERFORMANCE_SNAPSHOT_KEY];
     const payload = sanitizeDiagnosticData({
       version: manifestVer,
       capturedAt: new Date().toISOString(),
       diagnosticMode: Boolean(rawStore?.[DIAGNOSTIC_MODE_KEY]),
       treeMeta: rawStore?.[TREE_META_KEY] || null,
       authMeta: rawStore?.qg_cloud_auth_meta || null,
+      performanceSnapshotSummary: perfSnap ? {
+        capturedAt: perfSnap.capturedAt || null,
+        rangeDays: perfSnap.rangeDays || null,
+        subjectsCount: perfSnap.subjectsAndTopicsPerformance ? Object.keys(perfSnap.subjectsAndTopicsPerformance).length : 0,
+      } : null,
       dbStats,
       pendingSimuladosQueue: pruneAndNormalizeQueue(rawStore?.[PENDING_SIMULADOS_QUEUE_KEY]),
       recentSnifferEvents: (rawStore?.[SNIFFER_RECENT_EVENTS_KEY] || []).slice(-20),

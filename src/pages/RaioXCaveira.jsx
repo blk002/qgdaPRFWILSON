@@ -5,7 +5,7 @@ import {
   RefreshCw, Download, Upload, Trash2, CheckCircle2, XCircle,
   BookOpen, ChevronDown, ChevronUp, Copy, Check,
   BrainCircuit, Skull, Search, MessageSquarePlus, Save, Scale, Layers, Sparkles,
-  Crosshair, ArrowRight, TrendingDown, Video, Flame
+  Crosshair, ArrowRight, TrendingDown, Video, Flame, RotateCcw
 } from 'lucide-react';
 import {
   findCourseVideoMatch,
@@ -657,7 +657,7 @@ export default function RaioXCaveira() {
     setSelectedLegalDevice(null);
   };
 
-  const triggerCriticalTopicPractice = (subjectName = '', topicsList = []) => {
+  const triggerCriticalTopicPractice = (subjectName = '', topicsList = [], questionStatus = 'not_resolved') => {
     const cleanTopics = (Array.isArray(topicsList) ? topicsList : [topicsList])
       .map(t => String(t || '').trim())
       .filter(Boolean);
@@ -680,10 +680,12 @@ export default function RaioXCaveira() {
           topic: cleanTopics.slice(0, 3).join(' • '),
           fallbackTopic: primaryTopic,
           subtopics: uniqueSubtopics,
-          rawIndexText: uniqueSubtopics.map((s, idx) => `${idx + 1}. ${s}`).join('\n')
+          rawIndexText: uniqueSubtopics.map((s, idx) => `${idx + 1}. ${s}`).join('\n'),
+          status: questionStatus
         }
-      }, '*');
-      toast.success(`Abrindo Caveira focado na Zona Crítica: ${cleanTopics.slice(0, 2).join(' • ')}`);
+      }, window.location.origin);
+      const statusTag = questionStatus === 'wrong' ? ' (só erradas)' : questionStatus === 'right' ? ' (só certas)' : '';
+      toast.success(`Abrindo Caveira${statusTag} na Zona Crítica: ${cleanTopics.slice(0, 2).join(' • ')}`);
     } else {
       window.open('https://app.caveira.com/questions', '_blank', 'noopener');
       toast.info('Extensão não detectada nesta aba. Assunto crítico copiado para a área de transferência!');
@@ -1322,22 +1324,40 @@ export default function RaioXCaveira() {
                 Zona Crítica: Assuntos Mais Errados ({topicRankings.mostErrored.length})
               </h3>
               {topicRankings.mostErrored.length > 0 ? (
-                <button
-                  type="button"
-                  onClick={() => {
-                    const topSubject = topicRankings.mostErrored[0].subject;
-                    const sameSubjectCritical = topicRankings.mostErrored
-                      .filter(item => item.subject === topSubject)
-                      .slice(0, 3)
-                      .map(item => item.topic);
-                    triggerCriticalTopicPractice(topSubject, sameSubjectCritical);
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-red-500/15 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-colors cursor-pointer"
-                  title="Abrir o Projeto Caveira já filtrado nos piores assuntos da sua disciplina mais crítica"
-                >
-                  <Target className="w-3 h-3" />
-                  <span>Treinar Top Críticos no Caveira</span>
-                </button>
+                <div className="flex items-center gap-1.5 flex-wrap">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const topSubject = topicRankings.mostErrored[0].subject;
+                      const sameSubjectCritical = topicRankings.mostErrored
+                        .filter(item => item.subject === topSubject)
+                        .slice(0, 3)
+                        .map(item => item.topic);
+                      triggerCriticalTopicPractice(topSubject, sameSubjectCritical, 'wrong');
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/30 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Refazer no Projeto Caveira apenas as questões erradas dos piores assuntos"
+                  >
+                    <RotateCcw className="w-3 h-3" />
+                    <span>Refazer erradas</span>
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const topSubject = topicRankings.mostErrored[0].subject;
+                      const sameSubjectCritical = topicRankings.mostErrored
+                        .filter(item => item.subject === topSubject)
+                        .slice(0, 3)
+                        .map(item => item.topic);
+                      triggerCriticalTopicPractice(topSubject, sameSubjectCritical, 'not_resolved');
+                    }}
+                    className="px-2.5 py-1 rounded-lg bg-red-500/15 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-colors cursor-pointer"
+                    title="Abrir o Projeto Caveira já filtrado nos piores assuntos da sua disciplina mais crítica"
+                  >
+                    <Target className="w-3 h-3" />
+                    <span>Treinar Top Críticos no Caveira</span>
+                  </button>
+                </div>
               ) : (
                 <span className="text-[10px] font-bold uppercase text-slate-400">Requer Atenção Imediata</span>
               )}
@@ -1390,12 +1410,21 @@ export default function RaioXCaveira() {
                     <div className="space-y-1">
                       <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-semibold text-slate-400">
                         <span>Taxa de Erro: <strong className="text-red-400">{t.errorPercent}%</strong></span>
-                        <div className="flex items-center gap-2.5">
+                        <div className="flex items-center gap-2">
                           <button
                             type="button"
-                            onClick={() => triggerCriticalTopicPractice(t.subject, [t.topic])}
+                            onClick={() => triggerCriticalTopicPractice(t.subject, [t.topic], 'wrong')}
+                            className="px-2 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/30 font-black uppercase tracking-wider cursor-pointer flex items-center gap-1 transition-colors"
+                            title={`Refazer apenas as questões que você errou em ${t.topic} (${t.subject})`}
+                          >
+                            <RotateCcw className="w-2.5 h-2.5" />
+                            <span>Refazer erradas</span>
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => triggerCriticalTopicPractice(t.subject, [t.topic], 'not_resolved')}
                             className="px-2 py-0.5 rounded bg-sky-500/15 hover:bg-sky-500 text-sky-400 hover:text-slate-950 border border-sky-500/30 font-black uppercase tracking-wider cursor-pointer flex items-center gap-1 transition-colors"
-                            title={`Resolver questões de ${t.topic} (${t.subject}) no Projeto Caveira`}
+                            title={`Resolver questões inéditas/não resolvidas de ${t.topic} (${t.subject}) no Projeto Caveira`}
                           >
                             <Target className="w-2.5 h-2.5" />
                             <span>Treinar no Caveira</span>

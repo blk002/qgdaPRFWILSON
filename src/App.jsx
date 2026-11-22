@@ -113,6 +113,7 @@ export default function App() {
     }
   });
   const [prePromptIndexText, setPrePromptIndexText] = useState('');
+  const [prePromptQuestionStatus, setPrePromptQuestionStatus] = useState('not_resolved');
   const [showPrePromptIndexBox, setShowPrePromptIndexBox] = useState(false);
   const [prevPrePromptModalRef, setPrevPrePromptModalRef] = useState(null);
   const lastPatenteId = useRef(null);
@@ -152,6 +153,7 @@ export default function App() {
     setPrevPrePromptModalRef(classConfirmModal);
     const autoText = matchedModalIndexEntry?.rawIndexText || '';
     setPrePromptIndexText(autoText);
+    setPrePromptQuestionStatus('not_resolved');
     setShowPrePromptIndexBox(false);
   }
 
@@ -165,7 +167,7 @@ export default function App() {
     ]);
   }, [classConfirmModal, prePromptIndexText, subjects]);
 
-  const triggerCaveiraPractice = (subjectName = '', lessonNames = [], topicName = '', subtopics = [], rawIndexText = '') => {
+  const triggerCaveiraPractice = (subjectName = '', lessonNames = [], topicName = '', subtopics = [], rawIndexText = '', questionStatus = 'not_resolved') => {
     const isGenericLesson = (name) => {
       const clean = String(name || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
       return !clean || /^testes?\s+propostos?$/.test(clean) || /^exercicios?(\s+de\s+fixacao)?$/.test(clean) || /^simulado$/.test(clean) || /^revisao$/.test(clean);
@@ -196,9 +198,10 @@ export default function App() {
           topic: displayFilterLabel,
           fallbackTopic: topicName,
           subtopics: cleanSubtopics,
-          rawIndexText: String(rawIndexText || '')
+          rawIndexText: String(rawIndexText || ''),
+          status: typeof questionStatus === 'string' ? questionStatus : 'not_resolved'
         }
-      }, '*');
+      }, window.location.origin);
       toast.success(
         cleanSubtopics.length > 0
           ? `Abrindo Caveira com ${cleanSubtopics.length} subassuntos do Índice`
@@ -485,6 +488,10 @@ export default function App() {
 
         if (event.data.type === 'FILTER_MEMORY_SYNC' && event.data.payload?.memory) {
           useStore.getState().setCaveiraFilterMemory?.(event.data.payload.memory);
+          return;
+        }
+        if (event.data.type === 'PERFORMANCE_SNAPSHOT_SYNC' && event.data.payload) {
+          useStore.getState().setCaveiraPerformanceSnapshot?.(event.data.payload);
           return;
         }
         if (event.data.type === 'COURSE_CATALOG_SYNC' && event.data.payload) {
@@ -1331,13 +1338,44 @@ export default function App() {
               )}
             </div>
 
+            <div className="mb-3 text-left">
+              <div className="text-[9px] font-black uppercase tracking-wider text-slate-500 dark:text-slate-400 mb-1.5">
+                Filtro de Status no Caveira
+              </div>
+              <div className="flex flex-wrap gap-1">
+                {[
+                  { value: 'not_resolved', label: 'Não resolvidas' },
+                  { value: 'wrong', label: 'Só erradas' },
+                  { value: 'right', label: 'Só certas' },
+                  { value: 'resolved', label: 'Resolvidas' },
+                  { value: '', label: 'Todas' }
+                ].map((opt) => {
+                  const active = prePromptQuestionStatus === opt.value;
+                  return (
+                    <button
+                      key={opt.label}
+                      type="button"
+                      onClick={() => setPrePromptQuestionStatus(opt.value)}
+                      className={`px-2 py-1 rounded-lg text-[10px] font-black transition-colors border cursor-pointer ${
+                        active
+                          ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
+                          : 'bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:border-blue-400'
+                      }`}
+                    >
+                      {opt.label}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
             <div className="flex flex-col gap-2">
               <button
                 onClick={() => {
                   const subjectName = subjects[classConfirmModal.subjectId]?.name || '';
                   const lessonNames = classConfirmModal.lessonNames || [];
                   const topicName = classConfirmModal.topicName || '';
-                  triggerCaveiraPractice(subjectName, lessonNames, topicName, prePromptSubtopics, prePromptIndexText);
+                  triggerCaveiraPractice(subjectName, lessonNames, topicName, prePromptSubtopics, prePromptIndexText, prePromptQuestionStatus);
                   setClassConfirmModal(null);
                 }}
                 className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-700 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-lg shadow-blue-600/25 flex items-center justify-center gap-2"
@@ -1395,7 +1433,7 @@ export default function App() {
           const count = Math.max(1, Number(selectedCount) || 1);
           const chosenLessons = allRem.length > 0 ? allRem.slice(0, count) : (classConfirmModal?.lessonNames || []);
           const topicName = classConfirmModal?.topicName || '';
-          triggerCaveiraPractice(subjectName, chosenLessons, topicName, subtopics, rawIndexText);
+          triggerCaveiraPractice(subjectName, chosenLessons, topicName, subtopics, rawIndexText, prePromptQuestionStatus);
         }}
         onClose={() => setClassConfirmModal(null)}
         onConfirm={(amount, speed, studyDate) => {

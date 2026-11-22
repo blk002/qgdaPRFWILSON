@@ -28,6 +28,7 @@ export const DIAGNOSTIC_MODE_KEY = 'qg_diagnostic_mode';
 export const DIAGNOSTIC_EVENTS_KEY = 'qg_diagnostic_events';
 export const SNIFFER_RECENT_EVENTS_KEY = 'qg_sniffer_recent_events';
 export const TREE_META_KEY = 'qg_tree_meta';
+export const PERFORMANCE_SNAPSHOT_KEY = 'qg_caveira_performance_snapshot';
 export const SIMULADO_QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const SIMULADO_QUEUE_MAX_ATTEMPTS = 10;
 
@@ -103,7 +104,7 @@ export function generateChannelNonce() {
   return `${Date.now().toString(16)}${Math.random().toString(16).slice(2, 18)}`;
 }
 
-const SENSITIVE_KEY_RX = /(?:token|auth|cookie|password|passwd|secret|jwt|bearer|authorization|refresh_token|access_token|apikey|api_key)/i;
+const SENSITIVE_KEY_RX = /(?:token|auth|cookie|password|passwd|secret|jwt|bearer|authorization|refresh_token|access_token|apikey|api_key|video_url|embed_url|signed|signature)/i;
 const JWT_STRING_RX = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+)?/g;
 
 export function sanitizeDiagnosticData(input, depth = 0) {

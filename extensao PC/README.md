@@ -1,14 +1,23 @@
-# QG da PRF — Rastreador Caveira (Extensão Chrome MV3 • v3.1.0)
+# QG da PRF — Rastreador Caveira (Extensão Chrome MV3 • v3.2.0)
 
 Extensão MV3 que integra o **Projeto Caveira** ao web app **QG da PRF**:
-1. Resolve assuntos e disciplinas localmente contra [`caveira_arvore.json`](caveira_arvore.json) (`caveiraResolver.js` + `treeMatcher.js` + `dynamicTreeManager.js`) e aplica filtros profundos por URL.
-2. Captura telemetria real de questões (`apiId`, `subjectId`, `subtopicId`, `banca`, `ano`, `acertou`, `data`) no IndexedDB (Dexie v2 + MiniSearch).
-3. Captura e entrega simulados ao QG da PRF via fila durável com confirmação (`SIMULADOS_IMPORT` ↔ `SIMULADOS_IMPORT_ACK` — ver [`CONTRATO.md`](CONTRATO.md)).
+1. Resolve assuntos e disciplinas localmente contra [`caveira_arvore.json`](caveira_arvore.json) (`caveiraResolver.js` + `treeMatcher.js` + `dynamicTreeManager.js`) e aplica filtros profundos por URL (incluindo `status`: `not_resolved`, `wrong`, `right`, `resolved`, ou todas).
+2. Captura telemetria real de questões via `POST /skull/question-database/{id}`, `/statistics` e snapshot `/skull/performance/questions/...` (`apiId`, `subjectId`, `subtopicId`, `banca`, `ano`, `acertou`, `data`) no IndexedDB (Dexie v2 + MiniSearch).
+3. Captura e entrega simulados ao QG da PRF com os campos reais do `/enjoyment` (`right`, `wrong`, `blank`, `canceled`, `count`, `others`) via fila durável com confirmação (`SIMULADOS_IMPORT` ↔ `SIMULADOS_IMPORT_ACK` — ver [`CONTRATO.md`](CONTRATO.md)).
 4. Oferece HUD flutuante (Shadow DOM), alertas FSRS/streak, player de vídeo com memória de velocidade/posição e sincronização direta com Supabase (token em `chrome.storage.session`).
 
 ---
 
-## Principais novidades da v3.1.0
+## Principais novidades
+
+### v3.2.0 (Formatos reais da API)
+- **Resposta de questão & `/statistics`:** `api_sniffer.js` captura `POST /skull/question-database/{id}` (`answer_status`, `correct_answer`, `general_stats`) e `GET /skull/question-database/{id}/statistics` (`subject_id`, `topic_id` exatos da árvore).
+- **Desempenho por assunto (`/skull/performance/questions/{dias}/{de}/{ate}`):** captura `subjects_and_topics_performance`, `correct_history` e `incorrect_history` e sincroniza para o QG Web App via `PERFORMANCE_SNAPSHOT_SYNC`.
+- **Simulados (`/enjoyment`):** leitura real de `right`, `wrong`, `blank`, `canceled`, `count` e `others` (média da turma), integrando metadados de `/teams/{id}` e `/practice-exam/{id}`.
+- **Filtro por status (`resolved` / `not_resolved` / `right` / `wrong`):** seletor no popup da extensão, no modal de prática e botão **"Refazer erradas"** na Zona Crítica do Raio-X.
+- **Privacidade & Índice de aulas:** URLs assinadas de vídeo nunca são armazenadas/logadas (`video_url`/`embed_url`/`signed`/`signature` redigidos); capítulos com timestamp na `description` das aulas alimentam o cache do Índice.
+
+### v3.1.0 (Confiabilidade, Segurança & Modularização)
 
 - **P0 — Fila confiável de Simulados + ACK:** `qg_pending_simulados_queue` com TTL de 7 dias, dedupe por `caveiraId`, até 10 tentativas com backoff (`5s`, `15s`, `45s`), fallback de `qg_active_user_id` do storage, botão **"Reenviar agora"** e contrato formal em [`CONTRATO.md`](CONTRATO.md).
 - **P0 — Parser tolerante de Simulados & Modo Diagnóstico:** suporte a payloads aninhados (`result`, `summary`, `practice_exam`), marcação explícita de `estimated: true` quando houver inferência (nunca inventa `total = 120` em silêncio) e **Modo Diagnóstico** no popup (desligado por padrão; registra apenas formas/chaves sanitizadas sem tokens).
@@ -52,7 +61,7 @@ extensao-src/
 npm install
 npm run build:extensao   # Compila extensao-src/entries/*.entry.js -> extensao PC/*.js
 npm test                 # Executa cases.js (12/12) e bulk.js (8.164 tópicos)
-npm run zip:extensao     # Gera releases/qg-prf-rastreador-caveira-v3.1.0.zip (com extensao-src/)
+npm run zip:extensao     # Gera releases/qg-prf-rastreador-caveira-v3.2.0.zip (com extensao-src/)
 ```
 
 Verificação de sintaxe (`node --check`):

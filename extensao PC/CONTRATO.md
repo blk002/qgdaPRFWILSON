@@ -1,6 +1,6 @@
-# Contrato de Comunicação — QG da PRF Web App ↔ Extensão (v3.1.0)
+# Contrato de Comunicação — QG da PRF Web App ↔ Extensão (v3.2.0)
 
-Este documento define o contrato oficial de mensagens entre a aplicação Web **QG da PRF** (`https://blk002.github.io/qgdaPRFWILSON`) e a extensão **QG da PRF — Rastreador Caveira (`v3.1.0`)**.
+Este documento define o contrato oficial de mensagens entre a aplicação Web **QG da PRF** (`https://blk002.github.io/qgdaPRFWILSON`) e a extensão **QG da PRF — Rastreador Caveira (`v3.2.0`)**.
 
 ---
 
@@ -17,11 +17,11 @@ Este documento define o contrato oficial de mensagens entre a aplicação Web **
 
 ### 1.2 `api_sniffer.js` (`MAIN` world) ↔ `content.js` (`ISOLATED` world)
 - Ao inicializar, `content.js` gera um nonce criptográfico aleatório (`CHANNEL_NONCE`) e o envia via evento `CustomEvent('qg-caveira-sniffer-init', { detail: { nonce, diagnosticMode } })`.
-- Todas as mensagens `postMessage` entre `QG_CAVEIRA_SNIFFER` e `QG_CAVEIRA_CONTENT` carregam `nonce` e são descartadas se `event.source !== window`, `event.origin !== window.location.origin` ou `event.data.nonce !== CHANNEL_NONCE`.
+- Todas as mensagens `postMessage` entre `QG_CAVEIRA_API_SNIFFER` e `QG_CAVEIRA_CONTENT` carregam `nonce` e são descartadas se `event.source !== window`, `event.origin !== window.location.origin` ou `event.data.nonce !== CHANNEL_NONCE`.
 
 ### 1.3 Credenciais e Dados Sensíveis
 - Tokens Supabase enviados pelo site em `QG_PRF_SYNC_CLOUD_CREDS` são gravados **exclusivamente** em `chrome.storage.session` (volátil em memória, nunca em `chrome.storage.local` nem em backups/diagnósticos).
-- Tokens `Authorization: Bearer` / JWTs do Projeto Caveira nunca são persistidos, exportados ou incluídos no **Modo Diagnóstico**.
+- Tokens `Authorization: Bearer`, JWTs e URLs assinadas de vídeo com expiração (`video_url`, `embed_url`, `signed`, `signature`) do Projeto Caveira nunca são persistidos, exportados ou incluídos no **Modo Diagnóstico**.
 
 ---
 
@@ -131,6 +131,7 @@ window.addEventListener('message', handleExtensionMessage);
 | `COURSE_CATALOG_SYNC` | Envia catálogo estruturado de módulos/aulas capturado no Caveira. |
 | `COURSE_LESSON_COMPLETE_REQUEST` | Abre fluxo de conclusão de aula no QG após clique no player do Caveira. |
 | `FILTER_MEMORY_SYNC` | Sincroniza mapa local de memórias ID→assunto (`qg_caveira_filter_id_memory_v1`). |
+| `PERFORMANCE_SNAPSHOT_SYNC` | Envia snapshot real de `/skull/performance/questions/{dias}/{de}/{ate}` (`subjectsAndTopicsPerformance`, `correctHistory`, `incorrectHistory`). |
 | `PDF_STUDY_LOG` | Registra sessão de leitura de PDF capturada no Caveira. |
 | `SESSION_CLEARED` | Confirmação após `CLEAR_SESSION`. |
 
@@ -143,7 +144,7 @@ window.addEventListener('message', handleExtensionMessage);
 | `QG_PRF_SYNC_CLOUD_CREDS` | Envia credenciais temporárias para o background manter somente em `chrome.storage.session`. |
 | `QG_PRF_SYNC_REMINDER_STATE` | Atualiza resumo de metas/FSRS/streak para alertas em 2º plano. |
 | `FETCH_CAVEIRA_DATA` | Solicita `CAVEIRA_DATA_RESPONSE` e eventos pendentes para `userId`. |
-| `OPEN_CAVEIRA_PRACTICE` | Abre/foca aba do Caveira e aplica filtro automático (`subject`, `topic`, `lessons`, `examBoards`, `numberAlternatives`). |
+| `OPEN_CAVEIRA_PRACTICE` | Abre/foca aba do Caveira e aplica filtro automático (`subject`, `topic`, `lessons`, `examBoards`, `numberAlternatives`, `status`: `'not_resolved'` / `'wrong'` / `'right'` / `'resolved'` / `''`). |
 | `QG_PRF_SYNC_TODAY_MISSION` | Sincroniza a missão do dia para exibição no HUD do Caveira. |
 | `QG_PRF_SYNC_SUBJECT_SPEEDS` | Sincroniza velocidades preferidas do player por disciplina. |
 | `QG_PRF_SYNC_FILTER_MEMORY` | Sincroniza memórias de filtro salvas na nuvem. |
@@ -155,8 +156,13 @@ window.addEventListener('message', handleExtensionMessage);
 
 ---
 
-## 4. Telemetria Estruturada por Questão (P0 #3)
-Cada questão capturada combina resposta real da API do Caveira (`/api/v1/skull/question-database`) com o estado visual do card, mantendo `apiId` numérico separado do código textual (`code`) e mapeando para `caveira_arvore.json`:
+## 4. Telemetria Estruturada & Formatos Reais da API (v3.2.0)
+- **Resposta de questão (`POST /skull/question-database/{id}`):** captura `answer_status` (`"correct"` / `"incorrect"`), `correct_answer` e `general_stats`.
+- **Estatísticas da questão (`GET /skull/question-database/{id}/statistics`):** obtém `subject_id` e `topic_id` já resolvidos para `caveira_arvore.json`.
+- **Desempenho por assunto (`GET /skull/performance/questions/{dias}/{de}/{ate}`):** alimenta `qg_caveira_performance_snapshot` → `PERFORMANCE_SNAPSHOT_SYNC` no QG Web App.
+- **Simulados (`/skull/teams/{teamId}/practice-exam/{examId}/enjoyment`):** lê `right`, `wrong`, `blank`, `canceled`, `count` e `others` (média da turma) por disciplina (`id`).
+
+Registro estruturado por questão (mantendo `apiId` separado de `code`):
 ```json
 {
   "id": "Q104328",

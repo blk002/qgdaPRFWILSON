@@ -70,7 +70,7 @@
     let channelNonce = null;
     let allowNextNonceInit = true;
     let diagnosticMode = false;
-    const SENSITIVE_KEY_RX = /(?:token|auth|cookie|password|passwd|secret|jwt|bearer|authorization|refresh_token|access_token|apikey|api_key|email|cpf|phone)/i;
+    const SENSITIVE_KEY_RX = /(?:token|auth|cookie|password|passwd|secret|jwt|bearer|authorization|refresh_token|access_token|apikey|api_key|email|cpf|phone|video_url|embed_url|signed|signature)/i;
     const JWT_RX = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+)?/g;
     function safeUrlPath(rawUrl) {
       try {
@@ -268,9 +268,10 @@
         ...item.situation !== void 0 ? { situation: item.situation } : {},
         ...item.outdated !== void 0 ? { outdated: Boolean(item.outdated) } : {},
         ...item.has_comment !== void 0 ? { hasComment: Boolean(item.has_comment) } : {},
-        ...item.video_url ? { videoUrl: String(item.video_url).trim() } : {},
+        ...item.video_url || item.has_video ? { hasVideo: true } : {},
         ...alternatives.length > 0 ? { alternatives } : {},
         ...item.user_answer !== void 0 && item.user_answer !== null ? { userAnswer: item.user_answer } : {},
+        ...item.user_assurance !== void 0 && item.user_assurance !== null ? { userAssurance: String(item.user_assurance).trim() } : {},
         ...lastStatus !== void 0 && lastStatus !== null ? { lastAnswerStatus: lastStatus } : {},
         ...commentText ? { teacherComment: commentText, commentSource } : {},
         ...hasPct ? { communityCorrectPct: Math.round(corrPct), communityErrorPct: Math.max(0, 100 - Math.round(corrPct)) } : {},
@@ -305,8 +306,12 @@
       const modIdMatch = urlStr.match(/\/modules\/(\d+)/i) || window.location.pathname.match(/\/modules\/(\d+)/i);
       const modIdFromUrl = modIdMatch?.[1] || "";
       const multiModulesCandidate = isSimuladoOrTeamUrl ? null : root.modules || root.course_modules || root.course?.modules || root.disciplines || root.subjects || root.sections || (Array.isArray(root) && root[0] && (root[0].videos || root[0].course_videos || root[0].lessons || root[0].contents || root[0].items || root[0].topics || root[0].submodules || root[0].course_module_videos || /\/courses\/\d+\/modules/i.test(urlStr) && root[0].id && (root[0].name || root[0].title)) ? root : null);
-      const singleVideoList = isSimuladoOrTeamUrl ? null : root.videos || root.course_videos || root.lessons || root.contents || root.course_module_videos || (Array.isArray(root) && root[0] && (root[0].course_video_id !== void 0 || root[0].video_id !== void 0 || root[0].vimeo_id !== void 0 || root[0].bunny_id !== void 0 || root[0].embed_url !== void 0 || root[0].duration_seconds !== void 0) ? root : null);
-      const modulesArr = Array.isArray(multiModulesCandidate) && multiModulesCandidate.length > 0 ? multiModulesCandidate : Array.isArray(singleVideoList) && singleVideoList.length > 0 ? [{
+      const singleVideoList = isSimuladoOrTeamUrl ? null : root.videos || root.course_videos || (root.course_video && typeof root.course_video === "object" ? [root.course_video] : null) || root.lessons || root.contents || root.course_module_videos || (Array.isArray(root) && root[0] && (root[0].course_video_id !== void 0 || root[0].video_id !== void 0 || root[0].vimeo_id !== void 0 || root[0].bunny_id !== void 0 || root[0].embed_url !== void 0 || root[0].duration_seconds !== void 0) ? root : null);
+      const modulesArr = Array.isArray(multiModulesCandidate) && multiModulesCandidate.length > 0 ? multiModulesCandidate : !isSimuladoOrTeamUrl && !Array.isArray(root) && Array.isArray(root.submodules) && root.submodules.length > 0 ? [{
+        id: root.id || modIdFromUrl || "0",
+        name: root.name || root.title || document.querySelector("h1, h2, .text-h6")?.textContent?.trim() || "Módulo Atual",
+        submodules: root.submodules
+      }] : Array.isArray(singleVideoList) && singleVideoList.length > 0 ? [{
         id: !Array.isArray(root) && root.id ? root.id : modIdFromUrl || "0",
         name: (!Array.isArray(root) ? root.name || root.title || root.module?.name || root.module?.title : "") || document.querySelector("h1, h2, .text-h6")?.textContent?.trim() || "Módulo Atual",
         videos: singleVideoList
@@ -332,12 +337,15 @@
             if (seenVids.has(dedup)) return;
             seenVids.add(dedup);
             const urlPath = courseId && vid ? `${window.location.origin}/courses/${courseId}/modules/${modId || "0"}/playground?course_video_id=${vid}` : moduleUrl;
+            const rawDesc = typeof v.description === "string" ? v.description.trim() : "";
+            const hasTimestampIndex = /\[\d{1,2}:\d{2}(?::\d{2})?\]/.test(rawDesc);
             rawLessons.push({
               id: vid || null,
               title,
               durationMin: normalizeDurationMin(v.duration || v.duration_seconds || v.duration_minutes || v.time || v.length),
               completed: Boolean(v.completed || v.is_completed || v.watched || v.concluded || v.finished),
-              url: urlPath
+              url: urlPath,
+              ...hasTimestampIndex ? { rawIndexText: rawDesc.slice(0, 4e3) } : {}
             });
           };
           (mod.videos || mod.course_videos || mod.lessons || mod.contents || mod.items || mod.course_module_videos || []).forEach(pushLesson);
@@ -424,25 +432,64 @@
         walk(obj, 0, "");
         return { attemptDate, attemptField, releaseDate, releaseField, anyDate, anyField };
       };
+      const qStatsMatch = urlStr.match(/\/question-database\/(\d+)\/statistics(?:[?#]|$)/i);
+      if (qStatsMatch && root && !Array.isArray(root)) {
+        const apiId = Number(qStatsMatch[1]);
+        const latestHist = Array.isArray(root.history) && root.history.length > 0 ? root.history[0] : null;
+        const statsObj = root.stats && typeof root.stats === "object" ? root.stats : null;
+        const commCorr = Number(statsObj?.correct ?? statsObj?.right);
+        const commErr = Number(statsObj?.incorrect ?? statsObj?.wrong);
+        const commTot = Number.isFinite(commCorr) && Number.isFinite(commErr) ? commCorr + commErr : 0;
+        const commPct = commTot > 0 ? Math.round(commCorr / commTot * 100) : void 0;
+        emit("API_QUESTION_STATISTICS", {
+          apiId: Number.isFinite(apiId) && apiId > 0 ? apiId : Number(latestHist?.question_id) || null,
+          subjectId: Number(latestHist?.subject_id) || null,
+          subtopicId: Number(latestHist?.topic_id) || null,
+          correctAnswer: root.correct_answer || null,
+          userAnswer: latestHist?.answer || null,
+          answerStatus: latestHist?.answer_status || null,
+          answeredAt: latestHist?.answered_at || null,
+          ...commPct !== void 0 ? { communityCorrectPct: commPct, communityErrorPct: Math.max(0, 100 - commPct) } : {}
+        });
+        return;
+      }
+      if (root && !Array.isArray(root) && root.subjects_and_topics_performance && typeof root.subjects_and_topics_performance === "object") {
+        const perfMatch = urlStr.match(/\/performance\/questions\/(\d+)\/(\d{4}-\d{2}-\d{2})\/(\d{4}-\d{2}-\d{2})/i);
+        emit("API_PERFORMANCE_DATA", {
+          subjectsAndTopicsPerformance: root.subjects_and_topics_performance,
+          correctHistory: Array.isArray(root.correct_history) ? root.correct_history : [],
+          incorrectHistory: Array.isArray(root.incorrect_history) ? root.incorrect_history : [],
+          rangeDays: perfMatch ? Number(perfMatch[1]) : null,
+          fromDate: perfMatch ? perfMatch[2] : null,
+          toDate: perfMatch ? perfMatch[3] : null,
+          capturedAt: (/* @__PURE__ */ new Date()).toISOString()
+        });
+        return;
+      }
       const enjoyMatch = urlStr.match(/\/practice-exams?\/(\d+)\/enjoyment/i);
       if (enjoyMatch) {
+        const teamIdMatch = urlStr.match(/\/teams\/(\d+)/i);
         const rawBlocks = root.blocks || root.blocos || root.groups || root.by_block || root.blocks_performance || [];
         const rawSubjects = root.subjects || root.disciplines || root.disciplinas || root.by_subject || root.disciplines_performance || [];
         const mapScoreRow = (item) => {
-          const hitsVal = Number(item?.hits ?? item?.correct ?? item?.correct_answers ?? item?.acertos ?? 0);
-          const errorsVal = Number(item?.errors ?? item?.wrong ?? item?.wrong_answers ?? item?.erros ?? 0);
+          const hitsVal = Number(item?.right ?? item?.hits ?? item?.correct ?? item?.correct_answers ?? item?.acertos ?? 0);
+          const errorsVal = Number(item?.wrong ?? item?.errors ?? item?.wrong_answers ?? item?.erros ?? 0);
           const blankVal = Number(item?.blank ?? item?.not_answered ?? item?.em_branco ?? item?.unanswered ?? 0);
-          const totalVal = Number(item?.total ?? item?.questions_count ?? hitsVal + errorsVal + blankVal);
+          const canceledVal = Number(item?.canceled ?? item?.anuladas ?? 0);
+          const totalVal = Number(item?.count ?? item?.total ?? item?.questions_count ?? hitsVal + errorsVal + blankVal + canceledVal);
           const netVal = item?.net_score !== void 0 ? Number(item.net_score) : item?.score !== void 0 ? Number(item.score) : item?.liquida !== void 0 ? Number(item.liquida) : hitsVal - errorsVal;
-          const rawPct = item?.percentage ?? item?.accuracy ?? item?.enjoyment ?? item?.user_percentage;
-          const rawOthers = item?.others_percentage ?? item?.members_percentage ?? item?.others ?? item?.average_others;
+          const rawPct = item?.enjoyment ?? item?.percentage ?? item?.accuracy ?? item?.user_percentage;
+          const rawOthers = item?.others ?? item?.others_percentage ?? item?.members_percentage ?? item?.average_others;
           const pctVal = rawPct !== void 0 ? Math.round(Number(rawPct)) : totalVal > 0 ? Math.round(hitsVal / totalVal * 100) : 0;
           const othersNum = rawOthers !== void 0 && rawOthers !== null && rawOthers !== "" ? Number(rawOthers) : void 0;
+          const subjectIdVal = Number(item?.id);
           return {
+            ...Number.isFinite(subjectIdVal) && subjectIdVal > 0 ? { subjectId: subjectIdVal } : {},
             name: String(item?.name || item?.title || item?.subject || item?.discipline || "").trim(),
             hits: hitsVal,
             errors: errorsVal,
             blank: blankVal,
+            ...canceledVal > 0 ? { canceled: canceledVal } : {},
             total: totalVal,
             liquida: netVal,
             pct: pctVal,
@@ -451,13 +498,37 @@
         };
         const blocks = (Array.isArray(rawBlocks) ? rawBlocks : []).map(mapScoreRow).filter((r) => r.name);
         const subjects = (Array.isArray(rawSubjects) ? rawSubjects : []).map(mapScoreRow).filter((r) => r.name);
+        let aggHits = 0;
+        let aggErrors = 0;
+        let aggBlank = 0;
+        let aggCanceled = 0;
+        let aggTotal = 0;
+        let aggLiquida = 0;
+        subjects.forEach((s) => {
+          aggHits += s.hits || 0;
+          aggErrors += s.errors || 0;
+          aggBlank += s.blank || 0;
+          aggCanceled += s.canceled || 0;
+          aggTotal += s.total || 0;
+          aggLiquida += s.liquida !== void 0 ? s.liquida : (s.hits || 0) - (s.errors || 0);
+        });
         const dates = extractSimuladoDatesDeep(root, urlStr);
         if (blocks.length > 0 || subjects.length > 0 || dates.attemptDate || dates.releaseDate || dates.anyDate) {
           emit("API_SIMULADO_ENJOYMENT", {
             caveiraId: `sim_${enjoyMatch[1]}`,
             examId: enjoyMatch[1],
+            ...teamIdMatch?.[1] ? { teamId: teamIdMatch[1] } : {},
             blocks,
             subjects,
+            ...subjects.length > 0 ? {
+              hits: aggHits,
+              errors: aggErrors,
+              blank: aggBlank,
+              canceled: aggCanceled,
+              total: aggTotal,
+              liquida: aggLiquida,
+              pct: aggTotal > 0 ? Math.round(aggHits / aggTotal * 100) : 0
+            } : {},
             attemptDate: dates.attemptDate,
             releaseDate: dates.releaseDate,
             anyDate: dates.anyDate,
@@ -468,11 +539,17 @@
       }
       const examDatesMatch = urlStr.match(/\/practice-exams?\/(\d+)(?:\/questions\/revision)?(?:[?#]|$)/i);
       if (examDatesMatch && !/\/(?:ranking|rankings|leaderboard)/i.test(urlStr)) {
+        const pe = root.practice_exam && typeof root.practice_exam === "object" ? root.practice_exam : root;
         const dates = extractSimuladoDatesDeep(root, urlStr);
-        if (dates.attemptDate || dates.releaseDate || dates.anyDate) {
+        const numQ = Number(pe?.number_questions || pe?.total_questions);
+        if (dates.attemptDate || dates.releaseDate || dates.anyDate || pe?.title) {
           emit("API_SIMULADO_DATES", {
             examId: examDatesMatch[1],
             caveiraId: `sim_${examDatesMatch[1]}`,
+            ...pe?.title ? { title: String(pe.title).trim() } : {},
+            ...Number.isFinite(numQ) && numQ > 0 ? { numberQuestions: numQ } : {},
+            ...pe?.total_points !== void 0 ? { totalPoints: Number(pe.total_points) } : {},
+            ...pe?.performance_released !== void 0 ? { performanceReleased: Boolean(pe.performance_released) } : {},
             attemptDate: dates.attemptDate,
             releaseDate: dates.releaseDate,
             anyDate: dates.anyDate,
@@ -489,11 +566,15 @@
             const d = extractSimuladoDatesDeep(simObj, urlStr);
             const tName = String(simObj.title || simObj.name || simObj.exam_name || "").trim();
             const eId = simObj.id ? String(simObj.id) : null;
+            const numQ = Number(simObj.number_questions || simObj.total_questions);
             if (!tName && !eId) return null;
-            if (!d.attemptDate && !d.releaseDate && !d.anyDate) return null;
+            if (!d.attemptDate && !d.releaseDate && !d.anyDate && !(Number.isFinite(numQ) && numQ > 0)) return null;
             return {
               examId: eId,
               title: tName,
+              ...Number.isFinite(numQ) && numQ > 0 ? { numberQuestions: numQ } : {},
+              ...simObj.total_points !== void 0 ? { totalPoints: Number(simObj.total_points) } : {},
+              ...simObj.performance_released !== void 0 ? { performanceReleased: Boolean(simObj.performance_released) } : {},
               attemptDate: d.attemptDate,
               releaseDate: d.releaseDate,
               anyDate: d.anyDate,
@@ -536,7 +617,7 @@
         if (!obj || typeof obj !== "object" || Array.isArray(obj)) return false;
         const resObj = obj.result || obj.summary || obj.stats || obj.metrics || obj.enjoyment || obj.performance || {};
         return Boolean(
-          obj.hits !== void 0 || obj.correct_answers !== void 0 || obj.net_score !== void 0 || obj.score !== void 0 || resObj.hits !== void 0 || resObj.correct !== void 0 || resObj.correct_answers !== void 0 || resObj.net_score !== void 0 || resObj.score !== void 0 || Array.isArray(obj.subjects) || Array.isArray(obj.disciplines)
+          obj.right !== void 0 || obj.wrong !== void 0 || obj.hits !== void 0 || obj.correct_answers !== void 0 || obj.net_score !== void 0 || obj.score !== void 0 || resObj.right !== void 0 || resObj.wrong !== void 0 || resObj.hits !== void 0 || resObj.correct !== void 0 || resObj.correct_answers !== void 0 || resObj.net_score !== void 0 || resObj.score !== void 0 || Array.isArray(obj.subjects) || Array.isArray(obj.disciplines)
         );
       };
       const singlePersonalWrapper = !Array.isArray(root) && [
@@ -577,12 +658,13 @@
           const nestedExam = sim.practice_exam && typeof sim.practice_exam === "object" ? sim.practice_exam : sim.exam && typeof sim.exam === "object" ? sim.exam : {};
           const estimatedFields = [];
           const estimatedReasons = [];
-          const hitsRaw = pickNum([sim.hits, sim.correct_answers, sim.correct, nestedRes.hits, nestedRes.correct, nestedRes.correct_answers, nestedRes.acertos]);
-          const errorsRaw = pickNum([sim.errors, sim.wrong_answers, sim.wrong, nestedRes.errors, nestedRes.wrong, nestedRes.wrong_answers, nestedRes.erros]);
+          const hitsRaw = pickNum([sim.right, sim.hits, sim.correct_answers, sim.correct, nestedRes.right, nestedRes.hits, nestedRes.correct, nestedRes.correct_answers, nestedRes.acertos]);
+          const errorsRaw = pickNum([sim.wrong, sim.errors, sim.wrong_answers, nestedRes.wrong, nestedRes.errors, nestedRes.wrong_answers, nestedRes.erros]);
           const blankRaw = pickNum([sim.blank, sim.not_answered, sim.unanswered, nestedRes.blank, nestedRes.not_answered, nestedRes.unanswered]);
+          const canceledRaw = pickNum([sim.canceled, nestedRes.canceled]);
           const liquidaRaw = pickNum([sim.net_score, sim.score, sim.liquida, nestedRes.net_score, nestedRes.score, nestedRes.liquida]);
-          const totalRaw = pickNum([sim.total_questions, sim.questions_count, sim.total, nestedExam.total_questions, nestedExam.questions_count, nestedRes.total_questions, nestedRes.questions_count, nestedRes.total]);
-          const pctRaw = pickNum([sim.percentage, sim.accuracy, sim.user_percentage, nestedRes.percentage, nestedRes.accuracy]);
+          const totalRaw = pickNum([sim.number_questions, sim.total_questions, sim.questions_count, sim.count, sim.total, nestedExam.number_questions, nestedExam.total_questions, nestedExam.questions_count, nestedRes.number_questions, nestedRes.total_questions, nestedRes.questions_count, nestedRes.count, nestedRes.total]);
+          const pctRaw = pickNum([sim.percentage, sim.accuracy, sim.user_percentage, nestedRes.enjoyment, nestedRes.percentage, nestedRes.accuracy]);
           if (hitsRaw === null && errorsRaw === null && liquidaRaw === null) {
             return null;
           }
@@ -630,16 +712,24 @@
           const dateField = attemptField || releaseField || anyField || null;
           const rawSubs = sim.subjects || sim.disciplines || nestedRes.subjects || nestedRes.disciplines;
           const subjectScores = Array.isArray(rawSubs) ? rawSubs.map((s) => {
-            const sH = pickNum([s?.hits, s?.correct, s?.acertos]) ?? 0;
-            const sE = pickNum([s?.errors, s?.wrong, s?.erros]) ?? 0;
+            const sId = Number(s?.id);
+            const sH = pickNum([s?.right, s?.hits, s?.correct, s?.acertos]) ?? 0;
+            const sE = pickNum([s?.wrong, s?.errors, s?.erros]) ?? 0;
             const sB = pickNum([s?.blank, s?.not_answered]) ?? 0;
+            const sCanc = pickNum([s?.canceled]) ?? 0;
+            const sTot = pickNum([s?.count, s?.total, s?.questions_count]) ?? sH + sE + sB + sCanc;
             const sLiq = pickNum([s?.net_score, s?.score, s?.liquida]);
+            const sOthers = pickNum([s?.others, s?.others_percentage, s?.members_percentage]);
             return {
+              ...Number.isFinite(sId) && sId > 0 ? { subjectId: sId } : {},
               name: String(s?.name || s?.subject || s?.discipline || "").trim(),
               hits: sH,
               errors: sE,
               blank: sB,
-              liquida: sLiq !== null ? sLiq : sH - sE
+              ...sCanc > 0 ? { canceled: sCanc } : {},
+              total: sTot,
+              liquida: sLiq !== null ? sLiq : sH - sE,
+              ...sOthers !== null ? { othersPct: Math.round(sOthers * 100) / 100 } : {}
             };
           }).filter((s) => s.name) : [];
           const title = String(
@@ -660,6 +750,7 @@
             ...hits !== null ? { hits } : {},
             ...errors !== null ? { errors } : {},
             ...blankRaw !== null ? { blank: blankRaw } : {},
+            ...canceledRaw !== null && canceledRaw > 0 ? { canceled: canceledRaw } : {},
             ...pct !== null ? { pct } : {},
             ...liquida !== null ? { liquida } : {},
             subjectScores
@@ -690,16 +781,26 @@
         }
       } catch (_) {
       }
+      const urlQuestionIdMatch = urlStr.match(/\/question-database\/(\d+)(?:[?#]|$)/i);
       const recognizedAnswer = Boolean(
-        /(?:question|answer|resol|respond|attempt|alternative)/i.test(urlStr) && (root?.is_correct !== void 0 || root?.correct !== void 0 || root?.hit !== void 0 || root?.acertou !== void 0)
+        /(?:question|answer|resol|respond|attempt|alternative)/i.test(urlStr) && (root?.answer_status !== void 0 || root?.is_correct !== void 0 || root?.correct !== void 0 || root?.hit !== void 0 || root?.acertou !== void 0)
       );
       if (recognizedAnswer) {
-        const qApiId = Number(root.question_id || root.id || parsedReq?.question_id || parsedReq?.id);
-        const hitVal = root.is_correct !== void 0 ? Boolean(root.is_correct) : root.correct !== void 0 ? Boolean(root.correct) : Boolean(root.hit ?? root.acertou);
+        const qApiId = Number(urlQuestionIdMatch?.[1] || root.question_id || root.id || parsedReq?.question_id || parsedReq?.id);
+        const hitVal = root.answer_status !== void 0 ? /^(?:correct|hit|acerto|acertou|1|true)$/i.test(String(root.answer_status)) : root.is_correct !== void 0 ? Boolean(root.is_correct) : root.correct !== void 0 ? Boolean(root.correct) : Boolean(root.hit ?? root.acertou);
+        const genStats = root.general_stats && typeof root.general_stats === "object" ? root.general_stats : null;
+        const gCorr = Number(genStats?.correct);
+        const gErr = Number(genStats?.incorrect);
+        const gTot = Number.isFinite(gCorr) && Number.isFinite(gErr) ? gCorr + gErr : 0;
+        const commPct = gTot > 0 ? Math.round(gCorr / gTot * 100) : void 0;
         emit("API_ANSWER_SUBMITTED", {
           apiId: Number.isFinite(qApiId) && qApiId > 0 ? qApiId : null,
           hit: hitVal,
+          answerStatus: root.answer_status ?? null,
           userAnswer: parsedReq?.answer ?? parsedReq?.alternative ?? root?.user_answer ?? null,
+          correctAnswer: root.correct_answer ?? null,
+          ...genStats ? { generalStats: genStats } : {},
+          ...commPct !== void 0 ? { communityCorrectPct: commPct, communityErrorPct: Math.max(0, 100 - commPct) } : {},
           url: safeUrlPath(urlStr)
         });
         return;

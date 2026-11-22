@@ -6,6 +6,7 @@ import {
 import {
   PENDING_SIMULADOS_QUEUE_KEY,
   SIMULADO_QUEUE_MAX_ATTEMPTS,
+  PERFORMANCE_SNAPSHOT_KEY,
 } from '../content/utils.js';
 
 // Bridge entre a Extensão e a aplicação Web QG da PRF (v3.1.0 Strict)
@@ -230,7 +231,7 @@ import {
     if (isBridgeDestroyed || !isExtensionContextValid() || !activeUserId) return;
     try {
       chrome.storage.local.get(
-        [PENDING_CATALOG_KEY, PENDING_SIMULADOS_KEY, PENDING_SIMULADOS_QUEUE_KEY, PENDING_PDF_KEY, FILTER_ID_MEMORY_KEY],
+        [PENDING_CATALOG_KEY, PENDING_SIMULADOS_KEY, PENDING_SIMULADOS_QUEUE_KEY, PENDING_PDF_KEY, FILTER_ID_MEMORY_KEY, PERFORMANCE_SNAPSHOT_KEY],
         (res) => {
           if (chrome.runtime.lastError || isBridgeDestroyed) return;
           const keysToRemove = [];
@@ -357,6 +358,15 @@ import {
               source: 'QG_CAVEIRA_EXTENSION',
               type: 'FILTER_MEMORY_SYNC',
               payload: { memory: filterMem, userId: activeUserId }
+            }, getTargetOrigin());
+          }
+
+          const perfSnap = res?.[PERFORMANCE_SNAPSHOT_KEY];
+          if (perfSnap && typeof perfSnap === 'object' && perfSnap.subjectsAndTopicsPerformance) {
+            window.postMessage({
+              source: 'QG_CAVEIRA_EXTENSION',
+              type: 'PERFORMANCE_SNAPSHOT_SYNC',
+              payload: { ...perfSnap, userId: activeUserId }
             }, getTargetOrigin());
           }
         }
@@ -727,7 +737,21 @@ import {
         const rawIndexText = String(event.data.payload?.rawIndexText || '');
         const examBoards = Array.isArray(event.data.payload?.examBoards) ? event.data.payload.examBoards.map(String) : undefined;
         const numberAlternatives = Array.isArray(event.data.payload?.numberAlternatives) ? event.data.payload.numberAlternatives.map(Number).filter(Number.isFinite) : undefined;
-        const filterData = { subject, topic, lessons, fallbackTopic, subtopics, rawIndexText, examBoards, numberAlternatives, createdAt: Date.now() };
+        const allowedStatuses = new Set(['not_resolved', 'resolved', 'right', 'wrong', '']);
+        const rawStatus = event.data.payload?.status;
+        const status = typeof rawStatus === 'string' && allowedStatuses.has(rawStatus) ? rawStatus : undefined;
+        const filterData = {
+          subject,
+          topic,
+          lessons,
+          fallbackTopic,
+          subtopics,
+          rawIndexText,
+          examBoards,
+          numberAlternatives,
+          ...(status !== undefined ? { status } : {}),
+          createdAt: Date.now()
+        };
         try {
           chrome.storage.local.set({ [PENDING_FILTER_KEY]: filterData }, () => {
             if (chrome.runtime && chrome.runtime.sendMessage) {
@@ -962,6 +986,16 @@ import {
                 source: 'QG_CAVEIRA_EXTENSION',
                 type: 'FILTER_MEMORY_SYNC',
                 payload: { memory: mem, userId: cachedActiveUserId }
+              }, getTargetOrigin());
+            }
+          }
+          if (changes[PERFORMANCE_SNAPSHOT_KEY] && cachedActiveUserId) {
+            const perfSnap = changes[PERFORMANCE_SNAPSHOT_KEY].newValue;
+            if (perfSnap && typeof perfSnap === 'object' && perfSnap.subjectsAndTopicsPerformance) {
+              window.postMessage({
+                source: 'QG_CAVEIRA_EXTENSION',
+                type: 'PERFORMANCE_SNAPSHOT_SYNC',
+                payload: { ...perfSnap, userId: cachedActiveUserId }
               }, getTargetOrigin());
             }
           }

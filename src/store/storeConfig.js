@@ -194,6 +194,7 @@ export const getCleanInitialState = () => ({
   caveiraSessionStats: null,
   caveiraFilterMemory: {},
   caveiraCourseIndexMap: {},
+  caveiraPerformanceSnapshot: null,
 });
 
 // Fonte única de verdade das chaves persistidas (nuvem, backup local,

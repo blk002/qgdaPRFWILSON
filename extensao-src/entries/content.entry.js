@@ -35,6 +35,7 @@ import {
   DIAGNOSTIC_EVENTS_KEY,
   SNIFFER_RECENT_EVENTS_KEY,
   TREE_META_KEY,
+  PERFORMANCE_SNAPSHOT_KEY,
   escapeHtml,
   normalizeFilterText,
   normalizeCourseIndexKey,
@@ -63,10 +64,10 @@ import {
   resolveSubjectSpeedForContext as resolveSubjectSpeedHelper,
 } from '../content/videoHelper.js';
 
-// QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1.0 — Shadow DOM + Dexie + Segurança)
+// QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.2.0 — Shadow DOM + Dexie + API Real)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v3.1.0 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v3.2.0 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -151,6 +152,8 @@ import {
     const prevByTitle = titleNorm ? (apiSimuladoDatesByTitle.get(titleNorm) || {}) : {};
 
     const merged = {
+      title: String(title || prevById.title || prevByTitle.title || '').trim(),
+      numberQuestions: Number(entry.numberQuestions || prevById.numberQuestions || prevByTitle.numberQuestions) || null,
       attemptDate: entry.attemptDate || prevById.attemptDate || prevByTitle.attemptDate || null,
       releaseDate: entry.releaseDate || prevById.releaseDate || prevByTitle.releaseDate || null,
       anyDate: entry.anyDate || prevById.anyDate || prevByTitle.anyDate || null,
@@ -683,14 +686,135 @@ import {
         courseName: msg.payload.courseName || apiCourseCatalogCache?.courseName || 'Curso Caveira',
         modules: Array.from(mergedMap.values()),
       };
+      // Aproveita descrições da API com timestamps ([00:00:00]) para enriquecer cache do Índice de Aulas
+      try {
+        const indexLessons = [];
+        msg.payload.modules.forEach((m) => {
+          (m?.lessons || []).forEach((l) => {
+            if (l?.title && l?.rawIndexText) {
+              const subs = parseCourseIndexSubtopics(l.rawIndexText, [m.name, l.title]);
+              if (subs.length > 0) {
+                indexLessons.push({
+                  key: normalizeCourseIndexKey(l.title),
+                  entry: {
+                    url: l.url || window.location.href,
+                    videoId: l.id ? String(l.id) : '',
+                    lessonTitle: l.title,
+                    source: 'indice_api',
+                    rawIndexText: l.rawIndexText,
+                    subtopics: subs,
+                    capturedAt: Date.now(),
+                  },
+                });
+              }
+            }
+          });
+        });
+        if (indexLessons.length > 0 && isExtensionContextValid() && chrome?.storage?.local) {
+          chrome.storage.local.get([COURSE_INDEX_CACHE_KEY], (res) => {
+            if (chrome.runtime?.lastError || isDestroyed) return;
+            const prev = (res?.[COURSE_INDEX_CACHE_KEY] && typeof res[COURSE_INDEX_CACHE_KEY] === 'object')
+              ? res[COURSE_INDEX_CACHE_KEY]
+              : { latest: null, byLesson: {} };
+            const nextBy = { ...(prev.byLesson || {}) };
+            let changed = false;
+            indexLessons.forEach(({ key, entry }) => {
+              if (!key) return;
+              const existing = nextBy[key];
+              if (!existing || (existing.source !== 'bizus' && !existing.rawIndexText)) {
+                nextBy[key] = entry;
+                changed = true;
+              }
+            });
+            if (changed) {
+              const ordered = Object.entries(nextBy)
+                .sort((a, b) => (b[1]?.capturedAt || 0) - (a[1]?.capturedAt || 0))
+                .slice(0, 60);
+              chrome.storage.local.set({
+                [COURSE_INDEX_CACHE_KEY]: {
+                  latest: prev.latest || ordered[0]?.[1] || null,
+                  byLesson: Object.fromEntries(ordered),
+                },
+              });
+            }
+          });
+        }
+      } catch (_) {}
       return;
     }
 
     if (msg.type === 'API_ANSWER_SUBMITTED' && msg.payload) {
-      const { apiId, hit, userAnswer } = msg.payload;
-      appendSnifferTelemetryEvent('API_ANSWER_SUBMITTED', { apiId, hit });
+      const { apiId, hit, answerStatus, userAnswer, correctAnswer, communityCorrectPct, communityErrorPct } = msg.payload;
+      appendSnifferTelemetryEvent('API_ANSWER_SUBMITTED', { apiId, hit, answerStatus });
       if (apiId) {
-        apiAnswerCache.set(Number(apiId), { hit: Boolean(hit), userAnswer: userAnswer ?? null, at: Date.now() });
+        const numId = Number(apiId);
+        apiAnswerCache.set(numId, {
+          hit: Boolean(hit),
+          answerStatus: answerStatus ?? null,
+          userAnswer: userAnswer ?? null,
+          correctAnswer: correctAnswer ?? null,
+          ...(communityCorrectPct !== undefined ? { communityCorrectPct, communityErrorPct } : {}),
+          at: Date.now(),
+        });
+        const existing = questionsCache.find((q) => (
+          q && (Number(q.apiId) === numId || q.id === `Q${numId}` || q.id === `api_${numId}`)
+        ));
+        if (existing) {
+          saveQuestion({
+            ...existing,
+            apiId: numId,
+            hit: Boolean(hit),
+            acertou: Boolean(hit),
+            ...(userAnswer ? { userChoice: String(userAnswer).toUpperCase() } : {}),
+            ...(correctAnswer ? { correctChoice: String(correctAnswer).toUpperCase() } : {}),
+            ...(communityCorrectPct !== undefined ? { communityCorrectPct, communityErrorPct } : {}),
+          }, true);
+        }
+      }
+      return;
+    }
+
+    if (msg.type === 'API_QUESTION_STATISTICS' && msg.payload?.apiId) {
+      const { apiId, subjectId, subtopicId, correctAnswer, userAnswer, answerStatus, answeredAt, communityCorrectPct, communityErrorPct } = msg.payload;
+      const numId = Number(apiId);
+      appendSnifferTelemetryEvent('API_QUESTION_STATISTICS', { apiId: numId, subjectId, subtopicId });
+      const prev = apiQuestionByApiId.get(numId) || {};
+      const nextApi = {
+        ...prev,
+        apiId: numId,
+        ...(subjectId ? { subjectId } : {}),
+        ...(subtopicId ? { subtopicId } : {}),
+        ...(correctAnswer ? { correctAnswer } : {}),
+        ...(userAnswer ? { userAnswer } : {}),
+        ...(answerStatus ? { lastAnswerStatus: answerStatus } : {}),
+        ...(answeredAt ? { answeredAt } : {}),
+        ...(communityCorrectPct !== undefined ? { communityCorrectPct, communityErrorPct } : {}),
+      };
+      apiQuestionByApiId.set(numId, nextApi);
+      apiQuestionCache.set(`Q${numId}`, nextApi);
+      const existing = questionsCache.find((q) => (
+        q && (Number(q.apiId) === numId || q.id === `Q${numId}` || q.id === `api_${numId}`)
+      ));
+      if (existing && (subjectId || subtopicId || correctAnswer || communityCorrectPct !== undefined)) {
+        saveQuestion({
+          ...existing,
+          apiId: numId,
+          ...(subjectId ? { subjectId } : {}),
+          ...(subtopicId ? { subtopicId } : {}),
+          ...(correctAnswer && !existing.correctChoice ? { correctChoice: String(correctAnswer).toUpperCase() } : {}),
+          ...(communityCorrectPct !== undefined && existing.communityCorrectPct === undefined ? { communityCorrectPct, communityErrorPct } : {}),
+        }, true);
+      }
+      return;
+    }
+
+    if (msg.type === 'API_PERFORMANCE_DATA' && msg.payload?.subjectsAndTopicsPerformance) {
+      const subjectCount = Object.keys(msg.payload.subjectsAndTopicsPerformance).length;
+      appendSnifferTelemetryEvent('API_PERFORMANCE_DATA', { subjects: subjectCount, rangeDays: msg.payload.rangeDays || null });
+      if (isExtensionContextValid() && chrome?.storage?.local) {
+        chrome.storage.local.set({ [PERFORMANCE_SNAPSHOT_KEY]: msg.payload }, () => {
+          flushPendingQgEvents();
+        });
       }
       return;
     }
@@ -817,7 +941,22 @@ import {
 
     if (msg.type === 'API_SIMULADO_ENJOYMENT' && msg.payload?.examId) {
       appendSnifferTelemetryEvent('API_SIMULADO_ENJOYMENT', { examId: msg.payload.examId, subjects: msg.payload.subjects?.length || 0 });
-      const { examId, blocks = [], subjects = [], attemptDate = null, releaseDate = null, anyDate = null, dateField = null } = msg.payload;
+      const {
+        examId,
+        blocks = [],
+        subjects = [],
+        hits: enjoyHits,
+        errors: enjoyErrors,
+        blank: enjoyBlank,
+        canceled: enjoyCanceled,
+        total: enjoyTotal,
+        liquida: enjoyLiquida,
+        pct: enjoyPct,
+        attemptDate = null,
+        releaseDate = null,
+        anyDate = null,
+        dateField = null,
+      } = msg.payload;
       if (attemptDate || releaseDate || anyDate) {
         mergeSimuladoDateEntry(examId, msg.payload.title || '', { attemptDate, releaseDate, anyDate, dateField });
       }
@@ -854,13 +993,16 @@ import {
             const h = Number(sc.hits) || 0;
             const e = Number(sc.errors) || 0;
             const bl = Number(sc.blank) || 0;
-            const tot = Number(sc.total) || (h + e + bl);
+            const canc = Number(sc.canceled) || 0;
+            const tot = Number(sc.total) || (h + e + bl + canc);
             const pct = sc.pct !== undefined ? Number(sc.pct) : (tot > 0 ? Math.round((h / tot) * 100) : 0);
             return {
+              ...(sc.subjectId ? { subjectId: Number(sc.subjectId) } : {}),
               name: String(sc.name || '').trim(),
               hits: h,
               errors: e,
               blank: bl,
+              ...(canc > 0 ? { canceled: canc } : {}),
               total: tot,
               liquida: sc.liquida !== undefined ? Number(sc.liquida) : (h - e),
               pct,
@@ -872,19 +1014,50 @@ import {
 
       if (hasData || mappedSubjects.length > 0) {
         const blockStats = hasData ? { b1C, b1E, b1Liquida, b2C, b2E, b2Liquida, b3C, b3E, b3Liquida } : {};
-        apiSimuladoEnjoymentByExamId.set(String(examId), {
+        const aggPatch = {
+          ...(enjoyHits !== undefined ? { hits: Number(enjoyHits) } : {}),
+          ...(enjoyErrors !== undefined ? { errors: Number(enjoyErrors) } : {}),
+          ...(enjoyBlank !== undefined ? { blank: Number(enjoyBlank) } : {}),
+          ...(enjoyCanceled !== undefined && Number(enjoyCanceled) > 0 ? { canceled: Number(enjoyCanceled) } : {}),
+          ...(enjoyTotal !== undefined ? { total: Number(enjoyTotal) } : {}),
+          ...(enjoyLiquida !== undefined ? { liquida: Number(enjoyLiquida) } : {}),
+          ...(enjoyPct !== undefined ? { pct: Number(enjoyPct) } : {}),
+        };
+        const enjoyObj = {
           ...blockStats,
+          ...aggPatch,
           ...(mappedSubjects.length > 0 ? { subjectScores: mappedSubjects } : {}),
+        };
+        apiSimuladoEnjoymentByExamId.set(String(examId), enjoyObj);
+        let foundInCache = false;
+        apiSimuladosCache = apiSimuladosCache.map((s) => {
+          if (s && s.caveiraId === `sim_${examId}`) {
+            foundInCache = true;
+            return {
+              ...s,
+              ...enjoyObj,
+              estimated: false,
+            };
+          }
+          return s;
         });
-        apiSimuladosCache = apiSimuladosCache.map((s) =>
-          (s && s.caveiraId === `sim_${examId}`)
-            ? {
-                ...s,
-                ...blockStats,
-                ...(mappedSubjects.length > 0 ? { subjectScores: mappedSubjects } : {}),
-              }
-            : s
-        );
+        if (!foundInCache && mappedSubjects.length > 0) {
+          const dateMeta = apiSimuladoDatesByExamId.get(String(examId));
+          const resolvedDate = dateMeta?.attemptDate || dateMeta?.releaseDate || dateMeta?.anyDate || getTodaySessionDate();
+          const dateSource = dateMeta?.attemptDate ? 'attempt' : (dateMeta?.releaseDate ? 'release' : (dateMeta?.anyDate ? 'api_date' : 'import'));
+          apiSimuladosCache.push({
+            caveiraId: `sim_${examId}`,
+            title: dateMeta?.title || `Simulado Caveira #${examId}`,
+            data: resolvedDate,
+            dateSource,
+            ...(dateMeta?.dateField ? { dateField: dateMeta.dateField } : {}),
+            ...(dateMeta?.releaseDate ? { releasedAt: dateMeta.releaseDate } : {}),
+            dataSource: 'api',
+            estimated: false,
+            total: enjoyTotal !== undefined ? Number(enjoyTotal) : (dateMeta?.numberQuestions || undefined),
+            ...enjoyObj,
+          });
+        }
       }
       return;
     }
@@ -1524,19 +1697,20 @@ import {
       const numQuestionsTxt = (document.querySelector('.number-questions')?.textContent || '').trim();
       const totalFromBadge = parseInt(numQuestionsTxt, 10) || 0;
 
+      const apiEnjoy = examId ? apiSimuladoEnjoymentByExamId.get(examId) : null;
       const apiMatchById = examId ? apiSimuladosCache.find((s) => s && s.caveiraId === `sim_${examId}`) : null;
       const estimatedReasons = [];
       const total = smallMatch
         ? Number(smallMatch[2])
-        : (totalFromBadge || (apiMatchById?.total ? Number(apiMatchById.total) : null));
+        : (totalFromBadge || apiEnjoy?.total || (apiMatchById?.total ? Number(apiMatchById.total) : null));
       if (!total) {
         estimatedReasons.push('total de questões ausente na tela e na API (não inventado)');
       }
 
-      const liquidaFromBox = smallMatch ? Number(smallMatch[1]) : (apiMatchById?.liquida !== undefined ? Number(apiMatchById.liquida) : null);
+      const liquidaFromBox = smallMatch ? Number(smallMatch[1]) : (apiEnjoy?.liquida ?? apiMatchById?.liquida ?? null);
       const pct = bigMatch
         ? Math.round(parseFloat(bigMatch[1].replace(',', '.')))
-        : (liquidaFromBox !== null && total > 0 ? Math.round((liquidaFromBox / total) * 100) : (apiMatchById?.pct ?? 0));
+        : (apiEnjoy?.pct ?? (liquidaFromBox !== null && total > 0 ? Math.round((liquidaFromBox / total) * 100) : (apiMatchById?.pct ?? 0)));
 
       // Acertos, Erros e Em Branco no SVG ApexCharts Treemap
       let svgHits = null; let svgErrors = null; let svgBlank = null;
@@ -1557,9 +1731,10 @@ import {
         else if (fill.includes('no-answer') || jAttr === '2') svgBlank = numVal;
       });
 
-      let hits = svgHits !== null ? svgHits : (apiMatchById?.hits ?? null);
-      let errors = svgErrors !== null ? svgErrors : (apiMatchById?.errors ?? null);
-      let blank = svgBlank !== null ? svgBlank : (apiMatchById?.blank ?? null);
+      let hits = apiEnjoy?.hits ?? (svgHits !== null ? svgHits : (apiMatchById?.hits ?? null));
+      let errors = apiEnjoy?.errors ?? (svgErrors !== null ? svgErrors : (apiMatchById?.errors ?? null));
+      let blank = apiEnjoy?.blank ?? (svgBlank !== null ? svgBlank : (apiMatchById?.blank ?? null));
+      const canceled = apiEnjoy?.canceled ?? apiMatchById?.canceled ?? null;
       if (hits === null && total !== null && liquidaFromBox !== null) {
         hits = Math.max(0, Math.round((total + liquidaFromBox) / 2));
         estimatedReasons.push('acertos aproximados a partir de líquida e total');
@@ -1569,19 +1744,18 @@ import {
         estimatedReasons.push('erros inferidos de acertos - líquida');
       }
       if (blank === null && total !== null && hits !== null && errors !== null) {
-        blank = Math.max(0, total - hits - errors);
+        blank = Math.max(0, total - hits - errors - (canceled || 0));
       }
-      const liquida = liquidaFromBox !== null ? liquidaFromBox : (hits !== null && errors !== null ? hits - errors : 0);
+      const liquida = apiEnjoy?.liquida ?? (liquidaFromBox !== null ? liquidaFromBox : (hits !== null && errors !== null ? hits - errors : 0));
 
-      const apiEnjoy = examId ? apiSimuladoEnjoymentByExamId.get(examId) : null;
       const blockStats = dialogData?.blockStats || (apiEnjoy?.b1Liquida !== undefined ? {
         b1C: apiEnjoy.b1C, b1E: apiEnjoy.b1E, b1Liquida: apiEnjoy.b1Liquida,
         b2C: apiEnjoy.b2C, b2E: apiEnjoy.b2E, b2Liquida: apiEnjoy.b2Liquida,
         b3C: apiEnjoy.b3C, b3E: apiEnjoy.b3E, b3Liquida: apiEnjoy.b3Liquida,
       } : {});
-      const subjectScores = (dialogData?.subjectScores?.length || 0) >= (apiEnjoy?.subjectScores?.length || 0)
-        ? (dialogData?.subjectScores || [])
-        : (apiEnjoy?.subjectScores || []);
+      const subjectScores = (apiEnjoy?.subjectScores?.length || 0) > 0
+        ? apiEnjoy.subjectScores
+        : (dialogData?.subjectScores || []);
 
       const teamIdMatch = window.location.pathname.match(/\/teams\/(\d+)/i);
       const teamId = teamIdMatch?.[1] || '';
@@ -1618,6 +1792,7 @@ import {
         ...(hits !== null ? { hits } : {}),
         ...(errors !== null ? { errors } : {}),
         ...(blank !== null ? { blank } : {}),
+        ...(canceled ? { canceled } : {}),
         pct,
         liquida,
         ...blockStats,
@@ -4965,33 +5140,53 @@ import {
     return null;
   }
 
+  const VALID_QUESTION_STATUSES = new Set(['not_resolved', 'resolved', 'right', 'wrong', '']);
+  const STATUS_LABELS = {
+    not_resolved: 'Não resolvidas',
+    resolved: 'Todas resolvidas',
+    right: 'Só certas',
+    wrong: 'Só erradas',
+    '': 'Todas as questões',
+  };
+
   async function getEffectiveQuestionPrefs(filterCtx) {
     const resolver = (typeof globalThis !== 'undefined' && globalThis.QGCaveiraResolver) ? globalThis.QGCaveiraResolver : null;
+    const fromSiteStatus = typeof filterCtx?.status === 'string' && VALID_QUESTION_STATUSES.has(filterCtx.status)
+      ? filterCtx.status
+      : null;
     const fromSite = filterCtx && (Array.isArray(filterCtx.examBoards) || Array.isArray(filterCtx.numberAlternatives));
-    if (fromSite) {
-      // site novo: array vazio = "sem filtro" explícito
-      return { examBoards: filterCtx.examBoards || [], numberAlternatives: filterCtx.numberAlternatives || [], source: 'site' };
-    }
     const fallback = resolver?.DEFAULT_PREFS || { examBoards: [], numberAlternatives: [] };
+    let saved = null;
     try {
       if (isExtensionContextValid() && chrome?.storage?.local) {
-        const saved = await new Promise((res) => chrome.storage.local.get([DEFAULT_PREFS_KEY], (r) => res(r?.[DEFAULT_PREFS_KEY] || null)));
-        if (saved && (Array.isArray(saved.examBoards) || Array.isArray(saved.numberAlternatives))) {
-          return { examBoards: saved.examBoards || [], numberAlternatives: saved.numberAlternatives || [], source: 'popup' };
-        }
+        saved = await new Promise((res) => chrome.storage.local.get([DEFAULT_PREFS_KEY], (r) => res(r?.[DEFAULT_PREFS_KEY] || null)));
       }
     } catch (_) {}
-    return { examBoards: fallback.examBoards, numberAlternatives: fallback.numberAlternatives, source: 'padrao' };
+    const savedStatus = typeof saved?.status === 'string' && VALID_QUESTION_STATUSES.has(saved.status)
+      ? saved.status
+      : 'not_resolved';
+    const status = fromSiteStatus !== null ? fromSiteStatus : savedStatus;
+
+    if (fromSite) {
+      // site novo: array vazio = "sem filtro" explícito
+      return { examBoards: filterCtx.examBoards || [], numberAlternatives: filterCtx.numberAlternatives || [], status, source: 'site' };
+    }
+    if (saved && (Array.isArray(saved.examBoards) || Array.isArray(saved.numberAlternatives))) {
+      return { examBoards: saved.examBoards || [], numberAlternatives: saved.numberAlternatives || [], status, source: 'popup' };
+    }
+    return { examBoards: fallback.examBoards, numberAlternatives: fallback.numberAlternatives, status, source: 'padrao' };
   }
 
   async function navigateToCaveiraDeepLink(subjectId, ids, bannerText) {
     const resolver = (typeof globalThis !== 'undefined' && globalThis.QGCaveiraResolver) ? globalThis.QGCaveiraResolver : null;
     if (!resolver || !subjectId || !Array.isArray(ids) || ids.length === 0) return false;
     const prefs = await getEffectiveQuestionPrefs(activePracticeFilter);
-    const url = resolver.buildUrl(window.location.origin, subjectId, ids, { status: 'not_resolved', examBoards: prefs.examBoards, numberAlternatives: prefs.numberAlternatives });
-    const prefsLabel = resolver.describePrefs ? resolver.describePrefs(prefs.examBoards, prefs.numberAlternatives) : '';
+    const url = resolver.buildUrl(window.location.origin, subjectId, ids, { status: prefs.status, examBoards: prefs.examBoards, numberAlternatives: prefs.numberAlternatives });
+    const basePrefsLabel = resolver.describePrefs ? resolver.describePrefs(prefs.examBoards, prefs.numberAlternatives) : '';
+    const statusLabel = prefs.status !== 'not_resolved' ? (STATUS_LABELS[prefs.status] || prefs.status) : '';
+    const prefsLabel = [statusLabel, basePrefsLabel].filter(Boolean).join(' • ');
     if (bannerText && prefsLabel) bannerText = `${bannerText} • ${prefsLabel}`;
-    if (lastFilterDiagnosticLog) { lastFilterDiagnosticLog.examBoards = prefs.examBoards; lastFilterDiagnosticLog.numberAlternatives = prefs.numberAlternatives; lastFilterDiagnosticLog.prefsSource = prefs.source; lastFilterDiagnosticLog.url = url; }
+    if (lastFilterDiagnosticLog) { lastFilterDiagnosticLog.examBoards = prefs.examBoards; lastFilterDiagnosticLog.numberAlternatives = prefs.numberAlternatives; lastFilterDiagnosticLog.status = prefs.status; lastFilterDiagnosticLog.prefsSource = prefs.source; lastFilterDiagnosticLog.url = url; }
     try {
       if (isExtensionContextValid() && chrome?.storage?.local) {
         await new Promise((res) => {
@@ -6047,7 +6242,8 @@ import {
       subtopics: effectiveSubtopics,
       rawIndexText,
       examBoards: Array.isArray(filterObj.examBoards) ? filterObj.examBoards : undefined,
-      numberAlternatives: Array.isArray(filterObj.numberAlternatives) ? filterObj.numberAlternatives : undefined
+      numberAlternatives: Array.isArray(filterObj.numberAlternatives) ? filterObj.numberAlternatives : undefined,
+      ...(typeof filterObj.status === 'string' ? { status: filterObj.status } : {})
     };
     const resolverBox = getHudEl('qg-hud-resolver-box');
     if (resolverBox) resolverBox.style.display = 'none';
@@ -6911,11 +7107,18 @@ import {
         /\b(PARAB[EÉ]NS|VOC[EÊ]\s+ACERTOU|ACERTOU)\b/i.test(statsText)
       );
 
-    const isCorrect = (incorrectLetterFromDom || hasStatsIncorrect)
+    const rawApiAns =
+      (apiData?.apiId ? apiAnswerCache.get(Number(apiData.apiId)) : null) ||
+      (Number.isFinite(numericFromQId) && numericFromQId > 0 ? apiAnswerCache.get(numericFromQId) : null) ||
+      null;
+    const apiAns = rawApiAns && (Date.now() - Number(rawApiAns.at || 0)) < 180000 ? rawApiAns : null;
+
+    const domIsCorrect = (incorrectLetterFromDom || hasStatsIncorrect)
       ? false
       : (hasStatsCorrect || (Boolean(correctLetterFromDom) && !statsText.toUpperCase().includes('RESPOSTA CORRETA')));
+    const isCorrect = apiAns ? Boolean(apiAns.hit) : domIsCorrect;
 
-    // Identifica o que o usuário marcou
+    // Identifica o que o usuário marcou (prioriza POST real da API quando disponível)
     const userSelectedEl = altScope.querySelector('.q-radio[aria-checked="true"], .q-radio--active, [class*="selected"], [class*="active"], input:checked');
     let userChoiceFromRadio = null;
     if (userSelectedEl) {
@@ -6924,16 +7127,19 @@ import {
       if (l && l.length <= 2) userChoiceFromRadio = l;
     }
 
-    const userChoice = incorrectLetterFromDom ||
+    const userChoice = (apiAns?.userAnswer ? String(apiAns.userAnswer).toUpperCase() : null) ||
+                       incorrectLetterFromDom ||
                        (isCorrect ? correctLetterFromDom : null) ||
                        userChoiceFromRadio ||
                        lastUserClickedChoice ||
                        (isCorrect ? (correctLetterFromDom || 'C') : 'E');
 
-    let correctChoice = correctLetterFromDom;
-    if (statsAnswerMatch) {
+    let correctChoice = (apiAns?.correctAnswer ? String(apiAns.correctAnswer).toUpperCase() : null) ||
+                        (apiData?.correctAnswer ? String(apiData.correctAnswer).toUpperCase() : null) ||
+                        correctLetterFromDom;
+    if (!correctChoice && statsAnswerMatch) {
       correctChoice = statsAnswerMatch[1].toUpperCase();
-    } else if (isCorrect) {
+    } else if (!correctChoice && isCorrect) {
       correctChoice = userChoice;
     } else if (!correctChoice) {
       // Se errou e não achou a letra verde explícita no DOM, busca nas alternativas qual tem ícone de check ou classe correta
@@ -7029,8 +7235,10 @@ import {
         })
       : { subjectId: apiData?.subjectId || null, subtopicId: apiData?.subtopicId || null };
 
-    const resolvedSubjectId = treeMapped.subjectId || apiData?.subjectId || null;
-    const resolvedSubtopicId = treeMapped.subtopicId || apiData?.subtopicId || null;
+    const resolvedSubjectId = apiData?.subjectId || treeMapped.subjectId || null;
+    const resolvedSubtopicId = apiData?.subtopicId || treeMapped.subtopicId || null;
+    const commCorrectPct = apiAns?.communityCorrectPct ?? apiData?.communityCorrectPct;
+    const commErrorPct = apiAns?.communityErrorPct ?? apiData?.communityErrorPct;
     const telemetry = buildStructuredTelemetryRecord({
       apiId: apiData?.apiId || (Number.isFinite(numericFromQId) && numericFromQId > 0 ? numericFromQId : null),
       subjectId: resolvedSubjectId,
@@ -7055,6 +7263,7 @@ import {
       ...(apiData?.supportingContent ? { supportingContent: apiData.supportingContent.slice(0, 1000) } : {}),
       alternatives: finalAlternatives,
       teacherComment: teacherComment || undefined,
+      ...(commCorrectPct !== undefined ? { communityCorrectPct: commCorrectPct, communityErrorPct: commErrorPct } : {}),
       ...(apiData?.userNote ? { userNote: apiData.userNote } : {}),
       ...(apiData?.outdated !== undefined ? { outdated: Boolean(apiData.outdated) } : {}),
       userChoice,
