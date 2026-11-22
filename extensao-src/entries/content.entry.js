@@ -838,6 +838,198 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     return { modulesCount: payload.modules.length, lessonsCount: totalLessonsCount };
   }
 
+  let targetLessonPollTimer = null;
+
+  function extractLessonPartNum(txt) {
+    const clean = normalizeCourseIndexKey(txt);
+    if (!clean) return '';
+    const mNum = clean.match(/\b(?:parte|pt|bloco|aula)\s*0*(\d{1,2})\b/);
+    if (mNum) return String(Number(mNum[1]));
+    const mRom = clean.match(/\b(?:parte|pt|bloco|aula)?\s*(i{1,3}|iv|v|vi{0,3})\b$/);
+    if (mRom) {
+      const romanMap = { i: '1', ii: '2', iii: '3', iv: '4', v: '5', vi: '6', vii: '7', viii: '8' };
+      if (romanMap[mRom[1]]) return romanMap[mRom[1]];
+    }
+    const mEnd = clean.match(/\b0*(\d{1,2})$/);
+    return mEnd ? String(Number(mEnd[1])) : '';
+  }
+
+  function scoreCaveiraLessonCandidate(candidateText, targetLesson) {
+    const cleanCand = normalizeCourseIndexKey(candidateText || '');
+    const cleanTarget = normalizeCourseIndexKey(targetLesson || '');
+    if (!cleanCand || !cleanTarget) return 0;
+
+    const partCand = extractLessonPartNum(candidateText);
+    const partTgt = extractLessonPartNum(targetLesson);
+    if (partCand && partTgt && partCand !== partTgt) return 0;
+
+    if (cleanCand === cleanTarget) return 100;
+    const stripPref = (s) => s
+      .replace(/^\s*(?:aula|bloco|parte|m[oó]dulo)\s*\d+\s*[-–—:|.]*\s*/i, '')
+      .replace(/^\s*\d{1,3}\s*[-–—:|.]+\s*/, '')
+      .trim();
+    const sc = stripPref(cleanCand);
+    const st = stripPref(cleanTarget);
+    if (sc && st && sc === st) return 90;
+    if ((st && sc.includes(st)) || (sc && st.includes(sc))) {
+      return (!partCand || !partTgt || partCand === partTgt) ? 75 : 0;
+    }
+
+    const tok = (s) => s.split(' ').map(w => (/^\d+$/.test(w) ? String(Number(w)) : w)).filter(w => w.length >= 3 || /^\d+$/.test(w));
+    const tTgt = tok(st || cleanTarget);
+    const tCand = new Set(tok(sc || cleanCand));
+    if (tTgt.length === 0 || tCand.size === 0) return 0;
+    const hits = tTgt.filter(w => tCand.has(w)).length;
+    const ratio = hits / Math.max(tTgt.length, tCand.size);
+    return ratio >= 0.5 ? Math.round(ratio * 70) : 0;
+  }
+
+  function autoOpenTargetLessonFromHash() {
+    if (!isCourseCatalogPage()) return;
+
+    let targetLesson = '';
+    let targetSubject = '';
+    const rawHash = String(window.location.hash || '');
+    if (rawHash.includes('qg_lesson=')) {
+      const mLes = rawHash.match(/qg_lesson=([^&]+)/);
+      const mSub = rawHash.match(/qg_subject=([^&]+)/);
+      if (mLes) targetLesson = decodeURIComponent(mLes[1] || '').trim();
+      if (mSub) targetSubject = decodeURIComponent(mSub[1] || '').trim();
+      if (targetLesson) {
+        try {
+          sessionStorage.setItem('qg_target_lesson_pending', JSON.stringify({
+            lesson: targetLesson,
+            subject: targetSubject,
+            savedAt: Date.now()
+          }));
+        } catch (_) {}
+      }
+    } else {
+      try {
+        const stored = JSON.parse(sessionStorage.getItem('qg_target_lesson_pending') || 'null');
+        if (stored && stored.lesson && (Date.now() - (Number(stored.savedAt) || 0)) < 25000) {
+          targetLesson = stored.lesson;
+          targetSubject = stored.subject || '';
+        }
+      } catch (_) {}
+    }
+
+    if (!targetLesson) return;
+
+    const clearTargetPending = () => {
+      if (targetLessonPollTimer) {
+        clearInterval(targetLessonPollTimer);
+        targetLessonPollTimer = null;
+      }
+      try { sessionStorage.removeItem('qg_target_lesson_pending'); } catch (_) {}
+      if (window.location.hash && window.location.hash.includes('qg_lesson=')) {
+        try {
+          window.history.replaceState(null, '', window.location.pathname + window.location.search);
+        } catch (_) {}
+      }
+    };
+
+    if (targetLessonPollTimer) {
+      clearInterval(targetLessonPollTimer);
+      targetLessonPollTimer = null;
+    }
+
+    let attempts = 0;
+    const expandedModules = new Set();
+
+    const tryNavigate = () => {
+      if (isDestroyed) {
+        clearInterval(targetLessonPollTimer);
+        targetLessonPollTimer = null;
+        return;
+      }
+      attempts += 1;
+
+      // 1. Já está no playground tocando exatamente a aula alvo?
+      if (isCoursePlaygroundPage()) {
+        const curPlayTitle = extractCourseLessonTitle() || currentCourseIndexStatus?.lessonTitle || '';
+        if (scoreCaveiraLessonCandidate(curPlayTitle, targetLesson) >= 70) {
+          clearTargetPending();
+          return;
+        }
+      }
+
+      // 2. Procura link exato no cache da API do curso
+      const apiMods = Array.isArray(apiCourseCatalogCache?.modules) ? apiCourseCatalogCache.modules : [];
+      let bestApiLesson = null;
+      let bestApiScore = 0;
+      apiMods.forEach((m) => {
+        (m?.lessons || []).forEach((l) => {
+          if (!l?.title || !l?.url || !String(l.url).includes('course_video_id=')) return;
+          const sc = scoreCaveiraLessonCandidate(l.title, targetLesson);
+          if (sc > bestApiScore) {
+            bestApiScore = sc;
+            bestApiLesson = l;
+          }
+        });
+      });
+      if (bestApiLesson && bestApiScore >= 55) {
+        const currentNoHash = window.location.href.split('#')[0];
+        clearTargetPending();
+        if (bestApiLesson.url !== currentNoHash) {
+          window.location.href = bestApiLesson.url;
+        }
+        return;
+      }
+
+      // 3. Procura no DOM visível
+      const candidateEls = Array.from(
+        document.querySelectorAll('a[href*="course_video_id"], [data-course-video-id], .q-item, [class*="lesson"], [class*="video"]')
+      ).filter((el) => !el.closest('#qg-caveira-shadow-host, #qg-caveira-hud') && isElementVisible(el));
+
+      let bestDomEl = null;
+      let bestDomScore = 0;
+      candidateEls.forEach((el) => {
+        const rawTxt = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!rawTxt || rawTxt.length > 200) return;
+        const sc = scoreCaveiraLessonCandidate(rawTxt, targetLesson);
+        if (sc > bestDomScore) {
+          bestDomScore = sc;
+          bestDomEl = el;
+        }
+      });
+
+      if (bestDomEl && bestDomScore >= 55) {
+        clearTargetPending();
+        try {
+          bestDomEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+          bestDomEl.click();
+          const anchorInside = bestDomEl.querySelector('a');
+          if (anchorInside && anchorInside !== bestDomEl) anchorInside.click();
+        } catch (_) {}
+        return;
+      }
+
+      // 4. Expande módulos colapsados correspondentes ao assunto/aula
+      const expansionHeaders = Array.from(document.querySelectorAll('.q-expansion-item'))
+        .filter((el) => !el.closest('#qg-caveira-shadow-host, #qg-caveira-hud') && isElementVisible(el));
+      expansionHeaders.forEach((expEl) => {
+        const headerBtn = expEl.querySelector(':scope > .q-expansion-item__container > .q-item, :scope > .q-item');
+        if (!headerBtn) return;
+        const hText = (headerBtn.innerText || headerBtn.textContent || '').replace(/\s+/g, ' ').trim();
+        if (!hText || expandedModules.has(hText)) return;
+        const matchesSubj = targetSubject && normalizeCourseIndexKey(hText).includes(normalizeCourseIndexKey(targetSubject).split(' ')[0]);
+        const matchesTok = scoreCaveiraLessonCandidate(hText, targetLesson) >= 30;
+        if (matchesSubj || matchesTok || expansionHeaders.length <= 6) {
+          expandedModules.add(hText);
+          try { headerBtn.click(); } catch (_) {}
+        }
+      });
+
+      if (attempts >= 16) {
+        clearTargetPending();
+      }
+    };
+
+    tryNavigate();
+    targetLessonPollTimer = setInterval(tryNavigate, 500);
+  }
+
   function isRankingTitleOrRow(text = '', title = '', isTableRow = false) {
     const cleanTitle = String(title || '').trim();
     const cleanText = String(text || '').trim();
@@ -7181,7 +7373,14 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
   // --- 8. GATILHOS DE INTERAÇÃO E ROLAGEM (SCROLL) ---
   function setupTriggers() {
     handleScrollUpdateRef = handleScrollUpdate;
-    handlePopstateHashRef = () => scheduleScan(50);
+    handlePopstateHashRef = () => {
+      scheduleScan(50);
+      setTimeout(() => {
+        updateContextualHud();
+        autoOpenTargetLessonFromHash();
+      }, 250);
+    };
+    setTimeout(autoOpenTargetLessonFromHash, 500);
 
     // 1. Detecção em tempo real ao rolar a página e ao trocar de rota na SPA
     window.addEventListener('scroll', handleScrollUpdateRef, { capture: true, passive: true });

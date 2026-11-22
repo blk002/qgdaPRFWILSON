@@ -889,9 +889,13 @@ export default function Ciclo() {
                                 <div className="flex items-center gap-1.5">
                                   {(() => {
                                     const firstIdx = plannedLessons?.[0]?.index ?? currentCompleted;
-                                    const lesHref = activeTopic?.lessons?.[firstIdx]?.caveiraUrl
+                                    const firstLessonName = plannedLessons?.[0]?.name || activeTopic?.lessons?.[firstIdx]?.name || '';
+                                    const rawHref = activeTopic?.lessons?.[firstIdx]?.caveiraUrl
                                       || subject?.caveiraModuleUrl
                                       || (subject?.caveiraCourseId ? `https://app.caveira.com/courses/${subject.caveiraCourseId}` : '');
+                                    const lesHref = rawHref
+                                      ? `${String(rawHref).split('#')[0]}${firstLessonName ? `#qg_lesson=${encodeURIComponent(firstLessonName)}${subject?.name ? `&qg_subject=${encodeURIComponent(subject.name)}` : ''}` : ''}`
+                                      : '';
                                     return lesHref ? (
                                       <a
                                         href={lesHref}
@@ -923,6 +927,13 @@ export default function Ciclo() {
                                       ? `${formatSecondsToClock(accelSec)}${spd > 1 ? ` (${spd}x)` : ''}`
                                       : les.durStr || '';
 
+                                  const rawLesHref = activeTopic?.lessons?.[les.index ?? lIdx]?.caveiraUrl
+                                    || subject?.caveiraModuleUrl
+                                    || (subject?.caveiraCourseId ? `https://app.caveira.com/courses/${subject.caveiraCourseId}` : '');
+                                  const directLesHref = rawLesHref
+                                    ? `${String(rawLesHref).split('#')[0]}#qg_lesson=${encodeURIComponent(les.name || '')}${subject?.name ? `&qg_subject=${encodeURIComponent(subject.name)}` : ''}`
+                                    : '';
+
                                   return (
                                     <div
                                       key={lIdx}
@@ -930,6 +941,17 @@ export default function Ciclo() {
                                     >
                                       <span className="font-semibold text-slate-800 dark:text-slate-100 break-words flex-1 min-w-0">
                                         • {les.name}
+                                        {directLesHref && (
+                                          <a
+                                            href={directLesHref}
+                                            target="_blank"
+                                            rel="noopener noreferrer"
+                                            className="ml-1.5 inline-flex items-center text-[10px] font-black text-sky-500 hover:text-sky-400 underline underline-offset-2"
+                                            title="Abrir esta aula no Caveira"
+                                          >
+                                            ▶️
+                                          </a>
+                                        )}
                                       </span>
                                       {durationLabel && (
                                         <span className="text-xs sm:text-sm font-mono font-black text-amber-600 dark:text-amber-300 shrink-0 flex items-center gap-1 tabular-nums">

@@ -483,10 +483,18 @@ export default function AbaHoje({ onGoToTab }) {
                             </span>
                             <div className="flex items-center gap-2">
                               {(() => {
+                                const buildCaveiraLessonHref = (baseUrl, lessonName = '', subjectName = '') => {
+                                  if (!baseUrl) return '';
+                                  const cleanBase = String(baseUrl).split('#')[0];
+                                  if (!lessonName) return cleanBase;
+                                  return `${cleanBase}#qg_lesson=${encodeURIComponent(lessonName)}${subjectName ? `&qg_subject=${encodeURIComponent(subjectName)}` : ''}`;
+                                };
                                 const firstIdx = block.plannedLessons?.[0]?.index ?? block.currentCompleted;
-                                const lesHref = block.activeTopic?.lessons?.[firstIdx]?.caveiraUrl
+                                const firstLessonName = block.plannedLessons?.[0]?.name || block.activeTopic?.lessons?.[firstIdx]?.name || '';
+                                const rawHref = block.activeTopic?.lessons?.[firstIdx]?.caveiraUrl
                                   || block.subject?.caveiraModuleUrl
                                   || (block.subject?.caveiraCourseId ? `https://app.caveira.com/courses/${block.subject.caveiraCourseId}` : '');
+                                const lesHref = buildCaveiraLessonHref(rawHref, firstLessonName, block.subject?.name);
                                 return lesHref ? (
                                   <a
                                     href={lesHref}
@@ -517,7 +525,12 @@ export default function AbaHoje({ onGoToTab }) {
                                 accelSec > 0
                                   ? `${formatSecondsToClock(accelSec)}${block.spd > 1 ? ` (${block.spd}x)` : ''}`
                                   : les.durStr || '';
-                              const directUrl = block.activeTopic?.lessons?.[les.index ?? lIdx]?.caveiraUrl || '';
+                              const rawDirectUrl = block.activeTopic?.lessons?.[les.index ?? lIdx]?.caveiraUrl
+                                || block.subject?.caveiraModuleUrl
+                                || (block.subject?.caveiraCourseId ? `https://app.caveira.com/courses/${block.subject.caveiraCourseId}` : '');
+                              const directUrl = rawDirectUrl
+                                ? `${String(rawDirectUrl).split('#')[0]}#qg_lesson=${encodeURIComponent(les.name || '')}${block.subject?.name ? `&qg_subject=${encodeURIComponent(block.subject.name)}` : ''}`
+                                : '';
 
                               return (
                                 <div

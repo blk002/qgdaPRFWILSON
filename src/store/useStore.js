@@ -3900,6 +3900,56 @@ export const useStore = create(
             .trim()
         );
 
+        const extractPartTag = (txt) => {
+          const clean = normalizeCourseLookupKey(txt);
+          if (!clean) return '';
+          const mNum = clean.match(/\b(?:parte|pt|bloco|aula)\s*0*(\d{1,2})\b/);
+          if (mNum) return String(Number(mNum[1]));
+          const mRom = clean.match(/\b(?:parte|pt|bloco|aula)?\s*(i{1,3}|iv|v|vi{0,3})\b$/);
+          if (mRom) {
+            const romanMap = { i: '1', ii: '2', iii: '3', iv: '4', v: '5', vi: '6', vii: '7', viii: '8' };
+            if (romanMap[mRom[1]]) return romanMap[mRom[1]];
+          }
+          const mEnd = clean.match(/\b0*(\d{1,2})$/);
+          return mEnd ? String(Number(mEnd[1])) : '';
+        };
+
+        const tokenizeLesson = (txt) => String(txt || '')
+          .split(' ')
+          .map(w => (/^\d+$/.test(w) ? String(Number(w)) : w))
+          .filter(w => w.length >= 3 || /^\d+$/.test(w));
+
+        const scoreLessonMatch = (existingName, incomingTitle) => {
+          const en = normalizeCourseLookupKey(existingName || '');
+          const normTitle = normalizeCourseLookupKey(incomingTitle || '');
+          if (!en || !normTitle) return 0;
+
+          const partA = extractPartTag(existingName);
+          const partB = extractPartTag(incomingTitle);
+          if (partA && partB && partA !== partB) return 0;
+
+          if (en === normTitle) return 100;
+          const es = stripLessonPrefix(existingName);
+          const strippedTitle = stripLessonPrefix(incomingTitle);
+          if (strippedTitle && es && es === strippedTitle) return 95;
+
+          const subMatch = (strippedTitle && es && (
+            (strippedTitle.length >= 6 && es.includes(strippedTitle)) ||
+            (es.length >= 6 && strippedTitle.includes(es))
+          )) || (normTitle.length >= 6 && en.includes(normTitle)) || (en.length >= 6 && normTitle.includes(en));
+          if (subMatch && (!partA || !partB || partA === partB)) return 80;
+
+          const lesTokens = tokenizeLesson(strippedTitle || normTitle);
+          const exTokensList = tokenizeLesson(es || en);
+          if (lesTokens.length >= 2 && exTokensList.length >= 2) {
+            const exSet = new Set(exTokensList);
+            const overlap = lesTokens.filter(t => exSet.has(t)).length;
+            const ratio = overlap / Math.max(lesTokens.length, exTokensList.length);
+            if (ratio >= 0.6) return Math.round(ratio * 75);
+          }
+          return 0;
+        };
+
         const parseMinToClock = (minVal) => {
           const mins = Number(minVal);
           if (!Number.isFinite(mins) || mins <= 0) return '';
@@ -3951,42 +4001,34 @@ export const useStore = create(
           } else if (modLessons.length > 0) {
             modLessons.forEach((les) => {
               if (!les || !les.title) return;
-              const normTitle = normalizeCourseLookupKey(les.title);
-              const strippedTitle = stripLessonPrefix(les.title);
-              const lesTokens = (strippedTitle || normTitle).split(' ').filter(w => w.length >= 3);
-              let matched = false;
+              let bestTopic = null;
+              let bestIdx = -1;
+              let bestScore = 0;
+
               for (const topic of topics) {
-                const idx = (topic.lessons || []).findIndex(existing => {
-                  const en = normalizeCourseLookupKey(existing?.name || '');
-                  const es = stripLessonPrefix(existing?.name || '');
-                  if (!en) return false;
-                  if (en === normTitle || (strippedTitle && es && (es === strippedTitle || (strippedTitle.length >= 6 && es.includes(strippedTitle)) || (es.length >= 6 && strippedTitle.includes(es))))) {
-                    return true;
+                (topic.lessons || []).forEach((existing, idx) => {
+                  const sc = scoreLessonMatch(existing?.name || '', les.title);
+                  if (sc > bestScore) {
+                    bestScore = sc;
+                    bestTopic = topic;
+                    bestIdx = idx;
                   }
-                  if ((normTitle.length >= 6 && en.includes(normTitle)) || (en.length >= 6 && normTitle.includes(en))) {
-                    return true;
-                  }
-                  if (lesTokens.length >= 2) {
-                    const exTokens = new Set((es || en).split(' ').filter(w => w.length >= 3));
-                    const overlap = lesTokens.filter(t => exTokens.has(t)).length;
-                    if (overlap / lesTokens.length >= 0.6) return true;
-                  }
-                  return false;
                 });
-                if (idx >= 0) {
-                  const cur = topic.lessons[idx];
-                  topic.lessons[idx] = {
-                    ...cur,
-                    ...(les.url ? { caveiraUrl: les.url } : {}),
-                    ...(les.id ? { caveiraVideoId: les.id } : {}),
-                    ...(les.durationMin > 0 && !cur.duration ? { duration: parseMinToClock(les.durationMin) } : {})
-                  };
-                  updatedLessons++;
-                  matched = true;
-                  break;
-                }
               }
-              if (!matched) {
+
+              if (bestScore >= 50 && bestTopic && bestIdx >= 0) {
+                const cur = bestTopic.lessons[bestIdx];
+                const curHasSpecificVideo = Boolean(cur?.caveiraUrl && String(cur.caveiraUrl).includes('course_video_id='));
+                const incHasSpecificVideo = Boolean(les.url && String(les.url).includes('course_video_id='));
+                const resolvedUrl = (!curHasSpecificVideo || incHasSpecificVideo) ? (les.url || cur.caveiraUrl) : cur.caveiraUrl;
+                bestTopic.lessons[bestIdx] = {
+                  ...cur,
+                  ...(resolvedUrl ? { caveiraUrl: resolvedUrl } : {}),
+                  ...(les.id ? { caveiraVideoId: les.id } : {}),
+                  ...(les.durationMin > 0 && !cur.duration ? { duration: parseMinToClock(les.durationMin) } : {})
+                };
+                updatedLessons++;
+              } else {
                 const matchingTopic = topics.find(t => normModuleMatch(t?.name, mod.name)) || topics[0];
                 matchingTopic.lessons = Array.isArray(matchingTopic.lessons) ? matchingTopic.lessons : [];
                 matchingTopic.lessons.push({
