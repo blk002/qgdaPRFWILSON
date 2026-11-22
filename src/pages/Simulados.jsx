@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '../store/useStore';
-import { Target, Plus, TrendingUp, Edit2, Trash2, BarChart2, Trophy, Activity, Info } from 'lucide-react';
+import { Target, Plus, TrendingUp, Edit2, Trash2, BarChart2, Trophy, Activity, Info, ChevronDown, ChevronUp, Layers } from 'lucide-react';
 
 export default function Simulados() {
   const {
@@ -17,6 +17,46 @@ export default function Simulados() {
   const [showModal, setShowModal] = useState(false);
   const [editingSimulado, setEditingSimulado] = useState(null);
   const [hoveredPoint, setHoveredPoint] = useState(null);
+  const [expandedSimId, setExpandedSimId] = useState(null);
+
+  const aggregatedSubjects = React.useMemo(() => {
+    const map = new Map();
+    const blocoOrder = { 'Bloco I': 1, 'Bloco II': 2, 'Bloco III': 3 };
+    (simulados || []).forEach((sim) => {
+      (sim?.subjectScores || []).forEach((sc) => {
+        if (!sc || !sc.name) return;
+        const key = String(sc.name).trim().toLowerCase();
+        const prev = map.get(key) || {
+          name: sc.name,
+          bloco: sc.bloco || 'Bloco I',
+          hits: 0,
+          errors: 0,
+          blank: 0,
+          total: 0,
+          liquida: 0,
+          count: 0,
+        };
+        const h = Number(sc.hits) || 0;
+        const e = Number(sc.errors) || 0;
+        const bl = Number(sc.blank) || 0;
+        const tot = Number(sc.total) || (h + e + bl);
+        prev.hits += h;
+        prev.errors += e;
+        prev.blank += bl;
+        prev.total += tot;
+        prev.liquida += sc.liquida !== undefined ? Number(sc.liquida) : (h - e);
+        prev.count += 1;
+        map.set(key, prev);
+      });
+    });
+    return Array.from(map.values())
+      .map((item) => ({
+        ...item,
+        pct: item.total > 0 ? Math.round((item.hits / item.total) * 100) : 0,
+        blocoRank: blocoOrder[item.bloco] || 9,
+      }))
+      .sort((a, b) => a.pct - b.pct || b.errors - a.errors);
+  }, [simulados]);
 
   const totalSimulados = simulados.length;
   const caveiraSimuladosCount = simulados.filter(s => s?.source === 'caveira').length;
@@ -232,16 +272,43 @@ export default function Simulados() {
                 <tbody className="divide-y divide-slate-100">
                   {simulados.map(sim => {
                     const hasBlockBreakdown = sim.b1Liquida !== undefined && sim.b2Liquida !== undefined && sim.b3Liquida !== undefined;
+                    const hasSubjectScores = Array.isArray(sim.subjectScores) && sim.subjectScores.length > 0;
+                    const isExpanded = expandedSimId === sim.id;
                     const reprovouCorte = hasBlockBreakdown
                       ? ((15 > sim.b1Liquida) || (10 > sim.b2Liquida) || (10 > sim.b3Liquida) || (50 > sim.liquida))
                       : (sim.pct !== undefined ? Number(sim.pct) < 50 : 50 > sim.liquida);
+                    const sortedSubjects = hasSubjectScores
+                      ? [...sim.subjectScores].sort((a, b) => {
+                          const ord = { 'Bloco I': 1, 'Bloco II': 2, 'Bloco III': 3 };
+                          return ((ord[a.bloco] || 9) - (ord[b.bloco] || 9)) || ((a.pct || 0) - (b.pct || 0));
+                        })
+                      : [];
                     
                     return (
-                    <tr key={sim.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors dark:bg-slate-950">
+                    <React.Fragment key={sim.id}>
+                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors dark:bg-slate-950">
                       <td className="p-3 sm:p-4 font-semibold text-slate-700 dark:text-slate-200">
-                        <div>{sim.data}</div>
-                        {(sim.title || sim.source === 'caveira') && (
-                          <div className="flex items-center gap-1.5 mt-0.5 flex-wrap">
+                        <div className="flex items-center gap-1.5 flex-wrap">
+                          <span>{sim.data}</span>
+                          {sim.dateSource === 'release' && (
+                            <span
+                              className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
+                              title="Data de liberação do simulado no Caveira (edite no lápis se quiser informar o dia exato em que realizou)"
+                            >
+                              liberação
+                            </span>
+                          )}
+                          {sim.dateSource === 'import' && (
+                            <span
+                              className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-500 dark:text-slate-400 border border-slate-500/20"
+                              title="O Caveira não informa a data de realização de simulados de turma — clique no lápis para ajustar"
+                            >
+                              importado
+                            </span>
+                          )}
+                        </div>
+                        {(sim.title || sim.source === 'caveira' || hasSubjectScores) && (
+                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
                             {sim.source === 'caveira' && (
                               <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-500 border border-sky-500/30">
                                 Caveira
@@ -251,6 +318,16 @@ export default function Simulados() {
                               <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate max-w-[200px]" title={sim.title}>
                                 {sim.title}
                               </span>
+                            )}
+                            {hasSubjectScores && (
+                              <button
+                                type="button"
+                                onClick={() => setExpandedSimId(prev => prev === sim.id ? null : sim.id)}
+                                className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-1.5 py-0.5 rounded bg-purple-500/15 hover:bg-purple-500/25 text-purple-600 dark:text-purple-400 border border-purple-500/30 transition-colors cursor-pointer"
+                              >
+                                <span>Matérias ({sim.subjectScores.length})</span>
+                                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
+                              </button>
                             )}
                           </div>
                         )}
@@ -278,10 +355,114 @@ export default function Simulados() {
                         </div>
                       </td>
                     </tr>
+                    {isExpanded && hasSubjectScores && (
+                      <tr className="bg-slate-50/80 dark:bg-slate-900/70">
+                        <td colSpan={7} className="p-3 sm:p-4 border-t border-slate-200/70 dark:border-slate-800">
+                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
+                            {sortedSubjects.map((sc, sIdx) => {
+                              const bShort = sc.bloco === 'Bloco III' ? 'B3' : sc.bloco === 'Bloco II' ? 'B2' : 'B1';
+                              const pctNum = Number(sc.pct) || 0;
+                              const deltaOthers = sc.othersPct !== undefined ? Math.round((pctNum - Number(sc.othersPct)) * 10) / 10 : null;
+                              return (
+                                <div key={`${sc.name}-${sIdx}`} className="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 flex flex-col gap-1.5">
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0 flex-1">
+                                      <span className="inline-block text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 mr-1.5">
+                                        {bShort}
+                                      </span>
+                                      <span className="text-xs font-bold text-slate-800 dark:text-slate-100 break-words">
+                                        {sc.name}
+                                      </span>
+                                    </div>
+                                    <span className={`text-xs font-black shrink-0 ${pctNum >= 75 ? 'text-emerald-500' : pctNum >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
+                                      {pctNum}%
+                                    </span>
+                                  </div>
+                                  <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                    <div
+                                      className={`h-full rounded-full ${pctNum >= 75 ? 'bg-emerald-500' : pctNum >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
+                                      style={{ width: `${Math.max(0, Math.min(100, pctNum))}%` }}
+                                    />
+                                  </div>
+                                  <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                                    <span>
+                                      <strong className="text-emerald-500">{sc.hits}✓</strong> ·{' '}
+                                      <strong className="text-red-500">{sc.errors}✗</strong> ·{' '}
+                                      <span>{sc.blank}○</span> ·{' '}
+                                      <strong className={sc.liquida > 0 ? 'text-slate-700 dark:text-slate-200' : 'text-red-500'}>
+                                        Líq: {sc.liquida}
+                                      </strong>
+                                    </span>
+                                    {deltaOthers !== null && (
+                                      <span title={`Média Caveira: ${sc.othersPct}%`} className={deltaOthers >= 0 ? 'text-emerald-500 font-bold' : 'text-red-400 font-bold'}>
+                                        {deltaOthers >= 0 ? `+${deltaOthers}%` : `${deltaOthers}%`} vs turma
+                                      </span>
+                                    )}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        </td>
+                      </tr>
+                    )}
+                    </React.Fragment>
                     );
                   })}
                 </tbody>
               </table>
+            </div>
+          )}
+
+          {aggregatedSubjects.length > 0 && (
+            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 sm:p-5 mb-8">
+              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
+                <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 text-sm sm:text-base">
+                  <Layers className="w-4 h-4 text-purple-500" />
+                  <span>Raio-X por Matéria nos Simulados</span>
+                </h3>
+                <span className="text-[11px] font-semibold text-slate-400">
+                  Consolidado de {aggregatedSubjects.length} disciplina(s) (da mais crítica para a mais forte)
+                </span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
+                {aggregatedSubjects.map((sub) => {
+                  const bShort = sub.bloco === 'Bloco III' ? 'B3' : sub.bloco === 'Bloco II' ? 'B2' : 'B1';
+                  return (
+                    <div key={sub.name} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 flex flex-col gap-1.5">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="min-w-0 flex-1">
+                          <span className="inline-block text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-500 mr-1.5">
+                            {bShort}
+                          </span>
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100 break-words">
+                            {sub.name}
+                          </span>
+                        </div>
+                        <span className={`text-xs font-black shrink-0 ${sub.pct >= 75 ? 'text-emerald-500' : sub.pct >= 60 ? 'text-amber-500' : 'text-red-500'}`}>
+                          {sub.pct}%
+                        </span>
+                      </div>
+                      <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                        <div
+                          className={`h-full rounded-full ${sub.pct >= 75 ? 'bg-emerald-500' : sub.pct >= 60 ? 'bg-amber-500' : 'bg-red-500'}`}
+                          style={{ width: `${Math.max(0, Math.min(100, sub.pct))}%` }}
+                        />
+                      </div>
+                      <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 dark:text-slate-400">
+                        <span>
+                          <strong className="text-emerald-500">{sub.hits}✓</strong> ·{' '}
+                          <strong className="text-red-500">{sub.errors}✗</strong> ·{' '}
+                          <span>{sub.blank}○</span> ({sub.total}q)
+                        </span>
+                        <span className={sub.liquida > 0 ? 'text-slate-700 dark:text-slate-200 font-bold' : 'text-red-500 font-bold'}>
+                          Líq: {sub.liquida}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
           )}
         </div>
@@ -362,7 +543,7 @@ export default function Simulados() {
             const liquida = b1Liquida + b2Liquida + b3Liquida;
 
             if (editingSimulado) {
-              setSimulados(prev => prev.map(s => s.id === editingSimulado.id ? { ...s, data: dataVal, b1C, b1E, b2C, b2E, b3C, b3E, b1Liquida, b2Liquida, b3Liquida, liquida } : s));
+              setSimulados(prev => prev.map(s => s.id === editingSimulado.id ? { ...s, data: dataVal, dateSource: 'manual', b1C, b1E, b2C, b2E, b3C, b3E, b1Liquida, b2Liquida, b3Liquida, liquida } : s));
             } else {
               setSimulados(prev => [...prev, { id: Date.now(), data: dataVal, b1C, b1E, b2C, b2E, b3C, b3E, b1Liquida, b2Liquida, b3Liquida, liquida }]);
               addXP(500, "Simulado de Prova registrado");

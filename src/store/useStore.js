@@ -3828,17 +3828,58 @@ export const useStore = create(
             ...(item.b3Liquida !== undefined ? { b3Liquida: Number(item.b3Liquida) } : {}),
           };
 
+          const inferBlocoBySubjectName = (subName) => {
+            const norm = normalizeCourseLookupKey(subName);
+            if (!norm) return 'Bloco I';
+            if (/(?:transito|ctb|contran|9503)/.test(norm)) return 'Bloco II';
+            if (/(?:penal|processual|administrativo|constitucional|direitos humanos|extravagante|leis especiais|legislacao especial|institucional)/.test(norm)) {
+              return 'Bloco III';
+            }
+            return 'Bloco I';
+          };
+
+          const normalizeSubjectRow = (sc) => {
+            if (!sc || !sc.name) return null;
+            const h = Number(sc.hits) || 0;
+            const e = Number(sc.errors) || 0;
+            const bl = Number(sc.blank) || 0;
+            const tot = Number(sc.total) || (h + e + bl);
+            const liq = sc.liquida !== undefined ? Number(sc.liquida) : (h - e);
+            const pctVal = sc.pct !== undefined ? Number(sc.pct) : (tot > 0 ? Math.round((h / tot) * 100) : 0);
+            return {
+              name: String(sc.name).trim(),
+              hits: h,
+              errors: e,
+              blank: bl,
+              total: tot,
+              liquida: liq,
+              pct: pctVal,
+              ...(sc.othersPct !== undefined ? { othersPct: Number(sc.othersPct) } : {}),
+              bloco: sc.bloco || inferBlocoBySubjectName(sc.name),
+            };
+          };
+          const normalizedSubjects = Array.isArray(item.subjectScores)
+            ? item.subjectScores.map(normalizeSubjectRow).filter(Boolean)
+            : [];
+
           if (existingIdx >= 0) {
             const cur = nextSimulados[existingIdx];
             const addsBlocks = cur.b1Liquida === undefined && item.b1Liquida !== undefined;
+            const addsSubjects = normalizedSubjects.length > 0 && (!Array.isArray(cur.subjectScores) || cur.subjectScores.length < normalizedSubjects.length || normalizedSubjects.some((s, i) => cur.subjectScores[i]?.othersPct === undefined && s.othersPct !== undefined));
             const changesScore = (item.hits !== undefined && cur.hits !== hits) ||
               (item.errors !== undefined && cur.errors !== errors) ||
               (item.liquida !== undefined && cur.liquida !== liquida);
             const addsUrl = Boolean(item.url && !cur.url);
-            if (addsBlocks || changesScore || addsUrl) {
+
+            const dateRank = (src) => (src === 'manual' ? 4 : (src === 'attempt' || src === 'created') ? 3 : src === 'release' ? 2 : 1);
+            const canImproveDate = cur.dateSource !== 'manual' && item.dateSource && dateRank(item.dateSource) > dateRank(cur.dateSource || 'import');
+
+            if (addsBlocks || addsSubjects || changesScore || addsUrl || canImproveDate) {
               nextSimulados[existingIdx] = {
                 ...cur,
                 caveiraId: (item.caveiraId && !String(item.caveiraId).startsWith('sim_title_')) ? item.caveiraId : (cur.caveiraId || item.caveiraId || null),
+                ...(canImproveDate ? { data: dateStr, dateSource: item.dateSource } : {}),
+                ...(item.releasedAt ? { releasedAt: item.releasedAt } : {}),
                 total: total || cur.total,
                 hits: item.hits !== undefined ? hits : cur.hits,
                 errors: item.errors !== undefined ? errors : cur.errors,
@@ -3846,6 +3887,7 @@ export const useStore = create(
                 pct: item.pct !== undefined ? pct : cur.pct,
                 liquida: item.liquida !== undefined ? liquida : cur.liquida,
                 ...blockFields,
+                ...(normalizedSubjects.length > 0 ? { subjectScores: normalizedSubjects } : {}),
                 ...(item.url ? { url: item.url } : {}),
               };
               updatedCount += 1;
@@ -3856,6 +3898,8 @@ export const useStore = create(
           nextSimulados.push({
             id: Date.now() + idx,
             data: dateStr,
+            ...(item.dateSource ? { dateSource: item.dateSource } : {}),
+            ...(item.releasedAt ? { releasedAt: item.releasedAt } : {}),
             title,
             source: 'caveira',
             caveiraId: item.caveiraId || null,
@@ -3866,6 +3910,7 @@ export const useStore = create(
             pct,
             liquida,
             ...blockFields,
+            ...(normalizedSubjects.length > 0 ? { subjectScores: normalizedSubjects } : {}),
             ...(item.url ? { url: item.url } : {})
           });
           addedCount += 1;

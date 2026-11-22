@@ -210,33 +210,107 @@
           return;
         }
       }
+      const normalizeExtractedDate = (val) => {
+        if (typeof val !== "string") return null;
+        const iso = val.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+        if (iso) {
+          const yr = Number(iso[1]);
+          if (yr >= 2018 && yr <= 2035) return `${iso[1]}-${iso[2]}-${iso[3]}`;
+        }
+        const br = val.match(/\b(\d{2})\/(\d{2})\/(20\d{2})\b/);
+        if (br) {
+          const yr = Number(br[3]);
+          if (yr >= 2018 && yr <= 2035) return `${br[3]}-${br[2]}-${br[1]}`;
+        }
+        return null;
+      };
+      const extractSimuladoDatesDeep = (obj) => {
+        let attemptDate = null;
+        let releaseDate = null;
+        const visited = /* @__PURE__ */ new Set();
+        const walk = (node, depth = 0, parentContext = "") => {
+          if (!node || typeof node !== "object" || depth > 5 || visited.has(node)) return;
+          visited.add(node);
+          if (Array.isArray(node)) {
+            if (node.length > 0 && typeof node[0] === "object" && node[0] && (node[0].position !== void 0 || node[0].rank !== void 0 || node[0].nickname)) {
+              return;
+            }
+            node.slice(0, 12).forEach((child) => walk(child, depth + 1, parentContext));
+            return;
+          }
+          const keys = Object.keys(node);
+          for (const k of keys) {
+            const kl = k.toLowerCase();
+            if (/(?:ranking|rankings|leaderboard|participants|members|others|candidates)/i.test(kl)) continue;
+            const v = node[k];
+            if (typeof v === "string") {
+              const parsed = normalizeExtractedDate(v);
+              if (!parsed) continue;
+              const isAttemptKey = /^(?:finished|completed|answered|submitted|concluded|solved|done|realized|execution|performed|taken)_?(?:at|date)?$/i.test(kl) || /^(?:created_at|updated_at|date)$/i.test(kl) && /(?:user|attempt|answer|result|enjoyment|submission|my_)/i.test(parentContext);
+              const isReleaseKey = /^(?:release|released|available|publish|published|start|starts)_?(?:at|date)?$/i.test(kl) || depth === 0 && /^(?:created_at|date)$/i.test(kl);
+              if (isAttemptKey && !attemptDate) {
+                attemptDate = parsed;
+              } else if (isReleaseKey && !releaseDate) {
+                releaseDate = parsed;
+              }
+            } else if (v && typeof v === "object") {
+              walk(v, depth + 1, `${parentContext}.${kl}`);
+            }
+          }
+        };
+        walk(obj, 0, "");
+        return { attemptDate, releaseDate };
+      };
       const enjoyMatch = String(url || "").match(/\/practice-exams?\/(\d+)\/enjoyment/i);
       if (enjoyMatch) {
-        const rawBlocks = root.blocks || root.blocos || root.groups || [];
-        const rawSubjects = root.subjects || root.disciplines || root.disciplinas || [];
+        const rawBlocks = root.blocks || root.blocos || root.groups || root.by_block || root.blocks_performance || [];
+        const rawSubjects = root.subjects || root.disciplines || root.disciplinas || root.by_subject || root.disciplines_performance || [];
         const mapScoreRow = (item) => {
           const hitsVal = Number(item?.hits ?? item?.correct ?? item?.correct_answers ?? item?.acertos ?? 0);
           const errorsVal = Number(item?.errors ?? item?.wrong ?? item?.wrong_answers ?? item?.erros ?? 0);
           const blankVal = Number(item?.blank ?? item?.not_answered ?? item?.em_branco ?? item?.unanswered ?? 0);
+          const totalVal = Number(item?.total ?? item?.questions_count ?? hitsVal + errorsVal + blankVal);
           const netVal = item?.net_score !== void 0 ? Number(item.net_score) : item?.score !== void 0 ? Number(item.score) : item?.liquida !== void 0 ? Number(item.liquida) : hitsVal - errorsVal;
+          const rawPct = item?.percentage ?? item?.accuracy ?? item?.enjoyment ?? item?.user_percentage;
+          const rawOthers = item?.others_percentage ?? item?.members_percentage ?? item?.others ?? item?.average_others;
+          const pctVal = rawPct !== void 0 ? Math.round(Number(rawPct)) : totalVal > 0 ? Math.round(hitsVal / totalVal * 100) : 0;
+          const othersNum = rawOthers !== void 0 && rawOthers !== null && rawOthers !== "" ? Number(rawOthers) : void 0;
           return {
             name: String(item?.name || item?.title || item?.subject || item?.discipline || "").trim(),
             hits: hitsVal,
             errors: errorsVal,
             blank: blankVal,
-            liquida: netVal
+            total: totalVal,
+            liquida: netVal,
+            pct: pctVal,
+            ...Number.isFinite(othersNum) ? { othersPct: Math.round(othersNum * 100) / 100 } : {}
           };
         };
         const blocks = (Array.isArray(rawBlocks) ? rawBlocks : []).map(mapScoreRow).filter((r) => r.name);
         const subjects = (Array.isArray(rawSubjects) ? rawSubjects : []).map(mapScoreRow).filter((r) => r.name);
-        if (blocks.length > 0 || subjects.length > 0) {
+        const dates = extractSimuladoDatesDeep(root);
+        if (blocks.length > 0 || subjects.length > 0 || dates.attemptDate || dates.releaseDate) {
           emit("API_SIMULADO_ENJOYMENT", {
             caveiraId: `sim_${enjoyMatch[1]}`,
             examId: enjoyMatch[1],
             blocks,
-            subjects
+            subjects,
+            attemptDate: dates.attemptDate,
+            releaseDate: dates.releaseDate
           });
           return;
+        }
+      }
+      const examDatesMatch = String(url || "").match(/\/practice-exams?\/(\d+)(?:\/questions\/revision)?(?:[?#]|$)/i);
+      if (examDatesMatch && !/\/(?:ranking|rankings|leaderboard)/i.test(String(url || ""))) {
+        const dates = extractSimuladoDatesDeep(root);
+        if (dates.attemptDate || dates.releaseDate) {
+          emit("API_SIMULADO_DATES", {
+            examId: examDatesMatch[1],
+            caveiraId: `sim_${examDatesMatch[1]}`,
+            attemptDate: dates.attemptDate,
+            releaseDate: dates.releaseDate
+          });
         }
       }
       const isRankingUrl = /\/(?:ranking|rankings|leaderboard|classificacao|classification|participants|students|users|positions|podium|top-?\d*)\b|[?&](?:ranking|leaderboard|page_ranking)=/i.test(String(url || ""));
@@ -298,11 +372,15 @@
           const errors = errorsRaw !== void 0 ? Number(errorsRaw) : Math.max(0, total - hits);
           const pct = Number(sim.percentage ?? sim.accuracy ?? Math.round(hits / total * 100));
           const liquida = Number.isFinite(liquidaVal) ? liquidaVal : hits - errors;
-          const rawDate = String(sim.finished_at || sim.completed_at || sim.created_at || sim.date || "").slice(0, 10);
+          const { attemptDate, releaseDate } = extractSimuladoDatesDeep(sim);
+          const rawDate = String(sim.finished_at || sim.completed_at || sim.answered_at || sim.created_at || sim.date || "").slice(0, 10);
+          const resolvedDate = attemptDate || releaseDate || (/^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : void 0);
+          const dateSource = attemptDate ? "attempt" : releaseDate ? "release" : void 0;
           const subjectScores = Array.isArray(sim.subjects || sim.disciplines) ? (sim.subjects || sim.disciplines).map((s) => ({
             name: String(s?.name || s?.subject || "").trim(),
             hits: Number(s?.hits ?? s?.correct ?? 0),
             errors: Number(s?.errors ?? s?.wrong ?? 0),
+            blank: Number(s?.blank ?? s?.not_answered ?? 0),
             liquida: s?.net_score !== void 0 ? Number(s.net_score) : Number(s?.hits ?? s?.correct ?? 0) - Number(s?.errors ?? s?.wrong ?? 0)
           })) : [];
           const title = String(
@@ -311,7 +389,9 @@
           return {
             caveiraId: sim.id ? `sim_${sim.id}` : void 0,
             title,
-            data: /^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : void 0,
+            data: resolvedDate,
+            ...dateSource ? { dateSource } : {},
+            ...releaseDate ? { releasedAt: releaseDate } : {},
             total,
             hits,
             errors,

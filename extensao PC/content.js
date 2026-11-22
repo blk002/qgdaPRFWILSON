@@ -558,6 +558,7 @@ ${EXTRA_SHADOW_CSS}`;
     const apiQuestionCache = /* @__PURE__ */ new Map();
     let apiSimuladosCache = [];
     const apiSimuladoEnjoymentByExamId = /* @__PURE__ */ new Map();
+    const apiSimuladoDatesByExamId = /* @__PURE__ */ new Map();
     let handleApiSnifferMessageRef = null;
     const lessonCompletionStateByUrl = /* @__PURE__ */ new Map();
     const observedVideos = /* @__PURE__ */ new WeakSet();
@@ -1007,8 +1008,24 @@ ${EXTRA_SHADOW_CSS}`;
         apiSimuladosCache = Array.from(nextMap.values());
         return;
       }
+      if (msg.type === "API_SIMULADO_DATES" && msg.payload?.examId) {
+        const k = String(msg.payload.examId);
+        const prev = apiSimuladoDatesByExamId.get(k) || {};
+        apiSimuladoDatesByExamId.set(k, {
+          attemptDate: msg.payload.attemptDate || prev.attemptDate || null,
+          releaseDate: msg.payload.releaseDate || prev.releaseDate || null
+        });
+        return;
+      }
       if (msg.type === "API_SIMULADO_ENJOYMENT" && msg.payload?.examId) {
-        const { examId, blocks = [], subjects = [] } = msg.payload;
+        const { examId, blocks = [], subjects = [], attemptDate = null, releaseDate = null } = msg.payload;
+        if (attemptDate || releaseDate) {
+          const prevDates = apiSimuladoDatesByExamId.get(String(examId)) || {};
+          apiSimuladoDatesByExamId.set(String(examId), {
+            attemptDate: attemptDate || prevDates.attemptDate || null,
+            releaseDate: releaseDate || prevDates.releaseDate || null
+          });
+        }
         let b1C = 0;
         let b1E = 0;
         let b2C = 0;
@@ -1064,11 +1081,36 @@ ${EXTRA_SHADOW_CSS}`;
             }
           });
         }
-        if (hasData) {
-          const blockStats = { b1C, b1E, b1Liquida, b2C, b2E, b2Liquida, b3C, b3E, b3Liquida };
-          apiSimuladoEnjoymentByExamId.set(String(examId), blockStats);
+        const mappedSubjects = Array.isArray(subjects) ? subjects.map((sc) => {
+          const h = Number(sc.hits) || 0;
+          const e = Number(sc.errors) || 0;
+          const bl = Number(sc.blank) || 0;
+          const tot = Number(sc.total) || h + e + bl;
+          const pct = sc.pct !== void 0 ? Number(sc.pct) : tot > 0 ? Math.round(h / tot * 100) : 0;
+          return {
+            name: String(sc.name || "").trim(),
+            hits: h,
+            errors: e,
+            blank: bl,
+            total: tot,
+            liquida: sc.liquida !== void 0 ? Number(sc.liquida) : h - e,
+            pct,
+            ...sc.othersPct !== void 0 ? { othersPct: Number(sc.othersPct) } : {},
+            bloco: classifySubjectBloco(sc.name)
+          };
+        }).filter((s) => s.name) : [];
+        if (hasData || mappedSubjects.length > 0) {
+          const blockStats = hasData ? { b1C, b1E, b1Liquida, b2C, b2E, b2Liquida, b3C, b3E, b3Liquida } : {};
+          apiSimuladoEnjoymentByExamId.set(String(examId), {
+            ...blockStats,
+            ...mappedSubjects.length > 0 ? { subjectScores: mappedSubjects } : {}
+          });
           apiSimuladosCache = apiSimuladosCache.map(
-            (s) => s && s.caveiraId === `sim_${examId}` ? { ...s, ...blockStats } : s
+            (s) => s && s.caveiraId === `sim_${examId}` ? {
+              ...s,
+              ...blockStats,
+              ...mappedSubjects.length > 0 ? { subjectScores: mappedSubjects } : {}
+            } : s
           );
         }
         return;
@@ -1503,8 +1545,10 @@ ${EXTRA_SHADOW_CSS}`;
       if (isTableRow && /^\s*#?\d{1,5}\s*[º°ª]\b/.test(cleanText)) return true;
       return false;
     }
-    function parseEnjoymentDialogBlocks() {
+    function parseEnjoymentDialogData() {
       const tables = Array.from(document.querySelectorAll(".q-dialog table, .q-card table")).filter((t) => !t.closest("#qg-caveira-shadow-host, #qg-caveira-hud, .ranking-table-wrap") && isElementVisible(t));
+      let blockStats = null;
+      const subjectScores = [];
       for (const tbl of tables) {
         const headers = Array.from(tbl.querySelectorAll("thead th")).map((h) => normalizeCourseIndexKey(h.textContent || ""));
         if (headers.some((h) => h.includes("bloco")) && headers.some((h) => h.includes("acerto"))) {
@@ -1536,7 +1580,7 @@ ${EXTRA_SHADOW_CSS}`;
             }
           });
           if (found) {
-            return {
+            blockStats = {
               b1C,
               b1E,
               b1Liquida: b1C - b1E,
@@ -1547,6 +1591,7 @@ ${EXTRA_SHADOW_CSS}`;
               b3E,
               b3Liquida: b3C - b3E
             };
+            break;
           }
         }
       }
@@ -1559,14 +1604,31 @@ ${EXTRA_SHADOW_CSS}`;
           let b2E = 0;
           let b3C = 0;
           let b3E = 0;
-          let found = false;
           tbl.querySelectorAll("tbody tr").forEach((tr) => {
             const cells = Array.from(tr.querySelectorAll("td")).map((c) => (c.textContent || "").trim());
-            if (cells.length < 3) return;
-            const bloco = classifySubjectBloco(cells[0]);
+            if (cells.length < 4) return;
+            const name = cells[0];
+            if (!name) return;
             const hitsVal = parseInt(cells[1], 10) || 0;
             const errVal = parseInt(cells[2], 10) || 0;
-            found = true;
+            const blankVal = parseInt(cells[3], 10) || 0;
+            const totalVal = hitsVal + errVal + blankVal;
+            const liquidaVal = hitsVal - errVal;
+            const pctParsed = cells[4] ? parseFloat(cells[4].replace("%", "").replace(",", ".")) : NaN;
+            const pctVal = Number.isFinite(pctParsed) ? Math.round(pctParsed) : totalVal > 0 ? Math.round(hitsVal / totalVal * 100) : 0;
+            const othersParsed = cells[5] ? parseFloat(cells[5].replace("%", "").replace(",", ".")) : NaN;
+            const bloco = classifySubjectBloco(name);
+            subjectScores.push({
+              name,
+              hits: hitsVal,
+              errors: errVal,
+              blank: blankVal,
+              total: totalVal,
+              liquida: liquidaVal,
+              pct: pctVal,
+              ...Number.isFinite(othersParsed) ? { othersPct: Math.round(othersParsed * 100) / 100 } : {},
+              bloco
+            });
             if (bloco === "Bloco I") {
               b1C += hitsVal;
               b1E += errVal;
@@ -1578,8 +1640,8 @@ ${EXTRA_SHADOW_CSS}`;
               b3E += errVal;
             }
           });
-          if (found) {
-            return {
+          if (!blockStats && subjectScores.length > 0) {
+            blockStats = {
               b1C,
               b1E,
               b1Liquida: b1C - b1E,
@@ -1591,11 +1653,13 @@ ${EXTRA_SHADOW_CSS}`;
               b3Liquida: b3C - b3E
             };
           }
+          if (subjectScores.length > 0) break;
         }
       }
-      return null;
+      if (!blockStats && subjectScores.length === 0) return null;
+      return { blockStats, subjectScores };
     }
-    function scrapeSimuladosAndImport() {
+    async function scrapeSimuladosAndImport() {
       const results = [];
       const seen = /* @__PURE__ */ new Set();
       const boxUse = document.querySelector(".dash-box-container.box-use");
@@ -1603,6 +1667,42 @@ ${EXTRA_SHADOW_CSS}`;
         const title = (document.querySelector(".brand-container h5, h5.q-mb-sm, h1, h2")?.innerText || "").replace(/\s+/g, " ").trim() || "Simulado Caveira";
         const examIdMatch = window.location.pathname.match(/\/practice-exams?\/(\d+)/i);
         const examId = examIdMatch?.[1] || "";
+        let dialogData = parseEnjoymentDialogData();
+        let openedDialogProgrammatically = false;
+        if (!dialogData || !Array.isArray(dialogData.subjectScores) || dialogData.subjectScores.length === 0) {
+          const answersBtn = boxUse.querySelector(".show-answers button");
+          if (answersBtn && isElementVisible(answersBtn)) {
+            openedDialogProgrammatically = true;
+            try {
+              answersBtn.click();
+            } catch (_) {
+            }
+            for (let attempt = 0; attempt < 20; attempt += 1) {
+              await sleepMs(120);
+              if (isDestroyed) break;
+              const parsedNow = parseEnjoymentDialogData();
+              if (parsedNow && (parsedNow.subjectScores?.length > 0 || parsedNow.blockStats)) {
+                dialogData = parsedNow;
+                break;
+              }
+            }
+            await sleepMs(150);
+            if (openedDialogProgrammatically) {
+              try {
+                const dialogEl = document.querySelector(".q-dialog");
+                const closeBtn = dialogEl ? dialogEl.querySelector('button[aria-label*="close" i], button[aria-label*="fechar" i]') || Array.from(dialogEl.querySelectorAll("button")).find((b) => /close|clear|fechar/i.test((b.textContent || "") + " " + (b.getAttribute("aria-label") || ""))) : null;
+                if (closeBtn) {
+                  closeBtn.click();
+                } else {
+                  const backdrop = document.querySelector(".q-dialog__backdrop");
+                  if (backdrop) backdrop.click();
+                  else document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", keyCode: 27, bubbles: true }));
+                }
+              } catch (_) {
+              }
+            }
+          }
+        }
         const smallTxt = (boxUse.querySelector(".points .small-number")?.textContent || "").trim();
         const smallMatch = smallTxt.match(/(-?\d+)\s*\/\s*(\d+)/);
         const bigTxt = (boxUse.querySelector(".points .big-number")?.textContent || "").trim();
@@ -1633,12 +1733,29 @@ ${EXTRA_SHADOW_CSS}`;
         const errors = svgErrors !== null ? svgErrors : liquidaFromBox !== null ? Math.max(0, hits - liquidaFromBox) : Math.max(0, total - hits);
         const blank = svgBlank !== null ? svgBlank : Math.max(0, total - hits - errors);
         const liquida = liquidaFromBox !== null ? liquidaFromBox : hits - errors;
-        const blockStats = parseEnjoymentDialogBlocks() || (examId ? apiSimuladoEnjoymentByExamId.get(examId) : null) || {};
+        const apiEnjoy = examId ? apiSimuladoEnjoymentByExamId.get(examId) : null;
+        const blockStats = dialogData?.blockStats || (apiEnjoy?.b1Liquida !== void 0 ? {
+          b1C: apiEnjoy.b1C,
+          b1E: apiEnjoy.b1E,
+          b1Liquida: apiEnjoy.b1Liquida,
+          b2C: apiEnjoy.b2C,
+          b2E: apiEnjoy.b2E,
+          b2Liquida: apiEnjoy.b2Liquida,
+          b3C: apiEnjoy.b3C,
+          b3E: apiEnjoy.b3E,
+          b3Liquida: apiEnjoy.b3Liquida
+        } : {});
+        const subjectScores = (dialogData?.subjectScores?.length || 0) >= (apiEnjoy?.subjectScores?.length || 0) ? dialogData?.subjectScores || [] : apiEnjoy?.subjectScores || [];
+        const dateInfo = examId ? apiSimuladoDatesByExamId.get(examId) : null;
+        const dateStr = dateInfo?.attemptDate || dateInfo?.releaseDate || getTodaySessionDate();
+        const dateSource = dateInfo?.attemptDate ? "attempt" : dateInfo?.releaseDate ? "release" : "import";
         const caveiraId = examId ? `sim_${examId}` : `sim_title_${normalizeCourseIndexKey(title).slice(0, 48)}`;
         results.push({
           caveiraId,
           title: title.slice(0, 100),
-          data: getTodaySessionDate(),
+          data: dateStr,
+          dateSource,
+          ...dateInfo?.releaseDate ? { releasedAt: dateInfo.releaseDate } : {},
           total,
           hits,
           errors,
@@ -1646,6 +1763,7 @@ ${EXTRA_SHADOW_CSS}`;
           pct,
           liquida,
           ...blockStats,
+          ...subjectScores.length > 0 ? { subjectScores } : {},
           url: window.location.href
         });
       }
@@ -1680,22 +1798,27 @@ ${EXTRA_SHADOW_CSS}`;
           }
           const subText = (item.querySelector(".simulated--subtitle")?.innerText || item.innerText || "").trim();
           const dateMatch = subText.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/) || subText.match(/\b(\d{4}-\d{2}-\d{2})\b/);
-          const dataStr = dateMatch ? dateMatch[3] ? `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}` : dateMatch[1] : getTodaySessionDate();
+          const domDate = dateMatch ? dateMatch[3] ? `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}` : dateMatch[1] : null;
           const titleNorm = normalizeCourseIndexKey(title);
           if (seen.has(titleNorm)) return;
           seen.add(titleNorm);
           const apiMatch = apiSimuladosCache.find((s) => s && normalizeCourseIndexKey(s.title || "") === titleNorm);
+          const resolvedDate = apiMatch?.data || domDate || getTodaySessionDate();
+          const dateSource = apiMatch?.dateSource || (isPersonalPage && domDate ? "created" : "import");
           results.push({
             caveiraId: apiMatch?.caveiraId || `sim_title_${titleNorm.slice(0, 48)}`,
             title,
-            data: apiMatch?.data || dataStr,
+            data: resolvedDate,
+            dateSource,
+            ...apiMatch?.releasedAt ? { releasedAt: apiMatch.releasedAt } : {},
             total,
             hits,
             errors,
             blank,
             pct,
             liquida,
-            ...apiMatch?.b1Liquida !== void 0 ? { b1C: apiMatch.b1C, b1E: apiMatch.b1E, b1Liquida: apiMatch.b1Liquida, b2C: apiMatch.b2C, b2E: apiMatch.b2E, b2Liquida: apiMatch.b2Liquida, b3C: apiMatch.b3C, b3E: apiMatch.b3E, b3Liquida: apiMatch.b3Liquida } : {}
+            ...apiMatch?.b1Liquida !== void 0 ? { b1C: apiMatch.b1C, b1E: apiMatch.b1E, b1Liquida: apiMatch.b1Liquida, b2C: apiMatch.b2C, b2E: apiMatch.b2E, b2Liquida: apiMatch.b2Liquida, b3C: apiMatch.b3C, b3E: apiMatch.b3E, b3Liquida: apiMatch.b3Liquida } : {},
+            ...Array.isArray(apiMatch?.subjectScores) && apiMatch.subjectScores.length > 0 ? { subjectScores: apiMatch.subjectScores } : {}
           });
         });
       }
@@ -2120,12 +2243,17 @@ ${EXTRA_SHADOW_CSS}`;
           }, 2500);
         }
       });
-      hud.querySelector("#qg-btn-import-simulados")?.addEventListener("click", (e) => {
+      hud.querySelector("#qg-btn-import-simulados")?.addEventListener("click", async (e) => {
         e.stopPropagation();
         const btn = e.currentTarget;
-        const count = scrapeSimuladosAndImport();
+        const orig = btn ? btn.textContent : "";
         if (btn) {
-          const orig = btn.textContent;
+          btn.disabled = true;
+          btn.textContent = "⏳ Lendo matérias e notas...";
+        }
+        const count = await scrapeSimuladosAndImport();
+        if (btn) {
+          btn.disabled = false;
           btn.textContent = count > 0 ? `✓ ${count} simulado(s) enviado(s) ao QG!` : "⚠️ Nenhum simulado seu encontrado nesta tela";
           setTimeout(() => {
             if (btn && btn.isConnected) btn.textContent = orig;
