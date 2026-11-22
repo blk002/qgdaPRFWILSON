@@ -7,6 +7,25 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
 
   const replayBuffer = [];
   const MAX_BUFFER = 80;
+  let cachedApiAuthHeader = '';
+
+  function readFallbackAuthHeader() {
+    if (cachedApiAuthHeader) return cachedApiAuthHeader;
+    try {
+      const storages = [window.localStorage, window.sessionStorage];
+      for (const st of storages) {
+        if (!st) continue;
+        for (let i = 0; i < st.length; i += 1) {
+          const k = st.key(i);
+          if (!k || !/(?:token|auth|jwt|access)/i.test(k)) continue;
+          const raw = st.getItem(k) || '';
+          const m = raw.match(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}/);
+          if (m) return `Bearer ${m[0]}`;
+        }
+      }
+    } catch (_) {}
+    return '';
+  }
 
   function emit(type, payload) {
     try {
@@ -128,14 +147,16 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       emit('API_SUBJECT_TREE_DATA', { nodes: treeRows });
     }
 
-    // 1. Detectar catálogo de curso / módulos / videoaulas
+    // 1. Detectar catálogo de curso / módulos / videoaulas (ignorar rotas de simulados/turmas)
     const urlStr = String(url || '');
+    const isSimuladoOrTeamUrl = /(?:practice-exam|simulado|enjoyment|ranking|\/teams\/\d+)/i.test(urlStr);
     const courseIdMatch = urlStr.match(/\/courses\/(\d+)/i) || window.location.pathname.match(/\/courses\/(\d+)/i);
     const modIdMatch = urlStr.match(/\/modules\/(\d+)/i) || window.location.pathname.match(/\/modules\/(\d+)/i);
     const modIdFromUrl = modIdMatch?.[1] || '';
 
-    const multiModulesCandidate =
-      root.modules ||
+    const multiModulesCandidate = isSimuladoOrTeamUrl
+      ? null
+      : root.modules ||
       root.course_modules ||
       root.course?.modules ||
       root.disciplines ||
@@ -153,8 +174,9 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
         (/\/courses\/\d+\/modules/i.test(urlStr) && root[0].id && (root[0].name || root[0].title))
       ) ? root : null);
 
-    const singleVideoList =
-      root.videos ||
+    const singleVideoList = isSimuladoOrTeamUrl
+      ? null
+      : root.videos ||
       root.course_videos ||
       root.lessons ||
       root.contents ||
@@ -228,7 +250,16 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
     }
 
     // 1B. Extrator profundo de datas de tentativa/liberação e detalhamento /enjoyment
-    const normalizeExtractedDate = (val) => {
+    const normalizeExtractedDate = (val, keyHint = '') => {
+      if (typeof val === 'number' && Number.isFinite(val) && /(?:date|at|time|data|liber|realiz|finish|complet)/i.test(keyHint)) {
+        const ms = val > 1e12 ? val : (val > 1e9 ? val * 1000 : 0);
+        if (ms > 0) {
+          const d = new Date(ms);
+          const yr = d.getUTCFullYear();
+          if (yr >= 2018 && yr <= 2035) return d.toISOString().slice(0, 10);
+        }
+        return null;
+      }
       if (typeof val !== 'string') return null;
       const iso = val.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
       if (iso) {
@@ -243,13 +274,18 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       return null;
     };
 
-    const extractSimuladoDatesDeep = (obj) => {
+    const extractSimuladoDatesDeep = (obj, urlContext = '') => {
       let attemptDate = null;
+      let attemptField = null;
       let releaseDate = null;
+      let releaseField = null;
+      let anyDate = null;
+      let anyField = null;
       const visited = new Set();
+      const isAttemptEndpoint = /\/(?:enjoyment|revision|result|attempt)/i.test(String(urlContext || ''));
 
       const walk = (node, depth = 0, parentContext = '') => {
-        if (!node || typeof node !== 'object' || depth > 5 || visited.has(node)) return;
+        if (!node || typeof node !== 'object' || depth > 6 || visited.has(node)) return;
         visited.add(node);
 
         if (Array.isArray(node)) {
@@ -265,30 +301,37 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
           const kl = k.toLowerCase();
           if (/(?:ranking|rankings|leaderboard|participants|members|others|candidates)/i.test(kl)) continue;
           const v = node[k];
-          if (typeof v === 'string') {
-            const parsed = normalizeExtractedDate(v);
+          if (typeof v === 'string' || typeof v === 'number') {
+            const parsed = normalizeExtractedDate(v, kl);
             if (!parsed) continue;
-            const isAttemptKey = /^(?:finished|completed|answered|submitted|concluded|solved|done|realized|execution|performed|taken)_?(?:at|date)?$/i.test(kl)
-              || (/^(?:created_at|updated_at|date)$/i.test(kl) && /(?:user|attempt|answer|result|enjoyment|submission|my_)/i.test(parentContext));
-            const isReleaseKey = /^(?:release|released|available|publish|published|start|starts)_?(?:at|date)?$/i.test(kl)
-              || (depth === 0 && /^(?:created_at|date)$/i.test(kl));
+            const pathLabel = parentContext ? `${parentContext}.${k}` : k;
+            const isAttemptKey = /(?:finish|complet|answer|submit|conclud|solv|done|realiz|execut|perform|taken|finaliz|sent|end|respon|feito|resolved)/i.test(kl)
+              || (/^(?:created_at|updated_at|date|data)$/i.test(kl) && (isAttemptEndpoint || /(?:user|attempt|answer|result|enjoyment|submission|pivot|student|my_|response|revision)/i.test(parentContext)));
+            const isReleaseKey = /(?:releas|liber|availab|publish|start|open|begin|schedul|applied|exam_date|data_prova)/i.test(kl)
+              || (depth <= 2 && /^(?:created_at|date)$/i.test(kl));
 
             if (isAttemptKey && !attemptDate) {
               attemptDate = parsed;
+              attemptField = pathLabel;
             } else if (isReleaseKey && !releaseDate) {
               releaseDate = parsed;
+              releaseField = pathLabel;
+            }
+            if (!anyDate) {
+              anyDate = parsed;
+              anyField = pathLabel;
             }
           } else if (v && typeof v === 'object') {
-            walk(v, depth + 1, `${parentContext}.${kl}`);
+            walk(v, depth + 1, parentContext ? `${parentContext}.${kl}` : kl);
           }
         }
       };
 
       walk(obj, 0, '');
-      return { attemptDate, releaseDate };
+      return { attemptDate, attemptField, releaseDate, releaseField, anyDate, anyField };
     };
 
-    const enjoyMatch = String(url || '').match(/\/practice-exams?\/(\d+)\/enjoyment/i);
+    const enjoyMatch = urlStr.match(/\/practice-exams?\/(\d+)\/enjoyment/i);
     if (enjoyMatch) {
       const rawBlocks = root.blocks || root.blocos || root.groups || root.by_block || root.blocks_performance || [];
       const rawSubjects = root.subjects || root.disciplines || root.disciplinas || root.by_subject || root.disciplines_performance || [];
@@ -319,8 +362,8 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       };
       const blocks = (Array.isArray(rawBlocks) ? rawBlocks : []).map(mapScoreRow).filter((r) => r.name);
       const subjects = (Array.isArray(rawSubjects) ? rawSubjects : []).map(mapScoreRow).filter((r) => r.name);
-      const dates = extractSimuladoDatesDeep(root);
-      if (blocks.length > 0 || subjects.length > 0 || dates.attemptDate || dates.releaseDate) {
+      const dates = extractSimuladoDatesDeep(root, urlStr);
+      if (blocks.length > 0 || subjects.length > 0 || dates.attemptDate || dates.releaseDate || dates.anyDate) {
         emit('API_SIMULADO_ENJOYMENT', {
           caveiraId: `sim_${enjoyMatch[1]}`,
           examId: enjoyMatch[1],
@@ -328,21 +371,51 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
           subjects,
           attemptDate: dates.attemptDate,
           releaseDate: dates.releaseDate,
+          anyDate: dates.anyDate,
+          dateField: dates.attemptField || dates.releaseField || dates.anyField || null,
         });
         return;
       }
     }
 
-    const examDatesMatch = String(url || '').match(/\/practice-exams?\/(\d+)(?:\/questions\/revision)?(?:[?#]|$)/i);
-    if (examDatesMatch && !/\/(?:ranking|rankings|leaderboard)/i.test(String(url || ''))) {
-      const dates = extractSimuladoDatesDeep(root);
-      if (dates.attemptDate || dates.releaseDate) {
+    const examDatesMatch = urlStr.match(/\/practice-exams?\/(\d+)(?:\/questions\/revision)?(?:[?#]|$)/i);
+    if (examDatesMatch && !/\/(?:ranking|rankings|leaderboard)/i.test(urlStr)) {
+      const dates = extractSimuladoDatesDeep(root, urlStr);
+      if (dates.attemptDate || dates.releaseDate || dates.anyDate) {
         emit('API_SIMULADO_DATES', {
           examId: examDatesMatch[1],
           caveiraId: `sim_${examDatesMatch[1]}`,
           attemptDate: dates.attemptDate,
           releaseDate: dates.releaseDate,
+          anyDate: dates.anyDate,
+          dateField: dates.attemptField || dates.releaseField || dates.anyField || null,
         });
+      }
+    }
+
+    const teamOverviewMatch = urlStr.match(/\/teams\/(\d+)(?:[?#]|$)/i);
+    if (teamOverviewMatch) {
+      const teamSimsRaw = root.practice_exams || root.exams || root.simulados || root.team?.practice_exams || (Array.isArray(root) ? root : []);
+      if (Array.isArray(teamSimsRaw) && teamSimsRaw.length > 0) {
+        const batchItems = teamSimsRaw.map((simObj) => {
+          if (!simObj || typeof simObj !== 'object') return null;
+          const d = extractSimuladoDatesDeep(simObj, urlStr);
+          const tName = String(simObj.title || simObj.name || simObj.exam_name || '').trim();
+          const eId = simObj.id ? String(simObj.id) : null;
+          if (!tName && !eId) return null;
+          if (!d.attemptDate && !d.releaseDate && !d.anyDate) return null;
+          return {
+            examId: eId,
+            title: tName,
+            attemptDate: d.attemptDate,
+            releaseDate: d.releaseDate,
+            anyDate: d.anyDate,
+            dateField: d.attemptField || d.releaseField || d.anyField || null,
+          };
+        }).filter(Boolean);
+        if (batchItems.length > 0) {
+          emit('API_SIMULADO_DATES_BATCH', { teamId: teamOverviewMatch[1], items: batchItems });
+        }
       }
     }
 
@@ -457,10 +530,11 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
         const errors = errorsRaw !== undefined ? Number(errorsRaw) : Math.max(0, total - hits);
         const pct = Number(sim.percentage ?? sim.accuracy ?? Math.round((hits / total) * 100));
         const liquida = Number.isFinite(liquidaVal) ? liquidaVal : (hits - errors);
-        const { attemptDate, releaseDate } = extractSimuladoDatesDeep(sim);
+        const { attemptDate, attemptField, releaseDate, releaseField, anyDate, anyField } = extractSimuladoDatesDeep(sim, urlStr);
         const rawDate = String(sim.finished_at || sim.completed_at || sim.answered_at || sim.created_at || sim.date || '').slice(0, 10);
-        const resolvedDate = attemptDate || releaseDate || (/^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : undefined);
-        const dateSource = attemptDate ? 'attempt' : (releaseDate ? 'release' : undefined);
+        const resolvedDate = attemptDate || releaseDate || anyDate || (/^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : undefined);
+        const dateSource = attemptDate ? 'attempt' : (releaseDate ? 'release' : (anyDate ? 'api_date' : undefined));
+        const dateField = attemptField || releaseField || anyField || null;
         const subjectScores = Array.isArray(sim.subjects || sim.disciplines)
           ? (sim.subjects || sim.disciplines).map((s) => ({
               name: String(s?.name || s?.subject || '').trim(),
@@ -483,6 +557,7 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
           title,
           data: resolvedDate,
           ...(dateSource ? { dateSource } : {}),
+          ...(dateField ? { dateField } : {}),
           ...(releaseDate ? { releasedAt: releaseDate } : {}),
           total,
           hits,
@@ -525,6 +600,13 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
   if (typeof origFetch === 'function') {
     window.fetch = function (...args) {
       const reqUrl = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+      try {
+        const hdrs = args[1]?.headers || args[0]?.headers;
+        const authVal = hdrs instanceof Headers ? hdrs.get('Authorization') : (hdrs?.Authorization || hdrs?.authorization);
+        if (authVal && /Bearer\s+/i.test(String(authVal))) {
+          cachedApiAuthHeader = String(authVal);
+        }
+      } catch (_) {}
       const promise = origFetch.apply(this, args);
       if (shouldInspectUrl(reqUrl)) {
         promise.then((res) => {
@@ -540,20 +622,37 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
     };
   }
 
-  // Wrapper passivo de XMLHttpRequest
+  // Wrapper passivo de XMLHttpRequest (suporta responseType === 'json' usado por Axios/Quasar!)
   const origOpen = XMLHttpRequest.prototype.open;
+  const origSetHeader = XMLHttpRequest.prototype.setRequestHeader;
   const origSend = XMLHttpRequest.prototype.send;
   XMLHttpRequest.prototype.open = function (method, url, ...rest) {
     this.__qgUrl = url;
     return origOpen.call(this, method, url, ...rest);
   };
+  XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
+    try {
+      if (String(name || '').toLowerCase() === 'authorization' && /Bearer\s+/i.test(String(value || ''))) {
+        cachedApiAuthHeader = String(value);
+      }
+    } catch (_) {}
+    return origSetHeader.call(this, name, value);
+  };
   XMLHttpRequest.prototype.send = function (...args) {
     if (shouldInspectUrl(this.__qgUrl)) {
       this.addEventListener('load', () => {
         try {
-          const ct = this.getResponseHeader('content-type') || '';
-          if (ct.includes('json') && typeof this.responseText === 'string' && (this.responseText.trim().startsWith('{') || this.responseText.trim().startsWith('['))) {
-            const json = JSON.parse(this.responseText);
+          let json = null;
+          if ((this.responseType === 'json' || !this.responseType) && this.response && typeof this.response === 'object') {
+            json = this.response;
+          } else if (!this.responseType || this.responseType === 'text') {
+            const ct = this.getResponseHeader('content-type') || '';
+            const txt = typeof this.responseText === 'string' ? this.responseText.trim() : '';
+            if ((ct.includes('json') || txt.startsWith('{') || txt.startsWith('[')) && (txt.startsWith('{') || txt.startsWith('['))) {
+              json = JSON.parse(txt);
+            }
+          }
+          if (json) {
             inspectApiPayload(this.__qgUrl, json);
           }
         } catch (_) {}
@@ -561,4 +660,90 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
     }
     return origSend.apply(this, args);
   };
+
+  // Busca ativa sob demanda para datas de simulado caso a resposta original tenha ocorrido antes ou sem payload de data
+  window.addEventListener('message', async (ev) => {
+    if (ev.source !== window || ev.data?.source !== 'QG_CAVEIRA_CONTENT' || ev.data?.type !== 'FETCH_SIMULADO_DATES') {
+      return;
+    }
+    const { requestId, teamId, examId } = ev.data.payload || {};
+    if (!requestId) return;
+
+    const urls = [];
+    if (teamId && examId) {
+      urls.push(`https://api.caveira.com/api/v1/skull/teams/${teamId}/practice-exam/${examId}`);
+      urls.push(`https://api.caveira.com/api/v1/skull/teams/${teamId}/practice-exam/${examId}/enjoyment`);
+      urls.push(`https://api.caveira.com/api/v1/skull/teams/${teamId}/practice-exam/${examId}/questions/revision?filters=${encodeURIComponent(JSON.stringify({ status: 'all', assurance: 'all', subject_id: 'all', practice_exam_id: Number(examId) }))}&page=1&rowsPerPage=5&rowsNumber=0`);
+    }
+    if (teamId) {
+      urls.push(`https://api.caveira.com/api/v1/skull/teams/${teamId}`);
+    }
+
+    const authHeader = readFallbackAuthHeader();
+    const headers = { Accept: 'application/json', ...(authHeader ? { Authorization: authHeader } : {}) };
+    const fetchFn = typeof origFetch === 'function' ? origFetch.bind(window) : window.fetch.bind(window);
+
+    let attemptDate = null;
+    let releaseDate = null;
+    let anyDate = null;
+    let dateField = null;
+
+    const scanResult = (urlTarget, jsonObj) => {
+      if (!jsonObj || typeof jsonObj !== 'object') return;
+      inspectApiPayload(urlTarget, jsonObj);
+      const rootData = (jsonObj.data && typeof jsonObj.data === 'object') ? jsonObj.data : jsonObj;
+      // Usa walker local leve reaproveitando regras de data
+      const visitedNodes = new Set();
+      const isAttemptUrl = /\/(?:enjoyment|revision|result|attempt)/i.test(urlTarget);
+      const walkDate = (node, depth = 0, parentCtx = '') => {
+        if (!node || typeof node !== 'object' || depth > 6 || visitedNodes.has(node)) return;
+        visitedNodes.add(node);
+        if (Array.isArray(node)) {
+          if (node.length > 0 && typeof node[0] === 'object' && node[0] && (node[0].position !== undefined || node[0].rank !== undefined || node[0].nickname)) return;
+          node.slice(0, 12).forEach((c) => walkDate(c, depth + 1, parentCtx));
+          return;
+        }
+        for (const k of Object.keys(node)) {
+          const kl = k.toLowerCase();
+          if (/(?:ranking|rankings|leaderboard|participants|members|others|candidates)/i.test(kl)) continue;
+          const v = node[k];
+          if (typeof v === 'string') {
+            const iso = v.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
+            const br = v.match(/\b(\d{2})\/(\d{2})\/(20\d{2})\b/);
+            const dStr = iso ? `${iso[1]}-${iso[2]}-${iso[3]}` : (br ? `${br[3]}-${br[2]}-${br[1]}` : null);
+            if (!dStr) continue;
+            const pathLbl = parentCtx ? `${parentCtx}.${k}` : k;
+            const isAtt = /(?:finish|complet|answer|submit|conclud|solv|done|realiz|execut|perform|taken|finaliz|sent|end|respon|feito|resolved)/i.test(kl)
+              || (/^(?:created_at|updated_at|date|data)$/i.test(kl) && (isAttemptUrl || /(?:user|attempt|answer|result|enjoyment|submission|pivot|student|my_|response|revision)/i.test(parentCtx)));
+            const isRel = /(?:releas|liber|availab|publish|start|open|begin|schedul|applied|exam_date|data_prova)/i.test(kl)
+              || (depth <= 2 && /^(?:created_at|date)$/i.test(kl));
+            if (isAtt && !attemptDate) { attemptDate = dStr; dateField = pathLbl; }
+            else if (isRel && !releaseDate) { releaseDate = dStr; if (!attemptDate) dateField = pathLbl; }
+            if (!anyDate) { anyDate = dStr; if (!attemptDate && !releaseDate) dateField = pathLbl; }
+          } else if (v && typeof v === 'object') {
+            walkDate(v, depth + 1, parentCtx ? `${parentCtx}.${kl}` : kl);
+          }
+        }
+      };
+      walkDate(rootData, 0, '');
+    };
+
+    try {
+      await Promise.allSettled(
+        urls.map(async (u) => {
+          const res = await fetchFn(u, { method: 'GET', headers, credentials: 'include' });
+          if (res && res.ok) {
+            const json = await res.json();
+            scanResult(u, json);
+          }
+        })
+      );
+    } catch (_) {}
+
+    window.postMessage({
+      source: 'QG_CAVEIRA_API_SNIFFER',
+      type: 'FETCH_SIMULADO_DATES_RESULT',
+      payload: { requestId, teamId, examId, attemptDate, releaseDate, anyDate, dateField },
+    }, '*');
+  });
 })();

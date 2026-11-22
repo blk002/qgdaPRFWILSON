@@ -289,19 +289,29 @@ export default function Simulados() {
                     <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors dark:bg-slate-950">
                       <td className="p-3 sm:p-4 font-semibold text-slate-700 dark:text-slate-200">
                         <div className="flex items-center gap-1.5 flex-wrap">
-                          <span>{sim.data}</span>
+                          <span title={sim.dateSource === 'attempt' ? 'Data de realização extraída da API do Caveira' : undefined}>
+                            {sim.data}
+                          </span>
                           {sim.dateSource === 'release' && (
                             <span
                               className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
-                              title="Data de liberação do simulado no Caveira (edite no lápis se quiser informar o dia exato em que realizou)"
+                              title={`Data de liberação no Caveira${sim.dateField ? ` (${sim.dateField})` : ''} — edite no lápis se quiser informar o dia exato em que realizou`}
                             >
                               liberação
+                            </span>
+                          )}
+                          {sim.dateSource === 'api_date' && (
+                            <span
+                              className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30"
+                              title={`Data encontrada na API (${sim.dateField || 'registro'}) — edite no lápis se necessário`}
+                            >
+                              API
                             </span>
                           )}
                           {sim.dateSource === 'import' && (
                             <span
                               className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-500 dark:text-slate-400 border border-slate-500/20"
-                              title="O Caveira não informa a data de realização de simulados de turma — clique no lápis para ajustar"
+                              title="Nenhuma data encontrada na API ou tela — clique no lápis para ajustar"
                             >
                               importado
                             </span>

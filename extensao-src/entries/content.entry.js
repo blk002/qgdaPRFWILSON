@@ -65,6 +65,54 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
   let apiSimuladosCache = [];
   const apiSimuladoEnjoymentByExamId = new Map();
   const apiSimuladoDatesByExamId = new Map();
+  const apiSimuladoDatesByTitle = new Map();
+
+  function mergeSimuladoDateEntry(examId, title, entry = {}) {
+    if (!entry || typeof entry !== 'object') return;
+    const prevById = examId ? (apiSimuladoDatesByExamId.get(String(examId)) || {}) : {};
+    const titleNorm = title ? normalizeCourseIndexKey(title) : '';
+    const prevByTitle = titleNorm ? (apiSimuladoDatesByTitle.get(titleNorm) || {}) : {};
+
+    const merged = {
+      attemptDate: entry.attemptDate || prevById.attemptDate || prevByTitle.attemptDate || null,
+      releaseDate: entry.releaseDate || prevById.releaseDate || prevByTitle.releaseDate || null,
+      anyDate: entry.anyDate || prevById.anyDate || prevByTitle.anyDate || null,
+      dateField: entry.dateField || prevById.dateField || prevByTitle.dateField || null,
+    };
+    if (examId) apiSimuladoDatesByExamId.set(String(examId), merged);
+    if (titleNorm) apiSimuladoDatesByTitle.set(titleNorm, merged);
+  }
+
+  function requestSimuladoDatesFromSniffer(teamId = '', examId = '', timeoutMs = 2600) {
+    return new Promise((resolve) => {
+      const requestId = `dates_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      let settled = false;
+      const done = (payload = null) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        window.removeEventListener('message', onResult);
+        resolve(payload);
+      };
+      const onResult = (ev) => {
+        if (ev.source !== window || ev.data?.source !== 'QG_CAVEIRA_API_SNIFFER') return;
+        if (ev.data?.type === 'FETCH_SIMULADO_DATES_RESULT' && ev.data?.payload?.requestId === requestId) {
+          done(ev.data.payload);
+        }
+      };
+      const timer = setTimeout(() => done(null), timeoutMs);
+      window.addEventListener('message', onResult);
+      try {
+        window.postMessage({
+          source: 'QG_CAVEIRA_CONTENT',
+          type: 'FETCH_SIMULADO_DATES',
+          payload: { requestId, teamId: String(teamId || ''), examId: String(examId || '') },
+        }, '*');
+      } catch (_) {
+        done(null);
+      }
+    });
+  }
   let handleApiSnifferMessageRef = null;
   const lessonCompletionStateByUrl = new Map();
   const observedVideos = new WeakSet();
@@ -550,23 +598,21 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     }
 
     if (msg.type === 'API_SIMULADO_DATES' && msg.payload?.examId) {
-      const k = String(msg.payload.examId);
-      const prev = apiSimuladoDatesByExamId.get(k) || {};
-      apiSimuladoDatesByExamId.set(k, {
-        attemptDate: msg.payload.attemptDate || prev.attemptDate || null,
-        releaseDate: msg.payload.releaseDate || prev.releaseDate || null,
+      mergeSimuladoDateEntry(msg.payload.examId, msg.payload.title || '', msg.payload);
+      return;
+    }
+
+    if (msg.type === 'API_SIMULADO_DATES_BATCH' && Array.isArray(msg.payload?.items)) {
+      msg.payload.items.forEach((it) => {
+        if (it) mergeSimuladoDateEntry(it.examId, it.title, it);
       });
       return;
     }
 
     if (msg.type === 'API_SIMULADO_ENJOYMENT' && msg.payload?.examId) {
-      const { examId, blocks = [], subjects = [], attemptDate = null, releaseDate = null } = msg.payload;
-      if (attemptDate || releaseDate) {
-        const prevDates = apiSimuladoDatesByExamId.get(String(examId)) || {};
-        apiSimuladoDatesByExamId.set(String(examId), {
-          attemptDate: attemptDate || prevDates.attemptDate || null,
-          releaseDate: releaseDate || prevDates.releaseDate || null,
-        });
+      const { examId, blocks = [], subjects = [], attemptDate = null, releaseDate = null, anyDate = null, dateField = null } = msg.payload;
+      if (attemptDate || releaseDate || anyDate) {
+        mergeSimuladoDateEntry(examId, msg.payload.title || '', { attemptDate, releaseDate, anyDate, dateField });
       }
 
       let b1C = 0; let b1E = 0; let b2C = 0; let b2E = 0; let b3C = 0; let b3E = 0;
@@ -1314,9 +1360,21 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
         ? (dialogData?.subjectScores || [])
         : (apiEnjoy?.subjectScores || []);
 
-      const dateInfo = examId ? apiSimuladoDatesByExamId.get(examId) : null;
-      const dateStr = dateInfo?.attemptDate || dateInfo?.releaseDate || getTodaySessionDate();
-      const dateSource = dateInfo?.attemptDate ? 'attempt' : (dateInfo?.releaseDate ? 'release' : 'import');
+      const teamIdMatch = window.location.pathname.match(/\/teams\/(\d+)/i);
+      const teamId = teamIdMatch?.[1] || '';
+
+      let dateInfo = examId ? apiSimuladoDatesByExamId.get(examId) : null;
+      if (!dateInfo?.attemptDate && (teamId || examId)) {
+        const fetchedDates = await requestSimuladoDatesFromSniffer(teamId, examId, 2600);
+        if (fetchedDates) {
+          mergeSimuladoDateEntry(examId, title, fetchedDates);
+          dateInfo = examId ? apiSimuladoDatesByExamId.get(examId) : apiSimuladoDatesByTitle.get(normalizeCourseIndexKey(title));
+        }
+      }
+
+      const dateStr = dateInfo?.attemptDate || dateInfo?.releaseDate || dateInfo?.anyDate || getTodaySessionDate();
+      const dateSource = dateInfo?.attemptDate ? 'attempt' : (dateInfo?.releaseDate ? 'release' : (dateInfo?.anyDate ? 'api_date' : 'import'));
+      console.log('📊 [QG Simulado] Datas resolvidas:', { examId, dateStr, dateSource, dateField: dateInfo?.dateField || null });
 
       const caveiraId = examId
         ? `sim_${examId}`
@@ -1327,6 +1385,7 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
         title: title.slice(0, 100),
         data: dateStr,
         dateSource,
+        ...(dateInfo?.dateField ? { dateField: dateInfo.dateField } : {}),
         ...(dateInfo?.releaseDate ? { releasedAt: dateInfo.releaseDate } : {}),
         total,
         hits,
@@ -1343,6 +1402,12 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     // MODO B: Lista de Simulados da Turma (/teams/:id) e Simulados Personalizados (/personal-practice-exams)
     if (results.length === 0) {
       const isPersonalPage = window.location.pathname.includes('/personal-practice-exams');
+      const teamIdMatch = window.location.pathname.match(/\/teams\/(\d+)/i);
+      const teamId = teamIdMatch?.[1] || '';
+      if (teamId && apiSimuladoDatesByTitle.size === 0) {
+        await requestSimuladoDatesFromSniffer(teamId, '', 2600);
+      }
+
       const simItems = Array.from(document.querySelectorAll('.simulated-item'))
         .filter((el) => (
           !el.closest('#qg-caveira-shadow-host, #qg-caveira-hud, .ranking-table-wrap, .larger, table') &&
@@ -1398,14 +1463,24 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
         seen.add(titleNorm);
 
         const apiMatch = apiSimuladosCache.find((s) => s && normalizeCourseIndexKey(s.title || '') === titleNorm);
-        const resolvedDate = apiMatch?.data || domDate || getTodaySessionDate();
-        const dateSource = apiMatch?.dateSource || (isPersonalPage && domDate ? 'created' : 'import');
+        const batchDateMatch = apiSimuladoDatesByTitle.get(titleNorm) || (apiMatch?.caveiraId ? apiSimuladoDatesByExamId.get(String(apiMatch.caveiraId).replace(/^sim_/, '')) : null);
+        const apiDate = batchDateMatch?.attemptDate || batchDateMatch?.releaseDate || batchDateMatch?.anyDate || apiMatch?.data || null;
+        const apiSource = batchDateMatch?.attemptDate
+          ? 'attempt'
+          : batchDateMatch?.releaseDate
+          ? 'release'
+          : batchDateMatch?.anyDate
+          ? 'api_date'
+          : (apiMatch?.dateSource || null);
+        const resolvedDate = apiDate || domDate || getTodaySessionDate();
+        const dateSource = apiSource || (isPersonalPage && domDate ? 'created' : 'import');
         results.push({
           caveiraId: apiMatch?.caveiraId || `sim_title_${titleNorm.slice(0, 48)}`,
           title,
           data: resolvedDate,
           dateSource,
-          ...(apiMatch?.releasedAt ? { releasedAt: apiMatch.releasedAt } : {}),
+          ...(batchDateMatch?.dateField || apiMatch?.dateField ? { dateField: batchDateMatch?.dateField || apiMatch?.dateField } : {}),
+          ...(batchDateMatch?.releaseDate || apiMatch?.releasedAt ? { releasedAt: batchDateMatch?.releaseDate || apiMatch?.releasedAt } : {}),
           total,
           hits,
           errors,

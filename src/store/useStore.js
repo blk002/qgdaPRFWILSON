@@ -3871,14 +3871,18 @@ export const useStore = create(
               (item.liquida !== undefined && cur.liquida !== liquida);
             const addsUrl = Boolean(item.url && !cur.url);
 
-            const dateRank = (src) => (src === 'manual' ? 4 : (src === 'attempt' || src === 'created') ? 3 : src === 'release' ? 2 : 1);
-            const canImproveDate = cur.dateSource !== 'manual' && item.dateSource && dateRank(item.dateSource) > dateRank(cur.dateSource || 'import');
+            const dateRank = (src) => (src === 'manual' ? 4 : (src === 'attempt' || src === 'created') ? 3 : (src === 'release' || src === 'api_date') ? 2 : 1);
+            const curRank = dateRank(cur.dateSource || 'import');
+            const incRank = dateRank(item.dateSource || 'import');
+            const canImproveDate = cur.dateSource !== 'manual' && item.dateSource && (
+              incRank > curRank || (incRank >= curRank && item.dateSource !== 'import' && dateStr !== cur.data)
+            );
 
             if (addsBlocks || addsSubjects || changesScore || addsUrl || canImproveDate) {
               nextSimulados[existingIdx] = {
                 ...cur,
                 caveiraId: (item.caveiraId && !String(item.caveiraId).startsWith('sim_title_')) ? item.caveiraId : (cur.caveiraId || item.caveiraId || null),
-                ...(canImproveDate ? { data: dateStr, dateSource: item.dateSource } : {}),
+                ...(canImproveDate ? { data: dateStr, dateSource: item.dateSource, ...(item.dateField ? { dateField: item.dateField } : {}) } : {}),
                 ...(item.releasedAt ? { releasedAt: item.releasedAt } : {}),
                 total: total || cur.total,
                 hits: item.hits !== undefined ? hits : cur.hits,
@@ -3899,6 +3903,7 @@ export const useStore = create(
             id: Date.now() + idx,
             data: dateStr,
             ...(item.dateSource ? { dateSource: item.dateSource } : {}),
+            ...(item.dateField ? { dateField: item.dateField } : {}),
             ...(item.releasedAt ? { releasedAt: item.releasedAt } : {}),
             title,
             source: 'caveira',
