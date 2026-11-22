@@ -63,6 +63,7 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
   let apiCourseCatalogCache = null;
   const apiQuestionCache = new Map();
   let apiSimuladosCache = [];
+  const apiSimuladoEnjoymentByExamId = new Map();
   let handleApiSnifferMessageRef = null;
   const lessonCompletionStateByUrl = new Map();
   const observedVideos = new WeakSet();
@@ -544,6 +545,45 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
         nextMap.set(key, enriched);
       });
       apiSimuladosCache = Array.from(nextMap.values());
+      return;
+    }
+
+    if (msg.type === 'API_SIMULADO_ENJOYMENT' && msg.payload?.examId) {
+      const { examId, blocks = [], subjects = [] } = msg.payload;
+      let b1C = 0; let b1E = 0; let b2C = 0; let b2E = 0; let b3C = 0; let b3E = 0;
+      let b1Liquida = 0; let b2Liquida = 0; let b3Liquida = 0;
+      let hasData = false;
+
+      if (Array.isArray(blocks) && blocks.length > 0) {
+        blocks.forEach((bl) => {
+          const n = normalizeCourseIndexKey(bl.name || '');
+          const h = Number(bl.hits) || 0;
+          const e = Number(bl.errors) || 0;
+          const liq = bl.liquida !== undefined ? Number(bl.liquida) : (h - e);
+          if (/\b(?:bloco\s*)?(?:1|i)\b/.test(n)) { b1C += h; b1E += e; b1Liquida += liq; hasData = true; }
+          else if (/\b(?:bloco\s*)?(?:2|ii)\b/.test(n)) { b2C += h; b2E += e; b2Liquida += liq; hasData = true; }
+          else if (/\b(?:bloco\s*)?(?:3|iii)\b/.test(n)) { b3C += h; b3E += e; b3Liquida += liq; hasData = true; }
+        });
+      } else if (Array.isArray(subjects) && subjects.length > 0) {
+        hasData = true;
+        subjects.forEach((sc) => {
+          const b = classifySubjectBloco(sc.name);
+          const h = Number(sc.hits) || 0;
+          const e = Number(sc.errors) || 0;
+          const liq = sc.liquida !== undefined ? Number(sc.liquida) : (h - e);
+          if (b === 'Bloco I') { b1C += h; b1E += e; b1Liquida += liq; }
+          else if (b === 'Bloco II') { b2C += h; b2E += e; b2Liquida += liq; }
+          else { b3C += h; b3E += e; b3Liquida += liq; }
+        });
+      }
+
+      if (hasData) {
+        const blockStats = { b1C, b1E, b1Liquida, b2C, b2E, b2Liquida, b3C, b3E, b3Liquida };
+        apiSimuladoEnjoymentByExamId.set(String(examId), blockStats);
+        apiSimuladosCache = apiSimuladosCache.map((s) =>
+          (s && s.caveiraId === `sim_${examId}`) ? { ...s, ...blockStats } : s
+        );
+      }
       return;
     }
 
@@ -1039,140 +1079,215 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     return false;
   }
 
-  function isInsideRankingSection(el) {
-    if (!el || typeof el.closest !== 'function') return false;
-    const tableWrap = el.closest('table, .q-table__container');
-    if (tableWrap) {
-      const headerText = Array.from(tableWrap.querySelectorAll('thead th, .q-table__top'))
-        .map((h) => (h.innerText || h.textContent || '').trim())
-        .join(' ');
-      if (/(?:posi[cç][aã]o|coloca[cç][aã]o|ranking|classifica[cç][aã]o|candidato|aluno|usu[aá]rio|apelido|nickname|p[oó]dio)/i.test(headerText)) {
-        return true;
+  function parseEnjoymentDialogBlocks() {
+    const tables = Array.from(document.querySelectorAll('.q-dialog table, .q-card table'))
+      .filter((t) => !t.closest('#qg-caveira-shadow-host, #qg-caveira-hud, .ranking-table-wrap') && isElementVisible(t));
+
+    // 1. Tenta Tabela 0: Bloco | Acertos | Erros
+    for (const tbl of tables) {
+      const headers = Array.from(tbl.querySelectorAll('thead th')).map((h) => normalizeCourseIndexKey(h.textContent || ''));
+      if (headers.some((h) => h.includes('bloco')) && headers.some((h) => h.includes('acerto'))) {
+        let b1C = 0; let b1E = 0; let b2C = 0; let b2E = 0; let b3C = 0; let b3E = 0;
+        let found = false;
+        tbl.querySelectorAll('tbody tr').forEach((tr) => {
+          const cells = Array.from(tr.querySelectorAll('td')).map((c) => (c.textContent || '').trim());
+          if (cells.length < 3) return;
+          const bName = normalizeCourseIndexKey(cells[0]);
+          const hitsVal = parseInt(cells[1], 10) || 0;
+          const errVal = parseInt(cells[2], 10) || 0;
+          if (/bloco\s*(?:1|i)\b/.test(bName)) { b1C = hitsVal; b1E = errVal; found = true; }
+          else if (/bloco\s*(?:2|ii)\b/.test(bName)) { b2C = hitsVal; b2E = errVal; found = true; }
+          else if (/bloco\s*(?:3|iii)\b/.test(bName)) { b3C = hitsVal; b3E = errVal; found = true; }
+        });
+        if (found) {
+          return {
+            b1C, b1E, b1Liquida: b1C - b1E,
+            b2C, b2E, b2Liquida: b2C - b2E,
+            b3C, b3E, b3Liquida: b3C - b3E,
+          };
+        }
       }
     }
-    return Boolean(el.closest('[class*="ranking" i], [id*="ranking" i], [class*="leaderboard" i], [class*="podium" i]'));
+
+    // 2. Fallback Tabela 1: Disciplina | Acertos | Erros
+    for (const tbl of tables) {
+      const headers = Array.from(tbl.querySelectorAll('thead th')).map((h) => normalizeCourseIndexKey(h.textContent || ''));
+      if (headers.some((h) => h.includes('disciplina')) && headers.some((h) => h.includes('acerto'))) {
+        let b1C = 0; let b1E = 0; let b2C = 0; let b2E = 0; let b3C = 0; let b3E = 0;
+        let found = false;
+        tbl.querySelectorAll('tbody tr').forEach((tr) => {
+          const cells = Array.from(tr.querySelectorAll('td')).map((c) => (c.textContent || '').trim());
+          if (cells.length < 3) return;
+          const bloco = classifySubjectBloco(cells[0]);
+          const hitsVal = parseInt(cells[1], 10) || 0;
+          const errVal = parseInt(cells[2], 10) || 0;
+          found = true;
+          if (bloco === 'Bloco I') { b1C += hitsVal; b1E += errVal; }
+          else if (bloco === 'Bloco II') { b2C += hitsVal; b2E += errVal; }
+          else { b3C += hitsVal; b3E += errVal; }
+        });
+        if (found) {
+          return {
+            b1C, b1E, b1Liquida: b1C - b1E,
+            b2C, b2E, b2Liquida: b2C - b2E,
+            b3C, b3E, b3Liquida: b3C - b3E,
+          };
+        }
+      }
+    }
+    return null;
   }
 
   function scrapeSimuladosAndImport() {
-    const cards = Array.from(document.querySelectorAll('.q-card, table tbody tr, .q-item'))
-      .filter((el) => !el.closest('#qg-caveira-shadow-host, #qg-caveira-hud') && isElementVisible(el));
     const results = [];
     const seen = new Set();
 
-    // Prioriza simulados ricos vindos da API (com B1/B2/B3 quando disponíveis)
-    apiSimuladosCache.forEach((sim) => {
-      if (!sim || isRankingTitleOrRow('', sim.title || '', false)) return;
-      const key = sim.caveiraId || `${sim.title}|${sim.data || ''}`;
-      if (seen.has(key)) return;
-      seen.add(key);
-      results.push(sim);
-    });
+    // MODO A: Tela de Resultado do Simulado (/teams/:id/practice-exam/:examId) via container exclusivo .dash-box-container.box-use
+    const boxUse = document.querySelector('.dash-box-container.box-use');
+    if (boxUse && !boxUse.closest('#qg-caveira-shadow-host, #qg-caveira-hud') && isElementVisible(boxUse)) {
+      const title = (document.querySelector('.brand-container h5, h5.q-mb-sm, h1, h2')?.innerText || '')
+        .replace(/\s+/g, ' ')
+        .trim() || 'Simulado Caveira';
+      const examIdMatch = window.location.pathname.match(/\/practice-exams?\/(\d+)/i);
+      const examId = examIdMatch?.[1] || '';
 
-    cards.forEach((card, idx) => {
-      if (isInsideRankingSection(card)) return;
-      const text = (card.innerText || card.textContent || '').replace(/\n+/g, ' | ').replace(/\s+/g, ' ').trim();
-      if (!text || text.length < 10) return;
+      const smallTxt = (boxUse.querySelector('.points .small-number')?.textContent || '').trim();
+      const smallMatch = smallTxt.match(/(-?\d+)\s*\/\s*(\d+)/);
+      const bigTxt = (boxUse.querySelector('.points .big-number')?.textContent || '').trim();
+      const bigMatch = bigTxt.match(/(-?\d+(?:[.,]\d+)?)\s*%/);
+      const numQuestionsTxt = (document.querySelector('.number-questions')?.textContent || '').trim();
+      const totalFromBadge = parseInt(numQuestionsTxt, 10) || 0;
 
-      const href = card.getAttribute('href') || card.querySelector('a')?.getAttribute('href') || '';
-      const hasSimuladoHref = /\/(?:practice-exams|personal-practice-exams|simulados)\/\d+/i.test(href);
-      const isRow = card.matches('tr');
-      if (isRow && !hasSimuladoHref && !/simulado|exame|prova|caderno|bloco|pessoal|turma/i.test(text)) {
-        return;
-      }
-      if (!hasSimuladoHref && !/simulado|exame|prova|acertos|erros|desempenho|nota|gabarito|quest[oõ]es/i.test(text)) {
-        return;
-      }
+      const total = smallMatch ? Number(smallMatch[2]) : (totalFromBadge || 120);
+      const liquidaFromBox = smallMatch ? Number(smallMatch[1]) : null;
+      const pct = bigMatch ? Math.round(parseFloat(bigMatch[1].replace(',', '.'))) : (liquidaFromBox !== null && total > 0 ? Math.round((liquidaFromBox / total) * 100) : 0);
 
-      const scoreRatioMatch = text.match(/(\d{1,3})\s*(?:\/|de)\s*(\d{1,3})/i);
-      const pctMatch = text.match(/(\d{1,3}(?:[.,]\d+)?)\s*%/);
-      const hitsLabelMatch = text.match(/(?:acertos?|certas?)\s*[:-]?\s*(\d{1,3})/i);
-      const errorsLabelMatch = text.match(/(?:erros?|erradas?)\s*[:-]?\s*(\d{1,3})/i);
-      const netLabelMatch = text.match(/(?:nota\s*l[ií]quida|l[ií]quida|pontua[cç][aã]o|nota)\s*[:-]?\s*(-?\d{1,3}(?:[.,]\d+)?)/i);
-      if (!scoreRatioMatch && !pctMatch && !hitsLabelMatch && !netLabelMatch) return;
+      // Acertos, Erros e Em Branco no SVG ApexCharts Treemap
+      let svgHits = null; let svgErrors = null; let svgBlank = null;
+      const rects = Array.from(boxUse.querySelectorAll('.apexcharts-treemap-series .apexcharts-treemap-rect'));
+      const labelGroups = Array.from(boxUse.querySelectorAll('.apexcharts-treemap-series .apexcharts-data-labels'));
+      rects.forEach((rect, idx) => {
+        const nextEl = rect.nextElementSibling;
+        const labelContainer = (nextEl && nextEl.classList?.contains('apexcharts-data-labels'))
+          ? nextEl
+          : labelGroups[idx];
+        const rawVal = labelContainer?.querySelector('tspan, text')?.textContent?.trim();
+        const numVal = rawVal !== undefined ? parseInt(rawVal, 10) : NaN;
+        if (!Number.isFinite(numVal)) return;
+        const fill = (rect.getAttribute('fill') || '').toLowerCase();
+        const jAttr = rect.getAttribute('j');
+        if (fill.includes('correct') || jAttr === '0') svgHits = numVal;
+        else if (fill.includes('wrong') || jAttr === '1') svgErrors = numVal;
+        else if (fill.includes('no-answer') || jAttr === '2') svgBlank = numVal;
+      });
 
-      const hitsFromLabel = hitsLabelMatch ? Number(hitsLabelMatch[1]) : null;
-      const errorsFromLabel = errorsLabelMatch ? Number(errorsLabelMatch[1]) : null;
-      const netFromLabel = netLabelMatch ? Math.round(parseFloat(netLabelMatch[1].replace(',', '.'))) : null;
+      const hits = svgHits !== null ? svgHits : (liquidaFromBox !== null ? Math.max(0, Math.round((total + liquidaFromBox) / 2)) : 0);
+      const errors = svgErrors !== null ? svgErrors : (liquidaFromBox !== null ? Math.max(0, hits - liquidaFromBox) : Math.max(0, total - hits));
+      const blank = svgBlank !== null ? svgBlank : Math.max(0, total - hits - errors);
+      const liquida = liquidaFromBox !== null ? liquidaFromBox : (hits - errors);
 
-      let total = scoreRatioMatch ? Number(scoreRatioMatch[2]) : 120;
-      if (!scoreRatioMatch && hitsFromLabel !== null && errorsFromLabel !== null && (hitsFromLabel + errorsFromLabel) > total) {
-        total = hitsFromLabel + errorsFromLabel;
-      }
-      const hits = scoreRatioMatch
-        ? Number(scoreRatioMatch[1])
-        : hitsFromLabel !== null
-        ? hitsFromLabel
-        : pctMatch
-        ? Math.round(((parseFloat(pctMatch[1].replace(',', '.')) || 0) / 100) * total)
-        : Math.max(0, Math.round((total + (netFromLabel || 0)) / 2));
-      if (!total || hits > total) return;
-
-      const errors = errorsFromLabel !== null ? errorsFromLabel : Math.max(0, total - hits);
-      const pct = pctMatch ? Math.round(parseFloat(pctMatch[1].replace(',', '.'))) : Math.round((hits / total) * 100);
-      const liquida = netFromLabel !== null ? netFromLabel : (hits - errors);
-      const dateMatch = text.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/) || text.match(/\b(\d{4}-\d{2}-\d{2})\b/);
-      const dataStr = dateMatch
-        ? (dateMatch[3] ? `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}` : dateMatch[1])
-        : getTodaySessionDate();
-
-      const parts = text.split('|').map(s => s.trim()).filter(s => s.length >= 4 && !/^\d{2}\/\d{2}\/\d{4}$/.test(s) && !/^\d+%$/.test(s));
-      const title = (parts[0] || `Simulado Caveira #${idx + 1}`).slice(0, 90);
-      if (isRankingTitleOrRow(text, title, isRow)) return;
-      const idMatch = href.match(/(\d{2,})/);
-      const caveiraId = idMatch ? `sim_${idMatch[1]}` : `sim_${normalizeCourseIndexKey(title).slice(0, 32)}_${dataStr}_${hits}`;
-      if (seen.has(caveiraId)) return;
-      seen.add(caveiraId);
+      const blockStats = parseEnjoymentDialogBlocks() || (examId ? apiSimuladoEnjoymentByExamId.get(examId) : null) || {};
+      const caveiraId = examId
+        ? `sim_${examId}`
+        : `sim_title_${normalizeCourseIndexKey(title).slice(0, 48)}`;
 
       results.push({
         caveiraId,
-        title,
-        data: dataStr,
+        title: title.slice(0, 100),
+        data: getTodaySessionDate(),
         total,
         hits,
         errors,
+        blank,
         pct,
         liquida,
-        ...(href ? { url: href.startsWith('http') ? href : `${window.location.origin}${href}` } : {})
+        ...blockStats,
+        url: window.location.href,
       });
-    });
+    }
 
-    // Fallback para página individual de resultado do simulado (onde título e métricas ficam em blocos separados)
+    // MODO B: Lista de Simulados da Turma (/teams/:id) e Simulados Personalizados (/personal-practice-exams)
     if (results.length === 0) {
-      const container = document.querySelector('main, .q-page, body');
-      if (container) {
-        const clone = container.cloneNode(true);
-        clone.querySelectorAll('#qg-caveira-shadow-host, #qg-caveira-hud, table, .q-table__container, [class*="ranking" i], [id*="ranking" i]').forEach((n) => n.remove());
-        const summaryText = (clone.textContent || '').replace(/\s+/g, ' ').trim();
-        const headingTitle = (document.querySelector('h1, h2, .text-h5, .text-h6')?.innerText || '').replace(/\s+/g, ' ').trim() || 'Simulado Caveira';
-        if (!isRankingTitleOrRow(summaryText, headingTitle, false)) {
-          const hitsM = summaryText.match(/(?:acertos?|certas?)\s*[:-]?\s*(\d{1,3})/i);
-          const errM = summaryText.match(/(?:erros?|erradas?)\s*[:-]?\s*(\d{1,3})/i);
-          const netM = summaryText.match(/(?:nota\s*l[ií]quida|l[ií]quida|pontua[cç][aã]o)\s*[:-]?\s*(-?\d{1,3}(?:[.,]\d+)?)/i);
-          const pctM = summaryText.match(/(\d{1,3}(?:[.,]\d+)?)\s*%/);
-          const ratioM = summaryText.match(/(\d{1,3})\s*(?:\/|de)\s*(\d{1,3})/i);
-          if (hitsM || netM || (pctM && /simulado|desempenho|exame/i.test(summaryText))) {
-            const total = ratioM ? Number(ratioM[2]) : 120;
-            const hits = hitsM ? Number(hitsM[1]) : ratioM ? Number(ratioM[1]) : pctM ? Math.round((parseFloat(pctM[1].replace(',', '.')) / 100) * total) : Math.max(0, Math.round((total + parseFloat(netM[1].replace(',', '.'))) / 2));
-            const errors = errM ? Number(errM[1]) : Math.max(0, total - hits);
-            const liquida = netM ? Math.round(parseFloat(netM[1].replace(',', '.'))) : (hits - errors);
-            const pct = pctM ? Math.round(parseFloat(pctM[1].replace(',', '.'))) : Math.round((hits / total) * 100);
-            const pathId = window.location.pathname.match(/(\d{2,})/);
-            if (total > 0 && hits <= total) {
-              results.push({
-                caveiraId: pathId ? `sim_${pathId[1]}` : `sim_${normalizeCourseIndexKey(headingTitle).slice(0, 32)}_${getTodaySessionDate()}_${hits}`,
-                title: headingTitle.slice(0, 90),
-                data: getTodaySessionDate(),
-                total,
-                hits,
-                errors,
-                pct,
-                liquida,
-                url: window.location.href,
-              });
-            }
-          }
+      const isPersonalPage = window.location.pathname.includes('/personal-practice-exams');
+      const simItems = Array.from(document.querySelectorAll('.simulated-item'))
+        .filter((el) => (
+          !el.closest('#qg-caveira-shadow-host, #qg-caveira-hud, .ranking-table-wrap, .larger, table') &&
+          isElementVisible(el)
+        ));
+
+      simItems.forEach((item) => {
+        const numEl = item.querySelector('.subtitle--number');
+        const pctEl = item.querySelector('.subtitle--percent');
+        // Sem .subtitle--number e .subtitle--percent = não resolvido ou card de PDF
+        if (!numEl || !pctEl) return;
+
+        const titleEl = item.querySelector('.simulated--title');
+        const rawTitle = titleEl?.getAttribute('title') || titleEl?.innerText || titleEl?.textContent || '';
+        const title = String(rawTitle)
+          .replace(/●\s*\d+\s*quest[oõ]es/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim()
+          .slice(0, 100);
+        if (!title || isRankingTitleOrRow('', title, false)) return;
+
+        const numTxt = (numEl.textContent || '').trim();
+        const numMatch = numTxt.match(/(\d+(?:[.,]\d+)?)\s*\/\s*(\d+(?:[.,]\d+)?)/);
+        const pctTxt = (pctEl.textContent || '').trim();
+        const pctMatch = pctTxt.match(/(-?\d+(?:[.,]\d+)?)\s*%/);
+        if (!numMatch || !pctMatch) return;
+
+        const hits = Math.round(parseFloat(numMatch[1].replace(',', '.')));
+        const total = Math.round(parseFloat(numMatch[2].replace(',', '.')));
+        if (!total || hits > total) return;
+
+        const pct = Math.round(parseFloat(pctMatch[1].replace(',', '.')));
+        const grossPct = Math.round((hits / total) * 100);
+
+        // Em Turmas (/teams/:id), .subtitle--number traz acertos brutos (ex: 88/120) e .subtitle--percent traz aproveitamento líquido (56%)
+        let liquida = hits - Math.max(0, total - hits);
+        let errors = Math.max(0, total - hits);
+        let blank = 0;
+        if (!isPersonalPage && pct < grossPct - 1) {
+          liquida = Math.round((pct / 100) * total);
+          errors = Math.max(0, hits - liquida);
+          blank = Math.max(0, total - hits - errors);
         }
-      }
+
+        const subText = (item.querySelector('.simulated--subtitle')?.innerText || item.innerText || '').trim();
+        const dateMatch = subText.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/) || subText.match(/\b(\d{4}-\d{2}-\d{2})\b/);
+        const dataStr = dateMatch
+          ? (dateMatch[3] ? `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}` : dateMatch[1])
+          : getTodaySessionDate();
+
+        const titleNorm = normalizeCourseIndexKey(title);
+        if (seen.has(titleNorm)) return;
+        seen.add(titleNorm);
+
+        const apiMatch = apiSimuladosCache.find((s) => s && normalizeCourseIndexKey(s.title || '') === titleNorm);
+        results.push({
+          caveiraId: apiMatch?.caveiraId || `sim_title_${titleNorm.slice(0, 48)}`,
+          title,
+          data: apiMatch?.data || dataStr,
+          total,
+          hits,
+          errors,
+          blank,
+          pct,
+          liquida,
+          ...(apiMatch?.b1Liquida !== undefined ? { b1C: apiMatch.b1C, b1E: apiMatch.b1E, b1Liquida: apiMatch.b1Liquida, b2C: apiMatch.b2C, b2E: apiMatch.b2E, b2Liquida: apiMatch.b2Liquida, b3C: apiMatch.b3C, b3E: apiMatch.b3E, b3Liquida: apiMatch.b3Liquida } : {}),
+        });
+      });
+    }
+
+    // MODO C: Fallback via cache da API quando não há itens DOM renderizados
+    if (results.length === 0) {
+      apiSimuladosCache.forEach((sim) => {
+        if (!sim || isRankingTitleOrRow('', sim.title || '', false)) return;
+        const titleNorm = normalizeCourseIndexKey(sim.title || '');
+        if (!titleNorm || seen.has(titleNorm)) return;
+        seen.add(titleNorm);
+        results.push(sim);
+      });
     }
 
     if (results.length > 0) {

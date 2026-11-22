@@ -227,6 +227,41 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       }
     }
 
+    // 1B. Detectar detalhamento por Bloco/Disciplina no modal "Meu gabarito" (/enjoyment)
+    const enjoyMatch = String(url || '').match(/\/practice-exams?\/(\d+)\/enjoyment/i);
+    if (enjoyMatch) {
+      const rawBlocks = root.blocks || root.blocos || root.groups || [];
+      const rawSubjects = root.subjects || root.disciplines || root.disciplinas || [];
+      const mapScoreRow = (item) => {
+        const hitsVal = Number(item?.hits ?? item?.correct ?? item?.correct_answers ?? item?.acertos ?? 0);
+        const errorsVal = Number(item?.errors ?? item?.wrong ?? item?.wrong_answers ?? item?.erros ?? 0);
+        const blankVal = Number(item?.blank ?? item?.not_answered ?? item?.em_branco ?? item?.unanswered ?? 0);
+        const netVal = item?.net_score !== undefined
+          ? Number(item.net_score)
+          : (item?.score !== undefined
+          ? Number(item.score)
+          : (item?.liquida !== undefined ? Number(item.liquida) : (hitsVal - errorsVal)));
+        return {
+          name: String(item?.name || item?.title || item?.subject || item?.discipline || '').trim(),
+          hits: hitsVal,
+          errors: errorsVal,
+          blank: blankVal,
+          liquida: netVal,
+        };
+      };
+      const blocks = (Array.isArray(rawBlocks) ? rawBlocks : []).map(mapScoreRow).filter((r) => r.name);
+      const subjects = (Array.isArray(rawSubjects) ? rawSubjects : []).map(mapScoreRow).filter((r) => r.name);
+      if (blocks.length > 0 || subjects.length > 0) {
+        emit('API_SIMULADO_ENJOYMENT', {
+          caveiraId: `sim_${enjoyMatch[1]}`,
+          examId: enjoyMatch[1],
+          blocks,
+          subjects,
+        });
+        return;
+      }
+    }
+
     // 2. Detectar simulados / exames / turmas (bloqueando rankings/classificações de outros candidatos)
     const isRankingUrl = /\/(?:ranking|rankings|leaderboard|classificacao|classification|participants|students|users|positions|podium|top-?\d*)\b|[?&](?:ranking|leaderboard|page_ranking)=/i.test(String(url || ''));
 

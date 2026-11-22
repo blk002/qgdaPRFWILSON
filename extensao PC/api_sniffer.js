@@ -210,6 +210,35 @@
           return;
         }
       }
+      const enjoyMatch = String(url || "").match(/\/practice-exams?\/(\d+)\/enjoyment/i);
+      if (enjoyMatch) {
+        const rawBlocks = root.blocks || root.blocos || root.groups || [];
+        const rawSubjects = root.subjects || root.disciplines || root.disciplinas || [];
+        const mapScoreRow = (item) => {
+          const hitsVal = Number(item?.hits ?? item?.correct ?? item?.correct_answers ?? item?.acertos ?? 0);
+          const errorsVal = Number(item?.errors ?? item?.wrong ?? item?.wrong_answers ?? item?.erros ?? 0);
+          const blankVal = Number(item?.blank ?? item?.not_answered ?? item?.em_branco ?? item?.unanswered ?? 0);
+          const netVal = item?.net_score !== void 0 ? Number(item.net_score) : item?.score !== void 0 ? Number(item.score) : item?.liquida !== void 0 ? Number(item.liquida) : hitsVal - errorsVal;
+          return {
+            name: String(item?.name || item?.title || item?.subject || item?.discipline || "").trim(),
+            hits: hitsVal,
+            errors: errorsVal,
+            blank: blankVal,
+            liquida: netVal
+          };
+        };
+        const blocks = (Array.isArray(rawBlocks) ? rawBlocks : []).map(mapScoreRow).filter((r) => r.name);
+        const subjects = (Array.isArray(rawSubjects) ? rawSubjects : []).map(mapScoreRow).filter((r) => r.name);
+        if (blocks.length > 0 || subjects.length > 0) {
+          emit("API_SIMULADO_ENJOYMENT", {
+            caveiraId: `sim_${enjoyMatch[1]}`,
+            examId: enjoyMatch[1],
+            blocks,
+            subjects
+          });
+          return;
+        }
+      }
       const isRankingUrl = /\/(?:ranking|rankings|leaderboard|classificacao|classification|participants|students|users|positions|podium|top-?\d*)\b|[?&](?:ranking|leaderboard|page_ranking)=/i.test(String(url || ""));
       const looksLikeRankingRow = (item, isFromArray = false) => {
         if (!item || typeof item !== "object") return true;

@@ -3790,18 +3790,21 @@ export const useStore = create(
         if (!Array.isArray(items) || items.length === 0) return 0;
         const { simulados = [], getLocalDateStr, addXP, updateMissionProgress } = get();
         const today = getLocalDateStr();
-        const existingKeys = new Set(
-          simulados.map(s => s?.caveiraId ? `id:${s.caveiraId}` : `td:${normalizeCourseLookupKey(s?.title || '')}|${s?.data || ''}`)
-        );
-        const toAdd = [];
+        const nextSimulados = simulados.map(s => ({ ...s }));
+        let addedCount = 0;
+        let updatedCount = 0;
+
         items.forEach((item, idx) => {
           if (!item || typeof item !== 'object') return;
           const dateStr = /^\d{4}-\d{2}-\d{2}$/.test(String(item.data || '')) ? item.data : today;
           const title = String(item.title || 'Simulado Projeto Caveira').trim();
           if (/^#?\d{1,5}\s*[º°ª]?$/.test(title) || /^caveira\s+\d{3,}$/i.test(title)) return;
-          const key = item.caveiraId ? `id:${item.caveiraId}` : `td:${normalizeCourseLookupKey(title)}|${dateStr}`;
-          if (existingKeys.has(key)) return;
-          existingKeys.add(key);
+
+          const titleNorm = normalizeCourseLookupKey(title);
+          const existingIdx = nextSimulados.findIndex((s) => (
+            (item.caveiraId && s?.caveiraId && s.caveiraId === item.caveiraId) ||
+            (s?.source === 'caveira' && titleNorm && normalizeCourseLookupKey(s?.title || '') === titleNorm)
+          ));
 
           const total = Number(item.total) || 0;
           const hits = Number(item.hits) || 0;
@@ -3813,7 +3816,44 @@ export const useStore = create(
             ? Number(item.liquida)
             : (hits - errors);
 
-          toAdd.push({
+          const blockFields = {
+            ...(item.b1C !== undefined ? { b1C: Number(item.b1C) } : {}),
+            ...(item.b1E !== undefined ? { b1E: Number(item.b1E) } : {}),
+            ...(item.b1Liquida !== undefined ? { b1Liquida: Number(item.b1Liquida) } : {}),
+            ...(item.b2C !== undefined ? { b2C: Number(item.b2C) } : {}),
+            ...(item.b2E !== undefined ? { b2E: Number(item.b2E) } : {}),
+            ...(item.b2Liquida !== undefined ? { b2Liquida: Number(item.b2Liquida) } : {}),
+            ...(item.b3C !== undefined ? { b3C: Number(item.b3C) } : {}),
+            ...(item.b3E !== undefined ? { b3E: Number(item.b3E) } : {}),
+            ...(item.b3Liquida !== undefined ? { b3Liquida: Number(item.b3Liquida) } : {}),
+          };
+
+          if (existingIdx >= 0) {
+            const cur = nextSimulados[existingIdx];
+            const addsBlocks = cur.b1Liquida === undefined && item.b1Liquida !== undefined;
+            const changesScore = (item.hits !== undefined && cur.hits !== hits) ||
+              (item.errors !== undefined && cur.errors !== errors) ||
+              (item.liquida !== undefined && cur.liquida !== liquida);
+            const addsUrl = Boolean(item.url && !cur.url);
+            if (addsBlocks || changesScore || addsUrl) {
+              nextSimulados[existingIdx] = {
+                ...cur,
+                caveiraId: (item.caveiraId && !String(item.caveiraId).startsWith('sim_title_')) ? item.caveiraId : (cur.caveiraId || item.caveiraId || null),
+                total: total || cur.total,
+                hits: item.hits !== undefined ? hits : cur.hits,
+                errors: item.errors !== undefined ? errors : cur.errors,
+                ...(item.blank !== undefined ? { blank: Number(item.blank) } : {}),
+                pct: item.pct !== undefined ? pct : cur.pct,
+                liquida: item.liquida !== undefined ? liquida : cur.liquida,
+                ...blockFields,
+                ...(item.url ? { url: item.url } : {}),
+              };
+              updatedCount += 1;
+            }
+            return;
+          }
+
+          nextSimulados.push({
             id: Date.now() + idx,
             data: dateStr,
             title,
@@ -3822,21 +3862,23 @@ export const useStore = create(
             total,
             hits,
             errors,
+            ...(item.blank !== undefined ? { blank: Number(item.blank) } : {}),
             pct,
             liquida,
-            ...(item.b1Liquida !== undefined ? { b1Liquida: Number(item.b1Liquida) } : {}),
-            ...(item.b2Liquida !== undefined ? { b2Liquida: Number(item.b2Liquida) } : {}),
-            ...(item.b3Liquida !== undefined ? { b3Liquida: Number(item.b3Liquida) } : {}),
+            ...blockFields,
             ...(item.url ? { url: item.url } : {})
           });
+          addedCount += 1;
         });
 
-        if (toAdd.length === 0) return 0;
-        const nextSimulados = [...simulados, ...toAdd].sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')));
-        set({ simulados: nextSimulados });
-        addXP(150 * toAdd.length, `${toAdd.length} Simulado(s) do Caveira importado(s)`);
-        updateMissionProgress?.('simulado', toAdd.length);
-        return toAdd.length;
+        if (addedCount === 0 && updatedCount === 0) return 0;
+        const sorted = nextSimulados.sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')));
+        set({ simulados: sorted });
+        if (addedCount > 0) {
+          addXP(150 * addedCount, `${addedCount} Simulado(s) do Caveira importado(s)`);
+          updateMissionProgress?.('simulado', addedCount);
+        }
+        return addedCount + updatedCount;
       },
 
       logCaveiraPdfStudy: ({ title = 'PDF Interativo', subject = '', minutes = 5 } = {}) => {
