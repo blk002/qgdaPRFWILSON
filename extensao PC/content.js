@@ -1255,15 +1255,12 @@ ${EXTRA_SHADOW_CSS}`;
       }
       return { modulesCount: payload.modules.length, lessonsCount: totalLessonsCount };
     }
-    function isRankingTitleOrRow(text = "", title = "") {
+    function isRankingTitleOrRow(text = "", title = "", isTableRow = false) {
       const cleanTitle = String(title || "").trim();
       const cleanText = String(text || "").trim();
       if (/^#?\d{1,5}\s*[º°ª]?$/.test(cleanTitle)) return true;
       if (/^caveira\s+\d{3,}$/i.test(cleanTitle)) return true;
-      if (/^\s*#?\d{1,5}\s*[º°ª]\b/.test(cleanText)) return true;
-      if (/(?:coloca[cç][aã]o|classifica[cç][aã]o|ranking)\b/i.test(cleanText) && !/meus?\s+simulados/i.test(cleanText)) {
-        return true;
-      }
+      if (isTableRow && /^\s*#?\d{1,5}\s*[º°ª]\b/.test(cleanText)) return true;
       return false;
     }
     function isInsideRankingSection(el) {
@@ -1275,25 +1272,14 @@ ${EXTRA_SHADOW_CSS}`;
           return true;
         }
       }
-      let cur = el.parentElement;
-      for (let depth = 0; cur && depth < 6; depth += 1) {
-        const meta = `${cur.className || ""} ${cur.id || ""}`;
-        if (/ranking|leaderboard|podium|classificacao/i.test(meta)) return true;
-        const heading = cur.querySelector(":scope > h1, :scope > h2, :scope > h3, :scope > h4, :scope > .text-h6, :scope > .q-table__title, :scope > div > h1, :scope > div > h2, :scope > div > h3, :scope > div > h4, :scope > div > .text-h6");
-        const headingText = (heading?.innerText || heading?.textContent || "").trim();
-        if (/ranking|classifica[cç][aã]o|leaderboard|p[oó]dio|participantes/i.test(headingText)) {
-          return true;
-        }
-        cur = cur.parentElement;
-      }
-      return false;
+      return Boolean(el.closest('[class*="ranking" i], [id*="ranking" i], [class*="leaderboard" i], [class*="podium" i]'));
     }
     function scrapeSimuladosAndImport() {
       const cards = Array.from(document.querySelectorAll(".q-card, table tbody tr, .q-item")).filter((el) => !el.closest("#qg-caveira-shadow-host, #qg-caveira-hud") && isElementVisible(el));
       const results = [];
       const seen = /* @__PURE__ */ new Set();
       apiSimuladosCache.forEach((sim) => {
-        if (!sim || isRankingTitleOrRow("", sim.title || "")) return;
+        if (!sim || isRankingTitleOrRow("", sim.title || "", false)) return;
         const key = sim.caveiraId || `${sim.title}|${sim.data || ""}`;
         if (seen.has(key)) return;
         seen.add(key);
@@ -1305,7 +1291,8 @@ ${EXTRA_SHADOW_CSS}`;
         if (!text || text.length < 10) return;
         const href = card.getAttribute("href") || card.querySelector("a")?.getAttribute("href") || "";
         const hasSimuladoHref = /\/(?:practice-exams|personal-practice-exams|simulados)\/\d+/i.test(href);
-        if (card.matches("tr") && !hasSimuladoHref && !/simulado|exame|prova|caderno|bloco|pessoal|turma/i.test(text)) {
+        const isRow = card.matches("tr");
+        if (isRow && !hasSimuladoHref && !/simulado|exame|prova|caderno|bloco|pessoal|turma/i.test(text)) {
           return;
         }
         if (!hasSimuladoHref && !/simulado|exame|prova|acertos|erros|desempenho|nota|gabarito|quest[oõ]es/i.test(text)) {
@@ -1313,16 +1300,27 @@ ${EXTRA_SHADOW_CSS}`;
         }
         const scoreRatioMatch = text.match(/(\d{1,3})\s*(?:\/|de)\s*(\d{1,3})/i);
         const pctMatch = text.match(/(\d{1,3}(?:[.,]\d+)?)\s*%/);
-        if (!scoreRatioMatch && !pctMatch) return;
-        const total = scoreRatioMatch ? Number(scoreRatioMatch[2]) : 120;
-        const hits = scoreRatioMatch ? Number(scoreRatioMatch[1]) : Math.round((parseFloat(pctMatch[1].replace(",", ".")) || 0) / 100 * total);
+        const hitsLabelMatch = text.match(/(?:acertos?|certas?)\s*[:-]?\s*(\d{1,3})/i);
+        const errorsLabelMatch = text.match(/(?:erros?|erradas?)\s*[:-]?\s*(\d{1,3})/i);
+        const netLabelMatch = text.match(/(?:nota\s*l[ií]quida|l[ií]quida|pontua[cç][aã]o|nota)\s*[:-]?\s*(-?\d{1,3}(?:[.,]\d+)?)/i);
+        if (!scoreRatioMatch && !pctMatch && !hitsLabelMatch && !netLabelMatch) return;
+        const hitsFromLabel = hitsLabelMatch ? Number(hitsLabelMatch[1]) : null;
+        const errorsFromLabel = errorsLabelMatch ? Number(errorsLabelMatch[1]) : null;
+        const netFromLabel = netLabelMatch ? Math.round(parseFloat(netLabelMatch[1].replace(",", "."))) : null;
+        let total = scoreRatioMatch ? Number(scoreRatioMatch[2]) : 120;
+        if (!scoreRatioMatch && hitsFromLabel !== null && errorsFromLabel !== null && hitsFromLabel + errorsFromLabel > total) {
+          total = hitsFromLabel + errorsFromLabel;
+        }
+        const hits = scoreRatioMatch ? Number(scoreRatioMatch[1]) : hitsFromLabel !== null ? hitsFromLabel : pctMatch ? Math.round((parseFloat(pctMatch[1].replace(",", ".")) || 0) / 100 * total) : Math.max(0, Math.round((total + (netFromLabel || 0)) / 2));
         if (!total || hits > total) return;
+        const errors = errorsFromLabel !== null ? errorsFromLabel : Math.max(0, total - hits);
         const pct = pctMatch ? Math.round(parseFloat(pctMatch[1].replace(",", "."))) : Math.round(hits / total * 100);
+        const liquida = netFromLabel !== null ? netFromLabel : hits - errors;
         const dateMatch = text.match(/\b(\d{2})\/(\d{2})\/(\d{4})\b/) || text.match(/\b(\d{4}-\d{2}-\d{2})\b/);
         const dataStr = dateMatch ? dateMatch[3] ? `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}` : dateMatch[1] : getTodaySessionDate();
         const parts = text.split("|").map((s) => s.trim()).filter((s) => s.length >= 4 && !/^\d{2}\/\d{2}\/\d{4}$/.test(s) && !/^\d+%$/.test(s));
         const title = (parts[0] || `Simulado Caveira #${idx + 1}`).slice(0, 90);
-        if (isRankingTitleOrRow(text, title)) return;
+        if (isRankingTitleOrRow(text, title, isRow)) return;
         const idMatch = href.match(/(\d{2,})/);
         const caveiraId = idMatch ? `sim_${idMatch[1]}` : `sim_${normalizeCourseIndexKey(title).slice(0, 32)}_${dataStr}_${hits}`;
         if (seen.has(caveiraId)) return;
@@ -1333,12 +1331,49 @@ ${EXTRA_SHADOW_CSS}`;
           data: dataStr,
           total,
           hits,
-          errors: Math.max(0, total - hits),
+          errors,
           pct,
-          liquida: hits - Math.max(0, total - hits),
+          liquida,
           ...href ? { url: href.startsWith("http") ? href : `${window.location.origin}${href}` } : {}
         });
       });
+      if (results.length === 0) {
+        const container = document.querySelector("main, .q-page, body");
+        if (container) {
+          const clone = container.cloneNode(true);
+          clone.querySelectorAll('#qg-caveira-shadow-host, #qg-caveira-hud, table, .q-table__container, [class*="ranking" i], [id*="ranking" i]').forEach((n) => n.remove());
+          const summaryText = (clone.textContent || "").replace(/\s+/g, " ").trim();
+          const headingTitle = (document.querySelector("h1, h2, .text-h5, .text-h6")?.innerText || "").replace(/\s+/g, " ").trim() || "Simulado Caveira";
+          if (!isRankingTitleOrRow(summaryText, headingTitle, false)) {
+            const hitsM = summaryText.match(/(?:acertos?|certas?)\s*[:-]?\s*(\d{1,3})/i);
+            const errM = summaryText.match(/(?:erros?|erradas?)\s*[:-]?\s*(\d{1,3})/i);
+            const netM = summaryText.match(/(?:nota\s*l[ií]quida|l[ií]quida|pontua[cç][aã]o)\s*[:-]?\s*(-?\d{1,3}(?:[.,]\d+)?)/i);
+            const pctM = summaryText.match(/(\d{1,3}(?:[.,]\d+)?)\s*%/);
+            const ratioM = summaryText.match(/(\d{1,3})\s*(?:\/|de)\s*(\d{1,3})/i);
+            if (hitsM || netM || pctM && /simulado|desempenho|exame/i.test(summaryText)) {
+              const total = ratioM ? Number(ratioM[2]) : 120;
+              const hits = hitsM ? Number(hitsM[1]) : ratioM ? Number(ratioM[1]) : pctM ? Math.round(parseFloat(pctM[1].replace(",", ".")) / 100 * total) : Math.max(0, Math.round((total + parseFloat(netM[1].replace(",", "."))) / 2));
+              const errors = errM ? Number(errM[1]) : Math.max(0, total - hits);
+              const liquida = netM ? Math.round(parseFloat(netM[1].replace(",", "."))) : hits - errors;
+              const pct = pctM ? Math.round(parseFloat(pctM[1].replace(",", "."))) : Math.round(hits / total * 100);
+              const pathId = window.location.pathname.match(/(\d{2,})/);
+              if (total > 0 && hits <= total) {
+                results.push({
+                  caveiraId: pathId ? `sim_${pathId[1]}` : `sim_${normalizeCourseIndexKey(headingTitle).slice(0, 32)}_${getTodaySessionDate()}_${hits}`,
+                  title: headingTitle.slice(0, 90),
+                  data: getTodaySessionDate(),
+                  total,
+                  hits,
+                  errors,
+                  pct,
+                  liquida,
+                  url: window.location.href
+                });
+              }
+            }
+          }
+        }
+      }
       if (results.length > 0) {
         try {
           chrome.storage.local.set({ [PENDING_SIMULADOS_KEY]: { simulados: results, savedAt: Date.now() } }, () => {

@@ -230,41 +230,8 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
     // 2. Detectar simulados / exames / turmas (bloqueando rankings/classificações de outros candidatos)
     const isRankingUrl = /\/(?:ranking|rankings|leaderboard|classificacao|classification|participants|students|users|positions|podium|top-?\d*)\b|[?&](?:ranking|leaderboard|page_ranking)=/i.test(String(url || ''));
 
-    const looksLikeRankingRow = (item) => {
+    const looksLikeRankingRow = (item, isFromArray = false) => {
       if (!item || typeof item !== 'object') return true;
-      const hasRankingOrCandidateField = Boolean(
-        item.position !== undefined ||
-        item.rank !== undefined ||
-        item.ranking !== undefined ||
-        item.placement !== undefined ||
-        item.colocacao !== undefined ||
-        item.nickname ||
-        item.username ||
-        item.avatar ||
-        item.avatar_url ||
-        item.student ||
-        item.student_name ||
-        item.candidate ||
-        item.user ||
-        (item.user_name && !item.exam_name && !item.title)
-      );
-      if (hasRankingOrCandidateField) return true;
-
-      const hasExamField = Boolean(
-        item.exam_id ||
-        item.practice_exam_id ||
-        item.exam_name ||
-        item.practice_exam ||
-        item.finished_at ||
-        item.completed_at ||
-        item.started_at ||
-        item.total_questions !== undefined ||
-        item.questions_count !== undefined ||
-        Array.isArray(item.subjects) ||
-        Array.isArray(item.disciplines)
-      );
-      if (!hasExamField) return true;
-
       const rawTitle = String(
         item.title ||
         item.exam_name ||
@@ -276,8 +243,62 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       if (/^#?\d{1,5}\s*[º°ª]?$/.test(rawTitle) || /^caveira\s+\d{3,}$/i.test(rawTitle)) {
         return true;
       }
+
+      const hasExplicitExamSignals = Boolean(
+        Array.isArray(item.subjects) ||
+        Array.isArray(item.disciplines) ||
+        item.exam_name ||
+        item.practice_exam ||
+        /simulado|exame|prova|prf|pol[ií]cia|turma/i.test(rawTitle)
+      );
+
+      const hasCandidateField = Boolean(
+        item.nickname ||
+        item.username ||
+        item.avatar ||
+        item.avatar_url ||
+        item.student ||
+        item.student_name ||
+        item.candidate ||
+        (item.user_name && !hasExplicitExamSignals)
+      );
+      if (hasCandidateField && !hasExplicitExamSignals) return true;
+
+      if (hasExplicitExamSignals) return false;
+
+      const hasPositionField = Boolean(
+        item.position !== undefined ||
+        item.rank !== undefined ||
+        item.ranking !== undefined ||
+        item.placement !== undefined ||
+        item.colocacao !== undefined
+      );
+      const hasAnyExamField = Boolean(
+        item.exam_id ||
+        item.practice_exam_id ||
+        item.total_questions !== undefined ||
+        item.questions_count !== undefined
+      );
+      if (isFromArray && hasPositionField && !hasAnyExamField) return true;
+      if (!hasAnyExamField && !item.finished_at && !item.completed_at && !item.started_at) return true;
       return false;
     };
+
+    const singlePersonalWrapper = (!Array.isArray(root) && [
+      root.practice_exam,
+      root.exam,
+      root.my_result,
+      root.user_result,
+      root.attempt,
+      root.result,
+    ].find((obj) => obj && typeof obj === 'object' && !Array.isArray(obj) && (
+      obj.hits !== undefined ||
+      obj.correct_answers !== undefined ||
+      obj.net_score !== undefined ||
+      obj.score !== undefined ||
+      Array.isArray(obj.subjects) ||
+      Array.isArray(obj.disciplines)
+    ))) || null;
 
     let simArr = isRankingUrl
       ? null
@@ -285,12 +306,15 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       ? root.practice_exams
       : Array.isArray(root.exams)
       ? root.exams
-      : (Array.isArray(root) && root[0] && (root[0].hits !== undefined || root[0].correct_answers !== undefined || root[0].score !== undefined) && !root[0].alternatives)
+      : (Array.isArray(root) && root[0] && (root[0].hits !== undefined || root[0].correct_answers !== undefined || root[0].score !== undefined || root[0].net_score !== undefined) && !root[0].alternatives)
       ? root
-      : (/practice-exam|team|simulado/i.test(url) && (root.hits !== undefined || root.correct_answers !== undefined || Array.isArray(root.subjects)))
+      : singlePersonalWrapper
+      ? [singlePersonalWrapper]
+      : (/practice-exam|team|simulado/i.test(url) && !Array.isArray(root) && (root.hits !== undefined || root.correct_answers !== undefined || root.net_score !== undefined || root.score !== undefined || Array.isArray(root.subjects) || Array.isArray(root.disciplines)))
       ? [root]
       : null;
 
+    const isArrayPayload = Array.isArray(simArr) && (simArr === root || simArr === root.practice_exams || simArr === root.exams || simArr.length > 1);
     if (simArr && simArr.length > 1) {
       const distinctUsers = new Set(simArr.map((x) => x?.user_id ?? x?.student_id ?? x?.participant_id).filter(Boolean));
       if (distinctUsers.size > 1) {
@@ -300,13 +324,20 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
 
     if (simArr && simArr.length > 0) {
       const normalizedSims = simArr.map((sim) => {
-        if (!sim || typeof sim !== 'object' || looksLikeRankingRow(sim)) return null;
-        const total = Number(sim.total_questions ?? sim.questions_count ?? sim.total ?? ((Number(sim.hits) || 0) + (Number(sim.errors) || 0) + (Number(sim.blank) || 0)));
+        if (!sim || typeof sim !== 'object' || looksLikeRankingRow(sim, isArrayPayload)) return null;
         const hits = Number(sim.hits ?? sim.correct_answers ?? sim.correct ?? 0);
+        const errorsRaw = sim.errors ?? sim.wrong_answers;
+        const liquidaVal = sim.net_score !== undefined ? Number(sim.net_score) : (sim.score !== undefined ? Number(sim.score) : undefined);
+        let total = Number(sim.total_questions ?? sim.questions_count ?? sim.total ?? 0);
+        if (!total || total <= 0) {
+          const sumKnown = hits + (Number(errorsRaw) || 0) + (Number(sim.blank) || 0);
+          if (sumKnown > 0) total = sumKnown;
+          else if (Number.isFinite(liquidaVal)) total = 120;
+        }
         if (!total || total <= 0) return null;
-        const errors = Number(sim.errors ?? sim.wrong_answers ?? Math.max(0, total - hits));
+        const errors = errorsRaw !== undefined ? Number(errorsRaw) : Math.max(0, total - hits);
         const pct = Number(sim.percentage ?? sim.accuracy ?? Math.round((hits / total) * 100));
-        const liquida = sim.net_score !== undefined ? Number(sim.net_score) : (sim.score !== undefined ? Number(sim.score) : (hits - errors));
+        const liquida = Number.isFinite(liquidaVal) ? liquidaVal : (hits - errors);
         const rawDate = String(sim.finished_at || sim.completed_at || sim.created_at || sim.date || '').slice(0, 10);
         const subjectScores = Array.isArray(sim.subjects || sim.disciplines)
           ? (sim.subjects || sim.disciplines).map((s) => ({
