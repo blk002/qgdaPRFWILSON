@@ -854,7 +854,7 @@ export const useStore = create(
           // Backup local automático (só adiciona se tiver dados reais, preservando últimos 5 backups íntegros)
           appendLocalBackup(dataToSave, 'cloud_sync');
 
-          toast.success("Nuvem atualizada! ☁️", { duration: 800 });
+          toast.success("Nuvem atualizada! ☁️", { id: 'cloud-sync-toast', duration: 1200 });
         } catch (error) {
           clearTimeout(timeoutId);
           // A3: Em caso de timeout/abort, relê o updated_at remoto para checar se o servidor concluiu a gravação

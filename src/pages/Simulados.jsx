@@ -131,6 +131,12 @@ export default function Simulados() {
   const chartData = getChartData();
   const targetY = chartHeight - (notaCortePRF / maxScore) * chartHeight;
 
+  const formatBrDate = (dateStr) => {
+    if (!dateStr || typeof dateStr !== 'string') return '—';
+    const parts = dateStr.split('-');
+    return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateStr;
+  };
+
   return (
     <div className="fade-in w-full pb-10">
       <div className="flex flex-col lg:flex-row gap-6">
@@ -236,7 +242,7 @@ export default function Simulados() {
                         
                         <div className="flex justify-between items-center gap-3 whitespace-nowrap border-b border-slate-700/50 pb-1 mb-1">
                           <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Simulado #{hoveredPoint.index + 1}</span>
-                          <span className="text-[10px] text-slate-400 font-medium">{hoveredPoint.sim.data.split('-').reverse().join('/')}</span>
+                          <span className="text-[10px] text-slate-400 font-medium">{formatBrDate(hoveredPoint.sim.data)}</span>
                         </div>
                         
                         <div className="flex justify-between items-center">
@@ -308,7 +314,7 @@ export default function Simulados() {
                       <td className="p-3 sm:p-4 font-semibold text-slate-700 dark:text-slate-200">
                         <div className="flex items-center gap-1.5 flex-wrap">
                           <span title={sim.dateSource === 'attempt' ? 'Data de realização extraída da API do Caveira' : undefined}>
-                            {sim.data}
+                            {formatBrDate(sim.data)}
                           </span>
                           {sim.dateSource === 'release' && (
                             <span

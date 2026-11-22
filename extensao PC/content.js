@@ -947,8 +947,8 @@ ${EXTRA_SHADOW_CSS}`;
     function classifySubjectBloco(subjectName = "") {
       const s = normalizeFilterText(subjectName);
       if (!s) return "Bloco I";
-      if (/transito|ctb|contran|resolucao|habilitacao|sinalizacao/.test(s)) return "Bloco II";
-      if (/constitucional|administrativo|penal|processual|direitos humanos|legislacao especial|leis especiais/.test(s)) return "Bloco III";
+      if (/transito|ctb|contran|resoluc(?:ao|oes)|habilitacao|sinalizacao/.test(s)) return "Bloco II";
+      if (/constitucional|administrativo|administracao publica|penal|processual|direitos humanos|legislacao especial|legislacao extravagante|legislacao institucional|leis especiais|extravagante/.test(s)) return "Bloco III";
       return "Bloco I";
     }
     handleApiSnifferMessageRef = (event) => {
@@ -1928,7 +1928,8 @@ ${EXTRA_SHADOW_CSS}`;
       let anyVisible = false;
       if (missionRow) {
         const subjects = Array.isArray(cachedTodayMission?.subjects) ? cachedTodayMission.subjects : [];
-        if (isQuestionsPage() && subjects.length > 0) {
+        const isHomeOrDashboard = /^\/(?:home|dashboard)(?:\/|$)/i.test(window.location.pathname || "");
+        if ((isQuestionsPage() || isHomeOrDashboard) && subjects.length > 0) {
           const pending = subjects.filter((s) => !s.completed);
           const list = pending.length > 0 ? pending : subjects;
           const picked = list[todayMissionIdx % list.length];
@@ -2285,12 +2286,24 @@ ${EXTRA_SHADOW_CSS}`;
         const list = pending.length > 0 ? pending : subjects;
         const picked = list[todayMissionIdx % list.length];
         if (picked) {
-          applyCaveiraPracticeFilter({
+          const filterPayload = {
             subject: picked.name,
             topic: picked.topic || "",
             lessons: picked.lesson ? [picked.lesson] : [],
-            fallbackTopic: picked.topic || ""
-          });
+            fallbackTopic: picked.topic || "",
+            createdAt: Date.now()
+          };
+          if (isQuestionsPage()) {
+            applyCaveiraPracticeFilter(filterPayload);
+          } else {
+            try {
+              chrome.storage.local.set({ [PENDING_FILTER_KEY]: filterPayload }, () => {
+                window.location.href = `${window.location.origin}/questions`;
+              });
+            } catch (_) {
+              window.location.href = `${window.location.origin}/questions`;
+            }
+          }
         }
       });
       hud.querySelector("#qg-btn-sync-catalog")?.addEventListener("click", (e) => {
