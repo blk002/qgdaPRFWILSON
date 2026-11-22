@@ -1,6 +1,6 @@
 import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
 
-// Sniffer passivo da API do Projeto Caveira (MAIN world — somente leitura de respostas JSON) — #2 e #7
+// Sniffer passivo da API do Projeto Caveira (MAIN world — somente leitura de respostas JSON) — v3.1.0
 (function () {
   if (window.__qgCaveiraApiSnifferInstalled) return;
   window.__qgCaveiraApiSnifferInstalled = true;
@@ -8,6 +8,51 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
   const replayBuffer = [];
   const MAX_BUFFER = 80;
   let cachedApiAuthHeader = '';
+  let channelNonce = null;
+  let allowNextNonceInit = true;
+  let diagnosticMode = false;
+
+  const SENSITIVE_KEY_RX = /(?:token|auth|cookie|password|passwd|secret|jwt|bearer|authorization|refresh_token|access_token|apikey|api_key|email|cpf|phone)/i;
+  const JWT_RX = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+)?/g;
+
+  function safeUrlPath(rawUrl) {
+    try {
+      const u = new URL(String(rawUrl || ''), window.location.origin);
+      return `${u.origin}${u.pathname}`;
+    } catch (_) {
+      return String(rawUrl || '').split('?')[0].slice(0, 140);
+    }
+  }
+
+  function summarizeShape(val, depth = 0, keyHint = '') {
+    if (keyHint && SENSITIVE_KEY_RX.test(keyHint)) return '[REDACTED]';
+    if (depth > 4) return '[depth-limit]';
+    if (val === null) return 'null';
+    if (val === undefined) return 'undefined';
+    const t = typeof val;
+    if (t === 'boolean' || t === 'number') return `${t}:${val}`;
+    if (t === 'string') {
+      const cleaned = val.replace(JWT_RX, '[REDACTED_JWT]');
+      const preview = cleaned.slice(0, 36).replace(/\s+/g, ' ');
+      return `string(${val.length}): "${preview}${cleaned.length > 36 ? '...' : ''}"`;
+    }
+    if (Array.isArray(val)) {
+      if (val.length === 0) return 'array(0)';
+      return [`array(${val.length})`, summarizeShape(val[0], depth + 1, keyHint)];
+    }
+    if (t === 'object') {
+      const keys = Object.keys(val).slice(0, 28);
+      const out = {};
+      for (const k of keys) {
+        out[k] = summarizeShape(val[k], depth + 1, k);
+      }
+      if (Object.keys(val).length > 28) {
+        out.__moreKeys = Object.keys(val).length - 28;
+      }
+      return out;
+    }
+    return t;
+  }
 
   function readFallbackAuthHeader() {
     if (cachedApiAuthHeader) return cachedApiAuthHeader;
@@ -25,6 +70,16 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       }
     } catch (_) {}
     return '';
+  }
+
+  function postVerifiedMessage(type, payload) {
+    if (!channelNonce) return;
+    try {
+      window.postMessage(
+        { source: 'QG_CAVEIRA_API_SNIFFER', nonce: channelNonce, type, payload },
+        window.location.origin
+      );
+    } catch (_) {}
   }
 
   function emit(type, payload) {
@@ -46,19 +101,57 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       if (replayBuffer.length > MAX_BUFFER) {
         replayBuffer.splice(0, replayBuffer.length - MAX_BUFFER);
       }
-      window.postMessage({ source: 'QG_CAVEIRA_API_SNIFFER', type, payload }, '*');
+      postVerifiedMessage(type, payload);
     } catch (_) {}
   }
 
+  function emitDiagnosticShape(kind, url, extra = {}) {
+    if (!diagnosticMode) return;
+    postVerifiedMessage('API_DIAGNOSTIC_SHAPE', {
+      at: new Date().toISOString(),
+      kind,
+      url: safeUrlPath(url),
+      ...extra,
+    });
+  }
+
+  window.addEventListener('qg-caveira-teardown', () => {
+    allowNextNonceInit = true;
+    channelNonce = null;
+  });
+
+  window.addEventListener('qg-caveira-sniffer-init', (ev) => {
+    const detail = ev?.detail;
+    if (!detail || typeof detail.nonce !== 'string' || detail.nonce.length < 16) return;
+    if (!allowNextNonceInit && channelNonce && detail.nonce !== channelNonce) return;
+    const isFreshInit = allowNextNonceInit || !channelNonce;
+    channelNonce = detail.nonce;
+    allowNextNonceInit = false;
+    if (typeof detail.diagnosticMode === 'boolean') {
+      diagnosticMode = detail.diagnosticMode;
+    }
+    if (isFreshInit) {
+      replayBuffer.forEach((item) => postVerifiedMessage(item.type, item.payload));
+    }
+  });
+
   window.addEventListener('message', (ev) => {
-    if (ev.source !== window || ev.data?.source !== 'QG_CAVEIRA_CONTENT' || ev.data?.type !== 'REQUEST_SNIFFER_REPLAY') {
+    if (
+      ev.source !== window ||
+      ev.origin !== window.location.origin ||
+      ev.data?.source !== 'QG_CAVEIRA_CONTENT' ||
+      !channelNonce ||
+      ev.data?.nonce !== channelNonce
+    ) {
       return;
     }
-    replayBuffer.forEach((item) => {
-      try {
-        window.postMessage({ source: 'QG_CAVEIRA_API_SNIFFER', type: item.type, payload: item.payload }, '*');
-      } catch (_) {}
-    });
+    if (ev.data.type === 'REQUEST_SNIFFER_REPLAY') {
+      replayBuffer.forEach((item) => postVerifiedMessage(item.type, item.payload));
+      return;
+    }
+    if (ev.data.type === 'SET_DIAGNOSTIC_MODE') {
+      diagnosticMode = Boolean(ev.data.payload?.enabled);
+    }
   });
 
   function stripHtml(raw) {
@@ -75,15 +168,30 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
 
   function normalizeQuestionNode(item) {
     if (!item || typeof item !== 'object') return null;
-    const rawId = item.code || item.question_code || (item.id ? `Q${String(item.id).replace(/^Q/i, '')}` : '');
-    if (!rawId || !/^Q\d{3,}$/i.test(String(rawId))) {
-      if (!item.enunciado && !item.statement && !item.question && !item.teacher_comment && !item.comentario_professor) {
-        return null;
-      }
+
+    const numericId = Number(item.id);
+    const apiId = Number.isFinite(numericId) && numericId > 0 ? numericId : null;
+    const rawExplicitCode = String(item.code || item.question_code || '').trim();
+    const explicitCode = rawExplicitCode
+      ? (rawExplicitCode.toUpperCase().startsWith('Q') ? rawExplicitCode.toUpperCase() : `Q${rawExplicitCode}`)
+      : null;
+
+    const contentText = stripHtml(item.content || item.enunciado || item.statement || item.question || '').slice(0, 2500);
+    const supportingText = stripHtml(item.supporting_content || item.supportingContent || '').slice(0, 1500);
+
+    const subjectStr = String(
+      item.subject?.name || item.subject?.title || (typeof item.subject === 'string' ? item.subject : '') ||
+      item.discipline?.name || (typeof item.discipline === 'string' ? item.discipline : '') || ''
+    ).trim();
+    const subtopicStr = String(
+      item.subtopic?.name || item.subtopic?.title || (typeof item.subtopic === 'string' ? item.subtopic : '') ||
+      item.topic?.name || (typeof item.topic === 'string' ? item.topic : '') || ''
+    ).trim();
+    const subtopicPathStr = String(item.subtopic_path || item.subtopicPath || '').trim();
+
+    if (!apiId && !explicitCode && !contentText && !subtopicPathStr) {
+      return null;
     }
-    const id = String(rawId || item.id).toUpperCase().startsWith('Q')
-      ? String(rawId || item.id).toUpperCase()
-      : `Q${rawId || item.id}`;
 
     const teacherRaw =
       item.teacher_comment ||
@@ -109,13 +217,64 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
     const hasPct = Number.isFinite(corrPct) && corrPct >= 0 && corrPct <= 100;
 
     const noteRaw = item.user_note || item.userNote || item.note || item.anotacao || '';
-    const banca = String(item.board?.name || item.banca?.name || item.banca || '').trim();
-    const ano = String(item.year || item.ano || '').trim();
+    const banca = String(
+      item.examining_board?.name ||
+      (typeof item.examining_board === 'string' ? item.examining_board : '') ||
+      item.board?.name ||
+      item.banca?.name ||
+      item.banca ||
+      ''
+    ).trim();
+    const ano = item.year !== undefined && item.year !== null
+      ? String(item.year).trim()
+      : String(item.ano || '').trim();
 
-    if (!commentText && !hasPct && !noteRaw && !banca && !ano) return null;
+    const alternatives = Array.isArray(item.alternatives)
+      ? item.alternatives.map((alt) => ({
+          answer: alt?.answer ?? alt?.letter ?? '',
+          letter: String(alt?.letter ?? alt?.answer ?? '').trim(),
+          text: stripHtml(alt?.content || alt?.text || '').slice(0, 800),
+          ...(alt?.is_correct !== undefined ? { isCorrect: Boolean(alt.is_correct) } : {}),
+        })).filter((a) => a.letter || a.text)
+      : [];
+
+    const lastStatus = item.last_answer_status !== undefined ? item.last_answer_status : (item.lastAnswerStatus ?? null);
+    if (
+      diagnosticMode &&
+      lastStatus !== null &&
+      lastStatus !== undefined &&
+      typeof lastStatus !== 'boolean' &&
+      !/^(?:correct|wrong|incorrect|hit|error|acerto|erro|acertou|errou|0|1|true|false)$/i.test(String(lastStatus))
+    ) {
+      emitDiagnosticShape('unknown_answer_status', window.location.pathname, {
+        apiId,
+        rawType: typeof lastStatus,
+        preview: String(lastStatus).slice(0, 60),
+      });
+    }
+
+    if (!apiId && !explicitCode && !commentText && !hasPct && !noteRaw && !banca && !ano && !subjectStr && !subtopicPathStr) {
+      return null;
+    }
+
     return {
-      id,
-      ...(commentText ? { teacherComment: commentText.slice(0, 2500), commentSource } : {}),
+      ...(apiId ? { apiId } : {}),
+      ...(explicitCode ? { code: explicitCode, id: explicitCode } : {}),
+      ...(contentText ? { content: contentText } : {}),
+      ...(supportingText ? { supportingContent: supportingText } : {}),
+      ...(subjectStr ? { subject: subjectStr } : {}),
+      ...(subtopicStr ? { subtopic: subtopicStr } : {}),
+      ...(subtopicPathStr ? { subtopicPath: subtopicPathStr } : {}),
+      ...(item.difficulty !== undefined && item.difficulty !== null ? { difficulty: String(item.difficulty).trim() } : {}),
+      ...(item.difficulty_ids !== undefined ? { difficultyIds: item.difficulty_ids } : {}),
+      ...(item.situation !== undefined ? { situation: item.situation } : {}),
+      ...(item.outdated !== undefined ? { outdated: Boolean(item.outdated) } : {}),
+      ...(item.has_comment !== undefined ? { hasComment: Boolean(item.has_comment) } : {}),
+      ...(item.video_url ? { videoUrl: String(item.video_url).trim() } : {}),
+      ...(alternatives.length > 0 ? { alternatives } : {}),
+      ...(item.user_answer !== undefined && item.user_answer !== null ? { userAnswer: item.user_answer } : {}),
+      ...(lastStatus !== undefined && lastStatus !== null ? { lastAnswerStatus: lastStatus } : {}),
+      ...(commentText ? { teacherComment: commentText, commentSource } : {}),
       ...(hasPct ? { communityCorrectPct: Math.round(corrPct), communityErrorPct: Math.max(0, 100 - Math.round(corrPct)) } : {}),
       ...(noteRaw ? { userNote: stripHtml(String(noteRaw)).slice(0, 1000) } : {}),
       ...(banca ? { banca } : {}),
@@ -476,6 +635,24 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       return false;
     };
 
+    const hasSimMetrics = (obj) => {
+      if (!obj || typeof obj !== 'object' || Array.isArray(obj)) return false;
+      const resObj = obj.result || obj.summary || obj.stats || obj.metrics || obj.enjoyment || obj.performance || {};
+      return Boolean(
+        obj.hits !== undefined ||
+        obj.correct_answers !== undefined ||
+        obj.net_score !== undefined ||
+        obj.score !== undefined ||
+        resObj.hits !== undefined ||
+        resObj.correct !== undefined ||
+        resObj.correct_answers !== undefined ||
+        resObj.net_score !== undefined ||
+        resObj.score !== undefined ||
+        Array.isArray(obj.subjects) ||
+        Array.isArray(obj.disciplines)
+      );
+    };
+
     const singlePersonalWrapper = (!Array.isArray(root) && [
       root.practice_exam,
       root.exam,
@@ -483,14 +660,7 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       root.user_result,
       root.attempt,
       root.result,
-    ].find((obj) => obj && typeof obj === 'object' && !Array.isArray(obj) && (
-      obj.hits !== undefined ||
-      obj.correct_answers !== undefined ||
-      obj.net_score !== undefined ||
-      obj.score !== undefined ||
-      Array.isArray(obj.subjects) ||
-      Array.isArray(obj.disciplines)
-    ))) || null;
+    ].find((obj) => hasSimMetrics(obj))) || null;
 
     let simArr = isRankingUrl
       ? null
@@ -498,13 +668,21 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       ? root.practice_exams
       : Array.isArray(root.exams)
       ? root.exams
-      : (Array.isArray(root) && root[0] && (root[0].hits !== undefined || root[0].correct_answers !== undefined || root[0].score !== undefined || root[0].net_score !== undefined) && !root[0].alternatives)
+      : (Array.isArray(root) && root[0] && hasSimMetrics(root[0]) && !root[0].alternatives)
       ? root
       : singlePersonalWrapper
       ? [singlePersonalWrapper]
-      : (/practice-exam|team|simulado/i.test(url) && !Array.isArray(root) && (root.hits !== undefined || root.correct_answers !== undefined || root.net_score !== undefined || root.score !== undefined || Array.isArray(root.subjects) || Array.isArray(root.disciplines)))
+      : (/practice-exam|team|simulado/i.test(urlStr) && !Array.isArray(root) && hasSimMetrics(root))
       ? [root]
       : null;
+
+    if (diagnosticMode && /(?:practice-exam|simulado|enjoyment|ranking|\/teams\/)/i.test(urlStr)) {
+      emitDiagnosticShape('simulado_api_response', urlStr, {
+        isRankingUrl,
+        matchedCount: Array.isArray(simArr) ? simArr.length : 0,
+        shape: summarizeShape(root),
+      });
+    }
 
     const isArrayPayload = Array.isArray(simArr) && (simArr === root || simArr === root.practice_exams || simArr === root.exams || simArr.length > 1);
     if (simArr && simArr.length > 1) {
@@ -514,56 +692,128 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       }
     }
 
+    const pickNum = (vals) => {
+      for (const v of vals) {
+        if (v === undefined || v === null || v === '') continue;
+        const n = Number(v);
+        if (Number.isFinite(n)) return n;
+      }
+      return null;
+    };
+
     if (simArr && simArr.length > 0) {
       const normalizedSims = simArr.map((sim) => {
         if (!sim || typeof sim !== 'object' || looksLikeRankingRow(sim, isArrayPayload)) return null;
-        const hits = Number(sim.hits ?? sim.correct_answers ?? sim.correct ?? 0);
-        const errorsRaw = sim.errors ?? sim.wrong_answers;
-        const liquidaVal = sim.net_score !== undefined ? Number(sim.net_score) : (sim.score !== undefined ? Number(sim.score) : undefined);
-        let total = Number(sim.total_questions ?? sim.questions_count ?? sim.total ?? 0);
-        if (!total || total <= 0) {
-          const sumKnown = hits + (Number(errorsRaw) || 0) + (Number(sim.blank) || 0);
-          if (sumKnown > 0) total = sumKnown;
-          else if (Number.isFinite(liquidaVal)) total = 120;
+        const nestedRes = (sim.result && typeof sim.result === 'object') ? sim.result
+          : (sim.summary && typeof sim.summary === 'object') ? sim.summary
+          : (sim.stats && typeof sim.stats === 'object') ? sim.stats
+          : (sim.enjoyment && typeof sim.enjoyment === 'object') ? sim.enjoyment
+          : {};
+        const nestedExam = (sim.practice_exam && typeof sim.practice_exam === 'object') ? sim.practice_exam
+          : (sim.exam && typeof sim.exam === 'object') ? sim.exam
+          : {};
+
+        const estimatedFields = [];
+        const estimatedReasons = [];
+
+        const hitsRaw = pickNum([sim.hits, sim.correct_answers, sim.correct, nestedRes.hits, nestedRes.correct, nestedRes.correct_answers, nestedRes.acertos]);
+        const errorsRaw = pickNum([sim.errors, sim.wrong_answers, sim.wrong, nestedRes.errors, nestedRes.wrong, nestedRes.wrong_answers, nestedRes.erros]);
+        const blankRaw = pickNum([sim.blank, sim.not_answered, sim.unanswered, nestedRes.blank, nestedRes.not_answered, nestedRes.unanswered]);
+        const liquidaRaw = pickNum([sim.net_score, sim.score, sim.liquida, nestedRes.net_score, nestedRes.score, nestedRes.liquida]);
+        const totalRaw = pickNum([sim.total_questions, sim.questions_count, sim.total, nestedExam.total_questions, nestedExam.questions_count, nestedRes.total_questions, nestedRes.questions_count, nestedRes.total]);
+        const pctRaw = pickNum([sim.percentage, sim.accuracy, sim.user_percentage, nestedRes.percentage, nestedRes.accuracy]);
+
+        if (hitsRaw === null && errorsRaw === null && liquidaRaw === null) {
+          return null;
         }
-        if (!total || total <= 0) return null;
-        const errors = errorsRaw !== undefined ? Number(errorsRaw) : Math.max(0, total - hits);
-        const pct = Number(sim.percentage ?? sim.accuracy ?? Math.round((hits / total) * 100));
-        const liquida = Number.isFinite(liquidaVal) ? liquidaVal : (hits - errors);
+
+        let total = totalRaw !== null && totalRaw > 0 ? totalRaw : null;
+        if (total === null && hitsRaw !== null && errorsRaw !== null) {
+          total = hitsRaw + errorsRaw + (blankRaw ?? 0);
+          estimatedFields.push('total');
+          estimatedReasons.push('total somado a partir de acertos + erros + brancos');
+        } else if (total === null) {
+          estimatedFields.push('total');
+          estimatedReasons.push('total_questions ausente na resposta da API (não inventado)');
+        }
+
+        let hits = hitsRaw;
+        let errors = errorsRaw;
+        if (hits === null) {
+          estimatedFields.push('hits');
+          estimatedReasons.push('hits ausente na resposta da API');
+        }
+        if (errors === null) {
+          if (hits !== null && liquidaRaw !== null) {
+            errors = Math.max(0, hits - liquidaRaw);
+            estimatedFields.push('errors');
+            estimatedReasons.push('errors inferido de hits - líquida');
+          } else {
+            estimatedFields.push('errors');
+            estimatedReasons.push('errors ausente na resposta da API');
+          }
+        }
+
+        let liquida = liquidaRaw;
+        if (liquida === null && hits !== null && errors !== null) {
+          liquida = hits - errors;
+          estimatedFields.push('liquida');
+          estimatedReasons.push('liquida calculada por hits - errors');
+        }
+
+        let pct = pctRaw !== null ? Math.round(pctRaw) : null;
+        if (pct === null && hits !== null && total !== null && total > 0) {
+          pct = Math.round((hits / total) * 100);
+          estimatedFields.push('pct');
+          estimatedReasons.push('pct calculado por hits / total');
+        }
+
         const { attemptDate, attemptField, releaseDate, releaseField, anyDate, anyField } = extractSimuladoDatesDeep(sim, urlStr);
-        const rawDate = String(sim.finished_at || sim.completed_at || sim.answered_at || sim.created_at || sim.date || '').slice(0, 10);
+        const rawDate = String(sim.finished_at || sim.completed_at || sim.answered_at || sim.created_at || sim.date || nestedRes.finished_at || '').slice(0, 10);
         const resolvedDate = attemptDate || releaseDate || anyDate || (/^\d{4}-\d{2}-\d{2}$/.test(rawDate) ? rawDate : undefined);
         const dateSource = attemptDate ? 'attempt' : (releaseDate ? 'release' : (anyDate ? 'api_date' : undefined));
         const dateField = attemptField || releaseField || anyField || null;
-        const subjectScores = Array.isArray(sim.subjects || sim.disciplines)
-          ? (sim.subjects || sim.disciplines).map((s) => ({
-              name: String(s?.name || s?.subject || '').trim(),
-              hits: Number(s?.hits ?? s?.correct ?? 0),
-              errors: Number(s?.errors ?? s?.wrong ?? 0),
-              blank: Number(s?.blank ?? s?.not_answered ?? 0),
-              liquida: s?.net_score !== undefined ? Number(s.net_score) : (Number(s?.hits ?? s?.correct ?? 0) - Number(s?.errors ?? s?.wrong ?? 0)),
-            }))
+        const rawSubs = sim.subjects || sim.disciplines || nestedRes.subjects || nestedRes.disciplines;
+        const subjectScores = Array.isArray(rawSubs)
+          ? rawSubs.map((s) => {
+              const sH = pickNum([s?.hits, s?.correct, s?.acertos]) ?? 0;
+              const sE = pickNum([s?.errors, s?.wrong, s?.erros]) ?? 0;
+              const sB = pickNum([s?.blank, s?.not_answered]) ?? 0;
+              const sLiq = pickNum([s?.net_score, s?.score, s?.liquida]);
+              return {
+                name: String(s?.name || s?.subject || s?.discipline || '').trim(),
+                hits: sH,
+                errors: sE,
+                blank: sB,
+                liquida: sLiq !== null ? sLiq : (sH - sE),
+              };
+            }).filter((s) => s.name)
           : [];
         const title = String(
           sim.title ||
           sim.exam_name ||
-          sim.practice_exam?.title ||
-          sim.practice_exam?.name ||
+          nestedExam.title ||
+          nestedExam.name ||
           sim.name ||
           'Simulado Caveira'
         ).trim();
+        const examIdVal = sim.id || sim.practice_exam_id || nestedExam.id || null;
         return {
-          caveiraId: sim.id ? `sim_${sim.id}` : undefined,
+          caveiraId: examIdVal ? `sim_${examIdVal}` : undefined,
           title,
           data: resolvedDate,
           ...(dateSource ? { dateSource } : {}),
           ...(dateField ? { dateField } : {}),
           ...(releaseDate ? { releasedAt: releaseDate } : {}),
-          total,
-          hits,
-          errors,
-          pct: Math.round(pct),
-          liquida,
+          dataSource: 'api',
+          estimated: estimatedFields.length > 0,
+          ...(estimatedFields.length > 0 ? { estimatedFields, estimatedReason: estimatedReasons.join('; ') } : {}),
+          ...(total !== null ? { total } : {}),
+          ...(hits !== null ? { hits } : {}),
+          ...(errors !== null ? { errors } : {}),
+          ...(blankRaw !== null ? { blank: blankRaw } : {}),
+          ...(pct !== null ? { pct } : {}),
+          ...(liquida !== null ? { liquida } : {}),
           subjectScores,
         };
       }).filter(Boolean);
@@ -574,9 +824,11 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       }
     }
 
-    // 3. Detectar questão isolada ou lista de questões
+    // 3. Detectar questão isolada ou lista de questões (inclui data.data paginado Laravel)
     const candidates = Array.isArray(root)
       ? root
+      : Array.isArray(root.data)
+      ? root.data
       : Array.isArray(root.questions)
       ? root.questions
       : Array.isArray(root.items)
@@ -586,6 +838,45 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
     const parsedQuestions = candidates.map(normalizeQuestionNode).filter(Boolean);
     if (parsedQuestions.length > 0) {
       emit('API_QUESTION_DATA', { questions: parsedQuestions });
+    }
+  }
+
+  function inspectAnswerMutation(method, reqUrl, reqBody, resJson) {
+    const m = String(method || 'GET').toUpperCase();
+    if (!['POST', 'PUT', 'PATCH'].includes(m)) return;
+    const urlStr = String(reqUrl || '');
+    const root = (resJson?.data && typeof resJson.data === 'object') ? resJson.data : (resJson || {});
+    let parsedReq = null;
+    try {
+      if (typeof reqBody === 'string' && (reqBody.trim().startsWith('{') || reqBody.trim().startsWith('['))) {
+        parsedReq = JSON.parse(reqBody);
+      } else if (reqBody && typeof reqBody === 'object' && !(reqBody instanceof FormData)) {
+        parsedReq = reqBody;
+      }
+    } catch (_) {}
+
+    const recognizedAnswer = Boolean(
+      /(?:question|answer|resol|respond|attempt|alternative)/i.test(urlStr) &&
+      (root?.is_correct !== undefined || root?.correct !== undefined || root?.hit !== undefined || root?.acertou !== undefined)
+    );
+    if (recognizedAnswer) {
+      const qApiId = Number(root.question_id || root.id || parsedReq?.question_id || parsedReq?.id);
+      const hitVal = root.is_correct !== undefined ? Boolean(root.is_correct) : (root.correct !== undefined ? Boolean(root.correct) : Boolean(root.hit ?? root.acertou));
+      emit('API_ANSWER_SUBMITTED', {
+        apiId: Number.isFinite(qApiId) && qApiId > 0 ? qApiId : null,
+        hit: hitVal,
+        userAnswer: parsedReq?.answer ?? parsedReq?.alternative ?? root?.user_answer ?? null,
+        url: safeUrlPath(urlStr),
+      });
+      return;
+    }
+
+    if (diagnosticMode) {
+      emitDiagnosticShape('unrecognized_mutation', urlStr, {
+        method: m,
+        reqShape: parsedReq ? summarizeShape(parsedReq) : (reqBody ? typeof reqBody : 'empty'),
+        resShape: resJson ? summarizeShape(resJson) : 'non-json',
+      });
     }
   }
 
@@ -600,6 +891,8 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
   if (typeof origFetch === 'function') {
     window.fetch = function (...args) {
       const reqUrl = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
+      const reqMethod = String(args[1]?.method || args[0]?.method || 'GET').toUpperCase();
+      const reqBody = args[1]?.body;
       try {
         const hdrs = args[1]?.headers || args[0]?.headers;
         const authVal = hdrs instanceof Headers ? hdrs.get('Authorization') : (hdrs?.Authorization || hdrs?.authorization);
@@ -613,8 +906,18 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
           try {
             if (!res || !res.ok) return;
             const ct = res.headers?.get('content-type') || '';
-            if (!ct.includes('json')) return;
-            res.clone().json().then((json) => inspectApiPayload(reqUrl, json)).catch(() => {});
+            if (!ct.includes('json')) {
+              if (['POST', 'PUT', 'PATCH'].includes(reqMethod)) {
+                inspectAnswerMutation(reqMethod, reqUrl, reqBody, null);
+              }
+              return;
+            }
+            res.clone().json().then((json) => {
+              inspectApiPayload(reqUrl, json);
+              if (['POST', 'PUT', 'PATCH'].includes(reqMethod)) {
+                inspectAnswerMutation(reqMethod, reqUrl, reqBody, json);
+              }
+            }).catch(() => {});
           } catch (_) {}
         }).catch(() => {});
       }
@@ -627,6 +930,7 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
   const origSetHeader = XMLHttpRequest.prototype.setRequestHeader;
   const origSend = XMLHttpRequest.prototype.send;
   XMLHttpRequest.prototype.open = function (method, url, ...rest) {
+    this.__qgMethod = String(method || 'GET').toUpperCase();
     this.__qgUrl = url;
     return origOpen.call(this, method, url, ...rest);
   };
@@ -638,7 +942,8 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
     } catch (_) {}
     return origSetHeader.call(this, name, value);
   };
-  XMLHttpRequest.prototype.send = function (...args) {
+  XMLHttpRequest.prototype.send = function (body, ...rest) {
+    const reqMethod = this.__qgMethod || 'GET';
     if (shouldInspectUrl(this.__qgUrl)) {
       this.addEventListener('load', () => {
         try {
@@ -655,15 +960,25 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
           if (json) {
             inspectApiPayload(this.__qgUrl, json);
           }
+          if (['POST', 'PUT', 'PATCH'].includes(reqMethod)) {
+            inspectAnswerMutation(reqMethod, this.__qgUrl, body, json);
+          }
         } catch (_) {}
       });
     }
-    return origSend.apply(this, args);
+    return origSend.call(this, body, ...rest);
   };
 
   // Busca ativa sob demanda para datas de simulado caso a resposta original tenha ocorrido antes ou sem payload de data
   window.addEventListener('message', async (ev) => {
-    if (ev.source !== window || ev.data?.source !== 'QG_CAVEIRA_CONTENT' || ev.data?.type !== 'FETCH_SIMULADO_DATES') {
+    if (
+      ev.source !== window ||
+      ev.origin !== window.location.origin ||
+      ev.data?.source !== 'QG_CAVEIRA_CONTENT' ||
+      !channelNonce ||
+      ev.data?.nonce !== channelNonce ||
+      ev.data?.type !== 'FETCH_SIMULADO_DATES'
+    ) {
       return;
     }
     const { requestId, teamId, examId } = ev.data.payload || {};
@@ -740,10 +1055,14 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       );
     } catch (_) {}
 
-    window.postMessage({
-      source: 'QG_CAVEIRA_API_SNIFFER',
-      type: 'FETCH_SIMULADO_DATES_RESULT',
-      payload: { requestId, teamId, examId, attemptDate, releaseDate, anyDate, dateField },
-    }, '*');
+    postVerifiedMessage('FETCH_SIMULADO_DATES_RESULT', {
+      requestId,
+      teamId,
+      examId,
+      attemptDate,
+      releaseDate,
+      anyDate,
+      dateField,
+    });
   });
 })();

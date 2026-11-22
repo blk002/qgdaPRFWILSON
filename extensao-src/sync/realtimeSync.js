@@ -9,14 +9,13 @@ import {
 } from '../db/extensionDb.js';
 
 const CLOUD_AUTH_KEY = 'qg_cloud_auth';
+const CLOUD_AUTH_META_KEY = 'qg_cloud_auth_meta';
 const DIRECT_SYNC_LAST_KEY = 'qg_last_direct_cloud_sync';
 const SYNC_MODE_KEY = 'qg_sync_mode';
 const FILTER_ID_MEMORY_KEY = 'qg_caveira_filter_id_memory_v1';
 
 const QG_URL_PATTERNS = [
   'https://blk002.github.io/*',
-  'http://localhost:*/*',
-  'http://127.0.0.1:*/*',
 ];
 
 let cachedClient = null;
@@ -25,9 +24,58 @@ let hasIncrementalTable = null; // null = não testado | true | false
 let isFlushing = false;
 let isPulling = false;
 
+async function readSessionAuth() {
+  try {
+    if (chrome.storage?.session) {
+      const s = await chrome.storage.session.get([CLOUD_AUTH_KEY]);
+      if (s?.[CLOUD_AUTH_KEY]?.accessToken || s?.[CLOUD_AUTH_KEY]?.refreshToken) {
+        return s[CLOUD_AUTH_KEY];
+      }
+    }
+  } catch (_) {}
+  // Migração defensiva de legado em chrome.storage.local -> session (removendo da persistência imediatamente)
+  try {
+    const legacy = await chrome.storage.local.get([CLOUD_AUTH_KEY]);
+    const auth = legacy?.[CLOUD_AUTH_KEY];
+    if (auth && (auth.accessToken || auth.refreshToken)) {
+      if (chrome.storage?.session) {
+        await chrome.storage.session.set({ [CLOUD_AUTH_KEY]: auth });
+      }
+      await chrome.storage.local.remove([CLOUD_AUTH_KEY]);
+      await chrome.storage.local.set({
+        [CLOUD_AUTH_META_KEY]: {
+          authenticated: true,
+          userId: auth.userId || null,
+          updatedAt: Date.now(),
+        },
+      });
+      return auth;
+    }
+  } catch (_) {}
+  return null;
+}
+
+async function writeSessionAuth(authObj) {
+  try {
+    if (chrome.storage?.session) {
+      await chrome.storage.session.set({ [CLOUD_AUTH_KEY]: authObj });
+    }
+    await chrome.storage.local.remove([CLOUD_AUTH_KEY]);
+    await chrome.storage.local.set({
+      [CLOUD_AUTH_META_KEY]: {
+        authenticated: Boolean(authObj?.accessToken && authObj?.userId),
+        userId: authObj?.userId || null,
+        updatedAt: Date.now(),
+      },
+    });
+  } catch (_) {}
+}
+
 async function getValidCloudContext() {
-  const store = await chrome.storage.local.get([CLOUD_AUTH_KEY, 'qg_active_user_id']);
-  const auth = store?.[CLOUD_AUTH_KEY];
+  const [auth, store] = await Promise.all([
+    readSessionAuth(),
+    chrome.storage.local.get(['qg_active_user_id']),
+  ]);
   const activeUserId = store?.qg_active_user_id || auth?.userId;
   if (!auth || !auth.supabaseUrl || !auth.anonKey || !auth.userId || (!auth.accessToken && !auth.refreshToken)) {
     return null;
@@ -50,14 +98,12 @@ async function getValidCloudContext() {
       const refreshed = await refreshRes.json();
       if (!refreshed?.access_token) return null;
       token = refreshed.access_token;
-      await chrome.storage.local.set({
-        [CLOUD_AUTH_KEY]: {
-          ...auth,
-          accessToken: refreshed.access_token,
-          refreshToken: refreshed.refresh_token || auth.refreshToken,
-          expiresAt: refreshed.expires_at || (nowSec + (Number(refreshed.expires_in) || 3600)),
-          updatedAt: Date.now(),
-        },
+      await writeSessionAuth({
+        ...auth,
+        accessToken: refreshed.access_token,
+        refreshToken: refreshed.refresh_token || auth.refreshToken,
+        expiresAt: refreshed.expires_at || (nowSec + (Number(refreshed.expires_in) || 3600)),
+        updatedAt: Date.now(),
       });
     } catch (_) {
       return null;

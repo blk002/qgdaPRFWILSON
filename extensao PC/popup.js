@@ -8076,6 +8076,12 @@
     dynamicTreeNodes: "&key, subjectId, nodeId, updatedAt",
     meta: "&key"
   });
+  db.version(2).stores({
+    questions: "&id, apiId, ownerUserId, subject, canonicalSubject, subjectId, subtopicId, banca, ano, bloco, hit, updatedAt, timestamp",
+    outbox: "++seq, entityType, entityId, userId, createdAt, status",
+    dynamicTreeNodes: "&key, subjectId, nodeId, updatedAt",
+    meta: "&key"
+  });
   var miniIndex = null;
   var indexedUserId = null;
   function normalizeSearchText(str) {
@@ -8107,6 +8113,118 @@
       correctChoice: String(q.correctChoice || ""),
       timestamp: q.timestamp || q.updatedAt || ""
     };
+  }
+  function mergeAttempts(prev = null, incoming = {}) {
+    const list = [];
+    const pushUnique = (entry) => {
+      if (!entry || typeof entry !== "object") return;
+      const ts = entry.timestamp || (/* @__PURE__ */ new Date()).toISOString();
+      const tsMs = new Date(ts).getTime() || 0;
+      const hit = Boolean(entry.hit);
+      const userChoice = String(entry.userChoice || "");
+      const durationSeconds = Number(entry.durationSeconds) || 0;
+      const dup = list.some((ex) => {
+        const exMs = new Date(ex.timestamp || 0).getTime() || 0;
+        return Math.abs(exMs - tsMs) <= 5e3 && Boolean(ex.hit) === hit && String(ex.userChoice || "") === userChoice;
+      });
+      if (!dup) list.push({ timestamp: ts, hit, userChoice, durationSeconds });
+    };
+    if (prev) {
+      if (Array.isArray(prev.attempts) && prev.attempts.length > 0) {
+        prev.attempts.forEach(pushUnique);
+      } else if (prev.timestamp || prev.updatedAt || prev.userChoice) {
+        pushUnique({
+          timestamp: prev.timestamp || prev.updatedAt,
+          hit: prev.hit,
+          userChoice: prev.userChoice,
+          durationSeconds: prev.durationSeconds
+        });
+      }
+    }
+    if (Array.isArray(incoming.attempts) && incoming.attempts.length > 0) {
+      incoming.attempts.forEach(pushUnique);
+    } else if (incoming.timestamp || incoming.userChoice !== void 0 || incoming.hit !== void 0) {
+      const incomingTs = incoming.timestamp || incoming.updatedAt || (/* @__PURE__ */ new Date()).toISOString();
+      const incomingMs = new Date(incomingTs).getTime() || 0;
+      const latest = list.length > 0 ? list[list.length - 1] : null;
+      const latestMs = latest ? new Date(latest.timestamp || 0).getTime() || 0 : 0;
+      const changed = latest && (Boolean(latest.hit) !== Boolean(incoming.hit) || String(latest.userChoice || "") !== String(incoming.userChoice || ""));
+      if (!latest || Math.abs(incomingMs - latestMs) > 5e3 || changed && incomingMs >= latestMs) {
+        pushUnique({
+          timestamp: incomingTs,
+          hit: incoming.hit,
+          userChoice: incoming.userChoice,
+          durationSeconds: incoming.durationSeconds
+        });
+      }
+    }
+    return list.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
+  }
+  function mergeQuestionRecords(prev = null, incoming = {}) {
+    const nowIso = (/* @__PURE__ */ new Date()).toISOString();
+    const base = prev ? { ...prev, ...incoming } : { ...incoming };
+    const attempts = mergeAttempts(prev, incoming);
+    const pickRicherText = (prevText, incText) => {
+      const p = String(prevText || "");
+      const i = String(incText || "");
+      if (!i) return p;
+      if (!p) return i;
+      return p.length > i.length + 25 ? p : i;
+    };
+    const content = pickRicherText(prev?.content, incoming.content);
+    const teacherComment = pickRicherText(prev?.teacherComment, incoming.teacherComment);
+    const userNote = incoming.userNote !== void 0 && incoming.userNote !== "" ? incoming.userNote : prev?.userNote || "";
+    const alternatives = Array.isArray(incoming.alternatives) && incoming.alternatives.length > 0 && (!Array.isArray(prev?.alternatives) || incoming.alternatives.length >= prev.alternatives.length) ? incoming.alternatives : prev?.alternatives || null;
+    const communityCorrectPct = incoming.communityCorrectPct !== void 0 && incoming.communityCorrectPct !== null ? Number(incoming.communityCorrectPct) : prev?.communityCorrectPct !== void 0 && prev?.communityCorrectPct !== null ? Number(prev.communityCorrectPct) : void 0;
+    const communityErrorPct = incoming.communityErrorPct !== void 0 && incoming.communityErrorPct !== null ? Number(incoming.communityErrorPct) : communityCorrectPct !== void 0 ? Math.max(0, Math.min(100, Math.round(100 - communityCorrectPct))) : prev?.communityErrorPct;
+    const hitVal = Boolean(base.hit);
+    const resolvedApiId = incoming.apiId !== void 0 && incoming.apiId !== null ? Number(incoming.apiId) : prev?.apiId !== void 0 && prev?.apiId !== null ? Number(prev.apiId) : void 0;
+    const resolvedSubjectId = incoming.subjectId !== void 0 && incoming.subjectId !== null ? Number(incoming.subjectId) : prev?.subjectId !== void 0 && prev?.subjectId !== null ? Number(prev.subjectId) : void 0;
+    const resolvedSubtopicId = incoming.subtopicId !== void 0 && incoming.subtopicId !== null ? Number(incoming.subtopicId) : prev?.subtopicId !== void 0 && prev?.subtopicId !== null ? Number(prev.subtopicId) : void 0;
+    return {
+      ...base,
+      ...Number.isFinite(resolvedApiId) && resolvedApiId > 0 ? { apiId: resolvedApiId } : {},
+      ...Number.isFinite(resolvedSubjectId) && resolvedSubjectId > 0 ? { subjectId: resolvedSubjectId } : {},
+      ...Number.isFinite(resolvedSubtopicId) && resolvedSubtopicId > 0 ? { subtopicId: resolvedSubtopicId } : {},
+      ...base.banca || prev?.banca ? { banca: incoming.banca || prev?.banca || base.banca } : {},
+      ...base.ano || prev?.ano ? { ano: incoming.ano || prev?.ano || base.ano } : {},
+      ...base.data || prev?.data ? { data: incoming.data || prev?.data || base.data } : {},
+      acertou: incoming.acertou !== void 0 ? Boolean(incoming.acertou) : prev?.acertou !== void 0 ? Boolean(prev.acertou) : hitVal,
+      ...content ? { content } : {},
+      attempts,
+      teacherComment,
+      commentSource: incoming.commentSource || prev?.commentSource || (teacherComment ? "professor" : ""),
+      userNote,
+      alternatives,
+      ...communityCorrectPct !== void 0 ? { communityCorrectPct } : {},
+      ...communityErrorPct !== void 0 ? { communityErrorPct } : {},
+      isPegadinha: communityErrorPct !== void 0 ? communityErrorPct >= 65 : Boolean(base.isPegadinha),
+      isAvoidableError: communityCorrectPct !== void 0 ? !hitVal && communityCorrectPct >= 65 : Boolean(base.isAvoidableError),
+      timestamp: base.timestamp || prev?.timestamp || nowIso,
+      updatedAt: incoming.updatedAt || nowIso
+    };
+  }
+  async function bulkUpsertQuestionsFull(questions = [], { enqueueOutbox = false } = {}) {
+    if (!Array.isArray(questions) || questions.length === 0) return [];
+    const valid = questions.filter((q) => q && q.id);
+    if (valid.length === 0) return [];
+    const existing = await db.questions.bulkGet(valid.map((q) => q.id));
+    const mergedList = valid.map((q, idx) => mergeQuestionRecords(existing[idx] || null, q));
+    await db.questions.bulkPut(mergedList);
+    miniIndex = null;
+    if (enqueueOutbox) {
+      await db.outbox.bulkAdd(
+        mergedList.map((m) => ({
+          entityType: "question_upsert",
+          entityId: String(m.id),
+          userId: m.ownerUserId || null,
+          payload: m,
+          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+          status: "pending"
+        }))
+      );
+    }
+    return mergedList;
   }
   async function getAllQuestionsFull(userId = null) {
     const all = await db.questions.toArray();
@@ -8143,6 +8261,31 @@
     const rows = await db.outbox.orderBy("seq").toArray();
     return userId ? rows.filter((r) => !r.userId || r.userId === userId) : rows;
   }
+  async function mergeDynamicTreeNodes(entries = []) {
+    if (!Array.isArray(entries) || entries.length === 0) return 0;
+    const now = Date.now();
+    const normalized = [];
+    for (const e of entries) {
+      if (!e || !e.subjectId || !e.nodeId || !e.name) continue;
+      normalized.push({
+        key: `${e.subjectId}:${e.nodeId}`,
+        subjectId: Number(e.subjectId),
+        subjectName: String(e.subjectName || ""),
+        nodeId: Number(e.nodeId),
+        parentId: Number(e.parentId || e.subjectId),
+        depth: Number(e.depth) || 1,
+        name: String(e.name).trim(),
+        path: Array.isArray(e.path) ? e.path.map(Number) : [Number(e.subjectId), Number(e.nodeId)],
+        updatedAt: now
+      });
+    }
+    if (normalized.length === 0) return 0;
+    await db.dynamicTreeNodes.bulkPut(normalized);
+    return normalized.length;
+  }
+  async function getAllDynamicTreeNodes() {
+    return db.dynamicTreeNodes.toArray();
+  }
   async function getDbStats(userId = null) {
     const [questions, pending, treeNodes] = await Promise.all([
       getAllQuestionsFull(userId),
@@ -8155,16 +8298,230 @@
       dynamicNodesCount: treeNodes
     };
   }
+  async function exportAllDataForBackup(userId = null) {
+    const [questions, dynamicNodes, storeData] = await Promise.all([
+      getAllQuestionsFull(userId),
+      getAllDynamicTreeNodes(),
+      chrome.storage.local.get([
+        "qg_caveira_filter_id_memory_v1",
+        "qg_caveira_filter_memory",
+        "qg_caveira_daily_goal",
+        "qg_caveira_default_prefs",
+        "qg_tree_meta"
+      ])
+    ]);
+    return {
+      schema: "qg_prf_backup_v3.1.0",
+      exportedAt: (/* @__PURE__ */ new Date()).toISOString(),
+      userId: userId || null,
+      questions,
+      dynamicTreeNodes: dynamicNodes,
+      filterIdMemory: storeData?.qg_caveira_filter_id_memory_v1 || {},
+      filterLegacyMemory: storeData?.qg_caveira_filter_memory || {},
+      dailyGoal: storeData?.qg_caveira_daily_goal || 50,
+      defaultPrefs: storeData?.qg_caveira_default_prefs || null,
+      treeMeta: storeData?.qg_tree_meta || null
+    };
+  }
+  async function importBackupData(backupObj, userId = null) {
+    if (!backupObj || typeof backupObj !== "object") {
+      throw new Error("Formato de backup inválido.");
+    }
+    const questions = Array.isArray(backupObj.questions) ? backupObj.questions : [];
+    const validQuestions = questions.filter((q) => q && (q.id || q.apiId)).map((q) => ({
+      ...q,
+      id: q.id || `api_${q.apiId}`,
+      ...userId && !q.ownerUserId ? { ownerUserId: userId } : {}
+    }));
+    let importedQuestions = 0;
+    if (validQuestions.length > 0) {
+      const merged = await bulkUpsertQuestionsFull(validQuestions, { enqueueOutbox: false });
+      importedQuestions = merged.length;
+    }
+    let importedNodes = 0;
+    if (Array.isArray(backupObj.dynamicTreeNodes) && backupObj.dynamicTreeNodes.length > 0) {
+      importedNodes = await mergeDynamicTreeNodes(backupObj.dynamicTreeNodes);
+    }
+    const localStore = await chrome.storage.local.get([
+      "qg_caveira_filter_id_memory_v1",
+      "qg_caveira_filter_memory"
+    ]);
+    const nextIdMem = {
+      ...localStore?.qg_caveira_filter_id_memory_v1 || {},
+      ...backupObj.filterIdMemory && typeof backupObj.filterIdMemory === "object" ? backupObj.filterIdMemory : {}
+    };
+    const nextLegacyMem = {
+      ...localStore?.qg_caveira_filter_memory || {},
+      ...backupObj.filterLegacyMemory && typeof backupObj.filterLegacyMemory === "object" ? backupObj.filterLegacyMemory : {}
+    };
+    await chrome.storage.local.set({
+      qg_caveira_filter_id_memory_v1: nextIdMem,
+      qg_caveira_filter_memory: nextLegacyMem,
+      ...backupObj.dailyGoal ? { qg_caveira_daily_goal: Number(backupObj.dailyGoal) || 50 } : {},
+      ...backupObj.defaultPrefs ? { qg_caveira_default_prefs: backupObj.defaultPrefs } : {}
+    });
+    return {
+      importedQuestions,
+      importedNodes,
+      filterMemoryCount: Object.keys(nextIdMem).length
+    };
+  }
 
-  // extensao-src/entries/popup.entry.js
+  // extensao-src/content/utils.js
   var STORAGE_KEY = "qg_caveira_questions";
   var SESSION_KEY = "qg_caveira_session";
   var GOAL_KEY = "qg_caveira_daily_goal";
   var ACTIVE_USER_KEY = "qg_active_user_id";
   var ACTIVE_USER_LABEL_KEY = "qg_active_user_label";
-  var USER_BUCKETS_KEY = "qg_caveira_user_buckets";
+  var PENDING_SIMULADOS_QUEUE_KEY = "qg_pending_simulados_queue";
+  var LAST_FILTER_DIAG_KEY = "qg_caveira_last_filter_diag";
   var DEFAULT_PREFS_KEY = "qg_caveira_default_prefs";
+  var DIAGNOSTIC_MODE_KEY = "qg_diagnostic_mode";
+  var DIAGNOSTIC_EVENTS_KEY = "qg_diagnostic_events";
+  var SNIFFER_RECENT_EVENTS_KEY = "qg_sniffer_recent_events";
+  var TREE_META_KEY = "qg_tree_meta";
+  var SIMULADO_QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
+  var SIMULADO_QUEUE_MAX_ATTEMPTS = 10;
+  function normalizeFilterText(str) {
+    return String(str || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  }
+  function normalizeCourseIndexKey(str) {
+    return normalizeFilterText(str).replace(/[-–—:|/]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+  function getTodaySessionDate() {
+    const now = /* @__PURE__ */ new Date();
+    const y = now.getFullYear();
+    const m = String(now.getMonth() + 1).padStart(2, "0");
+    const d = String(now.getDate()).padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  }
+  function normalizeSession(rawSession) {
+    const today = getTodaySessionDate();
+    if (!rawSession || rawSession.date !== today) {
+      return { date: today, total: 0, hits: 0, errors: 0 };
+    }
+    return {
+      date: today,
+      total: Number(rawSession.total) || 0,
+      hits: Number(rawSession.hits) || 0,
+      errors: Number(rawSession.errors) || 0,
+      ...rawSession.wasExplicitlyReset ? { wasExplicitlyReset: true } : {}
+    };
+  }
+  var SENSITIVE_KEY_RX = /(?:token|auth|cookie|password|passwd|secret|jwt|bearer|authorization|refresh_token|access_token|apikey|api_key)/i;
+  var JWT_STRING_RX = /eyJ[A-Za-z0-9_-]{8,}\.[A-Za-z0-9_-]{8,}(?:\.[A-Za-z0-9_-]+)?/g;
+  function sanitizeDiagnosticData(input, depth = 0) {
+    if (depth > 6) return "[depth-limit]";
+    if (input === null || input === void 0) return input;
+    if (typeof input === "string") {
+      const cleaned = input.replace(JWT_STRING_RX, "[REDACTED_JWT]");
+      return cleaned.length > 240 ? `${cleaned.slice(0, 240)}...` : cleaned;
+    }
+    if (typeof input === "number" || typeof input === "boolean") return input;
+    if (Array.isArray(input)) {
+      return input.slice(0, 15).map((item) => sanitizeDiagnosticData(item, depth + 1));
+    }
+    if (typeof input === "object") {
+      const out = {};
+      for (const [k, v] of Object.entries(input)) {
+        if (SENSITIVE_KEY_RX.test(k)) {
+          out[k] = "[REDACTED]";
+        } else {
+          out[k] = sanitizeDiagnosticData(v, depth + 1);
+        }
+      }
+      return out;
+    }
+    return String(input).slice(0, 120);
+  }
+
+  // extensao-src/content/simuladosHelper.js
+  function buildSimuladoKey(sim) {
+    if (!sim || typeof sim !== "object") return "";
+    if (sim.caveiraId) return String(sim.caveiraId);
+    const titlePart = normalizeCourseIndexKey(sim.title || "").slice(0, 48);
+    return titlePart ? `sim_title_${titlePart}` : `sim_${sim.data || "sem_data"}`;
+  }
+  function pruneAndNormalizeQueue(rawQueue, now = Date.now()) {
+    const rawItems = Array.isArray(rawQueue?.items) ? rawQueue.items : Array.isArray(rawQueue?.simulados) ? rawQueue.simulados.map((simulado) => ({
+      caveiraId: buildSimuladoKey(simulado),
+      simulado,
+      savedAt: Number(rawQueue.savedAt) || now,
+      attempts: 0,
+      lastAttemptAt: 0,
+      status: "saved"
+    })) : [];
+    const deduped = /* @__PURE__ */ new Map();
+    for (const item of rawItems) {
+      if (!item || !item.simulado) continue;
+      const savedAt = Number(item.savedAt) || now;
+      if (now - savedAt > SIMULADO_QUEUE_TTL_MS) continue;
+      const key = String(item.caveiraId || buildSimuladoKey(item.simulado));
+      if (!key) continue;
+      const prev = deduped.get(key);
+      if (!prev || savedAt >= prev.savedAt) {
+        deduped.set(key, {
+          caveiraId: key,
+          simulado: { ...item.simulado, caveiraId: item.simulado.caveiraId || key },
+          savedAt,
+          attempts: Number(item.attempts) || 0,
+          lastAttemptAt: Number(item.lastAttemptAt) || 0,
+          status: item.status || "saved"
+        });
+      }
+    }
+    return {
+      items: Array.from(deduped.values()),
+      lastStatus: rawQueue?.lastStatus || (deduped.size > 0 ? "saved" : "idle"),
+      lastDeliveryId: rawQueue?.lastDeliveryId || null,
+      lastConfirmedAt: Number(rawQueue?.lastConfirmedAt) || 0,
+      lastConfirmedCount: Number(rawQueue?.lastConfirmedCount) || 0,
+      lastConfirmedIds: Array.isArray(rawQueue?.lastConfirmedIds) ? rawQueue.lastConfirmedIds : [],
+      lastError: rawQueue?.lastError || null,
+      updatedAt: Number(rawQueue?.updatedAt) || now
+    };
+  }
+  function formatSimuladoDeliveryStatus(queue) {
+    if (!queue || typeof queue !== "object") return { label: "", isDone: false };
+    const items = Array.isArray(queue.items) ? queue.items : [];
+    const pendingCount = items.filter((i) => Number(i.attempts || 0) < SIMULADO_QUEUE_MAX_ATTEMPTS).length;
+    const exhaustedCount = items.length - pendingCount;
+    if (queue.lastStatus === "confirmed" && items.length === 0) {
+      const cnt = queue.lastConfirmedCount || (queue.lastConfirmedIds?.length || 0);
+      return {
+        label: cnt > 0 ? `✅ ${cnt} entregue(s) ao QG (confirmado)` : "✅ Entregue ao QG (confirmado)",
+        isDone: true
+      };
+    }
+    if (items.length === 0) return { label: "", isDone: false };
+    if (queue.lastStatus === "waiting_qg") {
+      return {
+        label: `⏳ ${items.length} salvo(s) — aguardando o QG (abra o site e faça login)`,
+        isDone: false
+      };
+    }
+    if (queue.lastStatus === "sending") {
+      return {
+        label: `📤 ${items.length} salvo(s) — enviando ao QG...`,
+        isDone: false
+      };
+    }
+    if (exhaustedCount > 0 && pendingCount === 0) {
+      return {
+        label: `⚠️ ${exhaustedCount} pendente(s) após ${SIMULADO_QUEUE_MAX_ATTEMPTS} tentativas — clique "Reenviar" no popup`,
+        isDone: false
+      };
+    }
+    return {
+      label: `💾 ${items.length} simulado(s) salvo(s) na extensão — enviando ao QG...`,
+      isDone: false
+    };
+  }
+
+  // extensao-src/entries/popup.entry.js
+  var USER_BUCKETS_KEY = "qg_caveira_user_buckets";
   var FIRST_PREFS = { examBoards: ["cebraspe", "caveira_ineditas", "caveira_adaptadas"], numberAlternatives: [2] };
+  var TREE_STALE_DAYS = 30;
   function renderAccountStatus(activeUserId, activeUserLabel) {
     const pill = document.getElementById("account-status-pill");
     if (!pill) return;
@@ -8192,26 +8549,6 @@
     pill.appendChild(iconSpan);
     pill.appendChild(textSpan);
   }
-  function getTodaySessionDate() {
-    const now = /* @__PURE__ */ new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, "0");
-    const d = String(now.getDate()).padStart(2, "0");
-    return `${y}-${m}-${d}`;
-  }
-  function normalizeSession(rawSession) {
-    const today = getTodaySessionDate();
-    if (!rawSession || rawSession.date !== today) {
-      return { date: today, total: 0, hits: 0, errors: 0 };
-    }
-    return {
-      date: today,
-      total: Number(rawSession.total) || 0,
-      hits: Number(rawSession.hits) || 0,
-      errors: Number(rawSession.errors) || 0,
-      ...rawSession.wasExplicitlyReset ? { wasExplicitlyReset: true } : {}
-    };
-  }
   function renderGoal(session, dailyGoal) {
     const hits = Number(session?.hits) || 0;
     const errors = Number(session?.errors) || 0;
@@ -8235,19 +8572,50 @@
     }
     if (txtStatus) {
       if (current >= goal) {
-        txtStatus.innerHTML = '<span style="color:#10b981; font-weight:800;">🏆 META CUMPRIDA! Missão dada é cumprida!</span>';
+        txtStatus.textContent = "🏆 META CUMPRIDA! Missão dada é cumprida!";
+        txtStatus.style.color = "#10b981";
+        txtStatus.style.fontWeight = "800";
       } else {
         const remaining = goal - current;
         txtStatus.textContent = `Faltam ${remaining} questão(ões) para a meta! 💪`;
         txtStatus.style.color = "#a1a1aa";
+        txtStatus.style.fontWeight = "700";
       }
     }
   }
+  function formatBrDate(isoOrMs) {
+    if (!isoOrMs) return null;
+    const dt = new Date(isoOrMs);
+    if (!Number.isFinite(dt.getTime())) return null;
+    const dd = String(dt.getDate()).padStart(2, "0");
+    const mm = String(dt.getMonth() + 1).padStart(2, "0");
+    const yyyy = dt.getFullYear();
+    return { formatted: `${dd}/${mm}/${yyyy}`, ms: dt.getTime() };
+  }
+  var cachedBaselineTreeDate = "";
+  async function getBaselineTreeDateFallback() {
+    if (cachedBaselineTreeDate) return cachedBaselineTreeDate;
+    try {
+      const resp = await fetch(chrome.runtime.getURL("caveira_arvore.json"));
+      if (!resp.ok) return "";
+      const data = await resp.json();
+      cachedBaselineTreeDate = String(data?.geradoEm || "");
+      return cachedBaselineTreeDate;
+    } catch (_) {
+      return "";
+    }
+  }
   document.addEventListener("DOMContentLoaded", () => {
-    const manifestVer = chrome.runtime?.getManifest?.().version || "3.0.0";
+    const manifestVer = chrome.runtime?.getManifest?.().version || "3.1.0";
     const verEl = document.getElementById("ext-version");
     if (verEl) verEl.textContent = `v${manifestVer}`;
     let currentUserId = null;
+    const setBackupStatus = (text, color = "#6ee7b7") => {
+      const el = document.getElementById("backup-status");
+      if (!el) return;
+      el.textContent = text;
+      el.style.color = color;
+    };
     const renderPopupStats = async (legacyQuestions, session, dailyGoal) => {
       let totalSaved = legacyQuestions.length;
       let dbStats = null;
@@ -8276,6 +8644,79 @@
       }
       renderGoal(session, dailyGoal);
     };
+    const renderDiagnosticsAndQueue = () => {
+      chrome.storage.local.get(
+        [
+          PENDING_SIMULADOS_QUEUE_KEY,
+          DIAGNOSTIC_MODE_KEY,
+          DIAGNOSTIC_EVENTS_KEY,
+          SNIFFER_RECENT_EVENTS_KEY,
+          LAST_FILTER_DIAG_KEY,
+          TREE_META_KEY
+        ],
+        async (r) => {
+          const queue = pruneAndNormalizeQueue(r[PENDING_SIMULADOS_QUEUE_KEY]);
+          const delivery = formatSimuladoDeliveryStatus(queue);
+          const queueEl = document.getElementById("simulados-queue-status");
+          if (queueEl) {
+            queueEl.textContent = delivery.label || "📊 Simulados: fila vazia (nenhum pendente)";
+            queueEl.style.color = delivery.isDone ? "#6ee7b7" : queue.items.length > 0 ? "#fbbf24" : "#94a3b8";
+          }
+          const badgeEl = document.getElementById("diag-pending-badge");
+          if (badgeEl) {
+            badgeEl.textContent = `${queue.items.length} pendente(s)`;
+            badgeEl.style.color = queue.items.length > 0 ? "#fbbf24" : "#6ee7b7";
+          }
+          const diagCb2 = document.getElementById("pref-diagnostic-mode");
+          if (diagCb2) {
+            diagCb2.checked = Boolean(r[DIAGNOSTIC_MODE_KEY]);
+          }
+          const snifferEvents = Array.isArray(r[SNIFFER_RECENT_EVENTS_KEY]) ? r[SNIFFER_RECENT_EVENTS_KEY] : [];
+          const diagShapes = Array.isArray(r[DIAGNOSTIC_EVENTS_KEY]) ? r[DIAGNOSTIC_EVENTS_KEY] : [];
+          const snifferSummaryEl = document.getElementById("diag-sniffer-summary");
+          if (snifferSummaryEl) {
+            const lastEv = snifferEvents[snifferEvents.length - 1];
+            const lastEvStr = lastEv ? `${lastEv.type}` : "nenhum ainda";
+            snifferSummaryEl.textContent = `Sniffer: ${snifferEvents.length} evento(s) (${lastEvStr}) • ${diagShapes.length} forma(s) diag.`;
+          }
+          const lastFilter = r[LAST_FILTER_DIAG_KEY];
+          const resolverSummaryEl = document.getElementById("diag-resolver-summary");
+          if (resolverSummaryEl) {
+            if (lastFilter?.diagLog) {
+              const d = lastFilter.diagLog;
+              const idsCount = Array.isArray(d.ids) ? d.ids.length : Array.isArray(lastFilter.expectedFilter?.ids) ? lastFilter.expectedFilter.ids.length : 0;
+              resolverSummaryEl.textContent = `Resolver: ${d.method || "auto"} • ${d.confidence || "-"} • ${idsCount} ID(s) • ${lastFilter.activePracticeFilter?.subject || ""}`.trim();
+            } else {
+              resolverSummaryEl.textContent = "Resolver: sem filtro recente";
+            }
+          }
+          const treeEl = document.getElementById("tree-meta-status");
+          if (treeEl) {
+            const meta = r[TREE_META_KEY] || {};
+            let dateRaw = meta.mergedDate || meta.baselineDate || "";
+            if (!dateRaw) {
+              dateRaw = await getBaselineTreeDateFallback();
+            }
+            const parsed = formatBrDate(dateRaw);
+            const dynCount = Number(meta.dynamicNodeCount) || 0;
+            const dynSuffix = dynCount > 0 ? ` (+${dynCount} din.)` : "";
+            if (parsed) {
+              const ageDays = Math.floor((Date.now() - parsed.ms) / 864e5);
+              if (ageDays > TREE_STALE_DAYS) {
+                treeEl.textContent = `⚠️ Árvore Caveira: ${parsed.formatted} (${ageDays}d atrás — atualize)${dynSuffix}`;
+                treeEl.style.color = "#fbbf24";
+              } else {
+                treeEl.textContent = `🌳 Árvore Caveira: ${parsed.formatted}${dynSuffix}`;
+                treeEl.style.color = "#94a3b8";
+              }
+            } else {
+              treeEl.textContent = `⚠️ Árvore Caveira: data desconhecida${dynSuffix}`;
+              treeEl.style.color = "#fbbf24";
+            }
+          }
+        }
+      );
+    };
     chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, GOAL_KEY, ACTIVE_USER_KEY, ACTIVE_USER_LABEL_KEY], (res) => {
       currentUserId = res[ACTIVE_USER_KEY] || null;
       renderAccountStatus(currentUserId, res[ACTIVE_USER_LABEL_KEY] || "");
@@ -8289,6 +8730,7 @@
         chrome.storage.local.set({ [SESSION_KEY]: session });
       }
       renderPopupStats(questions, session, dailyGoal);
+      renderDiagnosticsAndQueue();
     });
     chrome.storage.onChanged.addListener((_, area) => {
       if (area === "local") {
@@ -8299,6 +8741,7 @@
           const dailyGoal = Number(res[GOAL_KEY]) || 50;
           renderAccountStatus(currentUserId, res[ACTIVE_USER_LABEL_KEY] || "");
           renderPopupStats(questions, session, dailyGoal);
+          renderDiagnosticsAndQueue();
         });
       }
     });
@@ -8402,12 +8845,14 @@
       const notifCb = document.getElementById("pref-notifications");
       const syncEl = document.getElementById("direct-sync-status");
       const renderStatus = () => {
-        chrome.storage.local.get(["qg_notifications_enabled", "qg_cloud_auth", "qg_last_direct_cloud_sync", "qg_sync_mode"], (r) => {
+        chrome.storage.local.get(["qg_notifications_enabled", "qg_last_direct_cloud_sync", "qg_sync_mode", "qg_cloud_auth_meta"], (r) => {
           if (notifCb) {
             notifCb.checked = r.qg_notifications_enabled !== false;
           }
-          if (syncEl) {
-            if (r.qg_cloud_auth?.accessToken && r.qg_cloud_auth?.userId) {
+          chrome.runtime.sendMessage({ type: "GET_CLOUD_AUTH_STATUS" }, (authRes) => {
+            if (!syncEl) return;
+            const isAuth = Boolean(!chrome.runtime?.lastError && (authRes?.authenticated || r.qg_cloud_auth_meta?.authenticated));
+            if (isAuth) {
               const last2 = r.qg_last_direct_cloud_sync;
               const modeLabel = r.qg_sync_mode === "incremental+profile" || r.qg_sync_mode === "incremental-realtime" ? "Incremental" : "Delta";
               if (last2) {
@@ -8422,7 +8867,7 @@
               syncEl.textContent = "☁️ Sync Direto: abra o QG 1x para vincular";
               syncEl.style.color = "#fbbf24";
             }
-          }
+          });
         });
       };
       renderStatus();
@@ -8432,17 +8877,106 @@
         });
       }
       chrome.storage.onChanged.addListener((changes, area) => {
-        if (area === "local" && (changes.qg_cloud_auth || changes.qg_last_direct_cloud_sync || changes.qg_notifications_enabled || changes.qg_sync_mode)) {
+        if (area === "local" && (changes.qg_cloud_auth_meta || changes.qg_last_direct_cloud_sync || changes.qg_notifications_enabled || changes.qg_sync_mode)) {
           renderStatus();
         }
       });
     })();
+    const diagCb = document.getElementById("pref-diagnostic-mode");
+    if (diagCb) {
+      diagCb.addEventListener("change", () => {
+        chrome.storage.local.set({ [DIAGNOSTIC_MODE_KEY]: diagCb.checked }, () => {
+          setBackupStatus(diagCb.checked ? "Modo Diagnóstico ATIVADO." : "Modo Diagnóstico desativado.", "#38bdf8");
+        });
+      });
+    }
+    document.getElementById("btn-retry-simulados")?.addEventListener("click", () => {
+      chrome.runtime.sendMessage({ type: "FLUSH_PENDING_QG_EVENTS", forceRetry: true }, (resp) => {
+        if (chrome.runtime?.lastError || !resp?.success) {
+          setBackupStatus("Falha ao acionar reenvio — verifique se a aba do QG está aberta.", "#f87171");
+          return;
+        }
+        if (!resp.tabs) {
+          setBackupStatus("Nenhuma aba do QG da PRF aberta. Abra o QG e faça login.", "#fbbf24");
+        } else {
+          setBackupStatus(`Reenvio enviado para ${resp.tabs} aba(s) do QG!`, "#6ee7b7");
+        }
+        setTimeout(renderDiagnosticsAndQueue, 400);
+      });
+    });
+    document.getElementById("btn-copy-diagnostic")?.addEventListener("click", async () => {
+      const rawStore = await new Promise((resolve) => {
+        chrome.storage.local.get([
+          PENDING_SIMULADOS_QUEUE_KEY,
+          DIAGNOSTIC_MODE_KEY,
+          DIAGNOSTIC_EVENTS_KEY,
+          SNIFFER_RECENT_EVENTS_KEY,
+          LAST_FILTER_DIAG_KEY,
+          TREE_META_KEY,
+          "qg_cloud_auth_meta"
+        ], resolve);
+      });
+      const dbStats = await getDbStats(currentUserId).catch(() => null);
+      const payload = sanitizeDiagnosticData({
+        version: manifestVer,
+        capturedAt: (/* @__PURE__ */ new Date()).toISOString(),
+        diagnosticMode: Boolean(rawStore?.[DIAGNOSTIC_MODE_KEY]),
+        treeMeta: rawStore?.[TREE_META_KEY] || null,
+        authMeta: rawStore?.qg_cloud_auth_meta || null,
+        dbStats,
+        pendingSimuladosQueue: pruneAndNormalizeQueue(rawStore?.[PENDING_SIMULADOS_QUEUE_KEY]),
+        recentSnifferEvents: (rawStore?.[SNIFFER_RECENT_EVENTS_KEY] || []).slice(-20),
+        diagnosticShapes: (rawStore?.[DIAGNOSTIC_EVENTS_KEY] || []).slice(-30),
+        lastFilterDiag: rawStore?.[LAST_FILTER_DIAG_KEY] || null
+      });
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      setBackupStatus("Diagnóstico copiado (tokens/credenciais removidos).", "#6ee7b7");
+    });
+    document.getElementById("btn-export-backup")?.addEventListener("click", async () => {
+      try {
+        const backup = await exportAllDataForBackup(currentUserId);
+        const blob = new Blob([JSON.stringify(backup, null, 2)], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `qg-prf-backup-${getTodaySessionDate()}.json`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(url), 1500);
+        setBackupStatus(`Backup exportado (${backup.questions.length} questões).`, "#6ee7b7");
+      } catch (err) {
+        setBackupStatus(`Erro ao exportar: ${err?.message || "desconhecido"}`, "#f87171");
+      }
+    });
+    const importInput = document.getElementById("input-import-backup");
+    document.getElementById("btn-import-backup")?.addEventListener("click", () => {
+      importInput?.click();
+    });
+    importInput?.addEventListener("change", async (e) => {
+      const file = e.target?.files?.[0];
+      if (!file) return;
+      try {
+        const text = await file.text();
+        const parsed = JSON.parse(text);
+        const res = await importBackupData(parsed, currentUserId);
+        setBackupStatus(
+          `Importado: ${res.importedQuestions} questão(ões), ${res.importedNodes} nó(s), ${res.filterMemoryCount} memória(s).`,
+          "#6ee7b7"
+        );
+        chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, GOAL_KEY], (s) => {
+          renderPopupStats(Array.isArray(s[STORAGE_KEY]) ? s[STORAGE_KEY] : [], normalizeSession(s[SESSION_KEY]), Number(s[GOAL_KEY]) || 50);
+        });
+      } catch (err) {
+        setBackupStatus(`Backup inválido: ${err?.message || "erro ao importar"}`, "#f87171");
+      } finally {
+        importInput.value = "";
+      }
+    });
     document.getElementById("btn-open-qg").addEventListener("click", async () => {
       const targetUrl = "https://blk002.github.io/qgdaPRFWILSON/#/estudos?tab=caveira";
       try {
         if (chrome.tabs && chrome.tabs.query) {
           const tabs = await chrome.tabs.query({
-            url: ["https://blk002.github.io/*", "http://localhost:*/*", "http://127.0.0.1:*/*"]
+            url: ["https://blk002.github.io/*"]
           });
           if (tabs && tabs.length > 0 && tabs[0].id) {
             await chrome.tabs.update(tabs[0].id, { active: true });
@@ -8464,10 +8998,10 @@
       const finalList = questions.length > 0 ? questions : fallback;
       navigator.clipboard.writeText(JSON.stringify(finalList, null, 2)).then(() => {
         const btn = document.getElementById("btn-copy-json");
-        const orig = btn.innerHTML;
-        btn.innerHTML = "<span>Copiado com Sucesso!</span> <span>✓</span>";
+        const orig = btn.textContent;
+        btn.textContent = "Copiado com Sucesso! ✓";
         setTimeout(() => {
-          btn.innerHTML = orig;
+          btn.textContent = orig;
         }, 1800);
       });
     });

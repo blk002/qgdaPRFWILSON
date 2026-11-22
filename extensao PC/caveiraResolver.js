@@ -187,37 +187,72 @@
       if (top[1] && top[0].final < top[1].final * 1.12) anchorAmbiguous = true; else anchor = top[0];
     }
 
-    // 2) Subtópicos: dentro do escopo da âncora (nós mais profundos) e, fora dele, só com confiança muito alta
+    // 2) Subtópicos: dentro do escopo da âncora; fora dele só com confiança alta (sem os termos da própria âncora)
     const picks = [];
     const scope = anchor ? descendantsOf(subject, anchor.node.id) : null;
-    for (const s of subs) {
-      let chosen = null, where = null;
+    const scopedExclude = anchor ? new Set([...exclude, ...anchor.node.tokens]) : exclude; // o escopo já implica o nome da âncora
+    const splitEnum = (txt) => String(txt || '').split(/\s*(?:,|;|\be\b|\bou\b)\s*/i).map(x => x.trim()).filter(x => canon(x).tokens.length >= 1);
+
+    const tryQuery = (q, isPart = false) => {
+      let chosen = null, where = null, amb = false, scopedTop = [], globalTop = [];
       if (scope && scope.size) {
-        const scopedExclude = new Set([...exclude, ...anchor.node.tokens]); // o escopo já implica o nome da âncora
-        const rr = score(subject, s.cleaned, { scope, excludeTokens: scopedExclude });
-        const p = pickBest(rr, { minRel: 0.6, minCov: 0.5 });
-        if (p.pick) { chosen = p.pick; where = 'dentro-da-ancora'; }
-        log.subtopics.push({ q: s.cleaned, level: s.level, scoped: rr.slice(0, 3).map(x => `${x.node.name} [${x.rel}]`), amb: p.ambiguous });
+        const rr = score(subject, q, { scope, excludeTokens: scopedExclude });
+        const pk = pickBest(rr, { minRel: 0.6, minCov: 0.5 });
+        scopedTop = rr.slice(0, 3).map(x => `${x.node.name} [${x.rel}]`); amb = pk.ambiguous;
+        if (pk.pick) { chosen = pk.pick; where = 'dentro-da-ancora'; }
       }
-      if (!chosen) {
-        const rr = score(subject, s.cleaned, { excludeTokens: exclude });
-        const p = pickBest(rr, { minRel: 0.9, minCov: 0.6, margin: 1.25 });
-        if (p.pick && (!anchor || !descendantsOf(subject, anchor.node.id).has(p.pick.node.id) || true)) { chosen = p.pick; where = 'global-forte'; }
-        if (!scope) log.subtopics.push({ q: s.cleaned, level: s.level, global: rr.slice(0, 3).map(x => `${x.node.name} [${x.rel}]`), amb: p.ambiguous });
+      // parte de enumeração fora da âncora: exige >=2 termos úteis (evita 'Segurança' solto marcar 'Da Segurança dos Veículos')
+      const usefulTokens = canon(q).tokens.filter(t => !scopedExclude.has(t)).length;
+      if (!chosen && !(isPart && usefulTokens < 2)) {
+        const rr = score(subject, q, { excludeTokens: scopedExclude });
+        const pk = pickBest(rr, { minRel: 0.9, minCov: 0.6, margin: 1.25 });
+        globalTop = rr.slice(0, 3).map(x => `${x.node.name} [${x.rel}]`); amb = amb || pk.ambiguous;
+        if (pk.pick) { chosen = pk.pick; where = 'global-forte'; }
       }
-      if (chosen && !picks.some(x => x.node.id === chosen.node.id)) picks.push({ ...chosen, where, from: s.cleaned });
+      return { chosen, where, amb, scopedTop, globalTop };
+    };
+    const addPick = (chosen, where, from) => {
+      if (chosen && !picks.some(x => x.node.id === chosen.node.id)) picks.push({ ...chosen, where, from });
+    };
+
+    let totalWeight = 0, matchedWeight = 0;
+    for (const sub of subs) {
+      totalWeight += sub.weight;
+      const full = tryQuery(sub.cleaned);
+      const entry = { q: sub.cleaned, level: sub.level, scoped: full.scopedTop, global: full.globalTop, amb: full.amb, via: 'completo' };
+      if (full.chosen) {
+        addPick(full.chosen, full.where, sub.cleaned); matchedWeight += sub.weight; entry.selected = full.chosen.node.name;
+      } else {
+        // enumeração ("A e B", "A, B"): tenta cada parte separadamente
+        const parts = splitEnum(sub.cleaned);
+        if (parts.length >= 2) {
+          let hit = 0; const got = [];
+          for (const part of parts) {
+            // parte precisa ter >=2 termos úteis (fora o nome da disciplina/âncora); termo solto como "segurança" casa com irmãos errados
+            if (canon(part).tokens.filter(t => !scopedExclude.has(t)).length < 2) continue;
+            const r = tryQuery(part, true);
+            if (r.chosen) { addPick(r.chosen, r.where, part); hit++; got.push(r.chosen.node.name); }
+          }
+          if (hit) { matchedWeight += sub.weight * (hit / parts.length); entry.via = 'partes'; entry.selected = got.join(' ; '); }
+        }
+      }
+      log.subtopics.push(entry);
     }
 
-    // 3) Montagem dos ids: pasta pai já inclui os filhos
+    // 3) Montagem dos ids: a pasta pai já inclui os filhos
     let ids = [], reason = '';
+    const ratio = totalWeight ? matchedWeight / totalWeight : 0;
+    log.matchRatio = +ratio.toFixed(2);
     const inScope = picks.filter(p => p.where === 'dentro-da-ancora');
     const outScope = picks.filter(p => p.where !== 'dentro-da-ancora');
     if (anchor) {
-      // se vários filhos específicos foram achados, usa os filhos (mais estreito); senão a própria âncora
       const exactTitle = anchor.rel >= 1.2; // título da aula == nome da pasta: a pasta inteira é o conteúdo
-      if (inScope.length >= 1 && !exactTitle) { ids = inScope.map(p => p.node.id); reason = 'subassuntos dentro da âncora (âncora ampla)'; }
-      else { ids = [anchor.node.id]; reason = exactTitle ? 'âncora exata (pasta cobre os filhos)' : 'âncora (pasta cobre os filhos)'; }
-      outScope.forEach(p => ids.push(p.node.id));
+      if (!exactTitle && picks.length >= 1 && ratio >= 0.6) {
+        ids = picks.map(p => p.node.id); reason = 'subassuntos cobrem o conteúdo (âncora ampla)';
+      } else {
+        ids = [anchor.node.id]; reason = exactTitle ? 'âncora exata (pasta cobre os filhos)' : 'âncora (pasta cobre os filhos)';
+        outScope.forEach(p => ids.push(p.node.id));
+      }
     } else {
       ids = picks.map(p => p.node.id); reason = ids.length ? 'só subtópicos fortes (sem âncora)' : 'nada decidido';
     }

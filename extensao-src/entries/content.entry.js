@@ -6,11 +6,67 @@ import {
   destroyShadowHud,
 } from '../ui/shadowHudHost.js';
 import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
+import {
+  QG_WEB_URL,
+  STORAGE_KEY,
+  SESSION_KEY,
+  SCHEMA_KEY,
+  SCHEMA_VERSION,
+  GOAL_KEY,
+  ACTIVE_USER_KEY,
+  ACTIVE_USER_LABEL_KEY,
+  PENDING_FILTER_KEY,
+  COURSE_INDEX_CACHE_KEY,
+  FILTER_CORRECTION_MEMORY_KEY,
+  FILTER_ID_MEMORY_KEY,
+  FILTER_MEMORY_CLOUD_KEY,
+  TODAY_MISSION_KEY,
+  SUBJECT_SPEEDS_KEY,
+  PLAYER_SPEED_KEY,
+  PLAYER_SEEK_KEY,
+  PENDING_CATALOG_KEY,
+  PENDING_SIMULADOS_KEY,
+  PENDING_SIMULADOS_QUEUE_KEY,
+  PENDING_PDF_KEY,
+  LAST_FILTER_DIAG_KEY,
+  DEFAULT_PREFS_KEY,
+  SUBJECT_TREE_CACHE_KEY,
+  DIAGNOSTIC_MODE_KEY,
+  DIAGNOSTIC_EVENTS_KEY,
+  SNIFFER_RECENT_EVENTS_KEY,
+  TREE_META_KEY,
+  escapeHtml,
+  normalizeFilterText,
+  normalizeCourseIndexKey,
+  classifySubjectBloco,
+  getTodaySessionDate,
+  normalizeSession,
+  sleepMs,
+  generateChannelNonce,
+  sanitizeDiagnosticData,
+} from '../content/utils.js';
+import {
+  isRankingTitleOrRow,
+  enqueueSimuladosIntoQueue,
+  formatSimuladoDeliveryStatus,
+} from '../content/simuladosHelper.js';
+import {
+  parseLastAnswerStatus,
+  resolveTreeIdsForQuestion,
+  buildStructuredTelemetryRecord,
+} from '../content/questionMapper.js';
+import {
+  hasSelectionChanged,
+  verifyUrlFilterApplied,
+} from '../content/filterGuard.js';
+import {
+  resolveSubjectSpeedForContext as resolveSubjectSpeedHelper,
+} from '../content/videoHelper.js';
 
-// QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.0 — Shadow DOM + Dexie IndexedDB + Sync Realtime)
+// QG DA PRF — Rastreador Tático de Questões do Projeto Caveira (v3.1.0 — Shadow DOM + Dexie + Segurança)
 
 (function() {
-  console.log('💀 [QG da PRF] Rastreador Caveira v3.0.0 ativo em:', window.location.href);
+  console.log('💀 [QG da PRF] Rastreador Caveira v3.1.0 ativo em:', window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
@@ -18,29 +74,10 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     destroyShadowHud();
   } catch (_) {}
 
-  const QG_WEB_URL = 'https://blk002.github.io/qgdaPRFWILSON/#/estudos?tab=caveira';
-  const STORAGE_KEY = 'qg_caveira_questions';
-  const SESSION_KEY = 'qg_caveira_session';
-  const SCHEMA_KEY = 'qg_caveira_schema_v3';
-  const GOAL_KEY = 'qg_caveira_daily_goal';
-  const ACTIVE_USER_KEY = 'qg_active_user_id';
-  const ACTIVE_USER_LABEL_KEY = 'qg_active_user_label';
-  const PENDING_FILTER_KEY = 'qg_pending_caveira_filter';
-  const COURSE_INDEX_CACHE_KEY = 'qg_caveira_course_index_cache';
-  const FILTER_CORRECTION_MEMORY_KEY = 'qg_caveira_filter_memory';
-  const FILTER_ID_MEMORY_KEY = 'qg_caveira_filter_id_memory_v1';
-  const FILTER_MEMORY_CLOUD_KEY = 'qg_filter_memory_cloud';
-  const TODAY_MISSION_KEY = 'qg_today_mission';
-  const SUBJECT_SPEEDS_KEY = 'qg_subject_speeds';
-  const PLAYER_SPEED_KEY = 'qg_player_target_speed';
-  const PLAYER_SEEK_KEY = 'qg_player_pending_seek';
-  const PENDING_CATALOG_KEY = 'qg_pending_course_catalog';
-  const PENDING_SIMULADOS_KEY = 'qg_pending_simulados_import';
-  const PENDING_PDF_KEY = 'qg_pending_pdf_study';
-  const LAST_FILTER_DIAG_KEY = 'qg_caveira_last_filter_diag';
-  const DEFAULT_PREFS_KEY = 'qg_caveira_default_prefs';
-  const SUBJECT_TREE_CACHE_KEY = 'qg_caveira_subject_tree_cache';
+  const SCHEMA_VERSION_KEY = 'qg_caveira_schema_version';
   const MAX_BUCKET_QUESTIONS = 1500;
+  const CHANNEL_NONCE = generateChannelNonce();
+  let diagnosticModeEnabled = false;
   let cachedDailyGoal = 50;
   let cachedActiveUserId = null;
   let cachedActiveUserLabel = '';
@@ -48,6 +85,7 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
   let isApplyingFilter = false;
   let filterStatusMessage = '';
   let lastFilterDiagnosticLog = null;
+  let lastResolverProposed = null;
   let cachedCaveiraTree = null;
   let cachedCaveiraTreeGeradoEm = '';
   let pendingResolverResult = null;
@@ -62,10 +100,49 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
   let lastSeekUrlApplied = '';
   let apiCourseCatalogCache = null;
   const apiQuestionCache = new Map();
+  const apiQuestionByApiId = new Map();
+  const apiQuestionByCode = new Map();
+  const apiAnswerCache = new Map();
   let apiSimuladosCache = [];
   const apiSimuladoEnjoymentByExamId = new Map();
   const apiSimuladoDatesByExamId = new Map();
   const apiSimuladoDatesByTitle = new Map();
+
+  function postToSniffer(type, payload) {
+    try {
+      window.postMessage(
+        { source: 'QG_CAVEIRA_CONTENT', nonce: CHANNEL_NONCE, type, payload },
+        window.location.origin
+      );
+    } catch (_) {}
+  }
+
+  function appendSnifferTelemetryEvent(type, summaryObj = {}) {
+    if (!isExtensionContextValid() || !chrome?.storage?.local) return;
+    try {
+      chrome.storage.local.get([SNIFFER_RECENT_EVENTS_KEY], (res) => {
+        if (chrome.runtime?.lastError || isDestroyed) return;
+        const prev = Array.isArray(res?.[SNIFFER_RECENT_EVENTS_KEY]) ? res[SNIFFER_RECENT_EVENTS_KEY] : [];
+        const next = [
+          { at: new Date().toISOString(), type, ...sanitizeDiagnosticData(summaryObj) },
+          ...prev,
+        ].slice(0, 20);
+        chrome.storage.local.set({ [SNIFFER_RECENT_EVENTS_KEY]: next });
+      });
+    } catch (_) {}
+  }
+
+  function appendDiagnosticShape(entry) {
+    if (!diagnosticModeEnabled || !isExtensionContextValid() || !chrome?.storage?.local) return;
+    try {
+      chrome.storage.local.get([DIAGNOSTIC_EVENTS_KEY], (res) => {
+        if (chrome.runtime?.lastError || isDestroyed) return;
+        const prev = Array.isArray(res?.[DIAGNOSTIC_EVENTS_KEY]) ? res[DIAGNOSTIC_EVENTS_KEY] : [];
+        const next = [sanitizeDiagnosticData(entry), ...prev].slice(0, 30);
+        chrome.storage.local.set({ [DIAGNOSTIC_EVENTS_KEY]: next });
+      });
+    } catch (_) {}
+  }
 
   function mergeSimuladoDateEntry(examId, title, entry = {}) {
     if (!entry || typeof entry !== 'object') return;
@@ -95,7 +172,14 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
         resolve(payload);
       };
       const onResult = (ev) => {
-        if (ev.source !== window || ev.data?.source !== 'QG_CAVEIRA_API_SNIFFER') return;
+        if (
+          ev.source !== window ||
+          ev.origin !== window.location.origin ||
+          ev.data?.source !== 'QG_CAVEIRA_API_SNIFFER' ||
+          ev.data?.nonce !== CHANNEL_NONCE
+        ) {
+          return;
+        }
         if (ev.data?.type === 'FETCH_SIMULADO_DATES_RESULT' && ev.data?.payload?.requestId === requestId) {
           done(ev.data.payload);
         }
@@ -103,11 +187,7 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
       const timer = setTimeout(() => done(null), timeoutMs);
       window.addEventListener('message', onResult);
       try {
-        window.postMessage({
-          source: 'QG_CAVEIRA_CONTENT',
-          type: 'FETCH_SIMULADO_DATES',
-          payload: { requestId, teamId: String(teamId || ''), examId: String(examId || '') },
-        }, '*');
+        postToSniffer('FETCH_SIMULADO_DATES', { requestId, teamId: String(teamId || ''), examId: String(examId || '') });
       } catch (_) {
         done(null);
       }
@@ -230,32 +310,6 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     errors: 0
   };
 
-  function getTodaySessionDate() {
-    const now = new Date();
-    const y = now.getFullYear();
-    const m = String(now.getMonth() + 1).padStart(2, '0');
-    const d = String(now.getDate()).padStart(2, '0');
-    return `${y}-${m}-${d}`;
-  }
-
-  function normalizeSession(rawSession) {
-    const today = getTodaySessionDate();
-    if (!rawSession || rawSession.date !== today) {
-      return {
-        date: today,
-        total: 0,
-        hits: 0,
-        errors: 0
-      };
-    }
-    return {
-      date: today,
-      total: Number(rawSession.total) || 0,
-      hits: Number(rawSession.hits) || 0,
-      errors: Number(rawSession.errors) || 0
-    };
-  }
-
   function checkDailySessionReset() {
     const today = getTodaySessionDate();
     if (sessionStats.date !== today) {
@@ -273,6 +327,20 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     } catch (_) {
       return false;
     }
+  }
+
+  function updateSimuladoImportStatusHud(queue) {
+    const statusEl = getHudEl('qg-sim-delivery-status');
+    const info = formatSimuladoDeliveryStatus(queue);
+    if (!statusEl) return;
+    if (!info.label) {
+      statusEl.style.display = 'none';
+      statusEl.textContent = '';
+      return;
+    }
+    statusEl.textContent = info.label;
+    statusEl.style.color = info.isDone ? '#86efac' : '#fde68a';
+    statusEl.style.display = 'block';
   }
 
   let handleScrollUpdateRef = null;
@@ -318,11 +386,21 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     if (!isExtensionContextValid()) return;
     try {
       chrome.storage.local.get(
-        [STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, GOAL_KEY, ACTIVE_USER_KEY, ACTIVE_USER_LABEL_KEY, PENDING_FILTER_KEY, LAST_FILTER_DIAG_KEY, TODAY_MISSION_KEY, SUBJECT_SPEEDS_KEY, FILTER_ID_MEMORY_KEY, FILTER_MEMORY_CLOUD_KEY],
+        [
+          STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, SCHEMA_VERSION_KEY, GOAL_KEY,
+          ACTIVE_USER_KEY, ACTIVE_USER_LABEL_KEY, PENDING_FILTER_KEY, LAST_FILTER_DIAG_KEY,
+          TODAY_MISSION_KEY, SUBJECT_SPEEDS_KEY, FILTER_ID_MEMORY_KEY, FILTER_MEMORY_CLOUD_KEY,
+          DIAGNOSTIC_MODE_KEY, PENDING_SIMULADOS_QUEUE_KEY
+        ],
         (res) => {
           if (chrome.runtime.lastError || isDestroyed) return;
           cachedActiveUserId = res?.[ACTIVE_USER_KEY] || null;
           cachedActiveUserLabel = res?.[ACTIVE_USER_LABEL_KEY] || '';
+          diagnosticModeEnabled = Boolean(res?.[DIAGNOSTIC_MODE_KEY]);
+          postToSniffer('SET_DIAGNOSTIC_MODE', { enabled: diagnosticModeEnabled });
+          if (res?.[PENDING_SIMULADOS_QUEUE_KEY]) {
+            updateSimuladoImportStatusHud(res[PENDING_SIMULADOS_QUEUE_KEY]);
+          }
           if (res?.[TODAY_MISSION_KEY]) cachedTodayMission = res[TODAY_MISSION_KEY];
           if (res?.[SUBJECT_SPEEDS_KEY] && typeof res[SUBJECT_SPEEDS_KEY] === 'object') {
             cachedSubjectSpeeds = res[SUBJECT_SPEEDS_KEY];
@@ -347,59 +425,84 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
           }
           updateHudUser();
           updateContextualHud();
-        const savedDiag = res?.[LAST_FILTER_DIAG_KEY];
-        if (savedDiag && savedDiag.savedAt && (Date.now() - savedDiag.savedAt) < 25000) {
-          if (savedDiag.diagLog) lastFilterDiagnosticLog = savedDiag.diagLog;
-          if (savedDiag.activePracticeFilter) activePracticeFilter = savedDiag.activePracticeFilter;
-          if (savedDiag.bannerText) {
-            filterStatusMessage = savedDiag.bannerText;
-            renderFilterBanner(savedDiag.bannerText);
+
+          const savedDiag = res?.[LAST_FILTER_DIAG_KEY];
+          if (savedDiag && savedDiag.savedAt && (Date.now() - savedDiag.savedAt) < 25000) {
+            if (savedDiag.diagLog) lastFilterDiagnosticLog = savedDiag.diagLog;
+            if (savedDiag.activePracticeFilter) activePracticeFilter = savedDiag.activePracticeFilter;
+            if (savedDiag.proposedSelection) lastResolverProposed = savedDiag.proposedSelection;
+            if (savedDiag.bannerText) {
+              filterStatusMessage = savedDiag.bannerText;
+              renderFilterBanner(savedDiag.bannerText);
+            }
+            if (savedDiag.expectedFilter && isQuestionsPage()) {
+              const expectedSnap = savedDiag.expectedFilter;
+              setTimeout(() => {
+                if (isDestroyed) return;
+                const check = verifyUrlFilterApplied({
+                  expectedSubjectId: expectedSnap.subjectId,
+                  expectedIds: expectedSnap.ids,
+                  urlSearch: window.location.search || '',
+                  appliedDom: readAppliedFiltersFromDom(),
+                });
+                if (!check.honored) {
+                  renderFilterBanner('⚠️ Filtro por URL não aplicado pelo Caveira — clique 🔄 ou "Tentar modo antigo"');
+                }
+              }, 2200);
+            }
+            chrome.storage.local.remove([LAST_FILTER_DIAG_KEY]);
           }
-          chrome.storage.local.remove([LAST_FILTER_DIAG_KEY]);
-        }
-        const pendingFilter = res?.[PENDING_FILTER_KEY];
-        if (!isCoursePage() && pendingFilter && (pendingFilter.topic || (Array.isArray(pendingFilter.lessons) && pendingFilter.lessons.length > 0)) && (Date.now() - (pendingFilter.createdAt || 0)) < 180000) {
-          setTimeout(() => applyCaveiraPracticeFilter(pendingFilter), 900);
-        }
-        if (res && res[GOAL_KEY]) {
-          cachedDailyGoal = Number(res[GOAL_KEY]) || 50;
-        }
-        const today = getTodaySessionDate();
-        if (res[SCHEMA_KEY] !== 'v3_strict_clean') {
-          const cleanSession = { date: today, total: 0, hits: 0, errors: 0 };
-          chrome.storage.local.set({
-            [STORAGE_KEY]: [],
-            [SESSION_KEY]: cleanSession,
-            [SCHEMA_KEY]: 'v3_strict_clean'
+
+          const pendingFilter = res?.[PENDING_FILTER_KEY];
+          if (!isCoursePage() && pendingFilter && (pendingFilter.topic || (Array.isArray(pendingFilter.lessons) && pendingFilter.lessons.length > 0)) && (Date.now() - (pendingFilter.createdAt || 0)) < 180000) {
+            setTimeout(() => applyCaveiraPracticeFilter(pendingFilter), 900);
+          }
+          if (res && res[GOAL_KEY]) {
+            cachedDailyGoal = Number(res[GOAL_KEY]) || 50;
+          }
+
+          const today = getTodaySessionDate();
+          const questions = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
+
+          // Migração versionada NÃO destrutiva: preserva histórico e envia legado para Dexie
+          if (res?.[SCHEMA_VERSION_KEY] !== SCHEMA_VERSION || res?.[SCHEMA_KEY] !== 'v3_strict_clean') {
+            if (questions.length > 0 && chrome.runtime?.sendMessage) {
+              chrome.runtime.sendMessage({
+                type: 'DB_BULK_UPSERT_QUESTIONS',
+                payload: {
+                  questions: questions.map((q) => (q && !q.ownerUserId && cachedActiveUserId ? { ...q, ownerUserId: cachedActiveUserId } : q)),
+                  enqueueOutbox: false,
+                },
+              }).catch(() => {});
+            }
+            const nextSession = normalizeSession(res?.[SESSION_KEY]);
+            chrome.storage.local.set({
+              [STORAGE_KEY]: questions,
+              [SESSION_KEY]: nextSession,
+              [SCHEMA_KEY]: 'v3_strict_clean',
+              [SCHEMA_VERSION_KEY]: SCHEMA_VERSION,
+            });
+          }
+
+          questionsCache = [...questions];
+          questions.forEach(q => {
+            if (q && q.id) {
+              savedQuestionIds.add(q.id);
+              if (!Array.isArray(q.alternatives) || q.alternatives.length === 0 || q.alternatives.every(a => !a.text || a.text === a.letter)) {
+                savedQuestionsMissingAlts.add(q.id);
+              }
+            }
           });
-          questionsCache = [];
-          sessionStats = cleanSession;
+
+          const rawSession = res?.[SESSION_KEY];
+          sessionStats = normalizeSession(rawSession);
+          if (!rawSession || rawSession.date !== today) {
+            chrome.storage.local.set({ [SESSION_KEY]: sessionStats });
+          }
           isStorageLoaded = true;
           updateHudStats();
           scanCards();
-          return;
-        }
-
-        const questions = Array.isArray(res[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
-        questionsCache = [...questions];
-        questions.forEach(q => {
-          if (q && q.id) {
-            savedQuestionIds.add(q.id);
-            if (!Array.isArray(q.alternatives) || q.alternatives.length === 0 || q.alternatives.every(a => !a.text || a.text === a.letter)) {
-              savedQuestionsMissingAlts.add(q.id);
-            }
-          }
         });
-
-        const rawSession = res[SESSION_KEY];
-        sessionStats = normalizeSession(rawSession);
-        if (!rawSession || rawSession.date !== today) {
-          chrome.storage.local.set({ [SESSION_KEY]: sessionStats });
-        }
-        isStorageLoaded = true;
-        updateHudStats();
-        scanCards();
-      });
     } catch (_) {}
   }
 
@@ -460,9 +563,50 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
             cachedSubjectSpeeds = changes[SUBJECT_SPEEDS_KEY].newValue || {};
             updateContextualHud();
           }
+          if (changes[DIAGNOSTIC_MODE_KEY]) {
+            diagnosticModeEnabled = Boolean(changes[DIAGNOSTIC_MODE_KEY].newValue);
+            postToSniffer('SET_DIAGNOSTIC_MODE', { enabled: diagnosticModeEnabled });
+          }
+          if (changes[PENDING_SIMULADOS_QUEUE_KEY]) {
+            updateSimuladoImportStatusHud(changes[PENDING_SIMULADOS_QUEUE_KEY].newValue);
+          }
         }
       });
     } catch (_) {}
+  }
+
+  function applyQuickTag(tag) {
+    if (!tag || (tag !== 'duvida' && tag !== 'chute' && tag !== 'sabia')) return false;
+    const hud = getHudEl('qg-caveira-hud');
+    if (hud) {
+      hud.querySelectorAll('[data-confidence]').forEach((b) => {
+        b.classList.toggle('active', b.dataset.confidence === tag);
+      });
+    }
+    let targetQ = activeQuestionData;
+    if (!targetQ && currentQuestionId) {
+      const fromCache = questionsCache.find((q) => q && q.id === currentQuestionId);
+      if (fromCache) {
+        targetQ = { ...fromCache };
+      } else {
+        const card = getQuestionCards().find((c) => extractQuestionId(c) === currentQuestionId);
+        if (card) targetQ = extractQuestionData(card, currentQuestionId);
+      }
+      if (targetQ) activeQuestionData = targetQ;
+    }
+    if (!targetQ) return false;
+    targetQ.confidence = tag;
+    targetQ.fsrsRequested = (tag === 'chute' || tag === 'duvida');
+    saveQuestion(targetQ, true);
+    const badge = getHudEl('qg-prompt-status-badge');
+    if (badge && targetQ.hit && (tag === 'chute' || tag === 'duvida')) {
+      badge.textContent = '🃏 +FSRS AGENDADO';
+    }
+    if (hud) {
+      const label = tag === 'chute' ? '🎲 Marcado: CHUTE (+FSRS)' : tag === 'duvida' ? '🤔 Marcado: DÚVIDA (+FSRS)' : '🎯 Marcado: SABIA';
+      renderFilterBanner(label);
+    }
+    return true;
   }
 
   if (isExtensionContextValid() && chrome.runtime.onMessage) {
@@ -480,25 +624,27 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
           showLessonCompletedBanner();
           sendResponse({ ok: true });
         }
+        if (msg && msg.type === 'HUD_QUICK_TAG' && msg.payload?.tag) {
+          const ok = applyQuickTag(msg.payload.tag);
+          sendResponse({ ok });
+        }
       });
     } catch (_) {}
   }
 
-  // Listener passivo do Sniffer de API (#2 — MAIN world -> Isolated world)
-  function classifySubjectBloco(subjectName = '') {
-    const s = normalizeFilterText(subjectName);
-    if (!s) return 'Bloco I';
-    if (/transito|ctb|contran|resoluc(?:ao|oes)|habilitacao|sinalizacao/.test(s)) return 'Bloco II';
-    if (/constitucional|administrativo|administracao publica|penal|processual|direitos humanos|legislacao especial|legislacao extravagante|legislacao institucional|leis especiais|extravagante/.test(s)) return 'Bloco III';
-    return 'Bloco I';
-  }
-
+  // Listener passivo do Sniffer de API com handshake via nonce (#2, #4, #7)
   handleApiSnifferMessageRef = (event) => {
-    if (isDestroyed || event.source !== window) return;
+    if (isDestroyed || event.source !== window || event.origin !== window.location.origin) return;
     const msg = event.data;
-    if (!msg || msg.source !== 'QG_CAVEIRA_API_SNIFFER') return;
+    if (!msg || msg.source !== 'QG_CAVEIRA_API_SNIFFER' || msg.nonce !== CHANNEL_NONCE) return;
+
+    if (msg.type === 'API_DIAGNOSTIC_SHAPE' && msg.payload) {
+      appendDiagnosticShape(msg.payload);
+      return;
+    }
 
     if (msg.type === 'API_COURSE_CATALOG' && msg.payload && Array.isArray(msg.payload.modules)) {
+      appendSnifferTelemetryEvent('API_COURSE_CATALOG', { modules: msg.payload.modules.length });
       const mergedMap = new Map();
       (Array.isArray(apiCourseCatalogCache?.modules) ? apiCourseCatalogCache.modules : []).forEach((m) => {
         if (!m || !m.name) return;
@@ -540,21 +686,78 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
       return;
     }
 
-    if (msg.type === 'API_QUESTION_DATA' && Array.isArray(msg.payload?.questions)) {
-      msg.payload.questions.forEach((aq) => {
-        if (!aq || !aq.id) return;
-        const prevApi = apiQuestionCache.get(aq.id) || {};
-        const mergedApi = { ...prevApi, ...aq };
-        apiQuestionCache.set(aq.id, mergedApi);
+    if (msg.type === 'API_ANSWER_SUBMITTED' && msg.payload) {
+      const { apiId, hit, userAnswer } = msg.payload;
+      appendSnifferTelemetryEvent('API_ANSWER_SUBMITTED', { apiId, hit });
+      if (apiId) {
+        apiAnswerCache.set(Number(apiId), { hit: Boolean(hit), userAnswer: userAnswer ?? null, at: Date.now() });
+      }
+      return;
+    }
 
-        const existing = questionsCache.find((q) => q && q.id === aq.id);
+    if (msg.type === 'API_QUESTION_DATA' && Array.isArray(msg.payload?.questions)) {
+      appendSnifferTelemetryEvent('API_QUESTION_DATA', { count: msg.payload.questions.length });
+      msg.payload.questions.forEach((aq) => {
+        if (!aq || (!aq.apiId && !aq.code && !aq.id)) return;
+        const numericApiId = aq.apiId ? Number(aq.apiId) : null;
+        const explicitCode = aq.code || aq.id || null;
+
+        const mappedIds = cachedCaveiraTree
+          ? resolveTreeIdsForQuestion(cachedCaveiraTree, {
+              subject: aq.subject || '',
+              subtopic: aq.subtopic || '',
+              subtopicPath: aq.subtopicPath || '',
+            })
+          : { subjectId: null, subtopicId: null };
+
+        const statusParsed = parseLastAnswerStatus(aq.lastAnswerStatus);
+        if (!statusParsed.recognized && diagnosticModeEnabled) {
+          appendDiagnosticShape({
+            kind: 'unknown_last_answer_status',
+            apiId: numericApiId,
+            rawType: typeof aq.lastAnswerStatus,
+            rawValue: statusParsed.rawValue,
+          });
+        }
+
+        const prevByApi = numericApiId ? (apiQuestionByApiId.get(numericApiId) || {}) : {};
+        const prevByCode = explicitCode ? (apiQuestionByCode.get(explicitCode) || {}) : {};
+        const mergedApi = {
+          ...prevByCode,
+          ...prevByApi,
+          ...aq,
+          ...(mappedIds.subjectId ? { subjectId: mappedIds.subjectId } : {}),
+          ...(mappedIds.subtopicId ? { subtopicId: mappedIds.subtopicId } : {}),
+        };
+
+        if (numericApiId) {
+          apiQuestionByApiId.set(numericApiId, mergedApi);
+          apiQuestionCache.set(`Q${numericApiId}`, mergedApi);
+        }
+        if (explicitCode) {
+          apiQuestionByCode.set(explicitCode, mergedApi);
+          apiQuestionCache.set(explicitCode, mergedApi);
+        }
+
+        const existing = questionsCache.find((q) => (
+          q && (
+            (explicitCode && q.id === explicitCode) ||
+            (numericApiId && (Number(q.apiId) === numericApiId || q.id === `Q${numericApiId}` || q.id === `api_${numericApiId}`))
+          )
+        ));
         if (existing) {
           const needsComment = !existing.teacherComment && mergedApi.teacherComment;
           const needsStats = existing.communityCorrectPct === undefined && mergedApi.communityCorrectPct !== undefined;
           const needsNote = !existing.userNote && mergedApi.userNote;
-          if (needsComment || needsStats || needsNote) {
+          const needsIds = (!existing.apiId && numericApiId) || (!existing.subjectId && mappedIds.subjectId) || (!existing.subtopicId && mappedIds.subtopicId);
+          if (needsComment || needsStats || needsNote || needsIds) {
             saveQuestion({
               ...existing,
+              ...(numericApiId ? { apiId: numericApiId } : {}),
+              ...(mappedIds.subjectId ? { subjectId: mappedIds.subjectId } : {}),
+              ...(mappedIds.subtopicId ? { subtopicId: mappedIds.subtopicId } : {}),
+              ...(mergedApi.banca && !existing.banca ? { banca: mergedApi.banca } : {}),
+              ...(mergedApi.ano && !existing.ano ? { ano: mergedApi.ano } : {}),
               ...(needsComment ? { teacherComment: mergedApi.teacherComment, commentSource: mergedApi.commentSource || 'professor' } : {}),
               ...(needsStats ? { communityCorrectPct: mergedApi.communityCorrectPct, communityErrorPct: mergedApi.communityErrorPct } : {}),
               ...(needsNote ? { userNote: mergedApi.userNote } : {})
@@ -562,10 +765,12 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
           }
         }
       });
+      if (!cachedCaveiraTree) loadCaveiraTree();
       return;
     }
 
     if (msg.type === 'API_SIMULADOS_DATA' && Array.isArray(msg.payload?.simulados)) {
+      appendSnifferTelemetryEvent('API_SIMULADOS_DATA', { count: msg.payload.simulados.length });
       const nextMap = new Map();
       apiSimuladosCache.forEach((s) => {
         if (s && !isRankingTitleOrRow('', s.title || '') && (s.caveiraId || s.title)) {
@@ -588,6 +793,7 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
         const enriched = {
           ...rawSim,
           data: rawSim.data || getTodaySessionDate(),
+          dataSource: rawSim.dataSource || 'api',
           ...(hasBlocks ? { b1Liquida: b1, b2Liquida: b2, b3Liquida: b3 } : {})
         };
         const key = enriched.caveiraId || `${enriched.title}|${enriched.data}`;
@@ -610,6 +816,7 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     }
 
     if (msg.type === 'API_SIMULADO_ENJOYMENT' && msg.payload?.examId) {
+      appendSnifferTelemetryEvent('API_SIMULADO_ENJOYMENT', { examId: msg.payload.examId, subjects: msg.payload.subjects?.length || 0 });
       const { examId, blocks = [], subjects = [], attemptDate = null, releaseDate = null, anyDate = null, dateField = null } = msg.payload;
       if (attemptDate || releaseDate || anyDate) {
         mergeSimuladoDateEntry(examId, msg.payload.title || '', { attemptDate, releaseDate, anyDate, dateField });
@@ -683,13 +890,27 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     }
 
     if (msg.type === 'API_SUBJECT_TREE_DATA' && Array.isArray(msg.payload?.nodes) && msg.payload.nodes.length > 0) {
+      appendSnifferTelemetryEvent('API_SUBJECT_TREE_DATA', { nodes: msg.payload.nodes.length });
       if (isExtensionContextValid() && chrome.runtime?.sendMessage) {
         chrome.runtime.sendMessage({
           type: 'DB_MERGE_TREE_OVERLAY',
           payload: { nodes: msg.payload.nodes }
         }, (resp) => {
-          if (!chrome.runtime?.lastError && resp?.added > 0) {
+          if (!chrome.runtime?.lastError) {
             cachedCaveiraTree = null;
+            loadCaveiraTree();
+            chrome.storage.local.get([TREE_META_KEY], (mRes) => {
+              if (chrome.runtime?.lastError) return;
+              const prevMeta = mRes?.[TREE_META_KEY] || {};
+              chrome.storage.local.set({
+                [TREE_META_KEY]: {
+                  ...prevMeta,
+                  baselineDate: cachedCaveiraTreeGeradoEm || prevMeta.baselineDate || '',
+                  lastDynamicUpdateAt: Date.now(),
+                  dynamicNodeCount: Math.max(Number(prevMeta.dynamicNodeCount) || 0, Number(resp?.added) || 0),
+                },
+              });
+            });
           }
         });
       }
@@ -697,30 +918,20 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
   };
   window.addEventListener('message', handleApiSnifferMessageRef);
   try {
-    window.postMessage({ source: 'QG_CAVEIRA_CONTENT', type: 'REQUEST_SNIFFER_REPLAY' }, '*');
+    window.dispatchEvent(new CustomEvent('qg-caveira-sniffer-init', {
+      detail: { nonce: CHANNEL_NONCE, diagnosticMode: diagnosticModeEnabled }
+    }));
+    postToSniffer('REQUEST_SNIFFER_REPLAY');
     setTimeout(() => {
       if (!isDestroyed) {
-        window.postMessage({ source: 'QG_CAVEIRA_CONTENT', type: 'REQUEST_SNIFFER_REPLAY' }, '*');
+        postToSniffer('REQUEST_SNIFFER_REPLAY');
       }
     }, 800);
   } catch (_) {}
 
   // --- HELPERS DAS 15 INTEGRAÇÕES v2.0.0 (#1, #2, #27, #29, #30, #31) ---
   function resolveSubjectSpeedForContext(contextTitle = '') {
-    if (!cachedSubjectSpeeds || typeof cachedSubjectSpeeds !== 'object') return 1;
-    const normCtx = normalizeFilterText(contextTitle);
-    const inferred = inferSubjectFromLessons([contextTitle], contextTitle) || '';
-    const normInf = normalizeFilterText(inferred);
-    for (const [subName, spd] of Object.entries(cachedSubjectSpeeds)) {
-      const sNorm = normalizeFilterText(subName);
-      if (!sNorm) continue;
-      if ((normInf && (sNorm === normInf || sNorm.includes(normInf) || normInf.includes(sNorm))) ||
-          (normCtx && (normCtx.includes(sNorm) || sNorm.includes(normCtx)))) {
-        const num = Number(spd);
-        if (Number.isFinite(num) && num >= 0.5 && num <= 4) return num;
-      }
-    }
-    return 1;
+    return resolveSubjectSpeedHelper(cachedSubjectSpeeds, contextTitle, inferSubjectFromLessons);
   }
 
   function applySubjectVideoSpeedInPlayground() {
@@ -1165,15 +1376,6 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     targetLessonPollTimer = setInterval(tryNavigate, 500);
   }
 
-  function isRankingTitleOrRow(text = '', title = '', isTableRow = false) {
-    const cleanTitle = String(title || '').trim();
-    const cleanText = String(text || '').trim();
-    if (/^#?\d{1,5}\s*[º°ª]?$/.test(cleanTitle)) return true;
-    if (/^caveira\s+\d{3,}$/i.test(cleanTitle)) return true;
-    if (isTableRow && /^\s*#?\d{1,5}\s*[º°ª]\b/.test(cleanText)) return true;
-    return false;
-  }
-
   function parseEnjoymentDialogData() {
     const tables = Array.from(document.querySelectorAll('.q-dialog table, .q-card table'))
       .filter((t) => !t.closest('#qg-caveira-shadow-host, #qg-caveira-hud, .ranking-table-wrap') && isElementVisible(t));
@@ -1322,9 +1524,19 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
       const numQuestionsTxt = (document.querySelector('.number-questions')?.textContent || '').trim();
       const totalFromBadge = parseInt(numQuestionsTxt, 10) || 0;
 
-      const total = smallMatch ? Number(smallMatch[2]) : (totalFromBadge || 120);
-      const liquidaFromBox = smallMatch ? Number(smallMatch[1]) : null;
-      const pct = bigMatch ? Math.round(parseFloat(bigMatch[1].replace(',', '.'))) : (liquidaFromBox !== null && total > 0 ? Math.round((liquidaFromBox / total) * 100) : 0);
+      const apiMatchById = examId ? apiSimuladosCache.find((s) => s && s.caveiraId === `sim_${examId}`) : null;
+      const estimatedReasons = [];
+      const total = smallMatch
+        ? Number(smallMatch[2])
+        : (totalFromBadge || (apiMatchById?.total ? Number(apiMatchById.total) : null));
+      if (!total) {
+        estimatedReasons.push('total de questões ausente na tela e na API (não inventado)');
+      }
+
+      const liquidaFromBox = smallMatch ? Number(smallMatch[1]) : (apiMatchById?.liquida !== undefined ? Number(apiMatchById.liquida) : null);
+      const pct = bigMatch
+        ? Math.round(parseFloat(bigMatch[1].replace(',', '.')))
+        : (liquidaFromBox !== null && total > 0 ? Math.round((liquidaFromBox / total) * 100) : (apiMatchById?.pct ?? 0));
 
       // Acertos, Erros e Em Branco no SVG ApexCharts Treemap
       let svgHits = null; let svgErrors = null; let svgBlank = null;
@@ -1345,10 +1557,21 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
         else if (fill.includes('no-answer') || jAttr === '2') svgBlank = numVal;
       });
 
-      const hits = svgHits !== null ? svgHits : (liquidaFromBox !== null ? Math.max(0, Math.round((total + liquidaFromBox) / 2)) : 0);
-      const errors = svgErrors !== null ? svgErrors : (liquidaFromBox !== null ? Math.max(0, hits - liquidaFromBox) : Math.max(0, total - hits));
-      const blank = svgBlank !== null ? svgBlank : Math.max(0, total - hits - errors);
-      const liquida = liquidaFromBox !== null ? liquidaFromBox : (hits - errors);
+      let hits = svgHits !== null ? svgHits : (apiMatchById?.hits ?? null);
+      let errors = svgErrors !== null ? svgErrors : (apiMatchById?.errors ?? null);
+      let blank = svgBlank !== null ? svgBlank : (apiMatchById?.blank ?? null);
+      if (hits === null && total !== null && liquidaFromBox !== null) {
+        hits = Math.max(0, Math.round((total + liquidaFromBox) / 2));
+        estimatedReasons.push('acertos aproximados a partir de líquida e total');
+      }
+      if (errors === null && hits !== null && liquidaFromBox !== null) {
+        errors = Math.max(0, hits - liquidaFromBox);
+        estimatedReasons.push('erros inferidos de acertos - líquida');
+      }
+      if (blank === null && total !== null && hits !== null && errors !== null) {
+        blank = Math.max(0, total - hits - errors);
+      }
+      const liquida = liquidaFromBox !== null ? liquidaFromBox : (hits !== null && errors !== null ? hits - errors : 0);
 
       const apiEnjoy = examId ? apiSimuladoEnjoymentByExamId.get(examId) : null;
       const blockStats = dialogData?.blockStats || (apiEnjoy?.b1Liquida !== undefined ? {
@@ -1374,7 +1597,8 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
 
       const dateStr = dateInfo?.attemptDate || dateInfo?.releaseDate || dateInfo?.anyDate || getTodaySessionDate();
       const dateSource = dateInfo?.attemptDate ? 'attempt' : (dateInfo?.releaseDate ? 'release' : (dateInfo?.anyDate ? 'api_date' : 'import'));
-      console.log('📊 [QG Simulado] Datas resolvidas:', { examId, dateStr, dateSource, dateField: dateInfo?.dateField || null });
+      const dataSource = (apiEnjoy || apiMatchById || dateSource !== 'import') ? 'api+dom' : 'dom';
+      console.log('📊 [QG Simulado] Extraído:', { examId, dateStr, dateSource, dataSource, estimated: estimatedReasons.length > 0 });
 
       const caveiraId = examId
         ? `sim_${examId}`
@@ -1385,12 +1609,15 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
         title: title.slice(0, 100),
         data: dateStr,
         dateSource,
+        dataSource,
+        estimated: estimatedReasons.length > 0,
+        ...(estimatedReasons.length > 0 ? { estimatedReason: estimatedReasons.join('; ') } : {}),
         ...(dateInfo?.dateField ? { dateField: dateInfo.dateField } : {}),
         ...(dateInfo?.releaseDate ? { releasedAt: dateInfo.releaseDate } : {}),
-        total,
-        hits,
-        errors,
-        blank,
+        ...(total !== null ? { total } : {}),
+        ...(hits !== null ? { hits } : {}),
+        ...(errors !== null ? { errors } : {}),
+        ...(blank !== null ? { blank } : {}),
         pct,
         liquida,
         ...blockStats,
@@ -1400,6 +1627,7 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     }
 
     // MODO B: Lista de Simulados da Turma (/teams/:id) e Simulados Personalizados (/personal-practice-exams)
+    let domItemsSeen = 0;
     if (results.length === 0) {
       const isPersonalPage = window.location.pathname.includes('/personal-practice-exams');
       const teamIdMatch = window.location.pathname.match(/\/teams\/(\d+)/i);
@@ -1413,11 +1641,11 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
           !el.closest('#qg-caveira-shadow-host, #qg-caveira-hud, .ranking-table-wrap, .larger, table') &&
           isElementVisible(el)
         ));
+      domItemsSeen = simItems.length;
 
       simItems.forEach((item) => {
         const numEl = item.querySelector('.subtitle--number');
         const pctEl = item.querySelector('.subtitle--percent');
-        // Sem .subtitle--number e .subtitle--percent = não resolvido ou card de PDF
         if (!numEl || !pctEl) return;
 
         const titleEl = item.querySelector('.simulated--title');
@@ -1435,21 +1663,37 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
         const pctMatch = pctTxt.match(/(-?\d+(?:[.,]\d+)?)\s*%/);
         if (!numMatch || !pctMatch) return;
 
-        const hits = Math.round(parseFloat(numMatch[1].replace(',', '.')));
-        const total = Math.round(parseFloat(numMatch[2].replace(',', '.')));
-        if (!total || hits > total) return;
+        const domHits = Math.round(parseFloat(numMatch[1].replace(',', '.')));
+        const domTotal = Math.round(parseFloat(numMatch[2].replace(',', '.')));
+        if (!domTotal || domHits > domTotal) return;
 
-        const pct = Math.round(parseFloat(pctMatch[1].replace(',', '.')));
-        const grossPct = Math.round((hits / total) * 100);
+        const domPct = Math.round(parseFloat(pctMatch[1].replace(',', '.')));
+        const grossPct = Math.round((domHits / domTotal) * 100);
 
-        // Em Turmas (/teams/:id), .subtitle--number traz acertos brutos (ex: 88/120) e .subtitle--percent traz aproveitamento líquido (56%)
-        let liquida = hits - Math.max(0, total - hits);
-        let errors = Math.max(0, total - hits);
-        let blank = 0;
-        if (!isPersonalPage && pct < grossPct - 1) {
-          liquida = Math.round((pct / 100) * total);
-          errors = Math.max(0, hits - liquida);
-          blank = Math.max(0, total - hits - errors);
+        const titleNorm = normalizeCourseIndexKey(title);
+        if (seen.has(titleNorm)) return;
+        seen.add(titleNorm);
+
+        const apiMatch = apiSimuladosCache.find((s) => s && normalizeCourseIndexKey(s.title || '') === titleNorm);
+        const hits = apiMatch?.hits ?? domHits;
+        const total = apiMatch?.total ?? domTotal;
+        const pct = apiMatch?.pct ?? domPct;
+
+        const domEstimatedReasons = [];
+        let liquida = apiMatch?.liquida;
+        let errors = apiMatch?.errors;
+        let blank = apiMatch?.blank ?? 0;
+        if (liquida === undefined || errors === undefined) {
+          if (!isPersonalPage && domPct < grossPct - 1) {
+            liquida = Math.round((domPct / 100) * domTotal);
+            errors = Math.max(0, domHits - liquida);
+            blank = Math.max(0, domTotal - domHits - errors);
+            domEstimatedReasons.push('líquida/erros calculados a partir de % exibida e acertos brutos');
+          } else {
+            errors = Math.max(0, domTotal - domHits);
+            liquida = domHits - errors;
+            domEstimatedReasons.push('erros inferidos de total - acertos');
+          }
         }
 
         const subText = (item.querySelector('.simulated--subtitle')?.innerText || item.innerText || '').trim();
@@ -1458,11 +1702,6 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
           ? (dateMatch[3] ? `${dateMatch[3]}-${dateMatch[2]}-${dateMatch[1]}` : dateMatch[1])
           : null;
 
-        const titleNorm = normalizeCourseIndexKey(title);
-        if (seen.has(titleNorm)) return;
-        seen.add(titleNorm);
-
-        const apiMatch = apiSimuladosCache.find((s) => s && normalizeCourseIndexKey(s.title || '') === titleNorm);
         const batchDateMatch = apiSimuladoDatesByTitle.get(titleNorm) || (apiMatch?.caveiraId ? apiSimuladoDatesByExamId.get(String(apiMatch.caveiraId).replace(/^sim_/, '')) : null);
         const apiDate = batchDateMatch?.attemptDate || batchDateMatch?.releaseDate || batchDateMatch?.anyDate || apiMatch?.data || null;
         const apiSource = batchDateMatch?.attemptDate
@@ -1474,11 +1713,16 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
           : (apiMatch?.dateSource || null);
         const resolvedDate = apiDate || domDate || getTodaySessionDate();
         const dateSource = apiSource || (isPersonalPage && domDate ? 'created' : 'import');
+        const isEst = Boolean(apiMatch?.estimated || domEstimatedReasons.length > 0);
+        const estReason = [apiMatch?.estimatedReason, ...domEstimatedReasons].filter(Boolean).join('; ');
         results.push({
           caveiraId: apiMatch?.caveiraId || `sim_title_${titleNorm.slice(0, 48)}`,
           title,
           data: resolvedDate,
           dateSource,
+          dataSource: apiMatch ? 'api+dom' : 'dom',
+          estimated: isEst,
+          ...(estReason ? { estimatedReason: estReason } : {}),
           ...(batchDateMatch?.dateField || apiMatch?.dateField ? { dateField: batchDateMatch?.dateField || apiMatch?.dateField } : {}),
           ...(batchDateMatch?.releaseDate || apiMatch?.releasedAt ? { releasedAt: batchDateMatch?.releaseDate || apiMatch?.releasedAt } : {}),
           total,
@@ -1500,18 +1744,29 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
         const titleNorm = normalizeCourseIndexKey(sim.title || '');
         if (!titleNorm || seen.has(titleNorm)) return;
         seen.add(titleNorm);
-        results.push(sim);
+        results.push({ ...sim, dataSource: sim.dataSource || 'api' });
       });
     }
 
     if (results.length > 0) {
       try {
-        chrome.storage.local.set({ [PENDING_SIMULADOS_KEY]: { simulados: results, savedAt: Date.now() } }, () => {
-          flushPendingQgEvents();
+        chrome.storage.local.get([PENDING_SIMULADOS_QUEUE_KEY], (qRes) => {
+          if (chrome.runtime?.lastError || isDestroyed) return;
+          const nextQueue = enqueueSimuladosIntoQueue(qRes?.[PENDING_SIMULADOS_QUEUE_KEY], results);
+          chrome.storage.local.set({ [PENDING_SIMULADOS_QUEUE_KEY]: nextQueue }, () => {
+            chrome.storage.local.remove([PENDING_SIMULADOS_KEY]);
+            updateSimuladoImportStatusHud(nextQueue);
+            flushPendingQgEvents();
+          });
         });
       } catch (_) {}
+      return { count: results.length, reason: 'ok' };
     }
-    return results.length;
+
+    const reason = domItemsSeen > 0
+      ? 'Simulados visíveis ainda não respondidos (sem nota) e sem dados da API'
+      : 'Sem dados da API e seletores da tela (.box-use / .simulated-item) não encontrados';
+    return { count: 0, reason };
   }
 
   function startPdfTimerLoop() {
@@ -1694,8 +1949,9 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
           <div id="qg-ctx-course-catalog" style="display:none;">
             <button type="button" id="qg-btn-sync-catalog" style="width:100%;background:rgba(14,165,233,0.18);color:#38bdf8;border:1px solid rgba(56,189,248,0.4);border-radius:8px;padding:7px 10px;font-size:10px;font-weight:900;text-transform:uppercase;cursor:pointer;">🔄 Sincronizar Curso com QG</button>
           </div>
-          <div id="qg-ctx-simulados" style="display:none;">
+          <div id="qg-ctx-simulados" style="display:none;flex-direction:column;gap:4px;">
             <button type="button" id="qg-btn-import-simulados" style="width:100%;background:rgba(168,85,247,0.2);color:#e9d5ff;border:1px solid rgba(168,85,247,0.45);border-radius:8px;padding:7px 10px;font-size:10px;font-weight:900;text-transform:uppercase;cursor:pointer;">📊 Importar Simulados para o QG</button>
+            <span id="qg-sim-delivery-status" style="display:none;font-size:9px;font-weight:700;padding:1px 4px;line-height:1.25;"></span>
           </div>
           <div id="qg-ctx-pdf-tracker" style="display:none;flex-direction:column;gap:4px;padding:7px 9px;border-radius:8px;background:rgba(20,184,166,0.12);border:1px solid rgba(20,184,166,0.35);">
             <span id="qg-pdf-timer-text" style="font-size:10px;font-weight:800;color:#5eead4;">📄 Lendo PDF • 00:00</span>
@@ -1831,6 +2087,7 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
         lastFilterDiagnosticLog.picks = picks;
       }
       box.style.display = 'none';
+      lastResolverProposed = { subjectId: subjId, ids: checked };
       const summary = [pendingResolverResult.subject?.name || activePracticeFilter?.subject, activePracticeFilter?.topic].filter(Boolean).join(' • ');
       await navigateToCaveiraDeepLink(subjId, checked, `✅ Filtro aplicado (seleção manual): ${summary}`);
     });
@@ -1973,15 +2230,16 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
         btn.disabled = true;
         btn.textContent = '⏳ Lendo matérias e notas...';
       }
-      const count = await scrapeSimuladosAndImport();
+      const res = await scrapeSimuladosAndImport();
+      const count = Number(res?.count) || 0;
       if (btn) {
         btn.disabled = false;
         btn.textContent = count > 0
-          ? `✓ ${count} simulado(s) enviado(s) ao QG!`
-          : '⚠️ Nenhum simulado seu encontrado nesta tela';
+          ? `💾 ${count} salvo(s) na extensão — enviando...`
+          : `⚠️ ${res?.reason || 'Nenhum simulado encontrado nesta tela'}`;
         setTimeout(() => {
           if (btn && btn.isConnected) btn.textContent = orig;
-        }, 2500);
+        }, 3200);
       }
     });
 
@@ -2099,20 +2357,9 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     hud.querySelectorAll('[data-confidence]').forEach(btn => {
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
-        hud.querySelectorAll('[data-confidence]').forEach(b => b.classList.remove('active'));
-        btn.classList.add('active');
-        if (activeQuestionData) {
-          const conf = btn.dataset.confidence;
-          activeQuestionData.confidence = conf;
-          activeQuestionData.fsrsRequested = (conf === 'chute' || conf === 'duvida');
-          saveQuestion(activeQuestionData, true);
-          const badge = getHudEl('qg-prompt-status-badge');
-          if (badge && activeQuestionData.hit && (conf === 'chute' || conf === 'duvida')) {
-            badge.textContent = '🃏 +FSRS AGENDADO';
-          }
-          if (activeQuestionData.hit) {
-            setTimeout(dismissPrompt, 650);
-          }
+        const conf = btn.dataset.confidence;
+        if (applyQuickTag(conf) && activeQuestionData?.hit) {
+          setTimeout(dismissPrompt, 650);
         }
       });
     });
@@ -2150,14 +2397,6 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
   }
 
   // --- 2. CRONÔMETRO POR QUESTÃO ---
-  function normalizeFilterText(str) {
-    return String(str || '')
-      .normalize('NFD')
-      .replace(/[\u0300-\u036f]/g, '')
-      .toLowerCase()
-      .trim();
-  }
-
   function renderFilterBanner(customText = '') {
     const banner = getHudEl('qg-hud-filter-banner');
     const textEl = getHudEl('qg-hud-filter-text');
@@ -2165,11 +2404,13 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     if (customText !== undefined && customText !== null && customText !== '') {
       filterStatusMessage = customText;
     }
-    if (activePracticeFilter && (activePracticeFilter.topic || activePracticeFilter.subject)) {
-      const baseLabel = [activePracticeFilter.subject, activePracticeFilter.topic].filter(Boolean).join(' • ');
+    if ((activePracticeFilter && (activePracticeFilter.topic || activePracticeFilter.subject)) || filterStatusMessage) {
+      const baseLabel = activePracticeFilter
+        ? [activePracticeFilter.subject, activePracticeFilter.topic].filter(Boolean).join(' • ')
+        : '';
       const displayLabel = filterStatusMessage || `🎯 ${baseLabel}`;
       textEl.textContent = displayLabel;
-      textEl.title = baseLabel;
+      textEl.title = baseLabel || displayLabel;
       banner.style.display = 'flex';
     } else {
       filterStatusMessage = '';
@@ -2201,10 +2442,6 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     }
     input.dispatchEvent(new Event('change', { bubbles: true }));
     input.dispatchEvent(new KeyboardEvent('keyup', { bubbles: true }));
-  }
-
-  function sleepMs(ms) {
-    return new Promise(resolve => setTimeout(resolve, ms));
   }
 
   function clickElementRealistically(el) {
@@ -3831,12 +4068,6 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
 
   const BROAD_PARENT_PREFIX_REGEX = /^(?:organiza[cç][aã]o\s+(?:da|do|de)|conceitos?\s+(?:de|da|do|dos|das|sobre)|no[cç][oõ]es?\s+(?:de|da|do|dos|das|gerais\s+de)|introdu[cç][aã]o\s+(?:[aà]|ao|aos|[aà]s|de|sobre)|estrutura\s+(?:da|do|de|dos|das))\s+/i;
 
-  function normalizeCourseIndexKey(str) {
-    return normalizeFilterText(str)
-      .replace(/[-–—:|/]+/g, ' ')
-      .replace(/\s+/g, ' ')
-      .trim();
-  }
 
   const PURE_ARTICLE_LINE_REGEX = /^(?:revoga[cç][aã]o\s+(?:do|da|dos|das)\s+|leitura\s+(?:do|da|dos|das)\s+|coment[aá]rios?\s+(?:ao|sobre|do|dos)\s+|an[aá]lise\s+(?:do|dos)\s+)?art(?:igo)?s?\.?\s*(\d+)/i;
 
@@ -4588,6 +4819,23 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
       const { mergedJson } = mergeBaselineAndDynamicTree(json, dynamicNodes);
       cachedCaveiraTreeGeradoEm = String(mergedJson?.geradoEm || json?.geradoEm || '');
       cachedCaveiraTree = resolver.loadTree(mergedJson);
+      try {
+        if (chrome?.storage?.local) {
+          chrome.storage.local.get([TREE_META_KEY], (mRes) => {
+            if (chrome.runtime?.lastError) return;
+            const prevMeta = mRes?.[TREE_META_KEY] || {};
+            chrome.storage.local.set({
+              [TREE_META_KEY]: {
+                ...prevMeta,
+                baselineDate: String(json?.geradoEm || cachedCaveiraTreeGeradoEm || prevMeta.baselineDate || ''),
+                mergedDate: cachedCaveiraTreeGeradoEm || prevMeta.mergedDate || '',
+                dynamicNodeCount: Math.max(dynamicNodes.length, Number(prevMeta.dynamicNodeCount) || 0),
+                loadedAt: Date.now(),
+              },
+            });
+          });
+        }
+      } catch (_) {}
       return cachedCaveiraTree;
     } catch (_) {
       return null;
@@ -4752,7 +5000,9 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
               savedAt: Date.now(),
               diagLog: lastFilterDiagnosticLog,
               activePracticeFilter,
-              bannerText: bannerText || ''
+              bannerText: bannerText || '',
+              expectedFilter: { subjectId: Number(subjectId), ids: ids.map(Number) },
+              proposedSelection: lastResolverProposed,
             }
           }, () => res());
         });
@@ -4823,7 +5073,12 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
         const applied = readAppliedFiltersFromDom();
         const resolvedIds = await resolveIdsFromUrlOrDom(applied);
         if (resolvedIds && resolvedIds.subjectId && resolvedIds.ids.length > 0) {
+          if (!hasSelectionChanged(lastResolverProposed, resolvedIds)) {
+            renderFilterBanner(`ℹ️ Seleção igual à proposta (nada memorizado): ${ctxSnapshot.topic || ctxSnapshot.subject}`);
+            return;
+          }
           saveFilterIdMemory(ctxSnapshot, resolvedIds);
+          lastResolverProposed = { subjectId: resolvedIds.subjectId, ids: resolvedIds.ids };
           if (lastFilterDiagnosticLog) {
             lastFilterDiagnosticLog.manualCorrectionSaved = {
               savedAt: new Date().toISOString(),
@@ -4834,6 +5089,12 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
           }
           renderFilterBanner(`💾 Correção memorizada (${resolvedIds.ids.length} ID(s)): ${ctxSnapshot.topic || ctxSnapshot.subject}`);
         } else if (applied.assuntos && applied.assuntos.length > 0) {
+          const proposedNames = (lastFilterDiagnosticLog?.picks || []).map((p) => normalizeFilterText(p.name || p)).filter(Boolean).sort();
+          const appliedNames = applied.assuntos.map((a) => normalizeFilterText(a)).filter(Boolean).sort();
+          if (proposedNames.length > 0 && proposedNames.join('|') === appliedNames.join('|')) {
+            renderFilterBanner(`ℹ️ Seleção igual à proposta (nada memorizado): ${ctxSnapshot.topic || ctxSnapshot.subject}`);
+            return;
+          }
           saveFilterCorrectionMemory(ctxSnapshot, applied);
           renderFilterBanner(`💾 Correção memorizada (${applied.assuntos.length} assunto(s)): ${ctxSnapshot.topic || ctxSnapshot.subject}`);
         }
@@ -5813,6 +6074,7 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
           picks: idMemHit.picks || []
         };
         const summary = [idMemHit.subjectName || subject, displayTarget].filter(Boolean).join(' • ');
+        lastResolverProposed = { subjectId: idMemHit.subjectId, ids: idMemHit.ids };
         await navigateToCaveiraDeepLink(idMemHit.subjectId, idMemHit.ids, `✅ Filtro aplicado (💾 Memória IDs): ${summary}`);
         return;
       }
@@ -5870,11 +6132,13 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
       if (canAutoNavigate) {
         const summary = [res.subject.name, displayTarget].filter(Boolean).join(' • ');
         const tag = `${res.ids.length} assunto(s) • ${res.confidence}`;
+        lastResolverProposed = { subjectId: res.subject.id, ids: res.ids };
         await navigateToCaveiraDeepLink(res.subject.id, res.ids, `✅ Filtro aplicado (${tag}): ${summary}`);
         return;
       }
 
       // 3. Confiança baixa / nenhuma / âncora ambígua -> exibe seletor de alternativas no HUD
+      lastResolverProposed = null;
       renderResolverAlternativesBox(res, activePracticeFilter);
       renderFilterBanner(`⚠️ Confirme no HUD (${res.confidence}${res.anchorAmbiguous ? ' • ambíguo' : ''}): ${displayTarget || res.subject?.name || ''}`);
     } finally {
@@ -6250,28 +6514,19 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
       const activeGabarito = (activeQuestionData && activeQuestionData.id === qId) ? activeQuestionData.correctChoice : null;
       const userChoice = activeChoice || previousData.userChoice || '?';
       const gabarito = activeGabarito || previousData.correctChoice || '?';
-      choicesHtml = `<div style="font-size: 9px; opacity: 0.85; margin-top: 1px;">Você marcou: <strong>${userChoice}</strong> | Gabarito: <strong>${gabarito}</strong></div>`;
+      choicesHtml = `<div style="font-size: 9px; opacity: 0.85; margin-top: 1px;">Você marcou: <strong>${escapeHtml(userChoice)}</strong> | Gabarito: <strong>${escapeHtml(gabarito)}</strong></div>`;
     }
 
     box.className = `qg-hud-history ${isHit ? 'hit-history' : 'error-history'}`;
     box.innerHTML = `
       <div>
         <span class="qg-history-badge">${isHit ? '✓ HISTÓRICO' : '⚠️ ATENÇÃO: REPETIDA'}</span>
-        <div style="font-weight: 700;">${statusText} (${timeLabel})</div>
+        <div style="font-weight: 700;">${escapeHtml(statusText)} (${escapeHtml(timeLabel)})</div>
         ${choicesHtml}
       </div>
       ${bizuHtml}
     `;
     box.style.display = 'block';
-  }
-
-  function escapeHtml(text) {
-    if (!text) return '';
-    return String(text)
-      .replace(/&/g, '&amp;')
-      .replace(/</g, '&lt;')
-      .replace(/>/g, '&gt;')
-      .replace(/"/g, '&quot;');
   }
 
   function switchActiveQuestion(newQId, isAlreadyAnswered = false) {
@@ -6537,6 +6792,13 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
   function extractQuestionData(card, qId) {
     if (!card) return null;
 
+    const numericFromQId = Number(String(qId || '').replace(/^Q/i, '').replace(/\D+/g, ''));
+    const apiData =
+      apiQuestionByCode.get(qId) ||
+      (Number.isFinite(numericFromQId) && numericFromQId > 0 ? apiQuestionByApiId.get(numericFromQId) : null) ||
+      apiQuestionCache.get(qId) ||
+      null;
+
     // Busca disciplina e assunto pelo seletor específico ou vasculha a linha do cabeçalho ao lado do número
     let subject = 'Geral';
     let topic = 'Geral';
@@ -6566,16 +6828,30 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
       topic = parts.slice(1).join(' ➔ ') || subject;
     }
 
+    if (subject === 'Geral' && apiData?.subject) {
+      subject = apiData.subject;
+    }
+    if (topic === 'Geral' && (apiData?.subtopic || apiData?.subtopicPath)) {
+      if (apiData.subtopic) {
+        topic = apiData.subtopic;
+      } else {
+        const pathParts = String(apiData.subtopicPath).split(/->|➔|›|>/).map(s => s.trim()).filter(Boolean);
+        topic = pathParts.slice(1).join(' ➔ ') || pathParts[0] || topic;
+      }
+    }
+    const subtopicPath = apiData?.subtopicPath || rawSubjectText || '';
+
     const infoText = card.querySelector('.question-info')?.textContent || '';
     const bancaMatch = infoText.match(/Banca:\s*([^Ano\n]+)/i);
     const anoMatch = infoText.match(/Ano:\s*(\d+)/i);
     const diffMatch = infoText.match(/Dificuldade:\s*([^\n]+)/i);
 
-    const banca = bancaMatch ? bancaMatch[1].trim() : 'CAVEIRA';
-    const ano = anoMatch ? anoMatch[1].trim() : '2026';
-    const difficulty = diffMatch ? diffMatch[1].trim() : 'Média';
+    const banca = bancaMatch ? bancaMatch[1].trim() : (apiData?.banca || 'CAVEIRA');
+    const ano = anoMatch ? anoMatch[1].trim() : (apiData?.ano || '2026');
+    const difficulty = diffMatch ? diffMatch[1].trim() : (apiData?.difficulty || 'Média');
 
-    const content = card.querySelector('.content')?.innerText?.trim() || '';
+    const domContent = card.querySelector('.content')?.innerText?.trim() || '';
+    const content = domContent || apiData?.content || '';
     const { bloco, canonicalSubject } = classifyPRFCategory(subject, topic, content);
 
     const statsBox = card.querySelector('.stats-box');
@@ -6738,20 +7014,49 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     const durationSeconds = Math.max(3, elapsedForThisQ);
 
     // Captura Comentário do Professor caso esteja aberto no card
-    const teacherComment = extractTeacherCommentFromCard(card);
+    const teacherComment = extractTeacherCommentFromCard(card) || apiData?.teacherComment || '';
+    const finalAlternatives = alternatives.length > 0
+      ? alternatives
+      : (Array.isArray(apiData?.alternatives) && apiData.alternatives.length > 0
+          ? apiData.alternatives.map((a) => ({ letter: String(a.letter || a.answer || '').toUpperCase(), text: a.text || '' })).filter((a) => a.letter || a.text)
+          : null);
+
+    const treeMapped = cachedCaveiraTree
+      ? resolveTreeIdsForQuestion(cachedCaveiraTree, {
+          subject,
+          subtopic: apiData?.subtopic || topic,
+          subtopicPath,
+        })
+      : { subjectId: apiData?.subjectId || null, subtopicId: apiData?.subtopicId || null };
+
+    const resolvedSubjectId = treeMapped.subjectId || apiData?.subjectId || null;
+    const resolvedSubtopicId = treeMapped.subtopicId || apiData?.subtopicId || null;
+    const telemetry = buildStructuredTelemetryRecord({
+      apiId: apiData?.apiId || (Number.isFinite(numericFromQId) && numericFromQId > 0 ? numericFromQId : null),
+      subjectId: resolvedSubjectId,
+      subtopicId: resolvedSubtopicId,
+      banca,
+      ano,
+      acertou: isCorrect,
+      data: getTodaySessionDate(),
+    });
 
     return {
       id: qId,
+      ...(apiData?.code ? { code: apiData.code } : {}),
+      ...telemetry,
       bloco,
       canonicalSubject,
       subject,
       topic,
-      banca,
-      ano,
+      ...(subtopicPath ? { subtopicPath } : {}),
       difficulty,
       content: content.slice(0, 1000),
-      alternatives: alternatives.length > 0 ? alternatives : null,
+      ...(apiData?.supportingContent ? { supportingContent: apiData.supportingContent.slice(0, 1000) } : {}),
+      alternatives: finalAlternatives,
       teacherComment: teacherComment || undefined,
+      ...(apiData?.userNote ? { userNote: apiData.userNote } : {}),
+      ...(apiData?.outdated !== undefined ? { outdated: Boolean(apiData.outdated) } : {}),
       userChoice,
       correctChoice,
       hit: isCorrect,
@@ -7480,7 +7785,11 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
 
     const patch = {};
     // #2: Primeiro aproveita dados já capturados passivamente da API (zero cliques em abas)
-    const apiData = apiQuestionCache.get(qId);
+    const numericFromQId = Number(String(qId || '').replace(/^Q/i, '').replace(/\D+/g, ''));
+    const apiData =
+      apiQuestionByCode.get(qId) ||
+      (Number.isFinite(numericFromQId) && numericFromQId > 0 ? apiQuestionByApiId.get(numericFromQId) : null) ||
+      apiQuestionCache.get(qId);
     if (apiData) {
       if (apiData.teacherComment) {
         patch.teacherComment = apiData.teacherComment;

@@ -464,6 +464,7 @@ export default function App() {
     };
 
     const handleExtensionMessage = (event) => {
+      if (!event || event.source !== window || event.origin !== window.location.origin) return;
       if (event.data && event.data.source === 'QG_CAVEIRA_EXTENSION') {
         if (event.data.type === 'COURSE_INDEX_SYNC' && event.data.payload) {
           setCourseIndexCache(event.data.payload);
@@ -496,7 +497,20 @@ export default function App() {
           return;
         }
         if (event.data.type === 'SIMULADOS_IMPORT' && event.data.payload) {
-          const imported = useStore.getState().importCaveiraSimulados?.(event.data.payload.simulados || []);
+          const rawSimulados = Array.isArray(event.data.payload.simulados) ? event.data.payload.simulados : [];
+          const imported = useStore.getState().importCaveiraSimulados?.(rawSimulados);
+          const ids = rawSimulados.map(s => s?.caveiraId || s?.id).filter(Boolean);
+          try {
+            window.postMessage({
+              source: 'QG_WEB_APP',
+              type: 'SIMULADOS_IMPORT_ACK',
+              payload: {
+                ids,
+                imported: Number(imported) || 0,
+                deliveryId: event.data.payload.deliveryId || null
+              }
+            }, window.location.origin);
+          } catch (_) {}
           if (imported > 0) {
             toast.success(`📊 ${imported} simulado(s) do Caveira importado(s) para o QG!`);
           } else {

@@ -1,4 +1,14 @@
-// Bridge entre a Extensão e a aplicação Web QG da PRF (v3 Strict)
+import {
+  buildSimuladoKey,
+  pruneAndNormalizeQueue,
+  enqueueSimuladosIntoQueue,
+} from '../content/simuladosHelper.js';
+import {
+  PENDING_SIMULADOS_QUEUE_KEY,
+  SIMULADO_QUEUE_MAX_ATTEMPTS,
+} from '../content/utils.js';
+
+// Bridge entre a Extensão e a aplicação Web QG da PRF (v3.1.0 Strict)
 
 (function() {
   try {
@@ -22,14 +32,41 @@
   const PENDING_CATALOG_KEY = 'qg_pending_course_catalog';
   const PENDING_SIMULADOS_KEY = 'qg_pending_simulados_import';
   const PENDING_PDF_KEY = 'qg_pending_pdf_study';
-  const CLOUD_AUTH_KEY = 'qg_cloud_auth';
   const REMINDER_STATE_KEY = 'qg_reminder_state';
   const MAX_BUCKET_QUESTIONS = 1500;
+  const ALLOWED_WEB_HOSTS = new Set(['blk002.github.io', 'localhost', '127.0.0.1']);
+  const SIM_ACK_TIMEOUT_MS = 5000;
+  const SIM_BACKOFF_DELAYS_MS = [5000, 15000, 45000];
   let suppressFilterEchoUntil = 0;
   let isBridgeDestroyed = false;
   let cachedActiveUserId = null;
   let lastSyncPayloadJson = '';
   let lastSyncPayloadTime = 0;
+  let pendingSimAckTimer = null;
+  let pendingSimBackoffTimer = null;
+  let activeSimDelivery = null;
+  let autoBackoffIndex = 0;
+
+  function getTargetOrigin() {
+    try {
+      return window.location.origin;
+    } catch (_) {
+      return 'https://blk002.github.io';
+    }
+  }
+
+  function isValidWindowEvent(event) {
+    try {
+      return Boolean(
+        event &&
+        event.source === window &&
+        event.origin === window.location.origin &&
+        ALLOWED_WEB_HOSTS.has(window.location.hostname)
+      );
+    } catch (_) {
+      return false;
+    }
+  }
 
   function compactQuestionsForStorage(questions, maxItems = MAX_BUCKET_QUESTIONS) {
     if (!Array.isArray(questions)) return [];
@@ -73,7 +110,7 @@
         ...(extra.session ? { session: normalizeSession(extra.session) } : {}),
         ...(extra.dailyGoal ? { dailyGoal: Number(extra.dailyGoal) || 50 } : {})
       }
-    }, '*');
+    }, getTargetOrigin());
   }
 
   function getTodaySessionDate() {
@@ -99,7 +136,7 @@
 
   // Marca que a extensão está instalada no navegador
   document.documentElement.setAttribute('data-qg-caveira-extension-installed', 'true');
-  window.postMessage({ source: 'QG_CAVEIRA_EXTENSION', type: 'EXTENSION_DETECTED' }, '*');
+  window.postMessage({ source: 'QG_CAVEIRA_EXTENSION', type: 'EXTENSION_DETECTED' }, getTargetOrigin());
 
   function deliverCourseIndexCache(explicitCache = null) {
     if (isBridgeDestroyed || !isExtensionContextValid()) return;
@@ -108,7 +145,7 @@
         source: 'QG_CAVEIRA_EXTENSION',
         type: 'COURSE_INDEX_SYNC',
         payload: explicitCache
-      }, '*');
+      }, getTargetOrigin());
       return;
     }
     try {
@@ -120,7 +157,7 @@
             source: 'QG_CAVEIRA_EXTENSION',
             type: 'COURSE_INDEX_SYNC',
             payload: cache
-          }, '*');
+          }, getTargetOrigin());
         }
         const pendingCourse = res?.qg_pending_course_completion;
         if (pendingCourse && pendingCourse.requestedAt && (Date.now() - pendingCourse.requestedAt) < 120000) {
@@ -131,7 +168,7 @@
                 source: 'QG_CAVEIRA_EXTENSION',
                 type: 'COURSE_LESSON_COMPLETE_REQUEST',
                 payload: pendingCourse
-              }, '*');
+              }, getTargetOrigin());
             }
           }, 900);
         }
@@ -141,11 +178,59 @@
 
   deliverCourseIndexCache();
 
-  function deliverPendingQgEvents(activeUserId) {
+  function clearSimTimers() {
+    if (pendingSimAckTimer) {
+      clearTimeout(pendingSimAckTimer);
+      pendingSimAckTimer = null;
+    }
+    if (pendingSimBackoffTimer) {
+      clearTimeout(pendingSimBackoffTimer);
+      pendingSimBackoffTimer = null;
+    }
+  }
+
+  function acknowledgeSimuladosDelivery(payload = {}) {
+    clearSimTimers();
+    autoBackoffIndex = 0;
+    const rawIds = Array.isArray(payload.ids) ? payload.ids.map(String).filter(Boolean) : [];
+    const ackedSet = new Set(rawIds);
+    if (ackedSet.size === 0 && activeSimDelivery && (!payload.deliveryId || payload.deliveryId === activeSimDelivery.deliveryId)) {
+      activeSimDelivery.keys.forEach((k) => ackedSet.add(String(k)));
+    }
+    activeSimDelivery = null;
+
+    if (!isExtensionContextValid()) return;
+    try {
+      chrome.storage.local.get([PENDING_SIMULADOS_QUEUE_KEY, PENDING_SIMULADOS_KEY], (res) => {
+        if (chrome.runtime.lastError || isBridgeDestroyed) return;
+        let queue = pruneAndNormalizeQueue(res?.[PENDING_SIMULADOS_QUEUE_KEY]);
+        const beforeCount = queue.items.length;
+        const remaining = ackedSet.size > 0
+          ? queue.items.filter((it) => !ackedSet.has(String(it.caveiraId)) && !ackedSet.has(String(buildSimuladoKey(it.simulado))))
+          : [];
+        const confirmedCount = Math.max(0, beforeCount - remaining.length) || ackedSet.size;
+        const nextQueue = {
+          ...queue,
+          items: remaining,
+          lastStatus: 'confirmed',
+          lastConfirmedAt: Date.now(),
+          lastConfirmedCount: confirmedCount,
+          lastConfirmedIds: Array.from(ackedSet),
+          lastError: null,
+          updatedAt: Date.now(),
+        };
+        chrome.storage.local.set({ [PENDING_SIMULADOS_QUEUE_KEY]: nextQueue }, () => {
+          chrome.storage.local.remove([PENDING_SIMULADOS_KEY]);
+        });
+      });
+    } catch (_) {}
+  }
+
+  function deliverPendingQgEvents(activeUserId, { forceRetry = false } = {}) {
     if (isBridgeDestroyed || !isExtensionContextValid() || !activeUserId) return;
     try {
       chrome.storage.local.get(
-        [PENDING_CATALOG_KEY, PENDING_SIMULADOS_KEY, PENDING_PDF_KEY, FILTER_ID_MEMORY_KEY],
+        [PENDING_CATALOG_KEY, PENDING_SIMULADOS_KEY, PENDING_SIMULADOS_QUEUE_KEY, PENDING_PDF_KEY, FILTER_ID_MEMORY_KEY],
         (res) => {
           if (chrome.runtime.lastError || isBridgeDestroyed) return;
           const keysToRemove = [];
@@ -156,17 +241,89 @@
               source: 'QG_CAVEIRA_EXTENSION',
               type: 'COURSE_CATALOG_SYNC',
               payload: { ...catalog, userId: activeUserId }
-            }, '*');
+            }, getTargetOrigin());
           }
 
-          const simImport = res?.[PENDING_SIMULADOS_KEY];
-          if (simImport && Array.isArray(simImport.simulados) && simImport.simulados.length > 0) {
+          // Fila confiável com ACK, TTL 7d e dedupe por caveiraId
+          let simQueue = pruneAndNormalizeQueue(res?.[PENDING_SIMULADOS_QUEUE_KEY]);
+          const legacyImport = res?.[PENDING_SIMULADOS_KEY];
+          if (legacyImport && Array.isArray(legacyImport.simulados) && legacyImport.simulados.length > 0) {
+            simQueue = enqueueSimuladosIntoQueue(simQueue, legacyImport.simulados);
             keysToRemove.push(PENDING_SIMULADOS_KEY);
+          }
+
+          if (forceRetry) {
+            autoBackoffIndex = 0;
+            simQueue = {
+              ...simQueue,
+              items: simQueue.items.map((it) => ({ ...it, attempts: 0, status: 'saved' })),
+            };
+          }
+
+          const eligibleItems = simQueue.items.filter((it) => Number(it.attempts || 0) < SIMULADO_QUEUE_MAX_ATTEMPTS);
+          if (eligibleItems.length > 0 && (!activeSimDelivery || forceRetry)) {
+            const deliveryId = `dlv_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+            const deliveryKeys = eligibleItems.map((it) => it.caveiraId);
+            const updatedQueue = {
+              ...simQueue,
+              lastStatus: 'sending',
+              lastDeliveryId: deliveryId,
+              updatedAt: Date.now(),
+            };
+            chrome.storage.local.set({ [PENDING_SIMULADOS_QUEUE_KEY]: updatedQueue });
+            activeSimDelivery = { deliveryId, keys: deliveryKeys, sentAt: Date.now() };
+
             window.postMessage({
               source: 'QG_CAVEIRA_EXTENSION',
               type: 'SIMULADOS_IMPORT',
-              payload: { simulados: simImport.simulados, userId: activeUserId }
-            }, '*');
+              payload: {
+                simulados: eligibleItems.map((it) => it.simulado),
+                userId: activeUserId,
+                deliveryId,
+              }
+            }, getTargetOrigin());
+
+            if (pendingSimAckTimer) clearTimeout(pendingSimAckTimer);
+            pendingSimAckTimer = setTimeout(() => {
+              pendingSimAckTimer = null;
+              if (isBridgeDestroyed || !activeSimDelivery || activeSimDelivery.deliveryId !== deliveryId) return;
+              activeSimDelivery = null;
+              chrome.storage.local.get([PENDING_SIMULADOS_QUEUE_KEY], (qRes) => {
+                if (chrome.runtime.lastError || isBridgeDestroyed) return;
+                const cur = pruneAndNormalizeQueue(qRes?.[PENDING_SIMULADOS_QUEUE_KEY]);
+                const nowMs = Date.now();
+                const sentKeySet = new Set(deliveryKeys);
+                const nextItems = cur.items.map((it) => {
+                  if (!sentKeySet.has(it.caveiraId)) return it;
+                  const nextAttempts = Number(it.attempts || 0) + 1;
+                  return {
+                    ...it,
+                    attempts: nextAttempts,
+                    lastAttemptAt: nowMs,
+                    status: nextAttempts >= SIMULADO_QUEUE_MAX_ATTEMPTS ? 'failed' : 'waiting_qg',
+                  };
+                });
+                const hasMoreEligible = nextItems.some((it) => Number(it.attempts || 0) < SIMULADO_QUEUE_MAX_ATTEMPTS);
+                chrome.storage.local.set({
+                  [PENDING_SIMULADOS_QUEUE_KEY]: {
+                    ...cur,
+                    items: nextItems,
+                    lastStatus: hasMoreEligible ? 'waiting_qg' : 'failed',
+                    lastError: 'Sem ACK do site QG no tempo limite',
+                    updatedAt: nowMs,
+                  }
+                });
+                if (hasMoreEligible && autoBackoffIndex < SIM_BACKOFF_DELAYS_MS.length) {
+                  const delayMs = SIM_BACKOFF_DELAYS_MS[autoBackoffIndex++];
+                  pendingSimBackoffTimer = setTimeout(() => {
+                    pendingSimBackoffTimer = null;
+                    if (!isBridgeDestroyed && cachedActiveUserId) {
+                      deliverPendingQgEvents(cachedActiveUserId);
+                    }
+                  }, delayMs);
+                }
+              });
+            }, SIM_ACK_TIMEOUT_MS);
           }
 
           const pendingPdf = res?.[PENDING_PDF_KEY];
@@ -178,7 +335,7 @@
                   source: 'QG_CAVEIRA_EXTENSION',
                   type: 'PDF_STUDY_LOG',
                   payload: { ...pdfEntry, userId: activeUserId }
-                }, '*');
+                }, getTargetOrigin());
               }
             });
           } else if (pendingPdf && typeof pendingPdf === 'object' && pendingPdf.minutes) {
@@ -187,7 +344,7 @@
               source: 'QG_CAVEIRA_EXTENSION',
               type: 'PDF_STUDY_LOG',
               payload: { ...pendingPdf, userId: activeUserId }
-            }, '*');
+            }, getTargetOrigin());
           }
 
           if (keysToRemove.length > 0) {
@@ -200,7 +357,7 @@
               source: 'QG_CAVEIRA_EXTENSION',
               type: 'FILTER_MEMORY_SYNC',
               payload: { memory: filterMem, userId: activeUserId }
-            }, '*');
+            }, getTargetOrigin());
           }
         }
       );
@@ -418,7 +575,7 @@
           session: normalizeSession(rawSession),
           dailyGoal: Number(rawGoal) || 50
         }
-      }, '*');
+      }, getTargetOrigin());
     };
 
     try {
@@ -484,7 +641,13 @@
 
   function handleWindowMessage(event) {
     if (isBridgeDestroyed || !isExtensionContextValid()) return;
+    if (!isValidWindowEvent(event)) return;
     if (event.data && event.data.source === 'QG_WEB_APP') {
+      if (event.data.type === 'SIMULADOS_IMPORT_ACK' && event.data.payload) {
+        acknowledgeSimuladosDelivery(event.data.payload);
+        return;
+      }
+
       if (event.data.type === 'SET_ACTIVE_USER') {
         const nextUserId = event.data.payload?.userId || null;
         const nextUserLabel = event.data.payload?.userLabel || event.data.payload?.userEmail || '';
@@ -495,12 +658,16 @@
 
       if (event.data.type === 'USER_SIGNED_OUT') {
         switchUserBucket(null);
-        try { chrome.storage.local.remove([CLOUD_AUTH_KEY, REMINDER_STATE_KEY]); } catch (_) {}
+        try { chrome.storage.local.remove([REMINDER_STATE_KEY]); } catch (_) {}
+        try { chrome.runtime?.sendMessage?.({ type: 'CLEAR_CLOUD_AUTH' }).catch(() => {}); } catch (_) {}
       }
 
       if (event.data.type === 'QG_PRF_SYNC_CLOUD_CREDS' && event.data.payload?.userId) {
         try {
-          chrome.storage.local.set({ [CLOUD_AUTH_KEY]: { ...event.data.payload, updatedAt: Date.now() } });
+          chrome.runtime?.sendMessage?.({
+            type: 'SET_CLOUD_AUTH',
+            payload: { ...event.data.payload, updatedAt: Date.now() },
+          }).catch(() => {});
         } catch (_) {}
       }
 
@@ -716,7 +883,7 @@
               window.postMessage({
                 source: 'QG_CAVEIRA_EXTENSION',
                 type: 'SESSION_CLEARED'
-              }, '*');
+              }, getTargetOrigin());
             });
           });
         } catch (_) {}
@@ -731,6 +898,8 @@
 
   function teardownBridge() {
     isBridgeDestroyed = true;
+    clearSimTimers();
+    activeSimDelivery = null;
     window.removeEventListener('focus', handleFocus);
     document.removeEventListener('visibilitychange', handleVisibilityChange);
     window.removeEventListener('message', handleWindowMessage);
@@ -793,7 +962,7 @@
                 source: 'QG_CAVEIRA_EXTENSION',
                 type: 'FILTER_MEMORY_SYNC',
                 payload: { memory: mem, userId: cachedActiveUserId }
-              }, '*');
+              }, getTargetOrigin());
             }
           }
         }
@@ -805,8 +974,20 @@
     try {
       chrome.runtime.onMessage.addListener((msg) => {
         if (isBridgeDestroyed || !isExtensionContextValid()) return;
-        if (msg && msg.type === 'FLUSH_PENDING_QG_EVENTS' && cachedActiveUserId) {
-          deliverPendingQgEvents(cachedActiveUserId);
+        if (msg && msg.type === 'FLUSH_PENDING_QG_EVENTS') {
+          const forceRetry = Boolean(msg.forceRetry);
+          if (cachedActiveUserId) {
+            deliverPendingQgEvents(cachedActiveUserId, { forceRetry });
+          } else {
+            chrome.storage.local.get([ACTIVE_USER_KEY], (res) => {
+              if (chrome.runtime.lastError || isBridgeDestroyed) return;
+              const storedUid = res?.[ACTIVE_USER_KEY] || null;
+              if (storedUid) {
+                cachedActiveUserId = storedUid;
+                deliverPendingQgEvents(storedUid, { forceRetry });
+              }
+            });
+          }
         }
         if (msg && msg.type === 'PUSH_CAVEIRA_SYNC' && msg.payload && cachedActiveUserId) {
           postSyncUpdate(msg.payload.questions || [], cachedActiveUserId, {
@@ -819,7 +1000,7 @@
             source: 'QG_CAVEIRA_EXTENSION',
             type: 'COURSE_LESSON_COMPLETE_REQUEST',
             payload: msg.payload
-          }, '*');
+          }, getTargetOrigin());
         }
       });
     } catch (_) {}

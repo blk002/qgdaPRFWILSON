@@ -2,17 +2,35 @@ import {
   getAllQuestionsFull,
   searchQuestionsOffline,
   getDbStats,
+  exportAllDataForBackup,
+  importBackupData,
 } from '../db/extensionDb.js';
+import {
+  STORAGE_KEY,
+  SESSION_KEY,
+  GOAL_KEY,
+  ACTIVE_USER_KEY,
+  ACTIVE_USER_LABEL_KEY,
+  DEFAULT_PREFS_KEY,
+  PENDING_SIMULADOS_QUEUE_KEY,
+  DIAGNOSTIC_MODE_KEY,
+  DIAGNOSTIC_EVENTS_KEY,
+  SNIFFER_RECENT_EVENTS_KEY,
+  LAST_FILTER_DIAG_KEY,
+  TREE_META_KEY,
+  getTodaySessionDate,
+  normalizeSession,
+  sanitizeDiagnosticData,
+} from '../content/utils.js';
+import {
+  formatSimuladoDeliveryStatus,
+  pruneAndNormalizeQueue,
+} from '../content/simuladosHelper.js';
 
-// Popup Script — QG da PRF Rastreador Caveira (v3.0.0 — Dexie + MiniSearch + Sync Direto)
-const STORAGE_KEY = 'qg_caveira_questions';
-const SESSION_KEY = 'qg_caveira_session';
-const GOAL_KEY = 'qg_caveira_daily_goal';
-const ACTIVE_USER_KEY = 'qg_active_user_id';
-const ACTIVE_USER_LABEL_KEY = 'qg_active_user_label';
+// Popup Script — QG da PRF Rastreador Caveira (v3.1.0 — Dexie + Diagnóstico + Fila ACK)
 const USER_BUCKETS_KEY = 'qg_caveira_user_buckets';
-const DEFAULT_PREFS_KEY = 'qg_caveira_default_prefs';
 const FIRST_PREFS = { examBoards: ['cebraspe', 'caveira_ineditas', 'caveira_adaptadas'], numberAlternatives: [2] };
+const TREE_STALE_DAYS = 30;
 
 function renderAccountStatus(activeUserId, activeUserLabel) {
   const pill = document.getElementById('account-status-pill');
@@ -43,28 +61,6 @@ function renderAccountStatus(activeUserId, activeUserLabel) {
   pill.appendChild(textSpan);
 }
 
-function getTodaySessionDate() {
-  const now = new Date();
-  const y = now.getFullYear();
-  const m = String(now.getMonth() + 1).padStart(2, '0');
-  const d = String(now.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function normalizeSession(rawSession) {
-  const today = getTodaySessionDate();
-  if (!rawSession || rawSession.date !== today) {
-    return { date: today, total: 0, hits: 0, errors: 0 };
-  }
-  return {
-    date: today,
-    total: Number(rawSession.total) || 0,
-    hits: Number(rawSession.hits) || 0,
-    errors: Number(rawSession.errors) || 0,
-    ...(rawSession.wasExplicitlyReset ? { wasExplicitlyReset: true } : {}),
-  };
-}
-
 function renderGoal(session, dailyGoal) {
   const hits = Number(session?.hits) || 0;
   const errors = Number(session?.errors) || 0;
@@ -93,21 +89,55 @@ function renderGoal(session, dailyGoal) {
 
   if (txtStatus) {
     if (current >= goal) {
-      txtStatus.innerHTML = '<span style="color:#10b981; font-weight:800;">🏆 META CUMPRIDA! Missão dada é cumprida!</span>';
+      txtStatus.textContent = '🏆 META CUMPRIDA! Missão dada é cumprida!';
+      txtStatus.style.color = '#10b981';
+      txtStatus.style.fontWeight = '800';
     } else {
       const remaining = goal - current;
       txtStatus.textContent = `Faltam ${remaining} questão(ões) para a meta! 💪`;
       txtStatus.style.color = '#a1a1aa';
+      txtStatus.style.fontWeight = '700';
     }
   }
 }
 
+function formatBrDate(isoOrMs) {
+  if (!isoOrMs) return null;
+  const dt = new Date(isoOrMs);
+  if (!Number.isFinite(dt.getTime())) return null;
+  const dd = String(dt.getDate()).padStart(2, '0');
+  const mm = String(dt.getMonth() + 1).padStart(2, '0');
+  const yyyy = dt.getFullYear();
+  return { formatted: `${dd}/${mm}/${yyyy}`, ms: dt.getTime() };
+}
+
+let cachedBaselineTreeDate = '';
+async function getBaselineTreeDateFallback() {
+  if (cachedBaselineTreeDate) return cachedBaselineTreeDate;
+  try {
+    const resp = await fetch(chrome.runtime.getURL('caveira_arvore.json'));
+    if (!resp.ok) return '';
+    const data = await resp.json();
+    cachedBaselineTreeDate = String(data?.geradoEm || '');
+    return cachedBaselineTreeDate;
+  } catch (_) {
+    return '';
+  }
+}
+
 document.addEventListener('DOMContentLoaded', () => {
-  const manifestVer = chrome.runtime?.getManifest?.().version || '3.0.0';
+  const manifestVer = chrome.runtime?.getManifest?.().version || '3.1.0';
   const verEl = document.getElementById('ext-version');
   if (verEl) verEl.textContent = `v${manifestVer}`;
 
   let currentUserId = null;
+
+  const setBackupStatus = (text, color = '#6ee7b7') => {
+    const el = document.getElementById('backup-status');
+    if (!el) return;
+    el.textContent = text;
+    el.style.color = color;
+  };
 
   const renderPopupStats = async (legacyQuestions, session, dailyGoal) => {
     let totalSaved = legacyQuestions.length;
@@ -142,6 +172,90 @@ document.addEventListener('DOMContentLoaded', () => {
     renderGoal(session, dailyGoal);
   };
 
+  const renderDiagnosticsAndQueue = () => {
+    chrome.storage.local.get(
+      [
+        PENDING_SIMULADOS_QUEUE_KEY,
+        DIAGNOSTIC_MODE_KEY,
+        DIAGNOSTIC_EVENTS_KEY,
+        SNIFFER_RECENT_EVENTS_KEY,
+        LAST_FILTER_DIAG_KEY,
+        TREE_META_KEY,
+      ],
+      async (r) => {
+        const queue = pruneAndNormalizeQueue(r[PENDING_SIMULADOS_QUEUE_KEY]);
+        const delivery = formatSimuladoDeliveryStatus(queue);
+
+        const queueEl = document.getElementById('simulados-queue-status');
+        if (queueEl) {
+          queueEl.textContent = delivery.label || '📊 Simulados: fila vazia (nenhum pendente)';
+          queueEl.style.color = delivery.isDone
+            ? '#6ee7b7'
+            : queue.items.length > 0
+            ? '#fbbf24'
+            : '#94a3b8';
+        }
+
+        const badgeEl = document.getElementById('diag-pending-badge');
+        if (badgeEl) {
+          badgeEl.textContent = `${queue.items.length} pendente(s)`;
+          badgeEl.style.color = queue.items.length > 0 ? '#fbbf24' : '#6ee7b7';
+        }
+
+        const diagCb = document.getElementById('pref-diagnostic-mode');
+        if (diagCb) {
+          diagCb.checked = Boolean(r[DIAGNOSTIC_MODE_KEY]);
+        }
+
+        const snifferEvents = Array.isArray(r[SNIFFER_RECENT_EVENTS_KEY]) ? r[SNIFFER_RECENT_EVENTS_KEY] : [];
+        const diagShapes = Array.isArray(r[DIAGNOSTIC_EVENTS_KEY]) ? r[DIAGNOSTIC_EVENTS_KEY] : [];
+        const snifferSummaryEl = document.getElementById('diag-sniffer-summary');
+        if (snifferSummaryEl) {
+          const lastEv = snifferEvents[snifferEvents.length - 1];
+          const lastEvStr = lastEv ? `${lastEv.type}` : 'nenhum ainda';
+          snifferSummaryEl.textContent = `Sniffer: ${snifferEvents.length} evento(s) (${lastEvStr}) • ${diagShapes.length} forma(s) diag.`;
+        }
+
+        const lastFilter = r[LAST_FILTER_DIAG_KEY];
+        const resolverSummaryEl = document.getElementById('diag-resolver-summary');
+        if (resolverSummaryEl) {
+          if (lastFilter?.diagLog) {
+            const d = lastFilter.diagLog;
+            const idsCount = Array.isArray(d.ids) ? d.ids.length : (Array.isArray(lastFilter.expectedFilter?.ids) ? lastFilter.expectedFilter.ids.length : 0);
+            resolverSummaryEl.textContent = `Resolver: ${d.method || 'auto'} • ${d.confidence || '-'} • ${idsCount} ID(s) • ${lastFilter.activePracticeFilter?.subject || ''}`.trim();
+          } else {
+            resolverSummaryEl.textContent = 'Resolver: sem filtro recente';
+          }
+        }
+
+        const treeEl = document.getElementById('tree-meta-status');
+        if (treeEl) {
+          const meta = r[TREE_META_KEY] || {};
+          let dateRaw = meta.mergedDate || meta.baselineDate || '';
+          if (!dateRaw) {
+            dateRaw = await getBaselineTreeDateFallback();
+          }
+          const parsed = formatBrDate(dateRaw);
+          const dynCount = Number(meta.dynamicNodeCount) || 0;
+          const dynSuffix = dynCount > 0 ? ` (+${dynCount} din.)` : '';
+          if (parsed) {
+            const ageDays = Math.floor((Date.now() - parsed.ms) / 86400000);
+            if (ageDays > TREE_STALE_DAYS) {
+              treeEl.textContent = `⚠️ Árvore Caveira: ${parsed.formatted} (${ageDays}d atrás — atualize)${dynSuffix}`;
+              treeEl.style.color = '#fbbf24';
+            } else {
+              treeEl.textContent = `🌳 Árvore Caveira: ${parsed.formatted}${dynSuffix}`;
+              treeEl.style.color = '#94a3b8';
+            }
+          } else {
+            treeEl.textContent = `⚠️ Árvore Caveira: data desconhecida${dynSuffix}`;
+            treeEl.style.color = '#fbbf24';
+          }
+        }
+      }
+    );
+  };
+
   chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, GOAL_KEY, ACTIVE_USER_KEY, ACTIVE_USER_LABEL_KEY], (res) => {
     currentUserId = res[ACTIVE_USER_KEY] || null;
     renderAccountStatus(currentUserId, res[ACTIVE_USER_LABEL_KEY] || '');
@@ -157,6 +271,7 @@ document.addEventListener('DOMContentLoaded', () => {
       chrome.storage.local.set({ [SESSION_KEY]: session });
     }
     renderPopupStats(questions, session, dailyGoal);
+    renderDiagnosticsAndQueue();
   });
 
   chrome.storage.onChanged.addListener((_, area) => {
@@ -168,11 +283,12 @@ document.addEventListener('DOMContentLoaded', () => {
         const dailyGoal = Number(res[GOAL_KEY]) || 50;
         renderAccountStatus(currentUserId, res[ACTIVE_USER_LABEL_KEY] || '');
         renderPopupStats(questions, session, dailyGoal);
+        renderDiagnosticsAndQueue();
       });
     }
   });
 
-  // Busca offline instantânea via MiniSearch + IndexedDB (#2)
+  // Busca offline instantânea via MiniSearch + IndexedDB
   const searchInput = document.getElementById('popup-offline-search');
   const searchResultsEl = document.getElementById('popup-search-results');
   if (searchInput && searchResultsEl) {
@@ -276,18 +392,20 @@ document.addEventListener('DOMContentLoaded', () => {
     sel.addEventListener('change', save);
   })();
 
-  // Alertas FSRS & Status Sync Direto
+  // Alertas FSRS & Status Sync Direto (tokens vivem somente em chrome.storage.session via background)
   (function initBackgroundFeatures() {
     const notifCb = document.getElementById('pref-notifications');
     const syncEl = document.getElementById('direct-sync-status');
 
     const renderStatus = () => {
-      chrome.storage.local.get(['qg_notifications_enabled', 'qg_cloud_auth', 'qg_last_direct_cloud_sync', 'qg_sync_mode'], (r) => {
+      chrome.storage.local.get(['qg_notifications_enabled', 'qg_last_direct_cloud_sync', 'qg_sync_mode', 'qg_cloud_auth_meta'], (r) => {
         if (notifCb) {
           notifCb.checked = r.qg_notifications_enabled !== false;
         }
-        if (syncEl) {
-          if (r.qg_cloud_auth?.accessToken && r.qg_cloud_auth?.userId) {
+        chrome.runtime.sendMessage({ type: 'GET_CLOUD_AUTH_STATUS' }, (authRes) => {
+          if (!syncEl) return;
+          const isAuth = Boolean(!chrome.runtime?.lastError && (authRes?.authenticated || r.qg_cloud_auth_meta?.authenticated));
+          if (isAuth) {
             const last = r.qg_last_direct_cloud_sync;
             const modeLabel = r.qg_sync_mode === 'incremental+profile' || r.qg_sync_mode === 'incremental-realtime'
               ? 'Incremental'
@@ -304,7 +422,7 @@ document.addEventListener('DOMContentLoaded', () => {
             syncEl.textContent = '☁️ Sync Direto: abra o QG 1x para vincular';
             syncEl.style.color = '#fbbf24';
           }
-        }
+        });
       });
     };
 
@@ -315,18 +433,113 @@ document.addEventListener('DOMContentLoaded', () => {
       });
     }
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area === 'local' && (changes.qg_cloud_auth || changes.qg_last_direct_cloud_sync || changes.qg_notifications_enabled || changes.qg_sync_mode)) {
+      if (area === 'local' && (changes.qg_cloud_auth_meta || changes.qg_last_direct_cloud_sync || changes.qg_notifications_enabled || changes.qg_sync_mode)) {
         renderStatus();
       }
     });
   })();
+
+  // Modo Diagnóstico, Reenvio Simulados & Backup (#P0-1, #P0-2, #P2-11)
+  const diagCb = document.getElementById('pref-diagnostic-mode');
+  if (diagCb) {
+    diagCb.addEventListener('change', () => {
+      chrome.storage.local.set({ [DIAGNOSTIC_MODE_KEY]: diagCb.checked }, () => {
+        setBackupStatus(diagCb.checked ? 'Modo Diagnóstico ATIVADO.' : 'Modo Diagnóstico desativado.', '#38bdf8');
+      });
+    });
+  }
+
+  document.getElementById('btn-retry-simulados')?.addEventListener('click', () => {
+    chrome.runtime.sendMessage({ type: 'FLUSH_PENDING_QG_EVENTS', forceRetry: true }, (resp) => {
+      if (chrome.runtime?.lastError || !resp?.success) {
+        setBackupStatus('Falha ao acionar reenvio — verifique se a aba do QG está aberta.', '#f87171');
+        return;
+      }
+      if (!resp.tabs) {
+        setBackupStatus('Nenhuma aba do QG da PRF aberta. Abra o QG e faça login.', '#fbbf24');
+      } else {
+        setBackupStatus(`Reenvio enviado para ${resp.tabs} aba(s) do QG!`, '#6ee7b7');
+      }
+      setTimeout(renderDiagnosticsAndQueue, 400);
+    });
+  });
+
+  document.getElementById('btn-copy-diagnostic')?.addEventListener('click', async () => {
+    const rawStore = await new Promise((resolve) => {
+      chrome.storage.local.get([
+        PENDING_SIMULADOS_QUEUE_KEY,
+        DIAGNOSTIC_MODE_KEY,
+        DIAGNOSTIC_EVENTS_KEY,
+        SNIFFER_RECENT_EVENTS_KEY,
+        LAST_FILTER_DIAG_KEY,
+        TREE_META_KEY,
+        'qg_cloud_auth_meta',
+      ], resolve);
+    });
+    const dbStats = await getDbStats(currentUserId).catch(() => null);
+    const payload = sanitizeDiagnosticData({
+      version: manifestVer,
+      capturedAt: new Date().toISOString(),
+      diagnosticMode: Boolean(rawStore?.[DIAGNOSTIC_MODE_KEY]),
+      treeMeta: rawStore?.[TREE_META_KEY] || null,
+      authMeta: rawStore?.qg_cloud_auth_meta || null,
+      dbStats,
+      pendingSimuladosQueue: pruneAndNormalizeQueue(rawStore?.[PENDING_SIMULADOS_QUEUE_KEY]),
+      recentSnifferEvents: (rawStore?.[SNIFFER_RECENT_EVENTS_KEY] || []).slice(-20),
+      diagnosticShapes: (rawStore?.[DIAGNOSTIC_EVENTS_KEY] || []).slice(-30),
+      lastFilterDiag: rawStore?.[LAST_FILTER_DIAG_KEY] || null,
+    });
+    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+    setBackupStatus('Diagnóstico copiado (tokens/credenciais removidos).', '#6ee7b7');
+  });
+
+  document.getElementById('btn-export-backup')?.addEventListener('click', async () => {
+    try {
+      const backup = await exportAllDataForBackup(currentUserId);
+      const blob = new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `qg-prf-backup-${getTodaySessionDate()}.json`;
+      a.click();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+      setBackupStatus(`Backup exportado (${backup.questions.length} questões).`, '#6ee7b7');
+    } catch (err) {
+      setBackupStatus(`Erro ao exportar: ${err?.message || 'desconhecido'}`, '#f87171');
+    }
+  });
+
+  const importInput = document.getElementById('input-import-backup');
+  document.getElementById('btn-import-backup')?.addEventListener('click', () => {
+    importInput?.click();
+  });
+  importInput?.addEventListener('change', async (e) => {
+    const file = e.target?.files?.[0];
+    if (!file) return;
+    try {
+      const text = await file.text();
+      const parsed = JSON.parse(text);
+      const res = await importBackupData(parsed, currentUserId);
+      setBackupStatus(
+        `Importado: ${res.importedQuestions} questão(ões), ${res.importedNodes} nó(s), ${res.filterMemoryCount} memória(s).`,
+        '#6ee7b7'
+      );
+      chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, GOAL_KEY], (s) => {
+        renderPopupStats(Array.isArray(s[STORAGE_KEY]) ? s[STORAGE_KEY] : [], normalizeSession(s[SESSION_KEY]), Number(s[GOAL_KEY]) || 50);
+      });
+    } catch (err) {
+      setBackupStatus(`Backup inválido: ${err?.message || 'erro ao importar'}`, '#f87171');
+    } finally {
+      importInput.value = '';
+    }
+  });
 
   document.getElementById('btn-open-qg').addEventListener('click', async () => {
     const targetUrl = 'https://blk002.github.io/qgdaPRFWILSON/#/estudos?tab=caveira';
     try {
       if (chrome.tabs && chrome.tabs.query) {
         const tabs = await chrome.tabs.query({
-          url: ['https://blk002.github.io/*', 'http://localhost:*/*', 'http://127.0.0.1:*/*'],
+          url: ['https://blk002.github.io/*'],
         });
         if (tabs && tabs.length > 0 && tabs[0].id) {
           await chrome.tabs.update(tabs[0].id, { active: true });
@@ -348,9 +561,9 @@ document.addEventListener('DOMContentLoaded', () => {
     const finalList = questions.length > 0 ? questions : fallback;
     navigator.clipboard.writeText(JSON.stringify(finalList, null, 2)).then(() => {
       const btn = document.getElementById('btn-copy-json');
-      const orig = btn.innerHTML;
-      btn.innerHTML = '<span>Copiado com Sucesso!</span> <span>✓</span>';
-      setTimeout(() => { btn.innerHTML = orig; }, 1800);
+      const orig = btn.textContent;
+      btn.textContent = 'Copiado com Sucesso! ✓';
+      setTimeout(() => { btn.textContent = orig; }, 1800);
     });
   });
 

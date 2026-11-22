@@ -20,7 +20,10 @@ const SESSION_KEY = 'qg_caveira_session';
 const ACTIVE_USER_KEY = 'qg_active_user_id';
 const USER_BUCKETS_KEY = 'qg_caveira_user_buckets';
 const GOAL_KEY = 'qg_caveira_daily_goal';
+const CLOUD_AUTH_KEY = 'qg_cloud_auth';
+const CLOUD_AUTH_META_KEY = 'qg_cloud_auth_meta';
 const FILTER_ID_MEMORY_KEY = 'qg_caveira_filter_id_memory_v1';
+const FILTER_CORRECTION_MEMORY_KEY = 'qg_caveira_filter_memory';
 const REMINDER_STATE_KEY = 'qg_reminder_state';
 const NOTIF_ENABLED_KEY = 'qg_notifications_enabled';
 const LAST_NOTIF_META_KEY = 'qg_last_notification_meta';
@@ -41,9 +44,27 @@ const CAVEIRA_URL_PATTERNS = [
 
 const QG_URL_PATTERNS = [
   'https://blk002.github.io/*',
-  'http://localhost:*/*',
-  'http://127.0.0.1:*/*',
 ];
+
+async function migrateCloudAuthToSession() {
+  try {
+    const legacy = await chrome.storage.local.get([CLOUD_AUTH_KEY]);
+    const auth = legacy?.[CLOUD_AUTH_KEY];
+    if (auth && typeof auth === 'object') {
+      if (chrome.storage?.session && (auth.accessToken || auth.refreshToken)) {
+        await chrome.storage.session.set({ [CLOUD_AUTH_KEY]: auth });
+      }
+      await chrome.storage.local.remove([CLOUD_AUTH_KEY]);
+      await chrome.storage.local.set({
+        [CLOUD_AUTH_META_KEY]: {
+          authenticated: Boolean(auth.accessToken && auth.userId),
+          userId: auth.userId || null,
+          updatedAt: Date.now(),
+        },
+      });
+    }
+  } catch (_) {}
+}
 
 function getTodaySessionDate() {
   const now = new Date();
@@ -243,6 +264,7 @@ if (chrome.notifications?.onClicked) {
 }
 
 chrome.runtime.onInstalled.addListener(async () => {
+  await migrateCloudAuthToSession();
   const res = await chrome.storage.local.get([STORAGE_KEY, SESSION_KEY]);
   if (!res[STORAGE_KEY]) {
     await chrome.storage.local.set({ [STORAGE_KEY]: [] });
@@ -256,6 +278,7 @@ chrome.runtime.onInstalled.addListener(async () => {
 
 if (chrome.runtime?.onStartup) {
   chrome.runtime.onStartup.addListener(async () => {
+    await migrateCloudAuthToSession();
     await ensureMigratedFromLegacyStorage();
     ensurePeriodicAlarm();
     await flushOutboxToSupabase({ onlyWhenQgClosed: true });
@@ -264,6 +287,21 @@ if (chrome.runtime?.onStartup) {
   });
 }
 
+if (chrome.commands?.onCommand) {
+  chrome.commands.onCommand.addListener(async (command) => {
+    if (command !== 'mark-doubt' && command !== 'mark-guess') return;
+    const tag = command === 'mark-doubt' ? 'duvida' : 'chute';
+    try {
+      const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true, url: CAVEIRA_URL_PATTERNS });
+      const targetTab = activeTabs?.[0] || (await chrome.tabs.query({ url: CAVEIRA_URL_PATTERNS }))?.[0];
+      if (targetTab?.id) {
+        chrome.tabs.sendMessage(targetTab.id, { type: 'HUD_QUICK_TAG', payload: { tag } }).catch(() => {});
+      }
+    } catch (_) {}
+  });
+}
+
+migrateCloudAuthToSession();
 ensurePeriodicAlarm();
 ensureMigratedFromLegacyStorage();
 
@@ -504,13 +542,72 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     return true;
   }
 
+  if (message.type === 'SET_CLOUD_AUTH' && message.payload?.userId) {
+    (async () => {
+      try {
+        const authPayload = { ...message.payload, updatedAt: Date.now() };
+        if (chrome.storage?.session) {
+          await chrome.storage.session.set({ [CLOUD_AUTH_KEY]: authPayload });
+        }
+        await chrome.storage.local.remove([CLOUD_AUTH_KEY]);
+        await chrome.storage.local.set({
+          [CLOUD_AUTH_META_KEY]: {
+            authenticated: Boolean(authPayload.accessToken && authPayload.userId),
+            userId: authPayload.userId || null,
+            updatedAt: Date.now(),
+          },
+        });
+        sendResponse({ ok: true });
+      } catch (_) {
+        sendResponse({ ok: false });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'CLEAR_CLOUD_AUTH') {
+    (async () => {
+      try {
+        if (chrome.storage?.session) {
+          await chrome.storage.session.remove([CLOUD_AUTH_KEY]);
+        }
+        await chrome.storage.local.remove([CLOUD_AUTH_KEY, CLOUD_AUTH_META_KEY]);
+        sendResponse({ ok: true });
+      } catch (_) {
+        sendResponse({ ok: false });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'GET_CLOUD_AUTH_STATUS') {
+    (async () => {
+      try {
+        await migrateCloudAuthToSession();
+        const sess = chrome.storage?.session ? await chrome.storage.session.get([CLOUD_AUTH_KEY]) : {};
+        const auth = sess?.[CLOUD_AUTH_KEY];
+        sendResponse({
+          ok: true,
+          authenticated: Boolean(auth?.accessToken && auth?.userId),
+          userId: auth?.userId || null,
+        });
+      } catch (_) {
+        sendResponse({ ok: false, authenticated: false, userId: null });
+      }
+    })();
+    return true;
+  }
+
   if (message.type === 'FLUSH_PENDING_QG_EVENTS') {
     (async () => {
       try {
         const qgTabs = chrome.tabs ? await chrome.tabs.query({ url: QG_URL_PATTERNS }) : [];
         for (const tab of (qgTabs || [])) {
           if (tab.id && !tab.discarded) {
-            chrome.tabs.sendMessage(tab.id, { type: 'FLUSH_PENDING_QG_EVENTS' }).catch(() => {});
+            chrome.tabs.sendMessage(tab.id, {
+              type: 'FLUSH_PENDING_QG_EVENTS',
+              forceRetry: Boolean(message.forceRetry),
+            }).catch(() => {});
           }
         }
         sendResponse({ success: true, tabs: (qgTabs || []).length });

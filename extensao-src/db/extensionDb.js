@@ -10,6 +10,13 @@ db.version(1).stores({
   meta: '&key',
 });
 
+db.version(2).stores({
+  questions: '&id, apiId, ownerUserId, subject, canonicalSubject, subjectId, subtopicId, banca, ano, bloco, hit, updatedAt, timestamp',
+  outbox: '++seq, entityType, entityId, userId, createdAt, status',
+  dynamicTreeNodes: '&key, subjectId, nodeId, updatedAt',
+  meta: '&key',
+});
+
 let miniIndex = null;
 let indexedUserId = null;
 
@@ -130,8 +137,25 @@ export function mergeQuestionRecords(prev = null, incoming = {}) {
     : (communityCorrectPct !== undefined ? Math.max(0, Math.min(100, Math.round(100 - communityCorrectPct))) : prev?.communityErrorPct);
 
   const hitVal = Boolean(base.hit);
+  const resolvedApiId = incoming.apiId !== undefined && incoming.apiId !== null
+    ? Number(incoming.apiId)
+    : (prev?.apiId !== undefined && prev?.apiId !== null ? Number(prev.apiId) : undefined);
+  const resolvedSubjectId = incoming.subjectId !== undefined && incoming.subjectId !== null
+    ? Number(incoming.subjectId)
+    : (prev?.subjectId !== undefined && prev?.subjectId !== null ? Number(prev.subjectId) : undefined);
+  const resolvedSubtopicId = incoming.subtopicId !== undefined && incoming.subtopicId !== null
+    ? Number(incoming.subtopicId)
+    : (prev?.subtopicId !== undefined && prev?.subtopicId !== null ? Number(prev.subtopicId) : undefined);
+
   return {
     ...base,
+    ...(Number.isFinite(resolvedApiId) && resolvedApiId > 0 ? { apiId: resolvedApiId } : {}),
+    ...(Number.isFinite(resolvedSubjectId) && resolvedSubjectId > 0 ? { subjectId: resolvedSubjectId } : {}),
+    ...(Number.isFinite(resolvedSubtopicId) && resolvedSubtopicId > 0 ? { subtopicId: resolvedSubtopicId } : {}),
+    ...(base.banca || prev?.banca ? { banca: incoming.banca || prev?.banca || base.banca } : {}),
+    ...(base.ano || prev?.ano ? { ano: incoming.ano || prev?.ano || base.ano } : {}),
+    ...(base.data || prev?.data ? { data: incoming.data || prev?.data || base.data } : {}),
+    acertou: incoming.acertou !== undefined ? Boolean(incoming.acertou) : (prev?.acertou !== undefined ? Boolean(prev.acertou) : hitVal),
     ...(content ? { content } : {}),
     attempts,
     teacherComment,
@@ -323,18 +347,101 @@ export async function getDbStats(userId = null) {
 }
 
 export async function migrateLegacyChromeStorageToDexie(rawQuestions = []) {
-  const alreadyMigrated = await getMeta('legacyMigratedV3');
-  if (alreadyMigrated) return 0;
+  const migratedVersion = await getMeta('legacyMigratedSchemaVersion');
+  if (migratedVersion === '3.1.0') return 0;
   let imported = 0;
   if (Array.isArray(rawQuestions) && rawQuestions.length > 0) {
-    const valid = rawQuestions.filter((q) => q && q.id);
+    const valid = rawQuestions.filter((q) => q && (q.id || q.apiId));
     if (valid.length > 0) {
-      await bulkUpsertQuestionsFull(valid, { enqueueOutbox: false });
-      imported = valid.length;
+      const normalized = valid.map((q) => ({
+        ...q,
+        id: q.id || `api_${q.apiId}`,
+      }));
+      await bulkUpsertQuestionsFull(normalized, { enqueueOutbox: false });
+      imported = normalized.length;
     }
   }
   await setMeta('legacyMigratedV3', true);
+  await setMeta('legacyMigratedSchemaVersion', '3.1.0');
   return imported;
+}
+
+export async function exportAllDataForBackup(userId = null) {
+  const [questions, dynamicNodes, storeData] = await Promise.all([
+    getAllQuestionsFull(userId),
+    getAllDynamicTreeNodes(),
+    chrome.storage.local.get([
+      'qg_caveira_filter_id_memory_v1',
+      'qg_caveira_filter_memory',
+      'qg_caveira_daily_goal',
+      'qg_caveira_default_prefs',
+      'qg_tree_meta',
+    ]),
+  ]);
+
+  return {
+    schema: 'qg_prf_backup_v3.1.0',
+    exportedAt: new Date().toISOString(),
+    userId: userId || null,
+    questions,
+    dynamicTreeNodes: dynamicNodes,
+    filterIdMemory: storeData?.qg_caveira_filter_id_memory_v1 || {},
+    filterLegacyMemory: storeData?.qg_caveira_filter_memory || {},
+    dailyGoal: storeData?.qg_caveira_daily_goal || 50,
+    defaultPrefs: storeData?.qg_caveira_default_prefs || null,
+    treeMeta: storeData?.qg_tree_meta || null,
+  };
+}
+
+export async function importBackupData(backupObj, userId = null) {
+  if (!backupObj || typeof backupObj !== 'object') {
+    throw new Error('Formato de backup inválido.');
+  }
+  const questions = Array.isArray(backupObj.questions) ? backupObj.questions : [];
+  const validQuestions = questions
+    .filter((q) => q && (q.id || q.apiId))
+    .map((q) => ({
+      ...q,
+      id: q.id || `api_${q.apiId}`,
+      ...(userId && !q.ownerUserId ? { ownerUserId: userId } : {}),
+    }));
+
+  let importedQuestions = 0;
+  if (validQuestions.length > 0) {
+    const merged = await bulkUpsertQuestionsFull(validQuestions, { enqueueOutbox: false });
+    importedQuestions = merged.length;
+  }
+
+  let importedNodes = 0;
+  if (Array.isArray(backupObj.dynamicTreeNodes) && backupObj.dynamicTreeNodes.length > 0) {
+    importedNodes = await mergeDynamicTreeNodes(backupObj.dynamicTreeNodes);
+  }
+
+  const localStore = await chrome.storage.local.get([
+    'qg_caveira_filter_id_memory_v1',
+    'qg_caveira_filter_memory',
+  ]);
+  const nextIdMem = {
+    ...(localStore?.qg_caveira_filter_id_memory_v1 || {}),
+    ...(backupObj.filterIdMemory && typeof backupObj.filterIdMemory === 'object' ? backupObj.filterIdMemory : {}),
+  };
+  const nextLegacyMem = {
+    ...(localStore?.qg_caveira_filter_memory || {}),
+    ...(backupObj.filterLegacyMemory && typeof backupObj.filterLegacyMemory === 'object' ? backupObj.filterLegacyMemory : {}),
+  };
+
+  await chrome.storage.local.set({
+    qg_caveira_filter_id_memory_v1: nextIdMem,
+    qg_caveira_filter_memory: nextLegacyMem,
+    ...(backupObj.dailyGoal ? { qg_caveira_daily_goal: Number(backupObj.dailyGoal) || 50 } : {}),
+    ...(backupObj.defaultPrefs ? { qg_caveira_default_prefs: backupObj.defaultPrefs } : {}),
+  });
+
+  return {
+    importedQuestions,
+    importedNodes,
+    filterMemoryCount: Object.keys(nextIdMem).length,
+  };
 }
 
 export { db };

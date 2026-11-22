@@ -1,0 +1,12 @@
+{
+  "_comment": "Apenas para desenvolvimento local. Em produção (v3.1.0+), localhost e 127.0.0.1 são removidos do manifest.",
+  "dev_host_permissions": [
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*"
+  ],
+  "dev_qg_bridge_matches": [
+    "http://localhost:*/*",
+    "http://127.0.0.1:*/*",
+    "https://blk002.github.io/*"
+  ]
+}

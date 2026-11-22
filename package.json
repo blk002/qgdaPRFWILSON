@@ -12,7 +12,8 @@
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist --dotfiles --nojekyll",
     "build:extensao": "node scripts/build-extension.mjs",
-    "zip:extensao": "node scripts/zip-extension.mjs"
+    "zip:extensao": "node scripts/zip-extension.mjs",
+    "test": "node extensao-src/tests/cases.js && node extensao-src/tests/bulk.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.103.3",

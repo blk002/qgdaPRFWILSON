@@ -8076,6 +8076,12 @@
     dynamicTreeNodes: "&key, subjectId, nodeId, updatedAt",
     meta: "&key"
   });
+  db.version(2).stores({
+    questions: "&id, apiId, ownerUserId, subject, canonicalSubject, subjectId, subtopicId, banca, ano, bloco, hit, updatedAt, timestamp",
+    outbox: "++seq, entityType, entityId, userId, createdAt, status",
+    dynamicTreeNodes: "&key, subjectId, nodeId, updatedAt",
+    meta: "&key"
+  });
   var miniIndex = null;
   var indexedUserId = null;
   function normalizeSearchText(str) {
@@ -8172,8 +8178,18 @@
     const communityCorrectPct = incoming.communityCorrectPct !== void 0 && incoming.communityCorrectPct !== null ? Number(incoming.communityCorrectPct) : prev?.communityCorrectPct !== void 0 && prev?.communityCorrectPct !== null ? Number(prev.communityCorrectPct) : void 0;
     const communityErrorPct = incoming.communityErrorPct !== void 0 && incoming.communityErrorPct !== null ? Number(incoming.communityErrorPct) : communityCorrectPct !== void 0 ? Math.max(0, Math.min(100, Math.round(100 - communityCorrectPct))) : prev?.communityErrorPct;
     const hitVal = Boolean(base.hit);
+    const resolvedApiId = incoming.apiId !== void 0 && incoming.apiId !== null ? Number(incoming.apiId) : prev?.apiId !== void 0 && prev?.apiId !== null ? Number(prev.apiId) : void 0;
+    const resolvedSubjectId = incoming.subjectId !== void 0 && incoming.subjectId !== null ? Number(incoming.subjectId) : prev?.subjectId !== void 0 && prev?.subjectId !== null ? Number(prev.subjectId) : void 0;
+    const resolvedSubtopicId = incoming.subtopicId !== void 0 && incoming.subtopicId !== null ? Number(incoming.subtopicId) : prev?.subtopicId !== void 0 && prev?.subtopicId !== null ? Number(prev.subtopicId) : void 0;
     return {
       ...base,
+      ...Number.isFinite(resolvedApiId) && resolvedApiId > 0 ? { apiId: resolvedApiId } : {},
+      ...Number.isFinite(resolvedSubjectId) && resolvedSubjectId > 0 ? { subjectId: resolvedSubjectId } : {},
+      ...Number.isFinite(resolvedSubtopicId) && resolvedSubtopicId > 0 ? { subtopicId: resolvedSubtopicId } : {},
+      ...base.banca || prev?.banca ? { banca: incoming.banca || prev?.banca || base.banca } : {},
+      ...base.ano || prev?.ano ? { ano: incoming.ano || prev?.ano || base.ano } : {},
+      ...base.data || prev?.data ? { data: incoming.data || prev?.data || base.data } : {},
+      acertou: incoming.acertou !== void 0 ? Boolean(incoming.acertou) : prev?.acertou !== void 0 ? Boolean(prev.acertou) : hitVal,
       ...content ? { content } : {},
       attempts,
       teacherComment,
@@ -8340,17 +8356,22 @@
     };
   }
   async function migrateLegacyChromeStorageToDexie(rawQuestions = []) {
-    const alreadyMigrated = await getMeta("legacyMigratedV3");
-    if (alreadyMigrated) return 0;
+    const migratedVersion = await getMeta("legacyMigratedSchemaVersion");
+    if (migratedVersion === "3.1.0") return 0;
     let imported = 0;
     if (Array.isArray(rawQuestions) && rawQuestions.length > 0) {
-      const valid = rawQuestions.filter((q) => q && q.id);
+      const valid = rawQuestions.filter((q) => q && (q.id || q.apiId));
       if (valid.length > 0) {
-        await bulkUpsertQuestionsFull(valid, { enqueueOutbox: false });
-        imported = valid.length;
+        const normalized = valid.map((q) => ({
+          ...q,
+          id: q.id || `api_${q.apiId}`
+        }));
+        await bulkUpsertQuestionsFull(normalized, { enqueueOutbox: false });
+        imported = normalized.length;
       }
     }
     await setMeta("legacyMigratedV3", true);
+    await setMeta("legacyMigratedSchemaVersion", "3.1.0");
     return imported;
   }
 
@@ -28229,22 +28250,70 @@ ${suffix}`;
 
   // extensao-src/sync/realtimeSync.js
   var CLOUD_AUTH_KEY = "qg_cloud_auth";
+  var CLOUD_AUTH_META_KEY = "qg_cloud_auth_meta";
   var DIRECT_SYNC_LAST_KEY = "qg_last_direct_cloud_sync";
   var SYNC_MODE_KEY = "qg_sync_mode";
   var FILTER_ID_MEMORY_KEY = "qg_caveira_filter_id_memory_v1";
   var QG_URL_PATTERNS = [
-    "https://blk002.github.io/*",
-    "http://localhost:*/*",
-    "http://127.0.0.1:*/*"
+    "https://blk002.github.io/*"
   ];
   var cachedClient = null;
   var cachedTokenKey = "";
   var hasIncrementalTable = null;
   var isFlushing = false;
   var isPulling = false;
+  async function readSessionAuth() {
+    try {
+      if (chrome.storage?.session) {
+        const s = await chrome.storage.session.get([CLOUD_AUTH_KEY]);
+        if (s?.[CLOUD_AUTH_KEY]?.accessToken || s?.[CLOUD_AUTH_KEY]?.refreshToken) {
+          return s[CLOUD_AUTH_KEY];
+        }
+      }
+    } catch (_) {
+    }
+    try {
+      const legacy = await chrome.storage.local.get([CLOUD_AUTH_KEY]);
+      const auth = legacy?.[CLOUD_AUTH_KEY];
+      if (auth && (auth.accessToken || auth.refreshToken)) {
+        if (chrome.storage?.session) {
+          await chrome.storage.session.set({ [CLOUD_AUTH_KEY]: auth });
+        }
+        await chrome.storage.local.remove([CLOUD_AUTH_KEY]);
+        await chrome.storage.local.set({
+          [CLOUD_AUTH_META_KEY]: {
+            authenticated: true,
+            userId: auth.userId || null,
+            updatedAt: Date.now()
+          }
+        });
+        return auth;
+      }
+    } catch (_) {
+    }
+    return null;
+  }
+  async function writeSessionAuth(authObj) {
+    try {
+      if (chrome.storage?.session) {
+        await chrome.storage.session.set({ [CLOUD_AUTH_KEY]: authObj });
+      }
+      await chrome.storage.local.remove([CLOUD_AUTH_KEY]);
+      await chrome.storage.local.set({
+        [CLOUD_AUTH_META_KEY]: {
+          authenticated: Boolean(authObj?.accessToken && authObj?.userId),
+          userId: authObj?.userId || null,
+          updatedAt: Date.now()
+        }
+      });
+    } catch (_) {
+    }
+  }
   async function getValidCloudContext() {
-    const store = await chrome.storage.local.get([CLOUD_AUTH_KEY, "qg_active_user_id"]);
-    const auth = store?.[CLOUD_AUTH_KEY];
+    const [auth, store] = await Promise.all([
+      readSessionAuth(),
+      chrome.storage.local.get(["qg_active_user_id"])
+    ]);
     const activeUserId = store?.qg_active_user_id || auth?.userId;
     if (!auth || !auth.supabaseUrl || !auth.anonKey || !auth.userId || !auth.accessToken && !auth.refreshToken) {
       return null;
@@ -28266,14 +28335,12 @@ ${suffix}`;
         const refreshed = await refreshRes.json();
         if (!refreshed?.access_token) return null;
         token = refreshed.access_token;
-        await chrome.storage.local.set({
-          [CLOUD_AUTH_KEY]: {
-            ...auth,
-            accessToken: refreshed.access_token,
-            refreshToken: refreshed.refresh_token || auth.refreshToken,
-            expiresAt: refreshed.expires_at || nowSec + (Number(refreshed.expires_in) || 3600),
-            updatedAt: Date.now()
-          }
+        await writeSessionAuth({
+          ...auth,
+          accessToken: refreshed.access_token,
+          refreshToken: refreshed.refresh_token || auth.refreshToken,
+          expiresAt: refreshed.expires_at || nowSec + (Number(refreshed.expires_in) || 3600),
+          updatedAt: Date.now()
         });
       } catch (_) {
         return null;
@@ -28499,6 +28566,8 @@ ${suffix}`;
   var ACTIVE_USER_KEY = "qg_active_user_id";
   var USER_BUCKETS_KEY = "qg_caveira_user_buckets";
   var GOAL_KEY = "qg_caveira_daily_goal";
+  var CLOUD_AUTH_KEY2 = "qg_cloud_auth";
+  var CLOUD_AUTH_META_KEY2 = "qg_cloud_auth_meta";
   var FILTER_ID_MEMORY_KEY2 = "qg_caveira_filter_id_memory_v1";
   var REMINDER_STATE_KEY = "qg_reminder_state";
   var NOTIF_ENABLED_KEY = "qg_notifications_enabled";
@@ -28516,10 +28585,28 @@ ${suffix}`;
     "*://projetocaveira.com/*"
   ];
   var QG_URL_PATTERNS2 = [
-    "https://blk002.github.io/*",
-    "http://localhost:*/*",
-    "http://127.0.0.1:*/*"
+    "https://blk002.github.io/*"
   ];
+  async function migrateCloudAuthToSession() {
+    try {
+      const legacy = await chrome.storage.local.get([CLOUD_AUTH_KEY2]);
+      const auth = legacy?.[CLOUD_AUTH_KEY2];
+      if (auth && typeof auth === "object") {
+        if (chrome.storage?.session && (auth.accessToken || auth.refreshToken)) {
+          await chrome.storage.session.set({ [CLOUD_AUTH_KEY2]: auth });
+        }
+        await chrome.storage.local.remove([CLOUD_AUTH_KEY2]);
+        await chrome.storage.local.set({
+          [CLOUD_AUTH_META_KEY2]: {
+            authenticated: Boolean(auth.accessToken && auth.userId),
+            userId: auth.userId || null,
+            updatedAt: Date.now()
+          }
+        });
+      }
+    } catch (_) {
+    }
+  }
   function getTodaySessionDate() {
     const now = /* @__PURE__ */ new Date();
     const y = now.getFullYear();
@@ -28707,6 +28794,7 @@ ${suffix}`;
     });
   }
   chrome.runtime.onInstalled.addListener(async () => {
+    await migrateCloudAuthToSession();
     const res = await chrome.storage.local.get([STORAGE_KEY2, SESSION_KEY]);
     if (!res[STORAGE_KEY2]) {
       await chrome.storage.local.set({ [STORAGE_KEY2]: [] });
@@ -28719,6 +28807,7 @@ ${suffix}`;
   });
   if (chrome.runtime?.onStartup) {
     chrome.runtime.onStartup.addListener(async () => {
+      await migrateCloudAuthToSession();
       await ensureMigratedFromLegacyStorage();
       ensurePeriodicAlarm();
       await flushOutboxToSupabase({ onlyWhenQgClosed: true });
@@ -28726,6 +28815,22 @@ ${suffix}`;
       checkAndNotifyUser();
     });
   }
+  if (chrome.commands?.onCommand) {
+    chrome.commands.onCommand.addListener(async (command) => {
+      if (command !== "mark-doubt" && command !== "mark-guess") return;
+      const tag = command === "mark-doubt" ? "duvida" : "chute";
+      try {
+        const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true, url: CAVEIRA_URL_PATTERNS });
+        const targetTab = activeTabs?.[0] || (await chrome.tabs.query({ url: CAVEIRA_URL_PATTERNS }))?.[0];
+        if (targetTab?.id) {
+          chrome.tabs.sendMessage(targetTab.id, { type: "HUD_QUICK_TAG", payload: { tag } }).catch(() => {
+          });
+        }
+      } catch (_) {
+      }
+    });
+  }
+  migrateCloudAuthToSession();
   ensurePeriodicAlarm();
   ensureMigratedFromLegacyStorage();
   chrome.storage.onChanged.addListener((changes, area) => {
@@ -28949,13 +29054,69 @@ ${suffix}`;
       })();
       return true;
     }
+    if (message.type === "SET_CLOUD_AUTH" && message.payload?.userId) {
+      (async () => {
+        try {
+          const authPayload = { ...message.payload, updatedAt: Date.now() };
+          if (chrome.storage?.session) {
+            await chrome.storage.session.set({ [CLOUD_AUTH_KEY2]: authPayload });
+          }
+          await chrome.storage.local.remove([CLOUD_AUTH_KEY2]);
+          await chrome.storage.local.set({
+            [CLOUD_AUTH_META_KEY2]: {
+              authenticated: Boolean(authPayload.accessToken && authPayload.userId),
+              userId: authPayload.userId || null,
+              updatedAt: Date.now()
+            }
+          });
+          sendResponse({ ok: true });
+        } catch (_) {
+          sendResponse({ ok: false });
+        }
+      })();
+      return true;
+    }
+    if (message.type === "CLEAR_CLOUD_AUTH") {
+      (async () => {
+        try {
+          if (chrome.storage?.session) {
+            await chrome.storage.session.remove([CLOUD_AUTH_KEY2]);
+          }
+          await chrome.storage.local.remove([CLOUD_AUTH_KEY2, CLOUD_AUTH_META_KEY2]);
+          sendResponse({ ok: true });
+        } catch (_) {
+          sendResponse({ ok: false });
+        }
+      })();
+      return true;
+    }
+    if (message.type === "GET_CLOUD_AUTH_STATUS") {
+      (async () => {
+        try {
+          await migrateCloudAuthToSession();
+          const sess = chrome.storage?.session ? await chrome.storage.session.get([CLOUD_AUTH_KEY2]) : {};
+          const auth = sess?.[CLOUD_AUTH_KEY2];
+          sendResponse({
+            ok: true,
+            authenticated: Boolean(auth?.accessToken && auth?.userId),
+            userId: auth?.userId || null
+          });
+        } catch (_) {
+          sendResponse({ ok: false, authenticated: false, userId: null });
+        }
+      })();
+      return true;
+    }
     if (message.type === "FLUSH_PENDING_QG_EVENTS") {
       (async () => {
         try {
           const qgTabs = chrome.tabs ? await chrome.tabs.query({ url: QG_URL_PATTERNS2 }) : [];
           for (const tab of qgTabs || []) {
             if (tab.id && !tab.discarded) {
-              chrome.tabs.sendMessage(tab.id, { type: "FLUSH_PENDING_QG_EVENTS" }).catch(() => {
+              chrome.tabs.sendMessage(tab.id, {
+                type: "FLUSH_PENDING_QG_EVENTS",
+                forceRetry: Boolean(message.forceRetry)
+              }).catch(() => {
               });
             }
           }

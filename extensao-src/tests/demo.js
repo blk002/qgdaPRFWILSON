@@ -1,0 +1,11 @@
+const { loadExtensionResolver } = require('./loadResolver.js');
+const { R, treeJson } = loadExtensionResolver();
+const tree = R.loadTree(treeJson);
+const show=(t,i)=>{const r=R.resolveLesson(tree,i);console.log('\n###',t,'\n conf:',r.confidence,'|',r.reason,'| ambígua:',r.anchorAmbiguous);console.log(' ids:',r.ids,r.picks.map(p=>p.name+' ('+p.path.slice(1).join(' > ')+')'));if(r.alternatives.length)console.log(' alt:',r.alternatives.map(a=>a.name));return r;};
+const CTB=["Código de Trânsito Brasileiro e disposições preliminares","Trânsito e vias terrestres","Estudo do anexo 1 do Código de Trânsito Brasileiro","Parar e estacionar","Segurança no trânsito e responsabilidade dos órgãos","Classificação das vias terrestres"];
+show('CTB Disposições Preliminares',{subjectName:'Código de Trânsito Brasileiro - CTB (Lei nº. 9.503/97)',lessons:['DISPOSIÇÕES PRELIMINARES'],topic:'CTB',subtopics:CTB});
+show('ECA crimes',{subjectName:'Legislação Especial',lessons:['Crimes contra a criança e o adolescente'],topic:'ECA',subtopics:['Crimes previstos no ECA']});
+show('ECA sem topic',{subjectName:'Legislação Especial',lessons:['Crimes contra a criança e o adolescente'],topic:'',subtopics:['Crimes previstos no ECA']});
+show('Informática redes',{subjectName:'Informática',lessons:['Redes de computadores'],topic:'',subtopics:['Definições de Redes - Internet, Intranet e Extranet','Classificação de Redes']});
+show('Poder Disciplinar',{subjectName:'Direito Administrativo',lessons:['Poder Disciplinar'],topic:'Poderes da Administração',subtopics:[]});
+console.log('\nURL:',R.buildUrl('https://app.caveira.com',8199,[8200,9761]));
