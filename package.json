@@ -11,6 +11,7 @@
     "preview": "vite preview",
     "predeploy": "npm run build",
     "deploy": "gh-pages -d dist --dotfiles --nojekyll",
+    "build:extensao": "node scripts/build-extension.mjs",
     "zip:extensao": "node scripts/zip-extension.mjs"
   },
   "dependencies": {
@@ -18,8 +19,10 @@
     "@tailwindcss/postcss": "^4.2.2",
     "@types/three": "^0.187.0",
     "autoprefixer": "^10.5.0",
+    "dexie": "^4.4.7",
     "framer-motion": "^12.38.0",
     "lucide-react": "^1.8.0",
+    "minisearch": "^7.2.0",
     "postcss": "^8.5.10",
     "react": "^19.2.4",
     "react-dom": "^19.2.4",
@@ -36,6 +39,7 @@
     "@types/react": "^19.2.14",
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.1",
+    "esbuild": "^0.28.2",
     "eslint": "^9.39.4",
     "eslint-plugin-react-hooks": "^7.0.1",
     "eslint-plugin-react-refresh": "^0.5.2",

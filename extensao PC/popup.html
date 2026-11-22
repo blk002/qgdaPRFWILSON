@@ -130,7 +130,7 @@
   <div class="header">
     <div class="logo-badge">💀</div>
     <div class="title">
-      <h1>QG da PRF • Caveira <span id="ext-version" style="font-size:10px;color:#a1a1aa;opacity:0.9;">v2.1.0</span></h1>
+      <h1>QG da PRF • Caveira <span id="ext-version" style="font-size:10px;color:#a1a1aa;opacity:0.9;">v3.0.0</span></h1>
       <p>Rastreador de Questões</p>
     </div>
   </div>
@@ -186,6 +186,8 @@
         </div>
       </div>
     </div>
+
+    <div id="db-infra-status" style="margin-top:8px;padding-top:7px;border-top:1px solid rgba(255,255,255,0.06);font-size:9px;font-weight:700;color:#38bdf8;">💾 IndexedDB inicializando...</div>
   </div>
 
   <div class="stats-card" id="prefs-card">
@@ -207,6 +209,14 @@
       </label>
       <div id="direct-sync-status" style="font-size:9.5px;font-weight:700;color:#94a3b8;">☁️ Sync Direto: verificando...</div>
     </div>
+  </div>
+
+  <div class="stats-card" style="padding:10px 12px;">
+    <div style="font-size:10px;font-weight:800;color:#a78bfa;text-transform:uppercase;margin-bottom:6px;display:flex;align-items:center;gap:5px;">
+      🔍 <span>Busca Offline (IndexedDB + MiniSearch)</span>
+    </div>
+    <input type="search" id="popup-offline-search" placeholder="Buscar por enunciado, comentário, bizu ou artigo..." style="width:100%;background:#1a1b22;color:#fff;border:1px solid rgba(167,139,250,0.3);border-radius:8px;padding:6px 8px;font-size:11px;font-weight:600;outline:none;">
+    <div id="popup-search-results" style="display:none;flex-direction:column;gap:4px;margin-top:6px;max-height:140px;overflow-y:auto;"></div>
   </div>
 
   <button class="btn btn-primary" id="btn-open-qg">

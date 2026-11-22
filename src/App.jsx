@@ -352,6 +352,7 @@ export default function App() {
           useStore.setState({ isSyncing: false, isLoadingFromCloud: false });
         }
       } else if (event === 'SIGNED_OUT') {
+        useStore.getState().unsubscribeFromCloudRealtime?.();
         setSession(null);
         useStore.setState({ isSyncing: false, isLoadingFromCloud: false });
       }
@@ -362,6 +363,34 @@ export default function App() {
       subscription.unsubscribe();
     };
   }, [setSession, loadFromCloud]);
+
+  // --- SUPABASE REALTIME + DELTA CHECK (#5 Sync Instantâneo PC <-> Mobile) ---
+  useEffect(() => {
+    const userId = session?.user?.id;
+    const ready = useStore.getState().hasCompletedInitialCloudSync;
+    if (!userId || isSyncing || !ready) {
+      if (!userId) {
+        useStore.getState().unsubscribeFromCloudRealtime?.();
+      }
+      return undefined;
+    }
+
+    useStore.getState().subscribeToCloudRealtime?.();
+
+    const triggerDeltaCheck = () => {
+      useStore.getState().checkCloudDeltaIfNewer?.();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'visible') triggerDeltaCheck();
+    };
+
+    window.addEventListener('focus', triggerDeltaCheck);
+    document.addEventListener('visibilitychange', onVisibility);
+    return () => {
+      window.removeEventListener('focus', triggerDeltaCheck);
+      document.removeEventListener('visibilitychange', onVisibility);
+    };
+  }, [session?.user?.id, isSyncing]);
 
   // --- PONTE GLOBAL DE SINCRONIZAÇÃO COM A EXTENSÃO CAVEIRA (ATIVA EM TODAS AS ABAS DO SITE) ---
   useEffect(() => {

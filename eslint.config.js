@@ -5,7 +5,7 @@ import reactRefresh from 'eslint-plugin-react-refresh'
 import { defineConfig, globalIgnores } from 'eslint/config'
 
 export default defineConfig([
-  globalIgnores(['dist', 'scripts/**', '*.cjs']),
+  globalIgnores(['dist', 'scripts/**', '*.cjs', 'extensao PC/**', 'qg-prf-rastreador-caveira-v1_5_0/**']),
   {
     files: ['**/*.{js,jsx}'],
     extends: [

@@ -923,6 +923,94 @@ export const useStore = create(
         }
       },
 
+      unsubscribeFromCloudRealtime: () => {
+        if (useStore._realtimeDebounce) {
+          clearTimeout(useStore._realtimeDebounce);
+          useStore._realtimeDebounce = null;
+        }
+        if (useStore._realtimeChannel) {
+          try {
+            supabase.removeChannel(useStore._realtimeChannel);
+          } catch (_) {}
+          useStore._realtimeChannel = null;
+          useStore._realtimeUserId = null;
+        }
+      },
+
+      checkCloudDeltaIfNewer: async () => {
+        const now = Date.now();
+        if (useStore._lastDeltaCheckAt && (now - useStore._lastDeltaCheckAt) < 8000) return false;
+        useStore._lastDeltaCheckAt = now;
+
+        const { session, hasCompletedInitialCloudSync, isLoadingFromCloud, isSavingToCloud, lastSyncedAt } = get();
+        if (!session?.user?.id || !hasCompletedInitialCloudSync || isLoadingFromCloud || isSavingToCloud) {
+          return false;
+        }
+        if (typeof navigator !== 'undefined' && navigator.onLine === false) return false;
+
+        try {
+          const { data, error } = await supabase
+            .from('profiles')
+            .select('updated_at')
+            .eq('id', session.user.id)
+            .maybeSingle();
+
+          if (!error && data?.updated_at && (!lastSyncedAt || data.updated_at > lastSyncedAt)) {
+            await get().loadFromCloud();
+            return true;
+          }
+        } catch (_) {}
+        return false;
+      },
+
+      subscribeToCloudRealtime: () => {
+        const { session, hasCompletedInitialCloudSync } = get();
+        const userId = session?.user?.id;
+        if (!userId || !hasCompletedInitialCloudSync) return;
+        if (useStore._realtimeChannel && useStore._realtimeUserId === userId) return;
+
+        get().unsubscribeFromCloudRealtime();
+
+        try {
+          const channel = supabase
+            .channel(`qg-prf-realtime-${userId}`)
+            .on(
+              'postgres_changes',
+              { event: 'UPDATE', schema: 'public', table: 'profiles', filter: `id=eq.${userId}` },
+              (payload) => {
+                const st = useStore.getState();
+                if (st.isLoadingFromCloud || st.isSavingToCloud) return;
+                const remoteTs = payload?.new?.updated_at;
+                if (remoteTs && (!st.lastSyncedAt || remoteTs > st.lastSyncedAt)) {
+                  clearTimeout(useStore._realtimeDebounce);
+                  useStore._realtimeDebounce = setTimeout(() => {
+                    const latest = useStore.getState();
+                    if (!latest.isLoadingFromCloud && !latest.isSavingToCloud) {
+                      latest.loadFromCloud();
+                    }
+                  }, 450);
+                }
+              }
+            )
+            .on(
+              'postgres_changes',
+              { event: '*', schema: 'public', table: 'caveira_question_events', filter: `user_id=eq.${userId}` },
+              (payload) => {
+                const st = useStore.getState();
+                if (payload?.eventType === 'DELETE' && payload?.old?.question_id) {
+                  st.deleteCaveiraQuestion?.(payload.old.question_id);
+                } else if (payload?.new?.payload?.id) {
+                  st.importCaveiraQuestions?.([payload.new.payload], true);
+                }
+              }
+            )
+            .subscribe();
+
+          useStore._realtimeChannel = channel;
+          useStore._realtimeUserId = userId;
+        } catch (_) {}
+      },
+
       getPendingReviews: () => {
         const { reviews, getLocalDateStr } = get();
         const today = getLocalDateStr();
