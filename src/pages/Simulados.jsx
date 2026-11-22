@@ -168,7 +168,7 @@ export default function Simulados() {
           </div>
 
           {totalSimulados > 0 && (
-            <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 overflow-hidden dark:bg-slate-900 dark:border-slate-800">
+            <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 overflow-visible dark:bg-slate-900 dark:border-slate-800">
                <div className="flex justify-between items-end mb-6">
                   <h3 className="font-bold text-slate-700 flex items-center gap-2 dark:text-slate-200"><TrendingUp className="w-5 h-5 text-purple-500"/> Curva de Evolução (Nota Líquida)</h3>
                </div>
@@ -206,43 +206,61 @@ export default function Simulados() {
                      ))}
                   </svg>
 
-                  {hoveredPoint && (
-                    <div 
-                      className="absolute bg-slate-900/95 border border-purple-500/50 text-white rounded-xl p-3 shadow-2xl z-50 pointer-events-none transition-all duration-200 backdrop-blur-md flex flex-col gap-1 min-w-[160px]"
-                      style={{
-                        left: `${(hoveredPoint.x / chartWidth) * 100}%`,
-                        top: `${(hoveredPoint.y / chartHeight) * 100 - 4}%`,
-                        transform: 'translate(-50%, -100%)',
-                      }}
-                    >
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-slate-900" />
-                      
-                      <div className="flex justify-between items-center border-b border-slate-700/50 pb-1 mb-1">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Simulado #{hoveredPoint.index + 1}</span>
-                        <span className="text-[10px] text-slate-400 font-medium">{hoveredPoint.sim.data.split('-').reverse().join('/')}</span>
-                      </div>
-                      
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-slate-300">Nota Líquida:</span>
-                        <span className="text-sm font-black text-purple-400">{hoveredPoint.val} pts</span>
-                      </div>
-                      
-                      <div className="grid grid-cols-3 gap-1 mt-1.5 pt-1.5 border-t border-slate-800 text-[10px]">
-                        <div className="flex flex-col items-center bg-slate-800/40 rounded p-1">
-                          <span className="font-bold text-slate-400">B1</span>
-                          <span className="font-black text-blue-400">{hoveredPoint.sim.b1Liquida}</span>
+                  {hoveredPoint && (() => {
+                    const xPct = (hoveredPoint.x / chartWidth) * 100;
+                    const yPct = (hoveredPoint.y / chartHeight) * 100;
+                    const isLeftEdge = xPct <= 18;
+                    const isRightEdge = xPct >= 82;
+                    const isNearTop = yPct < 34;
+                    const translateX = isLeftEdge ? '-14px' : isRightEdge ? 'calc(-100% + 14px)' : '-50%';
+                    const translateY = isNearTop ? '0%' : '-100%';
+                    const caretXClass = isLeftEdge
+                      ? 'left-[14px] -translate-x-1/2'
+                      : isRightEdge
+                        ? 'right-[14px] translate-x-1/2'
+                        : 'left-1/2 -translate-x-1/2';
+                    const caretYClass = isNearTop
+                      ? 'bottom-full border-l-[6px] border-r-[6px] border-b-[6px] border-l-transparent border-r-transparent border-b-slate-900'
+                      : 'top-full border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-slate-900';
+
+                    return (
+                      <div 
+                        className="absolute bg-slate-900/95 border border-purple-500/50 text-white rounded-xl p-3 shadow-2xl z-50 pointer-events-none transition-all duration-200 backdrop-blur-md flex flex-col gap-1 min-w-[185px]"
+                        style={{
+                          left: `${xPct}%`,
+                          top: isNearTop ? `calc(${yPct}% + 14px)` : `calc(${yPct}% - 14px)`,
+                          transform: `translate(${translateX}, ${translateY})`,
+                        }}
+                      >
+                        <div className={`absolute w-0 h-0 ${caretXClass} ${caretYClass}`} />
+                        
+                        <div className="flex justify-between items-center gap-3 whitespace-nowrap border-b border-slate-700/50 pb-1 mb-1">
+                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Simulado #{hoveredPoint.index + 1}</span>
+                          <span className="text-[10px] text-slate-400 font-medium">{hoveredPoint.sim.data.split('-').reverse().join('/')}</span>
                         </div>
-                        <div className="flex flex-col items-center bg-slate-800/40 rounded p-1">
-                          <span className="font-bold text-slate-400">B2</span>
-                          <span className="font-black text-yellow-400">{hoveredPoint.sim.b2Liquida}</span>
+                        
+                        <div className="flex justify-between items-center">
+                          <span className="text-xs text-slate-300">Nota Líquida:</span>
+                          <span className="text-sm font-black text-purple-400">{hoveredPoint.val} pts</span>
                         </div>
-                        <div className="flex flex-col items-center bg-slate-800/40 rounded p-1">
-                          <span className="font-bold text-slate-400">B3</span>
-                          <span className="font-black text-emerald-400">{hoveredPoint.sim.b3Liquida}</span>
+                        
+                        <div className="grid grid-cols-3 gap-1 mt-1.5 pt-1.5 border-t border-slate-800 text-[10px]">
+                          <div className="flex flex-col items-center bg-slate-800/40 rounded p-1">
+                            <span className="font-bold text-slate-400">B1</span>
+                            <span className="font-black text-blue-400">{hoveredPoint.sim.b1Liquida}</span>
+                          </div>
+                          <div className="flex flex-col items-center bg-slate-800/40 rounded p-1">
+                            <span className="font-bold text-slate-400">B2</span>
+                            <span className="font-black text-yellow-400">{hoveredPoint.sim.b2Liquida}</span>
+                          </div>
+                          <div className="flex flex-col items-center bg-slate-800/40 rounded p-1">
+                            <span className="font-bold text-slate-400">B3</span>
+                            <span className="font-black text-emerald-400">{hoveredPoint.sim.b3Liquida}</span>
+                          </div>
                         </div>
                       </div>
-                    </div>
-                  )}
+                    );
+                  })()}
                </div>
                <div className="flex justify-between text-[10px] text-slate-400 font-bold mt-2 border-t border-slate-100 pt-2 px-1 dark:border-slate-800">
                   <span>Mais antigo</span>
