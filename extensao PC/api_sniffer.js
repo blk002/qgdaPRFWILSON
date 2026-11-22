@@ -64,12 +64,40 @@
   (function() {
     if (window.__qgCaveiraApiSnifferInstalled) return;
     window.__qgCaveiraApiSnifferInstalled = true;
+    const replayBuffer = [];
+    const MAX_BUFFER = 80;
     function emit(type, payload) {
       try {
+        if (type === "API_COURSE_CATALOG" && payload && Array.isArray(payload.modules)) {
+          const idx = replayBuffer.findIndex(
+            (item) => item.type === "API_COURSE_CATALOG" && item.payload?.courseId === payload.courseId && item.payload.modules?.map((m) => m.name).join("|") === payload.modules.map((m) => m.name).join("|")
+          );
+          if (idx >= 0) {
+            replayBuffer[idx] = { type, payload };
+          } else {
+            replayBuffer.push({ type, payload });
+          }
+        } else {
+          replayBuffer.push({ type, payload });
+        }
+        if (replayBuffer.length > MAX_BUFFER) {
+          replayBuffer.splice(0, replayBuffer.length - MAX_BUFFER);
+        }
         window.postMessage({ source: "QG_CAVEIRA_API_SNIFFER", type, payload }, "*");
       } catch (_) {
       }
     }
+    window.addEventListener("message", (ev) => {
+      if (ev.source !== window || ev.data?.source !== "QG_CAVEIRA_CONTENT" || ev.data?.type !== "REQUEST_SNIFFER_REPLAY") {
+        return;
+      }
+      replayBuffer.forEach((item) => {
+        try {
+          window.postMessage({ source: "QG_CAVEIRA_API_SNIFFER", type: item.type, payload: item.payload }, "*");
+        } catch (_) {
+        }
+      });
+    });
     function stripHtml(raw) {
       if (!raw || typeof raw !== "string") return "";
       return raw.replace(/<br\s*\/?>/gi, "\n").replace(/<\/p>/gi, "\n").replace(/<[^>]+>/g, " ").replace(/&nbsp;/gi, " ").replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
@@ -130,35 +158,52 @@
       if (treeRows.length > 0) {
         emit("API_SUBJECT_TREE_DATA", { nodes: treeRows });
       }
-      const courseIdMatch = String(url).match(/\/courses\/(\d+)/i);
-      const modulesArr = Array.isArray(root.modules) ? root.modules : Array.isArray(root) && root[0] && (root[0].videos || root[0].course_videos || root[0].lessons || root[0].topics) ? root : null;
+      const urlStr = String(url || "");
+      const courseIdMatch = urlStr.match(/\/courses\/(\d+)/i) || window.location.pathname.match(/\/courses\/(\d+)/i);
+      const modIdMatch = urlStr.match(/\/modules\/(\d+)/i) || window.location.pathname.match(/\/modules\/(\d+)/i);
+      const modIdFromUrl = modIdMatch?.[1] || "";
+      const multiModulesCandidate = root.modules || root.course_modules || root.course?.modules || root.disciplines || root.subjects || root.sections || (Array.isArray(root) && root[0] && (root[0].videos || root[0].course_videos || root[0].lessons || root[0].contents || root[0].items || root[0].topics || root[0].submodules || root[0].course_module_videos || /\/courses\/\d+\/modules/i.test(urlStr) && root[0].id && (root[0].name || root[0].title)) ? root : null);
+      const singleVideoList = root.videos || root.course_videos || root.lessons || root.contents || root.course_module_videos || (Array.isArray(root) && root[0] && (root[0].course_video_id !== void 0 || root[0].video_id !== void 0 || root[0].vimeo_id !== void 0 || root[0].bunny_id !== void 0 || root[0].embed_url !== void 0 || root[0].duration_seconds !== void 0) ? root : null);
+      const modulesArr = Array.isArray(multiModulesCandidate) && multiModulesCandidate.length > 0 ? multiModulesCandidate : Array.isArray(singleVideoList) && singleVideoList.length > 0 ? [{
+        id: !Array.isArray(root) && root.id ? root.id : modIdFromUrl || "0",
+        name: (!Array.isArray(root) ? root.name || root.title || root.module?.name || root.module?.title : "") || document.querySelector("h1, h2, .text-h6")?.textContent?.trim() || "Módulo Atual",
+        videos: singleVideoList
+      }] : null;
       if (modulesArr && modulesArr.length > 0) {
-        const courseId = String(root.id || root.course_id || courseIdMatch?.[1] || "12");
-        const courseName = String(root.name || root.title || "Curso Caveira").trim();
+        const courseId = String(
+          (!Array.isArray(root) ? root.course_id || root.course?.id || (Array.isArray(root.modules) || Array.isArray(root.course_modules) ? root.id : "") : "") || courseIdMatch?.[1] || "12"
+        );
+        const courseName = String((!Array.isArray(root) ? root.course?.name || root.course?.title || root.name || root.title : "") || "Curso Caveira").trim();
         const parsedModules = modulesArr.map((mod) => {
           const modName = String(mod?.name || mod?.title || "").trim();
           if (!modName) return null;
+          const modId = mod?.id ? String(mod.id) : modIdFromUrl;
+          const moduleUrl = courseId && modId && modId !== "0" ? `${window.location.origin}/courses/${courseId}/modules/${modId}/playground` : courseId ? `${window.location.origin}/courses/${courseId}` : "";
           const rawLessons = [];
+          const seenVids = /* @__PURE__ */ new Set();
           const pushLesson = (v) => {
             if (!v || typeof v !== "object") return;
-            const vid = String(v.id || v.course_video_id || "");
-            const title = String(v.title || v.name || "").trim();
+            const vid = String(v.course_video_id || v.video_id || v.id || "");
+            const title = String(v.title || v.name || v.label || "").trim();
             if (!title) return;
-            const urlPath = vid ? `${window.location.origin}/courses/${courseId}/modules/${mod.id || "0"}/playground?course_video_id=${vid}` : "";
+            const dedup = vid ? `id:${vid}` : `t:${title.toLowerCase()}`;
+            if (seenVids.has(dedup)) return;
+            seenVids.add(dedup);
+            const urlPath = courseId && vid ? `${window.location.origin}/courses/${courseId}/modules/${modId || "0"}/playground?course_video_id=${vid}` : moduleUrl;
             rawLessons.push({
               id: vid || null,
               title,
-              durationMin: normalizeDurationMin(v.duration || v.duration_seconds || v.time),
-              completed: Boolean(v.completed || v.is_completed || v.watched || v.concluded),
+              durationMin: normalizeDurationMin(v.duration || v.duration_seconds || v.duration_minutes || v.time || v.length),
+              completed: Boolean(v.completed || v.is_completed || v.watched || v.concluded || v.finished),
               url: urlPath
             });
           };
-          (mod.videos || mod.course_videos || mod.lessons || []).forEach(pushLesson);
+          (mod.videos || mod.course_videos || mod.lessons || mod.contents || mod.items || mod.course_module_videos || []).forEach(pushLesson);
           (mod.topics || mod.submodules || []).forEach((tp) => {
-            (tp?.videos || tp?.course_videos || tp?.lessons || []).forEach(pushLesson);
+            (tp?.videos || tp?.course_videos || tp?.lessons || tp?.contents || []).forEach(pushLesson);
           });
-          if (rawLessons.length === 0) return null;
-          return { name: modName, lessons: rawLessons };
+          if (rawLessons.length === 0 && !/\/courses\/\d+/i.test(urlStr)) return null;
+          return { id: modId || null, name: modName, moduleUrl, lessons: rawLessons };
         }).filter(Boolean);
         if (parsedModules.length > 0) {
           emit("API_COURSE_CATALOG", { courseId, courseName, modules: parsedModules });

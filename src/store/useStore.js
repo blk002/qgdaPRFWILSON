@@ -3860,14 +3860,45 @@ export const useStore = create(
         let updatedLessons = 0;
         let addedLessons = 0;
 
+        const SUBJECT_ALIASES = [
+          { group: ['lingua portuguesa', 'portugues', 'gramatica', 'interpretacao de texto', 'ortografia'] },
+          { group: ['legislacao de transito', 'transito', 'ctb', 'codigo de transito', 'contran'] },
+          { group: ['raciocinio logico', 'rlm', 'matematica'] },
+          { group: ['direito administrativo', 'administrativo'] },
+          { group: ['direito constitucional', 'constitucional'] },
+          { group: ['direito processual penal', 'processual penal', 'processo penal', 'dpp'] },
+          { group: ['direito penal', 'penal'], excludeIf: ['processual', 'processo'] },
+          { group: ['legislacao especial', 'leis especiais', 'extravagante'] },
+          { group: ['direitos humanos', 'humanos'] },
+          { group: ['informatica', 'redes', 'seguranca da informacao'] },
+          { group: ['fisica', 'cinematica', 'dinamica'] },
+          { group: ['etica', 'servico publico'] },
+          { group: ['geopolitica', 'geografia'] },
+          { group: ['redacao', 'discursiva'] },
+        ];
+
         const normModuleMatch = (subName, modName) => {
           const s = normalizeCourseLookupKey(subName);
           const m = normalizeCourseLookupKey(modName);
           if (!s || !m) return false;
           if (s === m || m.includes(s) || s.includes(m)) return true;
           const sTokens = s.split(' ').filter(w => w.length > 3);
-          return sTokens.length > 0 && sTokens.every(tok => m.includes(tok));
+          if (sTokens.length > 0 && sTokens.every(tok => m.includes(tok))) return true;
+          for (const rule of SUBJECT_ALIASES) {
+            if (rule.excludeIf && rule.excludeIf.some(ex => m.includes(ex) || s.includes(ex))) continue;
+            const sHit = rule.group.some(alias => s.includes(alias));
+            const mHit = rule.group.some(alias => m.includes(alias));
+            if (sHit && mHit) return true;
+          }
+          return false;
         };
+
+        const stripLessonPrefix = (txt) => normalizeCourseLookupKey(
+          String(txt || '')
+            .replace(/^\s*(?:aula|bloco|parte|cap[ií]tulo|m[oó]dulo)\s*\d+\s*[-–—:|.]*\s*/i, '')
+            .replace(/^\s*\d{1,3}\s*[-–—:|.]+\s*/, '')
+            .trim()
+        );
 
         const parseMinToClock = (minVal) => {
           const mins = Number(minVal);
@@ -3882,8 +3913,17 @@ export const useStore = create(
         };
 
         catalog.modules.forEach((mod) => {
-          if (!mod || !mod.name || !Array.isArray(mod.lessons) || mod.lessons.length === 0) return;
-          const targetEntry = Object.entries(nextSubjects).find(([, sub]) => normModuleMatch(sub?.name, mod.name));
+          if (!mod || !mod.name) return;
+          const modLessons = Array.isArray(mod.lessons) ? mod.lessons : [];
+          if (modLessons.length === 0 && !mod.moduleUrl) return;
+
+          const firstBracket = modLessons[0]?.title?.match(/^\s*[[(]([^\]()]{3,40})[\])]/)?.[1] || '';
+          const candidatesToMatch = [mod.name, catalog.courseName, firstBracket].filter(Boolean);
+          let targetEntry = null;
+          for (const candidateName of candidatesToMatch) {
+            targetEntry = Object.entries(nextSubjects).find(([, sub]) => normModuleMatch(sub?.name, candidateName));
+            if (targetEntry) break;
+          }
           if (!targetEntry) return;
 
           const [subId, subObj] = targetEntry;
@@ -3893,13 +3933,13 @@ export const useStore = create(
             lessons: Array.isArray(t.lessons) ? t.lessons.map(l => ({ ...l })) : []
           })) : [];
 
-          if (topics.length === 0) {
+          if (modLessons.length > 0 && topics.length === 0) {
             topics.push({
               id: `top_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
               name: mod.name,
-              completed: mod.lessons.filter(l => l.completed).length,
-              total: mod.lessons.length,
-              lessons: mod.lessons.map(l => ({
+              completed: modLessons.filter(l => l.completed).length,
+              total: modLessons.length,
+              lessons: modLessons.map(l => ({
                 name: l.title,
                 duration: parseMinToClock(l.durationMin),
                 completed: Boolean(l.completed),
@@ -3907,16 +3947,31 @@ export const useStore = create(
                 ...(l.id ? { caveiraVideoId: l.id } : {})
               }))
             });
-            addedLessons += mod.lessons.length;
-          } else {
-            mod.lessons.forEach((les) => {
+            addedLessons += modLessons.length;
+          } else if (modLessons.length > 0) {
+            modLessons.forEach((les) => {
               if (!les || !les.title) return;
               const normTitle = normalizeCourseLookupKey(les.title);
+              const strippedTitle = stripLessonPrefix(les.title);
+              const lesTokens = (strippedTitle || normTitle).split(' ').filter(w => w.length >= 3);
               let matched = false;
               for (const topic of topics) {
                 const idx = (topic.lessons || []).findIndex(existing => {
                   const en = normalizeCourseLookupKey(existing?.name || '');
-                  return en && (en === normTitle || (normTitle.length >= 8 && en.includes(normTitle)) || (en.length >= 8 && normTitle.includes(en)));
+                  const es = stripLessonPrefix(existing?.name || '');
+                  if (!en) return false;
+                  if (en === normTitle || (strippedTitle && es && (es === strippedTitle || (strippedTitle.length >= 6 && es.includes(strippedTitle)) || (es.length >= 6 && strippedTitle.includes(es))))) {
+                    return true;
+                  }
+                  if ((normTitle.length >= 6 && en.includes(normTitle)) || (en.length >= 6 && normTitle.includes(en))) {
+                    return true;
+                  }
+                  if (lesTokens.length >= 2) {
+                    const exTokens = new Set((es || en).split(' ').filter(w => w.length >= 3));
+                    const overlap = lesTokens.filter(t => exTokens.has(t)).length;
+                    if (overlap / lesTokens.length >= 0.6) return true;
+                  }
+                  return false;
                 });
                 if (idx >= 0) {
                   const cur = topic.lessons[idx];
@@ -3932,18 +3987,18 @@ export const useStore = create(
                 }
               }
               if (!matched) {
-                const firstTopic = topics[0];
-                firstTopic.lessons = Array.isArray(firstTopic.lessons) ? firstTopic.lessons : [];
-                firstTopic.lessons.push({
+                const matchingTopic = topics.find(t => normModuleMatch(t?.name, mod.name)) || topics[0];
+                matchingTopic.lessons = Array.isArray(matchingTopic.lessons) ? matchingTopic.lessons : [];
+                matchingTopic.lessons.push({
                   name: les.title,
                   duration: parseMinToClock(les.durationMin),
                   completed: Boolean(les.completed),
                   ...(les.url ? { caveiraUrl: les.url } : {}),
                   ...(les.id ? { caveiraVideoId: les.id } : {})
                 });
-                firstTopic.total = Math.max(Number(firstTopic.total) || 0, firstTopic.lessons.length);
+                matchingTopic.total = Math.max(Number(matchingTopic.total) || 0, matchingTopic.lessons.length);
                 if (les.completed) {
-                  firstTopic.completed = Math.min(firstTopic.total, (Number(firstTopic.completed) || 0) + 1);
+                  matchingTopic.completed = Math.min(matchingTopic.total, (Number(matchingTopic.completed) || 0) + 1);
                 }
                 addedLessons++;
               }
@@ -3953,6 +4008,7 @@ export const useStore = create(
           nextSubjects[subId] = {
             ...subObj,
             ...(catalog.courseId ? { caveiraCourseId: catalog.courseId } : {}),
+            ...(mod.moduleUrl ? { caveiraModuleUrl: mod.moduleUrl } : {}),
             topics
           };
         });

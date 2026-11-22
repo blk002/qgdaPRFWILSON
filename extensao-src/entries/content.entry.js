@@ -86,7 +86,7 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
 
   function isCourseCatalogPage() {
     try {
-      return /\/courses\/\d+/i.test(window.location.pathname) && !isCoursePlaygroundPage();
+      return /\/courses\/\d+/i.test(window.location.pathname);
     } catch (_) {
       return false;
     }
@@ -449,10 +449,44 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     if (!msg || msg.source !== 'QG_CAVEIRA_API_SNIFFER') return;
 
     if (msg.type === 'API_COURSE_CATALOG' && msg.payload && Array.isArray(msg.payload.modules)) {
-      const prevCount = Array.isArray(apiCourseCatalogCache?.modules) ? apiCourseCatalogCache.modules.length : 0;
-      if (msg.payload.modules.length >= prevCount) {
-        apiCourseCatalogCache = msg.payload;
-      }
+      const mergedMap = new Map();
+      (Array.isArray(apiCourseCatalogCache?.modules) ? apiCourseCatalogCache.modules : []).forEach((m) => {
+        if (!m || !m.name) return;
+        const k = m.id ? `id:${m.id}` : `nm:${normalizeCourseIndexKey(m.name)}`;
+        mergedMap.set(k, m);
+      });
+      msg.payload.modules.forEach((m) => {
+        if (!m || !m.name) return;
+        const k = m.id ? `id:${m.id}` : `nm:${normalizeCourseIndexKey(m.name)}`;
+        const prevM = mergedMap.get(k);
+        if (!prevM) {
+          mergedMap.set(k, m);
+          return;
+        }
+        const prevLessons = Array.isArray(prevM.lessons) ? prevM.lessons : [];
+        const incLessons = Array.isArray(m.lessons) ? m.lessons : [];
+        const byLes = new Map();
+        prevLessons.forEach((l) => {
+          if (l?.title) byLes.set(l.id ? `id:${l.id}` : normalizeCourseIndexKey(l.title), l);
+        });
+        incLessons.forEach((l) => {
+          if (l?.title) {
+            const lk = l.id ? `id:${l.id}` : normalizeCourseIndexKey(l.title);
+            byLes.set(lk, { ...(byLes.get(lk) || {}), ...l });
+          }
+        });
+        mergedMap.set(k, {
+          ...prevM,
+          ...m,
+          moduleUrl: m.moduleUrl || prevM.moduleUrl || '',
+          lessons: Array.from(byLes.values()),
+        });
+      });
+      apiCourseCatalogCache = {
+        courseId: msg.payload.courseId || apiCourseCatalogCache?.courseId || '',
+        courseName: msg.payload.courseName || apiCourseCatalogCache?.courseName || 'Curso Caveira',
+        modules: Array.from(mergedMap.values()),
+      };
       return;
     }
 
@@ -527,6 +561,14 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     }
   };
   window.addEventListener('message', handleApiSnifferMessageRef);
+  try {
+    window.postMessage({ source: 'QG_CAVEIRA_CONTENT', type: 'REQUEST_SNIFFER_REPLAY' }, '*');
+    setTimeout(() => {
+      if (!isDestroyed) {
+        window.postMessage({ source: 'QG_CAVEIRA_CONTENT', type: 'REQUEST_SNIFFER_REPLAY' }, '*');
+      }
+    }, 800);
+  } catch (_) {}
 
   // --- HELPERS DAS 15 INTEGRAÇÕES v2.0.0 (#1, #2, #27, #29, #30, #31) ---
   function resolveSubjectSpeedForContext(contextTitle = '') {
@@ -650,28 +692,79 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
   function scrapeCourseCatalogAndSync() {
     const modulesMap = new Map();
     const courseIdMatch = window.location.pathname.match(/\/courses\/(\d+)/i);
+    const modIdMatch = window.location.pathname.match(/\/modules\/(\d+)/i);
     const courseId = courseIdMatch ? courseIdMatch[1] : '12';
+    const currentModId = modIdMatch ? modIdMatch[1] : '';
     const courseName = (document.querySelector('h1, h2, .text-h5, .text-h6')?.innerText || 'Curso Caveira PRF').trim();
 
-    const activeModEl = document.querySelector('.q-item--active, [aria-selected="true"].q-item, [class*="module"].active');
+    const activeModEl = document.querySelector('.q-item--active, [aria-selected="true"].q-item, [class*="module"].active, [class*="breadcrumb"] a:last-child');
     const activeModName = (activeModEl?.innerText || activeModEl?.textContent || '').split(/\r?\n/)[0]?.trim() || courseName;
+    const defaultModuleUrl = (courseId && currentModId)
+      ? `${window.location.origin}/courses/${courseId}/modules/${currentModId}/playground`
+      : `${window.location.origin}/courses/${courseId}`;
 
-    const lessonLinks = Array.from(document.querySelectorAll('a[href*="course_video_id"], [data-course-video-id], .q-expansion-item, .q-item'))
+    const lessonLinks = Array.from(document.querySelectorAll('a[href*="course_video_id"], a[href*="/modules/"], [data-course-video-id], .q-expansion-item, .q-item, .q-card'))
       .filter((el) => !el.closest('#qg-caveira-shadow-host, #qg-caveira-hud') && isElementVisible(el));
 
     const lessons = [];
     const seenLessonKeys = new Set();
 
+    // Captura a aula atualmente aberta no playground (caso esteja assistindo dentro de /playground)
+    if (isCoursePlaygroundPage()) {
+      const currentTitle = extractCourseLessonTitle() ||
+        currentCourseIndexStatus?.lessonTitle ||
+        (document.querySelector('h1, h2, .text-h6')?.innerText || '').trim();
+      const curVidMatch = window.location.search.match(/course_video_id=(\d+)/i);
+      if (currentTitle && currentTitle.length >= 3) {
+        const curVid = curVidMatch?.[1] || '';
+        const kCur = curVid ? `vid:${curVid}` : normalizeCourseIndexKey(currentTitle);
+        seenLessonKeys.add(kCur);
+        lessons.push({
+          id: curVid || null,
+          title: currentTitle,
+          durationMin: 0,
+          completed: detectCurrentPlaygroundLessonCompleted(),
+          url: window.location.href,
+        });
+      }
+    }
+
     lessonLinks.forEach((el) => {
-      const href = el.getAttribute('href') || el.querySelector('a[href*="course_video_id"]')?.getAttribute('href') || '';
+      const href = el.getAttribute('href') || el.querySelector('a[href*="course_video_id"], a[href*="/modules/"]')?.getAttribute('href') || '';
+      const modHrefMatch = href.match(/\/modules\/(\d+)/i);
       let videoId = el.getAttribute('data-course-video-id') || '';
       if (!videoId && href) {
         const m = href.match(/course_video_id=(\d+)/i);
         if (m) videoId = m[1];
       }
       const rawText = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
-      if (!rawText || rawText.length < 4 || rawText.length > 180) return;
-      if (!href && !/\d{1,2}:\d{2}/.test(rawText) && !/\baula\b/i.test(rawText)) return;
+      if (!rawText || rawText.length < 4 || rawText.length > 220) return;
+
+      const hasVideoIcon = Array.from(el.querySelectorAll('.material-icons, i')).some((i) =>
+        /play_circle|ondemand_video|smart_display|play_arrow|videocam/i.test(i.textContent || '')
+      );
+      const isLessonItem = Boolean(videoId || /\d{1,2}:\d{2}/.test(rawText) || /\baula\b/i.test(rawText) || hasVideoIcon);
+
+      // Card ou link de módulo inteiro (mesmo colapsado na tela /courses/:id)
+      if (!isLessonItem && (modHrefMatch || (el.matches('.q-expansion-item, .q-card') && inferSubjectFromLessons([rawText], rawText)))) {
+        const modHeading = (el.querySelector('h1, h2, h3, h4, .text-h6, .text-subtitle1, .q-item__label')?.innerText || rawText.split(/\n/)[0] || '').trim();
+        if (modHeading.length >= 3 && modHeading.length <= 90) {
+          const fullModUrl = href
+            ? (href.startsWith('http') ? href : `${window.location.origin}${href.startsWith('/') ? '' : '/'}${href}`)
+            : defaultModuleUrl;
+          if (!modulesMap.has(modHeading)) {
+            modulesMap.set(modHeading, {
+              id: modHrefMatch?.[1] || null,
+              name: modHeading,
+              moduleUrl: fullModUrl,
+              lessons: [],
+            });
+          }
+        }
+        return;
+      }
+
+      if (!isLessonItem) return;
 
       const durMatch = rawText.match(/\b(\d{1,2}):(\d{2})(?::(\d{2}))?\b/);
       let durationMin = 0;
@@ -682,7 +775,7 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
       }
       const title = rawText
         .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, '')
-        .replace(/\b(?:assistir|conclu[íi]da|play_arrow|check_circle|done)\b/gi, '')
+        .replace(/\b(?:assistir|conclu[íi]da|play_arrow|play_circle|ondemand_video|smart_display|check_circle|done)\b/gi, '')
         .trim();
       if (!title || title.length < 3) return;
       const dedupKey = videoId ? `vid:${videoId}` : normalizeCourseIndexKey(title);
@@ -695,7 +788,7 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
       );
       const url = href
         ? (href.startsWith('http') ? href : `${window.location.origin}${href.startsWith('/') ? '' : '/'}${href}`)
-        : '';
+        : (isCoursePlaygroundPage() ? window.location.href : defaultModuleUrl);
 
       lessons.push({ id: videoId || null, title, durationMin, completed, url });
     });
@@ -703,7 +796,7 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
     // Mescla módulos capturados passivamente pela API (#2 — todos os módulos de 1 vez)
     const apiMods = Array.isArray(apiCourseCatalogCache?.modules) ? apiCourseCatalogCache.modules : [];
     apiMods.forEach((m) => {
-      if (m && m.name && Array.isArray(m.lessons) && m.lessons.length > 0) {
+      if (m && m.name && (Array.isArray(m.lessons) && (m.lessons.length > 0 || m.moduleUrl))) {
         modulesMap.set(m.name, m);
       }
     });
@@ -715,9 +808,14 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
           const k = normalizeCourseIndexKey(l.title);
           if (!byTitle.has(k)) byTitle.set(k, l);
         });
-        modulesMap.set(activeModName, { name: activeModName, lessons: Array.from(byTitle.values()) });
+        modulesMap.set(activeModName, {
+          ...existingMod,
+          name: activeModName,
+          moduleUrl: existingMod.moduleUrl || defaultModuleUrl,
+          lessons: Array.from(byTitle.values())
+        });
       } else {
-        modulesMap.set(activeModName, { name: activeModName, lessons });
+        modulesMap.set(activeModName, { name: activeModName, moduleUrl: defaultModuleUrl, lessons });
       }
     }
 
@@ -729,11 +827,13 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
       syncedAt: Date.now()
     };
 
-    try {
-      chrome.storage.local.set({ [PENDING_CATALOG_KEY]: payload }, () => {
-        flushPendingQgEvents();
-      });
-    } catch (_) {}
+    if (payload.modules.length > 0) {
+      try {
+        chrome.storage.local.set({ [PENDING_CATALOG_KEY]: payload }, () => {
+          flushPendingQgEvents();
+        });
+      } catch (_) {}
+    }
 
     return { modulesCount: payload.modules.length, lessonsCount: totalLessonsCount };
   }
@@ -1277,8 +1377,10 @@ import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
       if (btn) {
         const orig = btn.textContent;
         btn.textContent = res.lessonsCount > 0
-          ? `✓ ${res.lessonsCount} aulas enviadas ao QG!`
-          : '⚠️ Abra um módulo para listar aulas';
+          ? `✓ ${res.modulesCount} mód. / ${res.lessonsCount} aulas enviadas!`
+          : res.modulesCount > 0
+          ? `✓ ${res.modulesCount} módulo(s) vinculados ao QG!`
+          : '⚠️ Abra um curso/módulo no Caveira';
         setTimeout(() => {
           if (btn && btn.isConnected) btn.textContent = orig;
         }, 2500);

@@ -485,6 +485,7 @@ export default function AbaHoje({ onGoToTab }) {
                               {(() => {
                                 const firstIdx = block.plannedLessons?.[0]?.index ?? block.currentCompleted;
                                 const lesHref = block.activeTopic?.lessons?.[firstIdx]?.caveiraUrl
+                                  || block.subject?.caveiraModuleUrl
                                   || (block.subject?.caveiraCourseId ? `https://app.caveira.com/courses/${block.subject.caveiraCourseId}` : '');
                                 return lesHref ? (
                                   <a

@@ -890,6 +890,7 @@ export default function Ciclo() {
                                   {(() => {
                                     const firstIdx = plannedLessons?.[0]?.index ?? currentCompleted;
                                     const lesHref = activeTopic?.lessons?.[firstIdx]?.caveiraUrl
+                                      || subject?.caveiraModuleUrl
                                       || (subject?.caveiraCourseId ? `https://app.caveira.com/courses/${subject.caveiraCourseId}` : '');
                                     return lesHref ? (
                                       <a
