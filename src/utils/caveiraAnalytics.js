@@ -1,16 +1,72 @@
-import { normalizeCourseLookupKey } from '../lib/courseIndexParser';
+import { normalizeCourseLookupKey } from '../lib/courseIndexParser.js';
 
 const STOP_WORDS = new Set([
   'de', 'da', 'do', 'das', 'dos', 'para', 'com', 'sem', 'sobre', 'entre',
   'que', 'uma', 'umo', 'uns', 'umas', 'nao', 'por', 'pela', 'pelo', 'pelas',
-  'pelos', 'nos', 'nas', 'aos', 'das', 'como', 'mais', 'menos', 'direito',
-  'nocoes', 'legislacao', 'parte', 'aula', 'bloco', 'questao', 'geral'
+  'pelos', 'nos', 'nas', 'aos', 'como', 'mais', 'menos', 'direito', 'nocoes',
+  'legislacao', 'parte', 'aula', 'bloco', 'questao', 'geral', 'codigo',
+  'transito', 'brasileiro', 'ctb', 'lei', 'art', 'artigo', 'artigos',
+  'capitulo', 'secao', 'titulo', 'disposicoes', 'conceito', 'conceitos',
+  'introducao', 'saudacao', 'saudacoes', 'apresentacao', 'boas', 'vindas',
+  'encerramento', 'consideracoes', 'finais', 'conclusao', 'inicio',
+  'revisao', 'resumo', 'exercicios', 'questoes', 'modulo', 'tema', 'topico',
+  'normas', 'gerais', 'regras'
 ]);
+
+const GENERIC_TIMESTAMP_LABEL_RX = /^(?:saudac(?:ao|oes)(?:\s+iniciais?)?|introducao(?:\s+(?:geral|inicial|(?:a|ao|da|do)\s+(?:aula|tema|modulo|disciplina|curso|ctb)))?|apresentacao(?:\s+(?:inicial|geral|da\s+aula|do\s+tema|do\s+curso))?|boas[\s-]+vindas|abertura|inicio(?:\s+da\s+aula)?|encerramento|consideracoes\s+finais|conclusao|finalizacao|despedida|avisos?(?:\s+gerais|\s+importantes)?)$/i;
 
 const tokenize = (str) =>
   normalizeCourseLookupKey(str)
+    .replace(/[^\p{L}\p{N}\s]/gu, ' ')
     .split(/\s+/)
     .filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
+
+function inferSubjectFamily(rawStr = '') {
+  const s = normalizeCourseLookupKey(rawStr);
+  if (!s) return '';
+  if (/\b(?:transito|ctb|contran|9503)\b/.test(s)) return 'transito';
+  if (/\b(?:processo penal|processual penal|cpp|inquerito policial|prisao)\b/.test(s)) return 'processual_penal';
+  if (/\b(?:direito penal|codigo penal|teoria do crime|crimes contra)\b/.test(s)) return 'penal';
+  if (/\b(?:constitucional|constituicao federal)\b/.test(s)) return 'constitucional';
+  if (/\b(?:administrativo|administracao publica|improbidade|licitac|poderes administrativos|atos administrativos)\b/.test(s)) return 'administrativo';
+  if (/\b(?:direitos humanos|pacto de san jose|dudh)\b/.test(s)) return 'direitos_humanos';
+  if (/\b(?:legislacao especial|legislacao extravagante|leis especiais|eca|desarmamento|drogas|abuso de autoridade|maria da penha|tortura)\b/.test(s)) return 'legislacao_especial';
+  if (/\b(?:portugues|lingua portuguesa|gramatica|sintaxe|morfologia|interpretacao de texto|redacao oficial|crase|regencia|concordancia)\b/.test(s)) return 'portugues';
+  if (/\b(?:informatica|computador|redes|seguranca da informacao|linux|windows|malware|nuvem|internet)\b/.test(s)) return 'informatica';
+  if (/\b(?:raciocinio logico|rlm|matematica|logica|probabilidade|combinatoria)\b/.test(s)) return 'rlm';
+  if (/\b(?:fisica|cinematica|dinamica|energia mecanica|colisoes)\b/.test(s)) return 'fisica';
+  if (/\b(?:etica|1171|cidadania)\b/.test(s)) return 'etica';
+  if (/\b(?:geopolitica|geografia)\b/.test(s)) return 'geopolitica';
+  if (/\b(?:ingles|english)\b/.test(s)) return 'ingles';
+  if (/\b(?:espanhol|spanish)\b/.test(s)) return 'espanhol';
+  return '';
+}
+
+function tokenMatchesTarget(tok, targetSet) {
+  if (!tok || !targetSet || targetSet.size === 0) return false;
+  if (targetSet.has(tok)) return true;
+  if (tok.length >= 6) {
+    const stem = tok.slice(0, 6);
+    for (const candidate of targetSet) {
+      if (candidate.length >= 6 && candidate.startsWith(stem)) return true;
+    }
+  }
+  return false;
+}
+
+function collectTokenMatches(tokens, targetSet) {
+  let hits = 0;
+  let maxLen = 0;
+  const matched = [];
+  for (const tok of tokens) {
+    if (tokenMatchesTarget(tok, targetSet)) {
+      hits += 1;
+      if (tok.length > maxLen) maxLen = tok.length;
+      matched.push(tok);
+    }
+  }
+  return { hits, maxLen, matched };
+}
 
 export function formatSecondsAsClock(totalSec) {
   const safe = Math.max(0, Math.round(Number(totalSec) || 0));
@@ -53,56 +109,128 @@ export function findCourseVideoMatch(question, caveiraCourseIndexMap = {}) {
   const entries = Object.values(caveiraCourseIndexMap || {}).filter((e) => e && e.url);
   if (entries.length === 0) return null;
 
-  const qSubNorm = normalizeCourseLookupKey(question.canonicalSubject || question.subject || '');
-  const qTopicNorm = normalizeCourseLookupKey(question.topic || '');
-  const qTokens = tokenize(`${question.canonicalSubject || ''} ${question.subject || ''} ${question.topic || ''} ${(question.content || '').slice(0, 180)}`);
-  if (qTokens.length === 0 && !qSubNorm) return null;
+  const qSubjectRaw = `${question.canonicalSubject || ''} ${question.subject || ''}`;
+  const qSubNorm = normalizeCourseLookupKey(qSubjectRaw);
+  const qFamily = inferSubjectFamily(`${qSubjectRaw} ${question.topic || ''} ${question.subtopicPath || ''}`);
+
+  // Extrai o(s) segmento(s) folha específicos do assunto (removendo prefixo genérico da disciplina/código)
+  const rawSegments = String(question.subtopicPath || question.topic || '')
+    .split(/->|➔|›|>/)
+    .map((s) => s.trim())
+    .filter(Boolean);
+  const specificSegments = rawSegments.filter((seg, idx) => {
+    const segNorm = normalizeCourseLookupKey(seg);
+    if (!segNorm) return false;
+    if (idx === 0 && rawSegments.length > 1) {
+      if (qSubNorm && (qSubNorm.includes(segNorm) || segNorm.includes(qSubNorm))) return false;
+      if (/\b(?:codigo de transito|constituicao federal|codigo penal|codigo de processo)\b/.test(segNorm)) return false;
+    }
+    return true;
+  });
+  const leafRaw = specificSegments.length > 0
+    ? specificSegments[specificSegments.length - 1]
+    : (question.topic || '');
+  const specificRaw = specificSegments.length > 0 ? specificSegments.join(' ') : (question.topic || '');
+  const leafNorm = normalizeCourseLookupKey(leafRaw)
+    .replace(/^(?:capitulo|secao|titulo|modulo)\s+[ivxlcdm\d]+\s*/i, '')
+    .trim();
+  const specificPhrases = Array.from(new Set([
+    normalizeCourseLookupKey(leafRaw),
+    leafNorm,
+  ].filter((p) => p && p.length >= 6)));
+
+  const qSubTokens = new Set(tokenize(qSubjectRaw));
+  const specificTopicTokens = Array.from(new Set(tokenize(specificRaw)))
+    .filter((tok) => !qSubTokens.has(tok) || tokenize(leafRaw).includes(tok));
+  if (specificTopicTokens.length === 0) return null;
+
+  const contentTokens = Array.from(new Set(tokenize((question.content || '').slice(0, 220))))
+    .filter((tok) => !specificTopicTokens.includes(tok));
 
   let bestEntry = null;
   let bestTopic = null;
   let bestScore = 0;
 
   entries.forEach((entry) => {
-    const eSubNorm = normalizeCourseLookupKey(`${entry.subject || ''} ${entry.moduleName || ''} ${entry.title || ''}`);
-    let entryBaseScore = 0;
+    const eHeaderRaw = `${entry.subject || ''} ${entry.moduleName || ''} ${entry.title || ''}`;
+    const eSubNorm = normalizeCourseLookupKey(eHeaderRaw);
+    const entryFamily = inferSubjectFamily(eHeaderRaw);
+    if (qFamily && entryFamily && qFamily !== entryFamily) return;
 
-    if (qSubNorm && eSubNorm) {
-      if (eSubNorm.includes(qSubNorm) || qSubNorm.includes(eSubNorm)) {
-        entryBaseScore += 4;
-      }
-    }
-    if (qTopicNorm && normalizeCourseLookupKey(entry.title || '').includes(qTopicNorm)) {
-      entryBaseScore += 4;
-    }
+    const sameDiscipline = Boolean(
+      (qFamily && entryFamily && qFamily === entryFamily) ||
+      (qSubNorm && eSubNorm && (eSubNorm.includes(qSubNorm) || qSubNorm.includes(eSubNorm)))
+    );
 
-    const eTokens = new Set(tokenize(`${entry.subject || ''} ${entry.moduleName || ''} ${entry.title || ''}`));
-    qTokens.forEach((tok) => {
-      if (eTokens.has(tok)) entryBaseScore += 1.5;
-    });
+    const entryTitleNorm = normalizeCourseLookupKey(entry.title || '');
+    const titlePhraseMatch = specificPhrases.some((p) => (
+      entryTitleNorm.includes(p) || (entryTitleNorm.length >= 8 && p.includes(entryTitleNorm))
+    ));
+    const entryTitleTokenSet = new Set(tokenize(`${entry.title || ''} ${entry.moduleName || ''}`));
+    const entryTitleMatch = collectTokenMatches(specificTopicTokens, entryTitleTokenSet);
 
     const topicsList = Array.isArray(entry.topics) ? entry.topics : [];
+    let matchedInsideTopics = false;
+
     if (topicsList.length > 0) {
       topicsList.forEach((tp) => {
         if (!tp || !tp.label) return;
         const tLabelNorm = normalizeCourseLookupKey(tp.label);
-        const tTokens = new Set(tokenize(tp.label));
-        let tScore = entryBaseScore;
-        if (qTopicNorm && (tLabelNorm.includes(qTopicNorm) || qTopicNorm.includes(tLabelNorm))) {
-          tScore += 5;
-        }
-        qTokens.forEach((tok) => {
-          if (tTokens.has(tok)) tScore += 2;
-        });
-        if (tScore > bestScore && tScore >= 3) {
-          bestScore = tScore;
+        if (!tLabelNorm || GENERIC_TIMESTAMP_LABEL_RX.test(tLabelNorm)) return;
+
+        const tLabelTokenSet = new Set(tokenize(tp.label));
+        if (tLabelTokenSet.size === 0) return;
+
+        const labelPhraseMatch = specificPhrases.some((p) => (
+          tLabelNorm.includes(p) || (tLabelNorm.length >= 8 && p.includes(tLabelNorm))
+        ));
+        const labelMatch = collectTokenMatches(specificTopicTokens, tLabelTokenSet);
+        const contentMatchOnLabel = collectTokenMatches(contentTokens, tLabelTokenSet);
+
+        const qualified = Boolean(
+          labelPhraseMatch ||
+          (titlePhraseMatch && labelMatch.hits >= 1) ||
+          labelMatch.hits >= 2 ||
+          (labelMatch.hits === 1 && labelMatch.maxLen >= 6 && (entryTitleMatch.hits >= 1 || contentMatchOnLabel.hits >= 1))
+        );
+        if (!qualified) return;
+
+        matchedInsideTopics = true;
+        const score =
+          (labelPhraseMatch ? 12 : 0) +
+          (titlePhraseMatch ? 6 : 0) +
+          labelMatch.hits * 4 +
+          entryTitleMatch.hits * 2 +
+          Math.min(contentMatchOnLabel.hits, 3) * 1.5 +
+          (sameDiscipline ? 1 : 0);
+
+        if (score > bestScore) {
+          bestScore = score;
           bestEntry = entry;
           bestTopic = tp;
         }
       });
-    } else if (entryBaseScore > bestScore && entryBaseScore >= 4) {
-      bestScore = entryBaseScore;
-      bestEntry = entry;
-      bestTopic = null;
+    }
+
+    if (!matchedInsideTopics) {
+      const contentMatchOnTitle = collectTokenMatches(contentTokens, entryTitleTokenSet);
+      const qualifiedLessonOnly = Boolean(
+        titlePhraseMatch ||
+        entryTitleMatch.hits >= 2 ||
+        (entryTitleMatch.hits === 1 && entryTitleMatch.maxLen >= 7 && sameDiscipline && (contentMatchOnTitle.hits >= 1 || entryTitleMatch.maxLen >= 8))
+      );
+      if (qualifiedLessonOnly) {
+        const lessonScore =
+          (titlePhraseMatch ? 10 : 0) +
+          entryTitleMatch.hits * 3.5 +
+          Math.min(contentMatchOnTitle.hits, 2) * 1.5 +
+          (sameDiscipline ? 1 : 0);
+        if (lessonScore > bestScore) {
+          bestScore = lessonScore;
+          bestEntry = entry;
+          bestTopic = null;
+        }
+      }
     }
   });
 
