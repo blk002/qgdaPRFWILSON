@@ -1,0 +1,505 @@
+import { useState, useEffect, useCallback } from 'react';
+import { toast } from 'sonner';
+import { useStore } from '../store/useStore';
+import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabaseClient';
+import { normalizeCourseLookupKey } from '../lib/courseIndexParser';
+
+export function triggerCaveiraPractice(
+  subjectName = '',
+  lessonNames = [],
+  topicName = '',
+  subtopics = [],
+  rawIndexText = '',
+  questionStatus = 'not_resolved'
+) {
+  const isGenericLesson = (name) => {
+    const clean = String(name || '')
+      .normalize('NFD')
+      .replace(/[\u0300-\u036f]/g, '')
+      .toLowerCase()
+      .trim();
+    return (
+      !clean ||
+      /^testes?\s+propostos?$/.test(clean) ||
+      /^exercicios?(\s+de\s+fixacao)?$/.test(clean) ||
+      /^simulado$/.test(clean) ||
+      /^revisao$/.test(clean)
+    );
+  };
+
+  const cleanedLessons = (Array.isArray(lessonNames) ? lessonNames : [])
+    .map((l) => String(l || '').replace(/\s*[-–]\s*aula\s*\d+\s*$/i, '').trim())
+    .filter((l) => l && !isGenericLesson(l));
+
+  const primaryLessons = cleanedLessons.length > 0 ? cleanedLessons : topicName ? [topicName] : [];
+  const cleanSubtopics = (Array.isArray(subtopics) ? subtopics : [])
+    .map((s) => String(s || '').trim())
+    .filter(Boolean);
+
+  const displayFilterLabel =
+    cleanSubtopics.length > 0
+      ? cleanSubtopics.slice(0, 3).join(' • ') +
+        (cleanSubtopics.length > 3 ? ` (+${cleanSubtopics.length - 3})` : '')
+      : primaryLessons.join(' • ');
+
+  const copyText = cleanSubtopics[0] || primaryLessons[0] || topicName || subjectName;
+  const hasExt = document.documentElement.getAttribute('data-qg-caveira-extension-installed') === 'true';
+
+  if (navigator.clipboard && copyText) {
+    navigator.clipboard.writeText(copyText).catch(() => {});
+  }
+
+  if (hasExt) {
+    window.postMessage(
+      {
+        source: 'QG_WEB_APP',
+        type: 'OPEN_CAVEIRA_PRACTICE',
+        payload: {
+          subject: subjectName,
+          lessons: primaryLessons,
+          topic: displayFilterLabel,
+          fallbackTopic: topicName,
+          subtopics: cleanSubtopics,
+          rawIndexText: String(rawIndexText || ''),
+          status: typeof questionStatus === 'string' ? questionStatus : 'not_resolved',
+        },
+      },
+      window.location.origin
+    );
+    toast.success(
+      cleanSubtopics.length > 0
+        ? `Abrindo Caveira com ${cleanSubtopics.length} subassuntos do Índice`
+        : `Abrindo Caveira com filtro: ${displayFilterLabel || subjectName}`
+    );
+  } else {
+    window.open('https://app.caveira.com/', '_blank', 'noopener');
+    toast.info('Extensão não detectada nesta aba. Conteúdo copiado para a área de transferência.');
+  }
+}
+
+export function useExtensionBridge() {
+  const session = useStore((s) => s.session);
+  const hasCompletedInitialCloudSync = useStore((s) => s.hasCompletedInitialCloudSync);
+  const subjects = useStore((s) => s.subjects);
+  const cycle = useStore((s) => s.cycle);
+  const currentDayIndex = useStore((s) => s.currentDayIndex);
+  const completedToday = useStore((s) => s.completedToday);
+  const completedTodayDate = useStore((s) => s.completedTodayDate);
+  const calendarOverrides = useStore((s) => s.calendarOverrides);
+  const futureScheduleRules = useStore((s) => s.futureScheduleRules);
+  const cycleScheduleType = useStore((s) => s.cycleScheduleType);
+  const cycleWeekStart = useStore((s) => s.cycleWeekStart);
+  const cycleCarryoverOffset = useStore((s) => s.cycleCarryoverOffset);
+  const caveiraFilterMemory = useStore((s) => s.caveiraFilterMemory);
+  const reviews = useStore((s) => s.reviews);
+  const studyHistory = useStore((s) => s.studyHistory);
+  const caveiraDailyGoal = useStore((s) => s.caveiraDailyGoal);
+  const getLocalDateStr = useStore((s) => s.getLocalDateStr);
+  const getCycleIndexForDate = useStore((s) => s.getCycleIndexForDate);
+
+  const [courseIndexCache, setCourseIndexCache] = useState({ latest: null, byLesson: {} });
+  const [manualLessonIndexMap, setManualLessonIndexMap] = useState(() => {
+    try {
+      const saved = localStorage.getItem('qg_lesson_index_map_v1');
+      return saved ? JSON.parse(saved) : {};
+    } catch {
+      return {};
+    }
+  });
+
+  const saveManualLessonIndex = useCallback((rawText, lessonKeyName) => {
+    const key = normalizeCourseLookupKey(lessonKeyName);
+    if (!key) return;
+    setManualLessonIndexMap((prev) => {
+      const next = { ...(prev || {}) };
+      if (!String(rawText || '').trim()) {
+        delete next[key];
+      } else {
+        next[key] = {
+          lessonTitle: lessonKeyName,
+          rawIndexText: String(rawText),
+          updatedAt: Date.now(),
+        };
+      }
+      try {
+        localStorage.setItem('qg_lesson_index_map_v1', JSON.stringify(next));
+      } catch {}
+      return next;
+    });
+  }, []);
+
+  // Ponte de recebimento: Extensão -> QG
+  useEffect(() => {
+    const handleCourseLessonCompleteFromExtension = (payload) => {
+      if (!payload) return;
+      const rawTitle = String(payload.lessonTitle || '').trim();
+      const rawIndexText = String(payload.rawIndexText || '').trim();
+      if (rawTitle && rawIndexText) {
+        saveManualLessonIndex(rawIndexText, rawTitle);
+      }
+      const st = useStore.getState();
+      const subs = Object.values(st.subjects || {});
+      const normTarget = normalizeCourseLookupKey(rawTitle);
+      const normSubHint = normalizeCourseLookupKey(payload.subject || '');
+
+      let matchedSub = null;
+      let matchedTopic = null;
+
+      if (normTarget) {
+        for (const sub of subs) {
+          for (const t of sub.topics || []) {
+            const lessons = t.lessons || [];
+            const hasLessonMatch = lessons.some((l) => {
+              const ln = normalizeCourseLookupKey(l?.name || '');
+              return ln && (ln === normTarget || ln.includes(normTarget) || normTarget.includes(ln));
+            });
+            const tn = normalizeCourseLookupKey(t?.name || '');
+            const hasTopicMatch = tn && (tn === normTarget || normTarget.includes(tn));
+            if (hasLessonMatch || hasTopicMatch) {
+              matchedSub = sub;
+              matchedTopic = t;
+              break;
+            }
+          }
+          if (matchedSub) break;
+        }
+      }
+
+      if (!matchedSub && normSubHint) {
+        matchedSub =
+          subs.find((s) => {
+            const sn = normalizeCourseLookupKey(s?.name || '');
+            return sn && (sn === normSubHint || sn.includes(normSubHint) || normSubHint.includes(sn));
+          }) || null;
+        if (matchedSub) {
+          matchedTopic =
+            (matchedSub.topics || []).find((t) => (Number(t.completed) || 0) < (Number(t.total) || 0)) ||
+            (matchedSub.topics || [])[0] ||
+            null;
+        }
+      }
+
+      if (matchedSub && matchedTopic) {
+        const currentCompleted = Math.min(Number(matchedTopic.total) || 0, Number(matchedTopic.completed) || 0);
+        const remLessons = (matchedTopic.lessons || []).slice(currentCompleted, matchedTopic.total);
+        const firstLesson = remLessons[0];
+        st.setClassConfirmModal({
+          subjectId: matchedSub.id,
+          slotIndex: 0,
+          topicName: matchedTopic.name,
+          lessonNames: rawTitle ? [rawTitle] : firstLesson?.name ? [firstLesson.name] : [matchedTopic.name],
+          allRemainingLessonNames: remLessons.map((l) => l?.name).filter(Boolean),
+          maxClasses: Math.max(1, (Number(matchedTopic.total) || 1) - currentCompleted),
+          lessonDuration: firstLesson?.duration || '60:00',
+          allLessonsDurations: remLessons.map((l) => l?.duration || '60:00'),
+          suggestedClasses: 1,
+          skipPrePrompt: true,
+        });
+        toast.success(`Aula "${rawTitle || matchedTopic.name}" recebida do Caveira com ${payload.subtopics?.length || 0} subassuntos.`);
+      } else {
+        toast.info(`Índice da aula "${rawTitle || 'Caveira'}" salvo. Clique em "Aula assistida" na matéria correspondente.`);
+      }
+    };
+
+    const handleExtensionMessage = (event) => {
+      if (!event || event.source !== window || event.origin !== window.location.origin) return;
+      if (event.data && event.data.source === 'QG_CAVEIRA_EXTENSION') {
+        if (event.data.type === 'COURSE_INDEX_SYNC' && event.data.payload) {
+          setCourseIndexCache(event.data.payload);
+          if (useStore.getState().hasCompletedInitialCloudSync) {
+            useStore.getState().setCaveiraCourseIndexMap?.(event.data.payload);
+          }
+          return;
+        }
+        if (event.data.type === 'COURSE_LESSON_COMPLETE_REQUEST' && event.data.payload) {
+          handleCourseLessonCompleteFromExtension(event.data.payload);
+          return;
+        }
+        const currentUser = useStore.getState().user;
+        const cloudReady = useStore.getState().hasCompletedInitialCloudSync;
+        if (!currentUser?.id || !cloudReady) return;
+        const msgUserId = event.data.payload?.userId;
+        if (msgUserId && msgUserId !== currentUser.id) return;
+
+        if (event.data.type === 'FILTER_MEMORY_SYNC' && event.data.payload?.memory) {
+          useStore.getState().setCaveiraFilterMemory?.(event.data.payload.memory);
+          return;
+        }
+        if (event.data.type === 'PERFORMANCE_SNAPSHOT_SYNC' && event.data.payload) {
+          useStore.getState().setCaveiraPerformanceSnapshot?.(event.data.payload);
+          return;
+        }
+        if (event.data.type === 'COURSE_CATALOG_SYNC' && event.data.payload) {
+          const stats = useStore.getState().syncCourseCatalogFromCaveira?.(event.data.payload);
+          if (stats && stats.matchedSubjects > 0) {
+            toast.success(
+              `Curso sincronizado: ${stats.matchedSubjects} disciplinas (${stats.updatedLessons} aulas ligadas, ${stats.addedLessons} novas).`
+            );
+          } else {
+            toast.info('Nenhuma disciplina correspondente encontrada para vincular este curso.');
+          }
+          return;
+        }
+        if (event.data.type === 'SIMULADOS_IMPORT' && event.data.payload) {
+          const rawSimulados = Array.isArray(event.data.payload.simulados) ? event.data.payload.simulados : [];
+          const imported = useStore.getState().importCaveiraSimulados?.(rawSimulados);
+          const ids = rawSimulados.map((s) => s?.caveiraId || s?.id).filter(Boolean);
+          try {
+            window.postMessage(
+              {
+                source: 'QG_WEB_APP',
+                type: 'SIMULADOS_IMPORT_ACK',
+                payload: {
+                  ids,
+                  imported: Number(imported) || 0,
+                  deliveryId: event.data.payload.deliveryId || null,
+                },
+              },
+              window.location.origin
+            );
+          } catch {}
+          if (imported > 0) {
+            toast.success(`${imported} simulado(s) do Caveira importado(s).`);
+          } else {
+            toast.info('Todos os simulados visíveis já estavam importados.');
+          }
+          return;
+        }
+        if (event.data.type === 'PDF_STUDY_LOG' && event.data.payload) {
+          useStore.getState().logCaveiraPdfStudy?.(event.data.payload);
+          return;
+        }
+        if (event.data.type === 'SYNC_UPDATE' && event.data.payload) {
+          const { newQuestion, questions, session: extSession, dailyGoal: extGoal } = event.data.payload;
+          if (extSession) useStore.getState().setCaveiraSessionStats?.(extSession);
+          if (extGoal && Number(extGoal) >= 5) {
+            const curGoal = useStore.getState().caveiraDailyGoal;
+            if (Number(extGoal) !== Number(curGoal)) {
+              useStore.setState({ caveiraDailyGoal: Number(extGoal) });
+            }
+          }
+          if (newQuestion) {
+            if (newQuestion.ownerUserId && newQuestion.ownerUserId !== currentUser.id) return;
+            useStore.getState().addCaveiraQuestion(newQuestion);
+          } else if (Array.isArray(questions) && questions.length > 0) {
+            const scoped = questions.filter((q) => q && (!q.ownerUserId || q.ownerUserId === currentUser.id));
+            if (scoped.length > 0) useStore.getState().importCaveiraQuestions(scoped, true);
+          }
+        }
+        if (event.data.type === 'CAVEIRA_DATA_RESPONSE' && event.data.payload) {
+          const { questions, session: extSession, dailyGoal: extGoal } = event.data.payload;
+          if (extSession) useStore.getState().setCaveiraSessionStats?.(extSession);
+          if (extGoal && Number(extGoal) >= 5) {
+            const curGoal = useStore.getState().caveiraDailyGoal;
+            if (Number(extGoal) !== Number(curGoal)) {
+              useStore.setState({ caveiraDailyGoal: Number(extGoal) });
+            }
+          }
+          if (Array.isArray(questions) && questions.length > 0) {
+            const scoped = questions.filter((q) => q && (!q.ownerUserId || q.ownerUserId === currentUser.id));
+            if (scoped.length > 0) useStore.getState().importCaveiraQuestions(scoped, true);
+          }
+        }
+      }
+    };
+
+    const requestExtensionSync = () => {
+      try {
+        const currentUser = useStore.getState().user;
+        const cloudReady = useStore.getState().hasCompletedInitialCloudSync;
+        if (!currentUser?.id || !cloudReady) return;
+        const currentStats = useStore.getState().userStats;
+        const userLabel = (
+          currentStats?.displayName ||
+          currentUser.user_metadata?.display_name ||
+          currentUser.email?.split('@')[0] ||
+          currentUser.email ||
+          ''
+        ).trim();
+        window.postMessage(
+          {
+            source: 'QG_WEB_APP',
+            type: 'SET_ACTIVE_USER',
+            payload: { userId: currentUser.id, userEmail: currentUser.email || '', userLabel },
+          },
+          window.location.origin
+        );
+      } catch {}
+    };
+
+    window.addEventListener('message', handleExtensionMessage);
+    window.addEventListener('focus', requestExtensionSync);
+    requestExtensionSync();
+    const syncTimer = setTimeout(requestExtensionSync, 1500);
+
+    return () => {
+      window.removeEventListener('message', handleExtensionMessage);
+      window.removeEventListener('focus', requestExtensionSync);
+      clearTimeout(syncTimer);
+    };
+  }, [session, saveManualLessonIndex]);
+
+  // Ponte de envio: QG -> Extensão
+  useEffect(() => {
+    if (!session || !hasCompletedInitialCloudSync) return;
+    if (courseIndexCache && (courseIndexCache.latest || Object.keys(courseIndexCache.byLesson || {}).length > 0)) {
+      useStore.getState().setCaveiraCourseIndexMap?.(courseIndexCache);
+    }
+
+    try {
+      const todayDateStr = getLocalDateStr ? getLocalDateStr() : '';
+      const todayObj = new Date();
+      let rawDaySubjects = [];
+
+      if (calendarOverrides && Array.isArray(calendarOverrides[todayDateStr])) {
+        rawDaySubjects = calendarOverrides[todayDateStr];
+      } else {
+        const baseIdx =
+          cycleScheduleType === 'weekly'
+            ? getCycleIndexForDate
+              ? getCycleIndexForDate(todayObj, todayObj)
+              : cycleWeekStart === 'monday'
+              ? (todayObj.getDay() + 6) % 7
+              : todayObj.getDay()
+            : currentDayIndex || 0;
+        const shouldShift = cycleScheduleType === 'weekly' && (cycleCarryoverOffset || 0) > 0;
+        const effIdx = shouldShift ? (((baseIdx - cycleCarryoverOffset) % 7) + 7) % 7 : baseIdx;
+        const effDateObj = shouldShift
+          ? new Date(todayObj.getFullYear(), todayObj.getMonth(), todayObj.getDate() - cycleCarryoverOffset)
+          : todayObj;
+        const effDateStr = shouldShift && getLocalDateStr ? getLocalDateStr(effDateObj) : todayDateStr;
+
+        if (shouldShift && calendarOverrides && Array.isArray(calendarOverrides[effDateStr])) {
+          rawDaySubjects = calendarOverrides[effDateStr];
+        } else {
+          const effDow = effDateObj.getDay();
+          const matchingRules = (futureScheduleRules || [])
+            .filter((r) => {
+              if (!r || r.v !== 2 || !r.fromDate || r.fromDate > effDateStr) return false;
+              if (cycleScheduleType === 'weekly' && r.dayOfWeek !== undefined) return r.dayOfWeek === effDow;
+              return r.dayOfWeek === effDow || r.cycleIndex === effIdx;
+            })
+            .sort((a, b) => b.fromDate.localeCompare(a.fromDate));
+          if (matchingRules.length > 0 && Array.isArray(matchingRules[0].daySlots)) {
+            rawDaySubjects = matchingRules[0].daySlots;
+          } else {
+            rawDaySubjects = Array.isArray(cycle?.[effIdx]) ? cycle[effIdx] : [];
+          }
+        }
+      }
+
+      const todayDoneSet = new Set(completedTodayDate === todayDateStr ? completedToday || [] : []);
+      const seenSubIds = new Set();
+      const missionSubjects = [];
+      (rawDaySubjects || []).forEach((sId, idx) => {
+        const sub = subjects?.[sId];
+        if (!sub || seenSubIds.has(sId)) return;
+        seenSubIds.add(sId);
+        const activeTopic = (sub.topics || []).find((t) => (Number(t.completed) || 0) < (Number(t.total) || 0)) || null;
+        const firstLesson = activeTopic ? activeTopic.lessons?.[Number(activeTopic.completed) || 0] : null;
+        missionSubjects.push({
+          id: sId,
+          name: sub.name,
+          topic: activeTopic?.name || '',
+          lesson: firstLesson?.name || '',
+          completed: todayDoneSet.has(idx),
+        });
+      });
+
+      window.postMessage(
+        {
+          source: 'QG_WEB_APP',
+          type: 'QG_PRF_SYNC_TODAY_MISSION',
+          payload: { date: todayDateStr, subjects: missionSubjects },
+        },
+        window.location.origin
+      );
+
+      const speeds = {};
+      Object.values(subjects || {}).forEach((sub) => {
+        if (sub?.name) speeds[sub.name] = Math.max(0.5, Number(sub.speed) || 1);
+      });
+      window.postMessage(
+        {
+          source: 'QG_WEB_APP',
+          type: 'QG_PRF_SYNC_SUBJECT_SPEEDS',
+          payload: { speeds },
+        },
+        window.location.origin
+      );
+
+      if (caveiraFilterMemory && Object.keys(caveiraFilterMemory).length > 0) {
+        window.postMessage(
+          {
+            source: 'QG_WEB_APP',
+            type: 'QG_PRF_SYNC_FILTER_MEMORY',
+            payload: { memory: caveiraFilterMemory },
+          },
+          window.location.origin
+        );
+      }
+
+      if (session?.access_token && session?.user?.id) {
+        if (SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_URL.includes('placeholder')) {
+          window.postMessage(
+            {
+              source: 'QG_WEB_APP',
+              type: 'QG_PRF_SYNC_CLOUD_CREDS',
+              payload: {
+                supabaseUrl: SUPABASE_URL,
+                anonKey: SUPABASE_ANON_KEY,
+                accessToken: session.access_token,
+                refreshToken: session.refresh_token || '',
+                expiresAt: session.expires_at || 0,
+                userId: session.user.id,
+              },
+            },
+            window.location.origin
+          );
+        }
+      }
+
+      const pendingReviewsCount = (reviews || []).filter((r) => r && r.nextDateStr <= todayDateStr).length;
+      const streakActiveToday = Boolean((studyHistory?.[todayDateStr] || 0) > 0);
+      window.postMessage(
+        {
+          source: 'QG_WEB_APP',
+          type: 'QG_PRF_SYNC_REMINDER_STATE',
+          payload: {
+            pendingReviewsCount,
+            streakActiveToday,
+            todayDate: todayDateStr,
+            dailyGoal: Number(caveiraDailyGoal) || 50,
+          },
+        },
+        window.location.origin
+      );
+    } catch {}
+  }, [
+    session,
+    hasCompletedInitialCloudSync,
+    subjects,
+    cycle,
+    currentDayIndex,
+    completedToday,
+    completedTodayDate,
+    calendarOverrides,
+    futureScheduleRules,
+    cycleScheduleType,
+    cycleWeekStart,
+    cycleCarryoverOffset,
+    caveiraFilterMemory,
+    courseIndexCache,
+    reviews,
+    studyHistory,
+    caveiraDailyGoal,
+    getLocalDateStr,
+    getCycleIndexForDate,
+  ]);
+
+  return {
+    courseIndexCache,
+    manualLessonIndexMap,
+    saveManualLessonIndex,
+  };
+}

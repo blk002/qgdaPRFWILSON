@@ -305,6 +305,17 @@ export default function Dashboard() {
 
   return (
     <div className="fade-in w-full pb-8 space-y-6">
+      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-2 pb-1">
+        <div className="min-w-0">
+          <h1 className="font-display text-lg sm:text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Carreira
+          </h1>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+            {patenteAtual.name} · {userStats.xp.toLocaleString()} XP · {completionPercent}% do edital concluído
+          </p>
+        </div>
+      </header>
+
       {/* CABEÇALHO DE CARREIRA — Superfície única limpa */}
       <section className="glass-card rounded-xl p-5 sm:p-6">
         <div className="flex flex-col lg:flex-row lg:items-center gap-6">
@@ -360,9 +371,9 @@ export default function Dashboard() {
                   </div>
                 ) : (
                   <>
-                    <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight truncate">
+                    <h2 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight truncate">
                       {displayName}
-                    </h1>
+                    </h2>
                     <button
                       type="button"
                       onClick={() => { setTempName(displayName); setIsEditingName(true); }}

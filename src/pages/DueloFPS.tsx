@@ -43,7 +43,10 @@ import {
   generateProceduralQuestionFromContranTopic,
   getRandomCuratedQuestion,
 } from '../data/questionsBank';
-import { TacticalRange3D, ShotTriggerCommand } from '../components/TacticalRange3D';
+import type { ShotTriggerCommand } from '../components/TacticalRange3D';
+const TacticalRange3D = React.lazy(() =>
+  import('../components/TacticalRange3D').then((m) => ({ default: m.TacticalRange3D }))
+);
 import { soundFX } from '../utils/soundEffects';
 import { useStore } from '../store/useStore';
 
@@ -727,18 +730,26 @@ export default function DueloFPS() {
       <div className="flex-1 relative overflow-hidden bg-black">
         {/* ABA 1: ESTANDE 3D */}
         <div className={`absolute inset-0 z-0 ${activeTab === 'arena' ? 'block' : 'hidden'}`}>
-          <TacticalRange3D
-            gameState={gameState}
-            currentQuestion={currentQuestion}
-            timeLeft={timeLeft}
-            roundNumber={roundNumber}
-            isExecuting={gameState === 'executing'}
-            isPlayerAlive={gameState !== 'gameover'}
-            hoveredTarget={hoveredTarget}
-            onShootTarget={handleShootTarget}
-            onHoverTargetChange={setHoveredTarget}
-            externalShotCommand={externalShotCommand}
-          />
+          <React.Suspense
+            fallback={
+              <div className="w-full h-full flex items-center justify-center bg-zinc-950 text-zinc-400 text-xs font-medium">
+                Carregando estande 3D...
+              </div>
+            }
+          >
+            <TacticalRange3D
+              gameState={gameState}
+              currentQuestion={currentQuestion}
+              timeLeft={timeLeft}
+              roundNumber={roundNumber}
+              isExecuting={gameState === 'executing'}
+              isPlayerAlive={gameState !== 'gameover'}
+              hoveredTarget={hoveredTarget}
+              onShootTarget={handleShootTarget}
+              onHoverTargetChange={setHoveredTarget}
+              externalShotCommand={externalShotCommand}
+            />
+          </React.Suspense>
         </div>
 
         {activeTab === 'arena' && (

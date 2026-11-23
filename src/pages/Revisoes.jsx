@@ -1,16 +1,15 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import CaveiraReviewQuestionModal from '../components/CaveiraReviewQuestionModal';
-import { 
-  BrainCircuit, AlertTriangle, Target as TargetIcon, Clock, 
-  ChevronLeft, ChevronRight, CalendarDays, Layers, CheckCircle, 
-  TrendingUp, TrendingDown, Zap, Activity
+import {
+  AlertTriangle, Clock, ChevronLeft, ChevronRight, CalendarDays,
+  CheckCircle, TrendingUp, TrendingDown, Zap, Activity, Flame
 } from 'lucide-react';
 
 export default function Revisoes() {
   const [currentCardIdx, setCurrentCardIdx] = useState(0);
   const [selectedSubjectFilter, setSelectedSubjectFilter] = useState('ALL');
-  const [reviewTypeFilter, setReviewTypeFilter] = useState('ALL'); // 'ALL' | 'CAVEIRA' | 'CICLO'
+  const [reviewTypeFilter, setReviewTypeFilter] = useState('ALL');
   const {
     reviews,
     caveiraQuestions = [],
@@ -41,7 +40,6 @@ export default function Revisoes() {
     caveiraQuestions.forEach((q, idx) => {
       if (q && q.id) {
         const ts = q.timestamp ? new Date(q.timestamp).getTime() : NaN;
-        // caveiraQuestions é salvo do mais novo (idx 0) para o mais antigo (idx final)
         map.set(String(q.id).toUpperCase(), {
           ts: Number.isFinite(ts) ? ts : null,
           reverseOrder: caveiraQuestions.length - idx
@@ -50,17 +48,18 @@ export default function Revisoes() {
     });
     return map;
   }, [caveiraQuestions]);
-  
-  if (!reviewCalendarDate) return null; // Safety check
+
+  if (!reviewCalendarDate) return null;
   void todayKey;
   const todayStr = getLocalDateStr();
 
-  const isCaveiraCard = (rev) => Boolean(
-    rev.isCaveiraQuestion ||
-    rev.questionData ||
-    String(rev.id || '').startsWith('rev_caveira_') ||
-    String(rev.topicName || '').startsWith('[Caveira')
-  );
+  const isCaveiraCard = (rev) =>
+    Boolean(
+      rev.isCaveiraQuestion ||
+        rev.questionData ||
+        String(rev.id || '').startsWith('rev_caveira_') ||
+        String(rev.topicName || '').startsWith('[Caveira')
+    );
 
   const getReviewSubjectMeta = (rev) => {
     const sub = subjects[rev.subjectId];
@@ -72,18 +71,17 @@ export default function Revisoes() {
         rev.questionData?.subject ||
         sub?.name ||
         'Questão Caveira';
-      const color = sub?.color || 'bg-purple-500/15 text-purple-400 border-purple-500/30';
+      const color = sub?.color || 'bg-purple-600 text-white';
       return { id: `caveira_${name}`, name, color, isCaveira: true };
     }
     return {
       id: rev.subjectId || 'geral',
       name: sub?.name || rev.customSubjectName || 'Geral',
-      color: sub?.color || 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400',
+      color: sub?.color || 'bg-slate-600 text-white',
       isCaveira: false
     };
   };
 
-  // Ordena estritamente dos MAIS ANTIGOS para os MAIS NOVOS
   const allDueToday = getPendingReviews()
     .slice()
     .sort((a, b) => {
@@ -113,51 +111,47 @@ export default function Revisoes() {
       const metaA = getSortMeta(a);
       const metaB = getSortMeta(b);
 
-      if (metaA.ts !== null && metaB.ts !== null && metaA.ts !== metaB.ts) {
-        return metaA.ts - metaB.ts; // Mais antigo primeiro
-      }
-      if (metaA.reverseOrder !== metaB.reverseOrder) {
-        return metaA.reverseOrder - metaB.reverseOrder; // Mais antigo no histórico primeiro
-      }
-      if (metaA.qNum !== metaB.qNum) {
-        return metaA.qNum - metaB.qNum; // Menor ID numérico primeiro
-      }
+      if (metaA.ts !== null && metaB.ts !== null && metaA.ts !== metaB.ts) return metaA.ts - metaB.ts;
+      if (metaA.reverseOrder !== metaB.reverseOrder) return metaA.reverseOrder - metaB.reverseOrder;
+      if (metaA.qNum !== metaB.qNum) return metaA.qNum - metaB.qNum;
       return String(a.id || '').localeCompare(String(b.id || ''));
     });
 
-  const caveiraDueCount = allDueToday.filter(rev => isCaveiraCard(rev)).length;
+  const caveiraDueCount = allDueToday.filter((rev) => isCaveiraCard(rev)).length;
 
-  const typeFilteredDueToday = allDueToday.filter(rev => {
+  const typeFilteredDueToday = allDueToday.filter((rev) => {
     if (reviewTypeFilter === 'CAVEIRA') return isCaveiraCard(rev);
     return true;
   });
 
-  const filteredDueToday = selectedSubjectFilter === 'ALL'
-    ? typeFilteredDueToday
-    : typeFilteredDueToday.filter(rev => getReviewSubjectMeta(rev).id === selectedSubjectFilter);
+  const filteredDueToday =
+    selectedSubjectFilter === 'ALL'
+      ? typeFilteredDueToday
+      : typeFilteredDueToday.filter((rev) => getReviewSubjectMeta(rev).id === selectedSubjectFilter);
 
-  const safeCardIdx = filteredDueToday.length > 0
-    ? Math.min(currentCardIdx, filteredDueToday.length - 1)
-    : 0;
+  const safeCardIdx =
+    filteredDueToday.length > 0 ? Math.min(currentCardIdx, filteredDueToday.length - 1) : 0;
   const activeRev = filteredDueToday[safeCardIdx] || null;
   const backlogCount = Math.max(0, allDueToday.length - 12);
   const isProcrastinating = backlogCount > 5;
 
   const subjectsDueMap = {};
-  typeFilteredDueToday.forEach(rev => {
+  typeFilteredDueToday.forEach((rev) => {
     const meta = getReviewSubjectMeta(rev);
     if (!subjectsDueMap[meta.id]) {
       subjectsDueMap[meta.id] = { subject: meta, count: 0 };
     }
     subjectsDueMap[meta.id].count += 1;
   });
-  const activeReviewSubjects = Object.values(subjectsDueMap)
-    .sort((a, b) => b.count - a.count);
+  const activeReviewSubjects = Object.values(subjectsDueMap).sort((a, b) => b.count - a.count);
 
-  const perfReviews = reviews.filter(r => r.lastPerformance !== undefined);
-  const avgMemoryHealth = perfReviews.length > 0 
-    ? Math.round((perfReviews.reduce((acc, r) => acc + r.lastPerformance, 0) / perfReviews.length) * 100) 
-    : 0;
+  const perfReviews = reviews.filter((r) => r.lastPerformance !== undefined);
+  const avgMemoryHealth =
+    perfReviews.length > 0
+      ? Math.round((perfReviews.reduce((acc, r) => acc + r.lastPerformance, 0) / perfReviews.length) * 100)
+      : 0;
+  const globalHitRate =
+    reviewStats.totalDone > 0 ? Math.round((reviewStats.correct / reviewStats.totalDone) * 100) : 0;
 
   const rawRevDate = reviewCalendarDate ? new Date(reviewCalendarDate) : new Date();
   const safeRevDate = isNaN(rawRevDate.getTime()) ? new Date() : rawRevDate;
@@ -165,43 +159,45 @@ export default function Revisoes() {
   const rMonth = safeRevDate.getMonth();
   const rDaysInMonth = new Date(rYear, rMonth + 1, 0).getDate();
   const rFirstDayIndex = new Date(rYear, rMonth, 1).getDay();
-  const mesesNomes = ['Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho', 'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'];
+  const mesesNomes = [
+    'Janeiro', 'Fevereiro', 'Março', 'Abril', 'Maio', 'Junho',
+    'Julho', 'Agosto', 'Setembro', 'Outubro', 'Novembro', 'Dezembro'
+  ];
   const diasSemana = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-  
+
   const rBlanks = Array(rFirstDayIndex).fill(null);
   const rDays = Array.from({ length: rDaysInMonth }, (_, i) => i + 1);
 
-  // --- PREVISÃO DE CARGA FSRS (PRÓXIMOS 7 DIAS) & CURVA DE ESQUECIMENTO ---
   const baseToday = getTodayDate ? getTodayDate() : new Date();
   const next7DaysForecast = Array.from({ length: 7 }, (_, i) => {
     const offset = i + 1;
     const d = new Date(baseToday);
     d.setDate(d.getDate() + offset);
     const dateStr = getLocalDateStr(d);
-    const dayRevs = reviews.filter(r => r.nextDateStr === dateStr);
-    const caveiraCount = dayRevs.filter(r => isCaveiraCard(r)).length;
+    const dayRevs = reviews.filter((r) => r.nextDateStr === dateStr);
+    const caveiraCount = dayRevs.filter((r) => isCaveiraCard(r)).length;
     const dayName = diasSemana[d.getDay()];
     const dayNum = String(d.getDate()).padStart(2, '0');
     const monthNum = String(d.getMonth() + 1).padStart(2, '0');
     return {
       offset,
       dateStr,
-      label: offset === 1 ? 'Amanhã' : `${dayName} (${dayNum}/${monthNum})`,
+      label: offset === 1 ? 'Amanhã' : dayName,
       shortDate: `${dayNum}/${monthNum}`,
       total: dayRevs.length,
       caveiraCount
     };
   });
-  const maxForecastCount = Math.max(5, ...next7DaysForecast.map(f => f.total));
+  const maxForecastCount = Math.max(5, ...next7DaysForecast.map((f) => f.total));
   const totalNext7Days = next7DaysForecast.reduce((acc, f) => acc + f.total, 0);
 
-  // Estabilidade média real dos cartões já revisados (ou 3.5d inicial) para a Curva de Esquecimento FSRS R(t) = (1 + t/(9*S))^-1
-  const cardsWithStability = reviews.filter(r => Number(r.stability) > 0);
-  const avgStabilityDays = cardsWithStability.length > 0
-    ? cardsWithStability.reduce((acc, r) => acc + Number(r.stability || 0), 0) / cardsWithStability.length
-    : 3.5;
+  const cardsWithStability = reviews.filter((r) => Number(r.stability) > 0);
+  const avgStabilityDays =
+    cardsWithStability.length > 0
+      ? cardsWithStability.reduce((acc, r) => acc + Number(r.stability || 0), 0) / cardsWithStability.length
+      : 3.5;
 
-  const forgettingCurvePoints = [0, 1, 3, 7, 14, 30].map(daysElapsed => {
+  const forgettingCurvePoints = [0, 1, 3, 7, 14, 30].map((daysElapsed) => {
     const retention = Math.round(Math.pow(1 + daysElapsed / (9 * Math.max(0.5, avgStabilityDays)), -1) * 100);
     return {
       daysElapsed,
@@ -211,362 +207,425 @@ export default function Revisoes() {
   });
 
   return (
-    <div className="fade-in w-full pb-6">
-      
-      <div className="bg-white p-3 sm:p-3.5 rounded-xl border border-slate-200/80 mb-3 flex flex-col lg:flex-row gap-3 justify-between items-start lg:items-center dark:bg-slate-900 dark:border-slate-800">
-        <div className="flex items-center gap-3">
-          <div className="bg-red-100 dark:bg-red-500/15 border border-red-200 dark:border-red-500/25 p-2 rounded-lg shrink-0"><BrainCircuit className="text-red-600 dark:text-red-400 w-5 h-5" /></div>
-          <div>
-            <h2 className="text-base sm:text-lg font-bold text-slate-800 dark:text-slate-100 leading-tight">C.C.R. (Centro de Comando de Retenção)</h2>
-            <p className="text-slate-500 text-xs dark:text-slate-400">Auditoria do Algoritmo FSRS de Espaçamento.</p>
+    <div className="fade-in w-full pb-8 space-y-5">
+      {/* Cabeçalho Unificado Transparente */}
+      <div className="flex flex-wrap items-center justify-between gap-x-6 gap-y-3">
+        <div className="min-w-0">
+          <h1 className="font-display text-lg sm:text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Revisões FSRS
+          </h1>
+          <div className="mt-0.5 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-xs text-slate-500 dark:text-slate-400">
+            <span>Espaçamento inteligente</span>
+            <span aria-hidden="true">·</span>
+            <span className="tabular-nums">
+              {allDueToday.length === 0
+                ? 'Fila zerada'
+                : `${allDueToday.length} ${allDueToday.length === 1 ? 'cartão pendente' : 'cartões pendentes'}`}
+            </span>
+            <span aria-hidden="true">·</span>
+            <span className="tabular-nums">{reviews.length} monitorados</span>
           </div>
         </div>
-        
-        <div className="flex flex-wrap gap-2 w-full lg:w-auto">
-          <div className="flex-1 min-w-[90px] lg:w-28 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-center dark:bg-slate-850 dark:border-slate-800">
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Acerto Global</p>
-            <p className="text-base sm:text-lg font-black text-slate-800 dark:text-slate-100 tabular-nums">
-              {reviewStats.totalDone > 0 ? Math.round((reviewStats.correct / reviewStats.totalDone) * 100) : 0}%
-            </p>
+
+        {/* Métricas Inline */}
+        <div className="flex items-center gap-5 shrink-0 text-xs">
+          <div>
+            <span className="text-slate-500 dark:text-slate-400 block">Acerto global</span>
+            <span className="font-mono text-base font-bold tabular-nums text-slate-900 dark:text-white">
+              {globalHitRate}%
+            </span>
           </div>
-          <div className="flex-1 min-w-[90px] lg:w-28 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-center dark:bg-slate-850 dark:border-slate-800">
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider" title="Média de todas as revisões feitas">Saúde da Memória</p>
-            <p className={`text-base sm:text-lg font-black tabular-nums ${avgMemoryHealth >= 80 ? 'text-emerald-500' : avgMemoryHealth >= 70 ? 'text-yellow-500' : 'text-red-500'}`}>
+          <div className="w-px h-7 bg-slate-200 dark:bg-slate-800" />
+          <div>
+            <span className="text-slate-500 dark:text-slate-400 block">Retenção</span>
+            <span
+              className={`font-mono text-base font-bold tabular-nums ${
+                avgMemoryHealth >= 80
+                  ? 'text-emerald-600 dark:text-emerald-400'
+                  : avgMemoryHealth >= 70
+                  ? 'text-amber-600 dark:text-amber-400'
+                  : 'text-red-600 dark:text-red-400'
+              }`}
+            >
               {avgMemoryHealth}%
-            </p>
+            </span>
           </div>
-          <div className="flex-1 min-w-[90px] lg:w-28 bg-slate-50 border border-slate-200 rounded-lg px-3 py-1.5 text-center dark:bg-slate-850 dark:border-slate-800">
-            <p className="text-[9px] font-bold text-slate-400 uppercase tracking-wider">Sequência</p>
-            <p className="text-base sm:text-lg font-black text-orange-500 flex items-center justify-center gap-1 tabular-nums">
-              🔥 {reviewStats.streak}
-            </p>
+          <div className="w-px h-7 bg-slate-200 dark:bg-slate-800" />
+          <div>
+            <span className="text-slate-500 dark:text-slate-400 block">Sequência</span>
+            <span className="font-mono text-base font-bold tabular-nums text-amber-600 dark:text-amber-400 inline-flex items-center gap-1">
+              <Flame className="w-3.5 h-3.5" />
+              {reviewStats.streak}
+            </span>
           </div>
         </div>
       </div>
 
+      {/* Alerta de acúmulo */}
       {isProcrastinating && (
-        <div className="bg-red-600 text-white p-4 rounded-xl shadow-md mb-6 flex items-center justify-between border-2 border-red-800 animate-pulse">
-          <div className="flex items-center gap-3">
-            <AlertTriangle className="w-8 h-8 text-yellow-300" />
-            <div>
-              <h3 className="font-black uppercase tracking-wider text-sm">Multa de Procrastinação Ativada</h3>
-              <p className="text-xs text-red-100 mt-0.5">Você acumulou {backlogCount} revisões ignoradas. Suas moedas estão sendo drenadas até que limpe a fila.</p>
-            </div>
+        <div className="rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 p-4 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
+          <div className="text-xs">
+            <p className="font-semibold text-red-800 dark:text-red-300">
+              Acúmulo de {backlogCount} revisões atrasadas
+            </p>
+            <p className="text-red-700/80 dark:text-red-300/80 mt-0.5">
+              Limpe a fila de hoje para interromper a penalidade de moedas e proteger sua retenção.
+            </p>
           </div>
         </div>
       )}
 
+      {/* Fila Estratégica de Hoje */}
       {allDueToday.length > 0 ? (
-        <>
-          <div className="flex flex-wrap justify-between items-center gap-3 mb-3">
-            <div>
-              <h3 className="text-lg font-bold text-slate-700 flex items-center gap-2 dark:text-slate-200">
-                <TargetIcon className="w-5 h-5 text-red-500"/> Fila Estratégica de Hoje (1 por 1)
-              </h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Exibindo um cartão por vez • Ordem cronológica: <strong>do mais antigo para o mais novo</strong>
-              </p>
-            </div>
-            <span className="text-xs font-bold bg-red-100 text-red-700 px-3 py-1 rounded-full border border-red-200 dark:bg-red-950/60 dark:text-red-300 dark:border-red-800/60">
-              Restam {allDueToday.length} Cartões
-            </span>
-          </div>
-
-          {/* Filtro por Tipo de Revisão: Todas | Questões Caveira */}
-          <div className="flex flex-wrap gap-2 mb-3">
-            {[
-              { id: 'ALL', label: 'Todas as Revisões', count: allDueToday.length, activeClass: 'bg-slate-800 text-white border-slate-700 dark:bg-slate-100 dark:text-slate-900 dark:border-white' },
-              { id: 'CAVEIRA', label: '💀 Questões Caveira', count: caveiraDueCount, activeClass: 'bg-purple-600 text-white border-purple-500 ring-2 ring-purple-500/30' }
-            ].map(tab => {
-              const isSelected = reviewTypeFilter === tab.id;
-              return (
-                <button
-                  key={tab.id}
-                  onClick={() => {
-                    setReviewTypeFilter(tab.id);
-                    setSelectedSubjectFilter('ALL');
-                    setCurrentCardIdx(0);
-                  }}
-                  className={`flex items-center gap-2 px-3 py-1.5 rounded-xl border text-xs font-black uppercase tracking-wider transition-all cursor-pointer ${
-                    isSelected
-                      ? tab.activeClass
-                      : 'bg-white text-slate-600 border-slate-200 hover:bg-slate-50 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800 dark:hover:bg-slate-850'
-                  }`}
-                >
-                  <span>{tab.label}</span>
-                  <span className={`px-1.5 py-0.5 rounded-md text-[11px] font-black ${isSelected ? 'bg-black/20' : 'bg-slate-100 dark:bg-slate-800'}`}>
-                    {tab.count}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {activeReviewSubjects.length > 0 && (
-            <div className="flex gap-2 overflow-x-auto pb-3 mb-4 snap-x items-center">
-              <div className="flex items-center justify-center px-1 shrink-0" title="Filtrar por Disciplina">
-                <Layers className="w-4 h-4 text-slate-400" />
-              </div>
-              <button
-                onClick={() => { setSelectedSubjectFilter('ALL'); setCurrentCardIdx(0); }}
-                className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border shadow-sm shrink-0 snap-start transition-all cursor-pointer ${
-                  selectedSubjectFilter === 'ALL'
-                    ? 'bg-blue-600 text-white border-blue-500 ring-2 ring-blue-500/30'
-                    : 'bg-slate-100 text-slate-600 border-slate-300 dark:bg-slate-800 dark:text-slate-300 dark:border-slate-700'
-                }`}
-              >
-                <span className="text-[12px] font-black uppercase tracking-wider">Todas</span>
-                <span className="bg-black/20 px-1.5 py-0.5 rounded text-[11px] font-black">{typeFilteredDueToday.length}</span>
-              </button>
-              {activeReviewSubjects.map(({ subject, count }) => {
-                const isSelected = selectedSubjectFilter === subject.id;
+        <section className="space-y-4">
+          {/* Controles de Filtro */}
+          <div className="flex flex-wrap items-center justify-between gap-3">
+            <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
+              {[
+                { id: 'ALL', label: 'Todas', count: allDueToday.length },
+                { id: 'CAVEIRA', label: 'Questões Caveira', count: caveiraDueCount }
+              ].map((tab) => {
+                const isSelected = reviewTypeFilter === tab.id;
                 return (
                   <button
-                    key={subject.id}
-                    onClick={() => { setSelectedSubjectFilter(isSelected ? 'ALL' : subject.id); setCurrentCardIdx(0); }}
-                    className={`flex items-center gap-1.5 px-2.5 py-1 rounded-md border shadow-sm shrink-0 snap-start transition-all cursor-pointer ${subject.color} ${
-                      isSelected ? 'ring-2 ring-purple-400 scale-105' : 'opacity-85 hover:opacity-100'
+                    key={tab.id}
+                    type="button"
+                    onClick={() => {
+                      setReviewTypeFilter(tab.id);
+                      setSelectedSubjectFilter('ALL');
+                      setCurrentCardIdx(0);
+                    }}
+                    className={`h-8 px-3 rounded-md text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap ${
+                      isSelected
+                        ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white shadow-xs'
+                        : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                     }`}
                   >
-                    <span className="text-[12px] font-black uppercase tracking-wider">{subject.name}</span>
-                    <span className="bg-white/40 px-1.5 py-0.5 rounded text-[11px] font-black backdrop-blur-sm border border-white/20 dark:bg-slate-900">{count}</span>
+                    <span>{tab.label}</span>
+                    <span className="font-mono text-[11px] tabular-nums opacity-70">{tab.count}</span>
                   </button>
                 );
               })}
             </div>
-          )}
 
-          {!activeRev && (
-            <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 text-center mb-8">
-              <p className="text-sm font-bold text-slate-600 dark:text-slate-300">
+            {activeReviewSubjects.length > 0 && (
+              <div className="flex items-center gap-1.5 overflow-x-auto no-scrollbar max-w-full">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedSubjectFilter('ALL');
+                    setCurrentCardIdx(0);
+                  }}
+                  className={`h-8 px-2.5 rounded-lg text-xs font-medium border transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                    selectedSubjectFilter === 'ALL'
+                      ? 'bg-slate-900 text-white border-slate-900 dark:bg-slate-100 dark:text-slate-900 dark:border-slate-100'
+                      : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                  }`}
+                >
+                  Todas ({typeFilteredDueToday.length})
+                </button>
+                {activeReviewSubjects.map(({ subject, count }) => {
+                  const isSelected = selectedSubjectFilter === subject.id;
+                  const dotClass = String(subject.color || '').split(' ')[0] || 'bg-sky-500';
+                  return (
+                    <button
+                      key={subject.id}
+                      type="button"
+                      onClick={() => {
+                        setSelectedSubjectFilter(isSelected ? 'ALL' : subject.id);
+                        setCurrentCardIdx(0);
+                      }}
+                      className={`h-8 px-2.5 rounded-lg text-xs font-medium border inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
+                        isSelected
+                          ? 'bg-sky-500/10 text-sky-700 dark:text-sky-300 border-sky-500/40'
+                          : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                      }`}
+                    >
+                      <span className={`w-2 h-2 rounded-full shrink-0 ${dotClass}`} />
+                      <span>{subject.name}</span>
+                      <span className="font-mono text-[11px] tabular-nums opacity-70">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+
+          {!activeRev ? (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-6 text-center">
+              <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
                 Nenhum cartão pendente neste filtro.
               </p>
               <button
-                onClick={() => { setReviewTypeFilter('ALL'); setSelectedSubjectFilter('ALL'); setCurrentCardIdx(0); }}
-                className="mt-3 px-4 py-2 rounded-xl text-xs font-black uppercase bg-purple-600 text-white hover:bg-purple-500 cursor-pointer"
+                type="button"
+                onClick={() => {
+                  setReviewTypeFilter('ALL');
+                  setSelectedSubjectFilter('ALL');
+                  setCurrentCardIdx(0);
+                }}
+                className="mt-3 h-9 px-4 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 transition-colors cursor-pointer"
               >
-                Mostrar Todas as Revisões ({allDueToday.length})
+                Mostrar todas ({allDueToday.length})
               </button>
             </div>
-          )}
-
-          {activeRev && (
-            <div className="max-w-3xl mx-auto mb-8">
-              {/* Barra de Progresso e Navegação 1 por 1 */}
-              <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-3.5 sm:p-4 mb-4 shadow-sm flex flex-col gap-3">
+          ) : (
+            <div className="max-w-3xl mx-auto space-y-3">
+              {/* Barra de Navegação 1 por 1 */}
+              <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4 space-y-3">
                 <div className="flex flex-wrap items-center justify-between gap-2">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-black uppercase tracking-wider px-2.5 py-1 rounded-lg bg-purple-500/15 text-purple-400 border border-purple-500/25">
+                  <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                    <span className="font-mono font-semibold tabular-nums text-slate-900 dark:text-white">
                       Cartão {safeCardIdx + 1} de {filteredDueToday.length}
                     </span>
-                    <span className="text-xs font-semibold text-slate-500 dark:text-slate-400">
-                      {safeCardIdx === 0 ? '⏳ Mais antigo da fila' : safeCardIdx === filteredDueToday.length - 1 ? '🆕 Mais recente da fila' : 'Ordem: Mais antigo ➔ Mais novo'}
-                    </span>
+                    <span aria-hidden="true">·</span>
+                    <span>Ordem cronológica (mais antigo primeiro)</span>
                   </div>
 
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-1.5">
                     <button
+                      type="button"
                       disabled={safeCardIdx <= 0}
                       onClick={() => setCurrentCardIdx(Math.max(0, safeCardIdx - 1))}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 cursor-pointer transition-colors"
+                      className="h-8 px-2.5 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-850 disabled:opacity-40 disabled:pointer-events-none inline-flex items-center gap-1 cursor-pointer transition-colors"
                     >
-                      <ChevronLeft className="w-4 h-4" /> Anterior
+                      <ChevronLeft className="w-3.5 h-3.5" />
+                      <span>Anterior</span>
                     </button>
                     <button
+                      type="button"
                       disabled={safeCardIdx >= filteredDueToday.length - 1}
                       onClick={() => setCurrentCardIdx(Math.min(filteredDueToday.length - 1, safeCardIdx + 1))}
-                      className="px-3 py-1.5 rounded-lg text-xs font-bold border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-40 disabled:pointer-events-none flex items-center gap-1 cursor-pointer transition-colors"
+                      className="h-8 px-2.5 rounded-lg text-xs font-medium border border-slate-200 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-850 disabled:opacity-40 disabled:pointer-events-none inline-flex items-center gap-1 cursor-pointer transition-colors"
                     >
-                      Próximo <ChevronRight className="w-4 h-4" />
+                      <span>Próximo</span>
+                      <ChevronRight className="w-3.5 h-3.5" />
                     </button>
                   </div>
                 </div>
 
-                <div className="w-full h-2 bg-slate-100 dark:bg-slate-850 rounded-full overflow-hidden">
+                <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-850 rounded-full overflow-hidden">
                   <div
-                    className="h-full bg-gradient-to-r from-purple-600 to-blue-500 transition-all duration-300"
+                    className="h-full bg-sky-500 transition-all duration-300"
                     style={{ width: `${Math.round(((safeCardIdx + 1) / filteredDueToday.length) * 100)}%` }}
                   />
                 </div>
               </div>
 
-              {/* Cartão Único Ativo */}
+              {/* Cartão Ativo */}
               {(() => {
                 const meta = getReviewSubjectMeta(activeRev);
                 if (meta.isCaveira) {
-                  return (
-                    <CaveiraReviewQuestionModal
-                      key={activeRev.id}
-                      review={activeRev}
-                      inline={true}
-                    />
-                  );
+                  return <CaveiraReviewQuestionModal key={activeRev.id} review={activeRev} inline={true} />;
                 }
 
                 const thermo = getThermometer(activeRev.lastPerformance);
+                const dotClass = String(meta.color || '').split(' ')[0] || 'bg-sky-500';
                 return (
-                  <div key={activeRev.id} className="bg-white p-6 sm:p-7 rounded-3xl border border-slate-200 shadow-xl flex flex-col justify-between dark:bg-slate-900 dark:border-slate-700">
-                    <div>
-                      <div className="flex justify-between items-start gap-2 mb-4">
-                        <span className={`text-xs font-black px-3 py-1 rounded-lg uppercase border leading-tight ${meta.color}`}>
-                          {meta.name}
+                  <div
+                    key={activeRev.id}
+                    className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-xl border border-slate-200/80 dark:border-slate-800 space-y-4"
+                  >
+                    <div className="flex items-center justify-between gap-3">
+                      <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
+                        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dotClass}`} />
+                        <span className="font-semibold text-slate-800 dark:text-slate-200">{meta.name}</span>
+                        <span aria-hidden="true">·</span>
+                        <span className="font-mono tabular-nums">
+                          Retenção {Math.round(activeRev.lastPerformance * 100 || 0)}%
                         </span>
-                        <div className="flex items-center gap-2 shrink-0">
-                          <div className={`text-xs font-bold px-2.5 py-1 rounded-lg border flex items-center gap-1 ${thermo.color}`} title="Termômetro de Memória">
-                            {thermo.icon} {Math.round(activeRev.lastPerformance * 100 || 0)}%
-                          </div>
-                          {activeRev.trend !== 0 && activeRev.trend !== undefined && (
-                            <div className={`flex items-center gap-0.5 text-[10px] font-black uppercase ${activeRev.trend > 0 ? 'text-blue-500' : 'text-red-500'}`}>
-                              {activeRev.trend > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
-                              {activeRev.trend > 0 ? 'Melhora' : 'Queda'}
-                            </div>
+                      </div>
+
+                      {activeRev.trend !== 0 && activeRev.trend !== undefined && (
+                        <span
+                          className={`inline-flex items-center gap-1 text-xs font-medium ${
+                            activeRev.trend > 0
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : 'text-red-600 dark:text-red-400'
+                          }`}
+                        >
+                          {activeRev.trend > 0 ? (
+                            <TrendingUp className="w-3.5 h-3.5" />
+                          ) : (
+                            <TrendingDown className="w-3.5 h-3.5" />
                           )}
-                        </div>
-                      </div>
-
-                      <h4 className="text-base sm:text-lg font-bold text-slate-800 leading-snug mb-4 dark:text-slate-100">
-                        {activeRev.topicName}
-                      </h4>
-
-                      {activeRev.notes && (
-                        <div className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-850 p-4 rounded-2xl border border-slate-200/80 dark:border-slate-800 mb-4 whitespace-pre-line">
-                          {activeRev.notes}
-                        </div>
+                          {activeRev.trend > 0 ? 'Melhora' : 'Queda'}
+                        </span>
                       )}
-
-                      <div className="flex items-center justify-between text-xs text-slate-400 font-bold bg-slate-50 p-3 rounded-xl border border-slate-100 dark:bg-slate-850 dark:border-slate-800">
-                        <div className="flex items-center gap-2">
-                          <Clock className="w-4 h-4 text-blue-400" />
-                          <span>Intervalo Atual: <strong className="text-blue-500">{activeRev.interval} {activeRev.interval === 1 ? 'dia' : 'dias'}</strong></span>
-                        </div>
-                        <div>
-                          <span>Estabilidade: <strong className="text-slate-700 dark:text-slate-200">{activeRev.stability?.toFixed(1) || 0}d</strong></span>
-                        </div>
-                      </div>
                     </div>
 
-                    <button
-                      onClick={() => setReviewModal(activeRev)}
-                      className="mt-5 w-full py-3.5 rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md cursor-pointer bg-red-600 hover:bg-red-500 text-white"
-                    >
-                      Avaliar Retenção FSRS
-                    </button>
+                    <h2 className="font-display text-lg font-bold text-slate-900 dark:text-white leading-snug">
+                      {activeRev.topicName}
+                    </h2>
+
+                    {activeRev.notes && (
+                      <div className="text-xs sm:text-sm text-slate-600 dark:text-slate-300 bg-slate-50 dark:bg-slate-850/60 p-4 rounded-lg border border-slate-200/70 dark:border-slate-800 whitespace-pre-line">
+                        {activeRev.notes}
+                      </div>
+                    )}
+
+                    <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+                      <div className="flex items-center gap-3 text-xs text-slate-500 dark:text-slate-400">
+                        <span className="inline-flex items-center gap-1.5">
+                          <Clock className="w-3.5 h-3.5 text-sky-500" />
+                          Intervalo:{' '}
+                          <strong className="font-mono font-semibold text-slate-800 dark:text-slate-200 tabular-nums">
+                            {activeRev.interval} {activeRev.interval === 1 ? 'dia' : 'dias'}
+                          </strong>
+                        </span>
+                        <span aria-hidden="true">·</span>
+                        <span>
+                          Estabilidade:{' '}
+                          <strong className="font-mono font-semibold text-slate-800 dark:text-slate-200 tabular-nums">
+                            {activeRev.stability?.toFixed(1) || 0}d
+                          </strong>
+                        </span>
+                        {thermo?.label && (
+                          <>
+                            <span aria-hidden="true">·</span>
+                            <span>{thermo.label}</span>
+                          </>
+                        )}
+                      </div>
+
+                      <button
+                        type="button"
+                        onClick={() => setReviewModal(activeRev)}
+                        className="h-9 px-4 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 transition-colors cursor-pointer"
+                      >
+                        Avaliar retenção
+                      </button>
+                    </div>
                   </div>
                 );
               })()}
             </div>
           )}
-        </>
+        </section>
       ) : (
-        <div className="px-4 py-3 bg-white border border-slate-200 rounded-xl text-slate-600 flex flex-wrap items-center justify-between gap-2 mb-3 dark:bg-slate-900 dark:text-slate-300 dark:border-slate-800">
-          <div className="flex items-center gap-2.5">
+        <div className="px-5 py-4 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl flex flex-wrap items-center justify-between gap-3">
+          <div className="flex items-center gap-3">
             <CheckCircle className="w-5 h-5 text-emerald-500 shrink-0" />
             <div>
-              <h3 className="text-sm font-bold text-slate-800 dark:text-slate-100 leading-tight">Missões Concluídas!</h3>
-              <p className="text-xs text-slate-500 dark:text-slate-400">Fila de revisões FSRS zerada. Avance a fila no seu Cronograma.</p>
+              <h2 className="text-sm font-semibold text-slate-900 dark:text-white">
+                Fila de hoje concluída
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Todas as revisões FSRS programadas para hoje estão em dia.
+              </p>
             </div>
           </div>
-          <span className="text-[10px] font-black uppercase px-2.5 py-1 rounded-md bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 border border-emerald-500/25">
-            100% Em Dia
+          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400">
+            100% em dia
           </span>
         </div>
       )}
 
-      {/* PAINEL #13: PREVISÃO DE CARGA FSRS (7 DIAS) + ADIANTAMENTO TÁTICO + CURVA DE ESQUECIMENTO */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-3 mt-3">
-        {/* Previsão de 7 Dias + Adiantamento Tático */}
-        <div className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 flex flex-col justify-between">
-          <div className="flex flex-wrap items-center justify-between gap-2 mb-2.5">
+      {/* Previsão de 7 Dias + Curva de Esquecimento */}
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">
+        {/* Previsão de 7 Dias */}
+        <section className="lg:col-span-7 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 p-5 flex flex-col justify-between gap-4">
+          <div className="flex flex-wrap items-baseline justify-between gap-2">
             <div>
-              <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
-                <Zap className="w-4 h-4 text-sky-500 dark:text-sky-400" /> Previsão de Carga FSRS (Próximos 7 Dias)
-              </h3>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Total na semana: <strong>{totalNext7Days} cartões</strong> • Clique em <strong>⚡ Puxar</strong> para trazer revisões para hoje.
+              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Zap className="w-4 h-4 text-sky-500" />
+                <span>Previsão dos próximos 7 dias</span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {totalNext7Days} cartões programados · Adiante revisões de dias futuros quando tiver folga.
               </p>
             </div>
           </div>
 
-          <div className="grid grid-cols-7 gap-1 sm:gap-1.5 items-end pt-1">
-            {next7DaysForecast.map(day => {
-              const barHeightPct = day.total > 0 ? Math.max(18, Math.round((day.total / maxForecastCount) * 100)) : 8;
+          <div className="grid grid-cols-7 gap-2 items-end">
+            {next7DaysForecast.map((day) => {
+              const barHeightPct =
+                day.total > 0 ? Math.max(18, Math.round((day.total / maxForecastCount) * 100)) : 6;
               const isHeavy = day.total >= 10;
               return (
-                <div
-                  key={day.dateStr}
-                  className="min-w-0 flex flex-col items-center bg-slate-50 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 rounded-lg p-1.5 transition-all"
-                >
-                  <span className="text-[10px] font-black uppercase tracking-tight text-slate-500 dark:text-slate-400 truncate max-w-full">
-                    {day.offset === 1 ? 'Amanhã' : day.label.split(' ')[0]}
-                  </span>
-                  <span className="text-[9px] font-mono text-slate-400 mb-1">{day.shortDate}</span>
+                <div key={day.dateStr} className="min-w-0 flex flex-col items-center gap-1.5">
+                  <div className="text-center">
+                    <span className="text-[11px] font-medium text-slate-700 dark:text-slate-300 block truncate">
+                      {day.label}
+                    </span>
+                    <span className="text-[10px] font-mono text-slate-400 tabular-nums">{day.shortDate}</span>
+                  </div>
 
-                  <div className="w-full h-12 bg-slate-200/60 dark:bg-slate-900 rounded-md flex flex-col justify-end p-1 overflow-hidden relative">
+                  <div className="w-full h-16 bg-slate-100 dark:bg-slate-850 rounded-lg flex flex-col justify-end p-1 relative overflow-hidden">
                     <div
                       className={`w-full rounded-sm transition-all duration-300 ${
                         day.total === 0
-                          ? 'bg-slate-300 dark:bg-slate-800'
+                          ? 'bg-slate-200 dark:bg-slate-800'
                           : isHeavy
-                          ? 'bg-gradient-to-t from-red-600 to-amber-500'
-                          : 'bg-gradient-to-t from-sky-600 to-teal-400'
+                          ? 'bg-amber-500'
+                          : 'bg-sky-500'
                       }`}
                       style={{ height: `${barHeightPct}%` }}
                     />
-                    <span className="absolute inset-x-0 top-1 text-center font-black text-xs text-slate-800 dark:text-white">
+                    <span className="absolute inset-x-0 top-1 text-center font-mono font-bold text-xs tabular-nums text-slate-800 dark:text-slate-100">
                       {day.total}
                     </span>
-                  </div>
-
-                  <div className="text-[9px] font-bold text-slate-400 mt-1 flex items-center gap-1">
-                    <span title="Questões Caveira">💀{day.caveiraCount}</span>
                   </div>
 
                   <button
                     type="button"
                     disabled={day.total === 0}
                     onClick={() => advanceFutureReviews(day.dateStr)}
-                    title={day.total > 0 ? `Adiantar ${day.total} revisões de ${day.shortDate} para hoje` : 'Sem revisões agendadas'}
-                    className="mt-1.5 w-full py-1 px-0.5 rounded-md text-[10px] font-black uppercase tracking-tight bg-sky-500/10 hover:bg-sky-500 text-sky-600 dark:text-sky-400 hover:text-white border border-sky-500/25 disabled:opacity-30 disabled:pointer-events-none transition-all cursor-pointer truncate"
+                    title={
+                      day.total > 0
+                        ? `Adiantar ${day.total} revisões de ${day.shortDate} para hoje`
+                        : 'Sem revisões agendadas'
+                    }
+                    className="w-full h-7 rounded-md text-[11px] font-semibold bg-slate-100 hover:bg-sky-600 text-slate-700 hover:text-white dark:bg-slate-850 dark:hover:bg-sky-500 dark:text-slate-300 dark:hover:text-slate-950 disabled:opacity-35 disabled:pointer-events-none transition-colors cursor-pointer"
                   >
-                    ⚡ Puxar
+                    Adiantar
                   </button>
                 </div>
               );
             })}
           </div>
-        </div>
+        </section>
 
-        {/* Curva de Esquecimento de Ebbinghaus / FSRS */}
-        <div className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200 dark:border-slate-800 p-3.5 flex flex-col justify-between">
+        {/* Curva de Esquecimento FSRS */}
+        <section className="lg:col-span-5 bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 p-5 flex flex-col justify-between gap-4">
           <div>
-            <div className="flex items-center justify-between gap-2 mb-1">
-              <h3 className="text-xs sm:text-sm font-black text-slate-800 dark:text-white uppercase tracking-wider flex items-center gap-1.5">
-                <Activity className="w-4 h-4 text-emerald-400 shrink-0" /> Curva de Esquecimento FSRS
-              </h3>
-              <span className="text-[10px] font-black px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-500 dark:text-emerald-400 border border-emerald-500/30 whitespace-nowrap shrink-0">
-                Estab. Média: {typeof avgStabilityDays === 'number' && !isNaN(avgStabilityDays) ? avgStabilityDays.toFixed(1) : '0.0'}d
+            <div className="flex items-center justify-between gap-2">
+              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Activity className="w-4 h-4 text-emerald-500" />
+                <span>Curva de retenção FSRS</span>
+              </h2>
+              <span className="text-xs font-mono font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums shrink-0">
+                Estab. {typeof avgStabilityDays === 'number' && !isNaN(avgStabilityDays) ? avgStabilityDays.toFixed(1) : '0.0'}d
               </span>
             </div>
-            <p className="text-[11px] text-slate-500 dark:text-slate-400 mb-2.5">
-              Projeção de retenção ao longo dos dias (Meta FSRS: revisar ao atingir <strong>90%</strong>).
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Projeção média de memória (gatilho de revisão em 90%).
             </p>
           </div>
 
-          <div className="space-y-1.5 my-auto">
-            {forgettingCurvePoints.map(pt => {
+          <div className="space-y-2">
+            {forgettingCurvePoints.map((pt) => {
               const isAboveTarget = pt.retention >= 90;
               const isWarning = pt.retention >= 75 && pt.retention < 90;
               return (
-                <div key={pt.daysElapsed} className="space-y-0.5">
-                  <div className="flex justify-between items-center text-[11px] font-bold">
-                    <span className="text-slate-600 dark:text-slate-300 font-mono">{pt.label}</span>
-                    <span className={isAboveTarget ? 'text-emerald-500 dark:text-emerald-400' : isWarning ? 'text-amber-500 dark:text-amber-400' : 'text-red-500 dark:text-red-400'}>
-                      {pt.retention}% estimada
+                <div key={pt.daysElapsed} className="space-y-1">
+                  <div className="flex justify-between items-center text-xs">
+                    <span className="text-slate-600 dark:text-slate-300 font-mono tabular-nums">{pt.label}</span>
+                    <span
+                      className={`font-mono font-semibold tabular-nums ${
+                        isAboveTarget
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : isWarning
+                          ? 'text-amber-600 dark:text-amber-400'
+                          : 'text-red-600 dark:text-red-400'
+                      }`}
+                    >
+                      {pt.retention}%
                     </span>
                   </div>
-                  <div className="w-full h-2 bg-slate-100 dark:bg-slate-850 rounded-full overflow-hidden relative">
+                  <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-850 rounded-full overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ${
+                      className={`h-full rounded-full transition-all duration-300 ${
                         isAboveTarget ? 'bg-emerald-500' : isWarning ? 'bg-amber-500' : 'bg-red-500'
                       }`}
                       style={{ width: `${pt.retention}%` }}
@@ -576,94 +635,151 @@ export default function Revisoes() {
               );
             })}
           </div>
-
-          <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-[11px] text-slate-400">
-            <span>🎯 Gatilho ideal: <strong>90%</strong></span>
-            <span>🃏 Monitorados: <strong>{reviews.length}</strong></span>
-          </div>
-        </div>
+        </section>
       </div>
 
-      <div className="bg-slate-900 rounded-xl border border-slate-800 overflow-hidden mt-3">
-        <div className="p-3 sm:p-3.5 border-b border-slate-800 flex justify-between items-center bg-slate-850/60">
-          <h3 className="text-xs sm:text-sm font-black text-white uppercase tracking-wider flex items-center gap-2">
-            <CalendarDays className="w-4 h-4 text-sky-400"/> Mapeamento FSRS (Heatmap)
-          </h3>
+      {/* Calendário Mensal de Revisões (Light + Dark Mode Completo) */}
+      <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex flex-wrap justify-between items-center gap-3">
+          <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <CalendarDays className="w-4 h-4 text-sky-500" />
+            <span>Calendário de revisões</span>
+          </h2>
           <div className="flex items-center gap-2">
-            <span className="text-white font-bold text-xs bg-slate-800 px-2.5 py-1 rounded-md border border-slate-700">{mesesNomes[rMonth]} {rYear}</span>
-            <div className="flex gap-1">
-              <button onClick={() => setReviewCalendarDate(new Date(rYear, rMonth - 1, 1))} className="p-1 bg-slate-800 hover:bg-slate-700 rounded-md text-white transition-colors border border-slate-700"><ChevronLeft className="w-3.5 h-3.5" /></button>
-              <button onClick={() => setReviewCalendarDate(new Date())} className="px-2 py-1 bg-slate-800 hover:bg-slate-700 rounded-md text-white text-[11px] font-bold transition-colors border border-slate-700" title="Voltar para o mês atual">Hoje</button>
-              <button onClick={() => setReviewCalendarDate(new Date(rYear, rMonth + 1, 1))} className="p-1 bg-slate-800 hover:bg-slate-700 rounded-md text-white transition-colors border border-slate-700"><ChevronRight className="w-3.5 h-3.5" /></button>
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+              {mesesNomes[rMonth]} {rYear}
+            </span>
+            <div className="flex items-center gap-1">
+              <button
+                type="button"
+                onClick={() => setReviewCalendarDate(new Date(rYear, rMonth - 1, 1))}
+                aria-label="Mês anterior"
+                className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-850 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </button>
+              <button
+                type="button"
+                onClick={() => setReviewCalendarDate(new Date())}
+                className="h-8 px-2.5 rounded-lg border border-slate-200 dark:border-slate-800 text-xs font-medium text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-850 transition-colors cursor-pointer"
+              >
+                Hoje
+              </button>
+              <button
+                type="button"
+                onClick={() => setReviewCalendarDate(new Date(rYear, rMonth + 1, 1))}
+                aria-label="Próximo mês"
+                className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-850 flex items-center justify-center transition-colors cursor-pointer"
+              >
+                <ChevronRight className="w-4 h-4" />
+              </button>
             </div>
           </div>
         </div>
-        
-        <div className="p-2.5 sm:p-3.5">
-          <div className="grid grid-cols-7 gap-1 sm:gap-1.5 mb-1.5">
-            {diasSemana.map(dia => <div key={dia} className="text-center font-black text-slate-500 uppercase tracking-widest text-[9px] sm:text-[11px] dark:text-slate-400">{dia}</div>)}
+
+        <div className="p-4">
+          <div className="grid grid-cols-7 gap-1.5 mb-2">
+            {diasSemana.map((dia) => (
+              <div
+                key={dia}
+                className="text-center text-xs font-medium text-slate-400 dark:text-slate-500"
+              >
+                {dia}
+              </div>
+            ))}
           </div>
-          <div className="grid grid-cols-7 gap-1 sm:gap-1.5">
-            {rBlanks.map((_, i) => <div key={`blank-${i}`} className="min-h-[3.5rem] sm:min-h-[4.5rem] bg-slate-850/40 rounded-lg"></div>)}
-            {rDays.map(day => {
+          <div className="grid grid-cols-7 gap-1.5">
+            {rBlanks.map((_, i) => (
+              <div
+                key={`blank-${i}`}
+                className="min-h-[3.75rem] sm:min-h-[4.5rem] bg-slate-50/50 dark:bg-slate-950/30 rounded-lg"
+              />
+            ))}
+            {rDays.map((day) => {
               const d = new Date(rYear, rMonth, day);
               const dateStr = getLocalDateStr(d);
-              const dayRevs = reviews.filter(r => r.nextDateStr === dateStr);
+              const dayRevs = reviews.filter((r) => r.nextDateStr === dateStr);
               const isTodayStr = dateStr === todayStr;
               const isPast = dateStr < todayStr;
-              
-              let heatClass = "bg-slate-850 border-slate-800";
-              if (isTodayStr) heatClass = "bg-sky-900/35 border-sky-500 ring-1 ring-sky-500/40";
-              else if (isPast) heatClass = "bg-slate-850/35 border-slate-800 opacity-60";
-              else if (dayRevs.length > 8) heatClass = "bg-red-900/20 border-red-800";
-              else if (dayRevs.length > 4) heatClass = "bg-orange-900/20 border-orange-800/60";
+
+              let cellClass = 'bg-slate-50/70 dark:bg-slate-850/40 border-slate-200/70 dark:border-slate-800';
+              if (isTodayStr) {
+                cellClass = 'bg-sky-50 dark:bg-sky-950/30 border-sky-500/60 ring-1 ring-sky-500/30';
+              } else if (isPast) {
+                cellClass = 'bg-slate-50/40 dark:bg-slate-950/30 border-slate-200/50 dark:border-slate-800/60 opacity-60';
+              } else if (dayRevs.length > 8) {
+                cellClass = 'bg-red-50/70 dark:bg-red-950/20 border-red-200 dark:border-red-900/50';
+              } else if (dayRevs.length > 4) {
+                cellClass = 'bg-amber-50/70 dark:bg-amber-950/20 border-amber-200 dark:border-amber-900/50';
+              }
+
+              const subjectCounts = {};
+              dayRevs.forEach((r) => {
+                const meta = getReviewSubjectMeta(r);
+                if (!subjectCounts[meta.id]) {
+                  subjectCounts[meta.id] = { name: meta.name, color: meta.color, count: 0 };
+                }
+                subjectCounts[meta.id].count += 1;
+              });
+              const items = Object.values(subjectCounts);
 
               return (
-                <div key={day} className={`min-h-[3.5rem] sm:min-h-[4.5rem] p-1 sm:p-1.5 rounded-lg flex flex-col border transition-all ${heatClass}`}>
-                  <div className="flex justify-between items-start mb-1 gap-1">
-                    <span className={`font-black text-[10px] sm:text-xs ${isTodayStr ? 'text-blue-400' : isPast ? 'text-slate-500' : 'text-slate-300'}`}>{day}</span>
+                <div
+                  key={day}
+                  className={`min-h-[3.75rem] sm:min-h-[4.5rem] p-1.5 rounded-lg flex flex-col border transition-colors ${cellClass}`}
+                >
+                  <div className="flex justify-between items-center mb-1 gap-1">
+                    <span
+                      className={`font-mono text-xs font-semibold tabular-nums ${
+                        isTodayStr
+                          ? 'text-sky-600 dark:text-sky-400'
+                          : isPast
+                          ? 'text-slate-400 dark:text-slate-600'
+                          : 'text-slate-700 dark:text-slate-300'
+                      }`}
+                    >
+                      {day}
+                    </span>
                     {dayRevs.length > 0 && (
-                      <span className={`text-[10px] sm:text-[11px] font-black px-1.5 py-0.5 rounded shadow-sm ${isPast ? 'bg-slate-700 text-slate-400' : dayRevs.length > 8 ? 'bg-red-600 text-white animate-pulse' : 'bg-blue-600 text-white'}`}>
+                      <span
+                        className={`font-mono text-[11px] font-bold tabular-nums ${
+                          isPast
+                            ? 'text-slate-400'
+                            : dayRevs.length > 8
+                            ? 'text-red-600 dark:text-red-400'
+                            : 'text-sky-600 dark:text-sky-400'
+                        }`}
+                      >
                         {dayRevs.length}
                       </span>
                     )}
                   </div>
-                  
-                  <div className="flex-1 flex flex-col gap-0.5 mt-auto overflow-hidden">
-                    {(() => {
-                      if (dayRevs.length === 0) return null;
-                      const subjectCounts = {};
-                      dayRevs.forEach(r => {
-                        const meta = getReviewSubjectMeta(r);
-                        if (!subjectCounts[meta.id]) {
-                          subjectCounts[meta.id] = { name: meta.name, color: meta.color, count: 0 };
-                        }
-                        subjectCounts[meta.id].count += 1;
-                      });
-                      
-                      const items = Object.values(subjectCounts);
 
-                      return (
-                        <>
-                          {items.slice(0, 3).map((item, idx) => (
-                            <div key={idx} className={`flex items-center justify-between text-[9px] sm:text-[11px] font-bold px-1 sm:px-1.5 py-0.5 rounded-sm leading-none mb-0.5 ${item.color}`} title={`${item.name} (${item.count} resoluções)`}>
-                              <span className="truncate flex-1 uppercase">{item.name}</span>
-                              <span className="shrink-0 ml-1 opacity-70">({item.count})</span>
-                            </div>
-                          ))}
-                          {items.length > 3 && (
-                            <span className="text-[7px] font-bold text-slate-500 ml-3 dark:text-slate-400">+{items.length - 3}</span>
-                          )}
-                        </>
-                      );
-                    })()}
-                  </div>
+                  {items.length > 0 && (
+                    <div className="flex-1 flex flex-col gap-0.5 mt-auto overflow-hidden">
+                      {items.slice(0, 2).map((item, idx) => (
+                        <div
+                          key={idx}
+                          className={`flex items-center justify-between text-[10px] font-medium px-1.5 py-0.5 rounded leading-tight ${item.color}`}
+                          title={`${item.name} (${item.count})`}
+                        >
+                          <span className="truncate flex-1">{item.name}</span>
+                          <span className="shrink-0 ml-1 font-mono opacity-80">{item.count}</span>
+                        </div>
+                      ))}
+                      {items.length > 2 && (
+                        <span className="text-[10px] font-mono text-slate-400 dark:text-slate-500 px-1">
+                          +{items.length - 2}
+                        </span>
+                      )}
+                    </div>
+                  )}
                 </div>
               );
             })}
           </div>
         </div>
-      </div>
+      </section>
     </div>
   );
 }

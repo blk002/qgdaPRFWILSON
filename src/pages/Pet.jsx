@@ -3,32 +3,36 @@ import { motion, AnimatePresence } from 'framer-motion';
 import { useStore } from '../store/useStore';
 import PouMascot from '../components/PouMascot';
 import K9RodoviaRun from '../components/K9RodoviaRun';
-import { 
-  PET_FOODS, 
-  PET_ACCESSORIES, 
-  PET_LEVELS, 
-  RARITY_BADGES 
+import {
+  PET_FOODS,
+  PET_ACCESSORIES,
+  PET_LEVELS,
+  RARITY_BADGES
 } from '../data/petConstants';
-import { 
-  Utensils, 
-  Bath, 
-  Moon, 
-  Sun, 
-  Gamepad2, 
-  Shirt, 
-  Heart, 
-  Zap, 
-  Sparkles, 
-  Coins, 
-  Award, 
-  Pencil, 
-  Check, 
-  ShoppingBag,
-  Volume2,
-  VolumeX,
+import {
+  Utensils,
+  Bath,
+  Moon,
+  Sun,
+  Gamepad2,
+  Shirt,
+  Heart,
+  Zap,
+  Sparkles,
+  Coins,
+  Pencil,
+  Check,
   Play
 } from 'lucide-react';
 import { toast } from 'sonner';
+
+const ROOMS = [
+  { id: 'kitchen', label: 'Cozinha', icon: Utensils },
+  { id: 'bath', label: 'Banheiro', icon: Bath },
+  { id: 'bedroom', label: 'Quarto', icon: Moon },
+  { id: 'play', label: 'Pátio & Jogos', icon: Gamepad2 },
+  { id: 'wardrobe', label: 'Guarda-Roupa', icon: Shirt },
+];
 
 export default function Pet() {
   const {
@@ -45,14 +49,13 @@ export default function Pet() {
     renamePet
   } = useStore();
 
-  const [activeRoom, setActiveRoom] = useState('kitchen'); // 'kitchen' | 'bath' | 'bedroom' | 'play' | 'wardrobe'
-  const [actionState, setActionState] = useState('idle'); // 'idle' | 'eating' | 'washing' | 'happy'
+  const [activeRoom, setActiveRoom] = useState('kitchen');
+  const [actionState, setActionState] = useState('idle');
   const [showMinigame, setShowMinigame] = useState(false);
   const [isEditingName, setIsEditingName] = useState(false);
   const [tempName, setTempName] = useState(petData?.name || 'Recruta K9');
   const [prevPetName, setPrevPetName] = useState(petData?.name);
 
-  // Sincroniza nome caso mude externamente na store
   if (petData?.name !== prevPetName) {
     setPrevPetName(petData?.name);
     if (!isEditingName) {
@@ -60,11 +63,10 @@ export default function Pet() {
     }
   }
 
-  // Informações de nível do pet
   const currentLevelInfo = PET_LEVELS.find(l => l.level === (petData?.level || 1)) || PET_LEVELS[0];
   const nextLevelInfo = PET_LEVELS.find(l => l.level === (petData?.level || 1) + 1);
   const levelSpan = nextLevelInfo ? Math.max(1, nextLevelInfo.minXp - currentLevelInfo.minXp) : 1;
-  const progressToNextLevel = nextLevelInfo 
+  const progressToNextLevel = nextLevelInfo
     ? Math.max(0, Math.min(100, Math.round((((petData?.xp || 0) - currentLevelInfo.minXp) / levelSpan) * 100)))
     : 100;
 
@@ -72,16 +74,15 @@ export default function Pet() {
     if (tempName.trim()) {
       renamePet(tempName.trim());
       setIsEditingName(false);
-      toast.success(`Nome atualizado para ${tempName.trim()}!`);
+      toast.success(`Nome atualizado para ${tempName.trim()}.`);
     }
   };
 
-  // Alimentar Pet
   const handleFeed = (food) => {
     const invCount = petData?.foodInventory?.[food.id] || 0;
     if (invCount <= 0) {
       if (coins < food.cost) {
-        toast.error(`Moedas insuficientes para comprar ${food.name}! Estude para ganhar mais.`);
+        toast.error(`Moedas insuficientes para comprar ${food.name}.`);
         return;
       }
       buyPetFood(food.id, 1);
@@ -89,261 +90,203 @@ export default function Pet() {
 
     setActionState('eating');
     feedPet(food.id);
-    toast.success(`${petData?.name || 'O pet'} adorou o ${food.name}!`);
+    toast.success(`${petData?.name || 'O pet'} adorou ${food.name}!`);
 
     setTimeout(() => {
       setActionState('idle');
     }, 1400);
   };
 
-  // Ação de dar banho
   const handleWash = () => {
     setActionState('washing');
     washPet();
-    toast.success(`${petData?.name || 'O pet'} está brilhando de limpo! ✨`);
+    toast.success(`${petData?.name || 'O pet'} está limpo e pronto.`);
     setTimeout(() => {
       setActionState('happy');
       setTimeout(() => setActionState('idle'), 1200);
     }, 800);
   };
 
-  // Carinho no Mascote
   const handlePetInteraction = () => {
     petThePet();
     setActionState('happy');
     setTimeout(() => setActionState('idle'), 1000);
   };
 
-  // Concluir Minigame
   const handleMinigameOver = (score, coinsEarned) => {
     playWithPet(score, coinsEarned);
-    toast.success(`Treino finalizado! +${coinsEarned} moedas creditadas e o K9 está revigorado!`);
+    toast.success(`Treino finalizado! +${coinsEarned} moedas creditadas.`);
   };
 
-  const rooms = [
-    { id: 'kitchen', label: 'Cozinha', icon: Utensils, desc: 'Alimente com lanches de plantão' },
-    { id: 'bath', label: 'Banheiro', icon: Bath, desc: 'Lave e perfume seu parceiro K9' },
-    { id: 'bedroom', label: 'Quarto', icon: Moon, desc: 'Apague a luz para a soneca tática' },
-    { id: 'play', label: 'Pátio & Jogos', icon: Gamepad2, desc: 'Brinque e jogue Rodovia Run' },
-    { id: 'wardrobe', label: 'Guarda-Roupa', icon: Shirt, desc: 'Boinas, óculos e coletes PRF' },
+  const vitals = [
+    { label: 'Nutrição', value: petData?.hunger || 0, icon: Utensils, color: 'text-amber-500', bar: 'bg-amber-500' },
+    { label: 'Energia', value: petData?.energy || 0, icon: Zap, color: 'text-sky-500', bar: 'bg-sky-500' },
+    { label: 'Higiene', value: petData?.hygiene || 0, icon: Bath, color: 'text-emerald-500', bar: 'bg-emerald-500' },
+    { label: 'Moral', value: petData?.fun || 0, icon: Heart, color: 'text-rose-500', bar: 'bg-rose-500' },
   ];
 
+  const roomStageBg =
+    activeRoom === 'bedroom' && petData?.isSleeping
+      ? 'bg-slate-950 border-slate-800'
+      : activeRoom === 'kitchen'
+        ? 'bg-gradient-to-b from-amber-500/10 via-slate-900 to-slate-950 border-slate-800'
+        : activeRoom === 'bath'
+          ? 'bg-gradient-to-b from-sky-500/10 via-slate-900 to-slate-950 border-slate-800'
+          : activeRoom === 'bedroom'
+            ? 'bg-gradient-to-b from-indigo-500/10 via-slate-900 to-slate-950 border-slate-800'
+            : 'bg-gradient-to-b from-emerald-500/10 via-slate-900 to-slate-950 border-slate-800';
+
   return (
-    <div className="fade-in w-full pb-14 font-sans">
-      
-      {/* CABEÇALHO DO MASCOTE (Dossiê, Nível, Nome & Status Vitais) */}
-      <div className="glass-card rounded-[2.2rem] p-6 sm:p-8 mb-6 border border-slate-200 dark:border-slate-800/80 shadow-xl relative overflow-hidden">
-        {/* Glow de fundo */}
-        <div className="absolute top-0 right-0 w-80 h-80 bg-blue-500/10 rounded-full blur-3xl pointer-events-none -z-10" />
+    <div className="fade-in w-full pb-12 space-y-6">
+      {/* Cabeçalho transparente padronizado */}
+      <header className="flex flex-col md:flex-row md:items-end justify-between gap-4 pb-1">
+        <div className="min-w-0">
+          <div className="flex items-center gap-2 flex-wrap">
+            {isEditingName ? (
+              <div className="flex items-center gap-1.5">
+                <input
+                  type="text"
+                  value={tempName}
+                  onChange={(e) => setTempName(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
+                  autoFocus
+                  maxLength={18}
+                  className="font-display text-lg sm:text-xl font-bold bg-transparent border-b-2 border-sky-500 text-slate-900 dark:text-white outline-none w-48"
+                />
+                <button
+                  type="button"
+                  onClick={handleSaveName}
+                  className="w-8 h-8 bg-sky-600 text-white rounded-lg hover:bg-sky-500 flex items-center justify-center cursor-pointer"
+                  aria-label="Salvar nome"
+                >
+                  <Check className="w-4 h-4" />
+                </button>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2 group">
+                <span className="text-xl leading-none">{currentLevelInfo.icon}</span>
+                <h1 className="font-display text-lg sm:text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+                  {petData?.name || 'Recruta K9'}
+                </h1>
+                <button
+                  type="button"
+                  onClick={() => setIsEditingName(true)}
+                  className="p-1 text-slate-400 hover:text-sky-500 transition-colors rounded-md cursor-pointer"
+                  title="Renomear mascote"
+                >
+                  <Pencil className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+          </div>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+            Nível {petData?.level || 1} · {currentLevelInfo.name} · {(petData?.xp || 0).toLocaleString()} XP · {coins.toLocaleString()} moedas
+          </p>
+        </div>
 
-        <div className="flex flex-col md:flex-row items-center justify-between gap-6 mb-6">
-          {/* Identificação do Pet */}
-          <div className="flex items-center gap-4 text-center md:text-left">
-            <div className="w-16 h-16 rounded-2xl bg-gradient-to-tr from-blue-600 to-indigo-600 border-2 border-blue-400/40 flex items-center justify-center text-3xl shadow-lg shadow-blue-500/20">
-              {currentLevelInfo.icon}
-            </div>
+        {/* Progresso de nível compacto */}
+        <div className="w-full md:w-64 space-y-1.5 shrink-0">
+          <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+            <span>Progresso de nível</span>
+            {nextLevelInfo ? (
+              <span className="font-mono font-semibold text-slate-800 dark:text-slate-200">
+                {petData?.xp || 0} / {nextLevelInfo.minXp} XP
+              </span>
+            ) : (
+              <span className="font-semibold text-emerald-600 dark:text-emerald-400">Nível máximo</span>
+            )}
+          </div>
+          <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+            <div
+              className="bg-sky-500 h-full rounded-full transition-all duration-500"
+              style={{ width: `${progressToNextLevel}%` }}
+            />
+          </div>
+        </div>
+      </header>
 
-            <div>
-              <div className="flex items-center gap-2 justify-center md:justify-start">
-                {isEditingName ? (
-                  <div className="flex items-center gap-1.5">
-                    <input
-                      type="text"
-                      value={tempName}
-                      onChange={(e) => setTempName(e.target.value)}
-                      onKeyDown={(e) => e.key === 'Enter' && handleSaveName()}
-                      autoFocus
-                      maxLength={18}
-                      className="text-xl font-black bg-slate-100 dark:bg-slate-800 px-3 py-1 rounded-xl text-slate-800 dark:text-white uppercase outline-none border border-blue-500"
-                    />
-                    <button 
-                      onClick={handleSaveName}
-                      className="p-1.5 bg-blue-600 text-white rounded-lg hover:bg-blue-500 cursor-pointer"
-                    >
-                      <Check className="w-4 h-4" />
-                    </button>
-                  </div>
-                ) : (
-                  <div className="flex items-center gap-2 group">
-                    <h2 className="text-2xl font-black text-slate-800 dark:text-white uppercase tracking-tight">
-                      {petData?.name || 'Recruta K9'}
-                    </h2>
-                    <button
-                      onClick={() => setIsEditingName(true)}
-                      className="p-1 text-slate-400 hover:text-blue-500 opacity-0 group-hover:opacity-100 transition-opacity rounded-md"
-                      title="Renomear mascote"
-                    >
-                      <Pencil className="w-4 h-4" />
-                    </button>
-                  </div>
-                )}
-                <span className="text-xs font-black px-2.5 py-0.5 rounded-full bg-blue-500/10 text-blue-600 dark:text-blue-400 border border-blue-500/20 uppercase">
-                  Nvl {petData?.level || 1}
+      {/* Strip único de status vitais */}
+      <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl grid grid-cols-2 sm:grid-cols-4 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 dark:divide-slate-800">
+        {vitals.map((v) => {
+          const Icon = v.icon;
+          const isLow = v.value < 35;
+          return (
+            <div key={v.label} className="p-4 space-y-2">
+              <div className="flex items-center justify-between text-xs">
+                <span className="font-medium text-slate-600 dark:text-slate-300 inline-flex items-center gap-1.5">
+                  <Icon className={`w-3.5 h-3.5 ${v.color}`} />
+                  {v.label}
+                </span>
+                <span className={`font-mono font-semibold tabular-nums ${isLow ? 'text-rose-600 dark:text-rose-400' : 'text-slate-900 dark:text-white'}`}>
+                  {v.value}%
                 </span>
               </div>
-
-              <p className="text-xs font-bold text-slate-500 uppercase mt-0.5 flex items-center gap-1 justify-center md:justify-start">
-                <span>{currentLevelInfo.badge}</span>
-                <span>{currentLevelInfo.name}</span>
-                <span className="text-slate-400">•</span>
-                <span className="text-blue-600 dark:text-blue-400 font-black">{petData?.xp || 0} XP</span>
-              </p>
+              <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                <div
+                  className={`h-full rounded-full transition-all duration-300 ${isLow ? 'bg-rose-500' : v.bar}`}
+                  style={{ width: `${v.value}%` }}
+                />
+              </div>
             </div>
-          </div>
-
-          {/* Barra de Evolução Canina */}
-          <div className="w-full md:w-72 bg-slate-100 dark:bg-slate-800/70 p-3 rounded-2xl border border-slate-200/80 dark:border-slate-800">
-            <div className="flex justify-between items-center text-[10px] font-black uppercase text-slate-400 mb-1.5">
-              <span>Carreira do Mascote</span>
-              {nextLevelInfo ? (
-                <span>{petData?.xp || 0} / {nextLevelInfo.minXp} XP</span>
-              ) : (
-                <span className="text-emerald-500">Patente Máxima!</span>
-              )}
-            </div>
-            <div className="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
-              <div 
-                className="bg-gradient-to-r from-blue-500 via-indigo-500 to-emerald-400 h-full rounded-full transition-all duration-500"
-                style={{ width: `${progressToNextLevel}%` }}
-              />
-            </div>
-          </div>
-        </div>
-
-        {/* AS 4 BARRAS VITAIS DO POU (Fome, Energia, Higiene, Moral) */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          {/* Fome */}
-          <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 flex flex-col gap-1.5">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1">
-                <Utensils className="w-3.5 h-3.5 text-amber-500" /> Nutrição
-              </span>
-              <span className={`text-xs font-black ${(petData?.hunger || 0) < 35 ? 'text-red-500' : 'text-amber-500'}`}>
-                {petData?.hunger || 0}%
-              </span>
-            </div>
-            <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-              <div 
-                className={`h-full rounded-full transition-all duration-300 ${(petData?.hunger || 0) < 35 ? 'bg-red-500' : 'bg-amber-500'}`}
-                style={{ width: `${petData?.hunger || 0}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Energia */}
-          <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 flex flex-col gap-1.5">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1">
-                <Zap className="w-3.5 h-3.5 text-blue-500" /> Energia
-              </span>
-              <span className={`text-xs font-black ${(petData?.energy || 0) < 35 ? 'text-red-500' : 'text-blue-500'}`}>
-                {petData?.energy || 0}%
-              </span>
-            </div>
-            <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-              <div 
-                className={`h-full rounded-full transition-all duration-300 ${(petData?.energy || 0) < 35 ? 'bg-red-500' : 'bg-blue-500'}`}
-                style={{ width: `${petData?.energy || 0}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Higiene */}
-          <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 flex flex-col gap-1.5">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1">
-                <Bath className="w-3.5 h-3.5 text-emerald-500" /> Higiene
-              </span>
-              <span className={`text-xs font-black ${(petData?.hygiene || 0) < 35 ? 'text-red-500' : 'text-emerald-500'}`}>
-                {petData?.hygiene || 0}%
-              </span>
-            </div>
-            <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-              <div 
-                className={`h-full rounded-full transition-all duration-300 ${(petData?.hygiene || 0) < 35 ? 'bg-red-500' : 'bg-emerald-500'}`}
-                style={{ width: `${petData?.hygiene || 0}%` }}
-              />
-            </div>
-          </div>
-
-          {/* Moral / Felicidade */}
-          <div className="bg-slate-50 dark:bg-slate-900/60 p-3 rounded-2xl border border-slate-200/60 dark:border-slate-800/60 flex flex-col gap-1.5">
-            <div className="flex justify-between items-center">
-              <span className="text-[10px] font-black text-slate-500 uppercase flex items-center gap-1">
-                <Heart className="w-3.5 h-3.5 text-rose-500" /> Moral
-              </span>
-              <span className={`text-xs font-black ${(petData?.fun || 0) < 35 ? 'text-red-500' : 'text-rose-500'}`}>
-                {petData?.fun || 0}%
-              </span>
-            </div>
-            <div className="w-full bg-slate-200 dark:bg-slate-800 h-2 rounded-full overflow-hidden">
-              <div 
-                className={`h-full rounded-full transition-all duration-300 ${(petData?.fun || 0) < 35 ? 'bg-red-500' : 'bg-rose-500'}`}
-                style={{ width: `${petData?.fun || 0}%` }}
-              />
-            </div>
-          </div>
-        </div>
-      </div>
-
-      {/* SELETOR DE CÔMODOS / SALAS DO POU */}
-      <div className="flex gap-2 overflow-x-auto no-scrollbar mb-6 pb-1">
-        {rooms.map(room => {
-          const Icon = room.icon;
-          const isActive = activeRoom === room.id;
-          return (
-            <button
-              key={room.id}
-              onClick={() => {
-                setActiveRoom(room.id);
-                setShowMinigame(false);
-              }}
-              className={`flex items-center gap-2 px-5 py-3 rounded-2xl font-black text-xs uppercase tracking-wider transition-all whitespace-nowrap cursor-pointer shadow-sm ${
-                isActive
-                  ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/20 scale-[1.02]'
-                  : 'bg-white dark:bg-slate-900 text-slate-500 hover:text-slate-900 dark:hover:text-white border border-slate-200 dark:border-slate-800'
-              }`}
-            >
-              <Icon className="w-4 h-4" />
-              <span>{room.label}</span>
-            </button>
           );
         })}
+      </section>
+
+      {/* Navegação por cômodos (underline) */}
+      <div className="border-b border-slate-200/80 dark:border-slate-800 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1 min-w-max">
+          {ROOMS.map(room => {
+            const Icon = room.icon;
+            const isActive = activeRoom === room.id;
+            return (
+              <button
+                key={room.id}
+                type="button"
+                onClick={() => {
+                  setActiveRoom(room.id);
+                  setShowMinigame(false);
+                }}
+                className={`relative px-3.5 py-2.5 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap cursor-pointer ${
+                  isActive
+                    ? 'text-sky-600 dark:text-sky-400'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                }`}
+              >
+                <Icon className="w-3.5 h-3.5" />
+                <span>{room.label}</span>
+                {isActive && (
+                  <span className="absolute inset-x-0 -bottom-px h-0.5 bg-sky-600 dark:bg-sky-400 rounded-full" />
+                )}
+              </button>
+            );
+          })}
+        </div>
       </div>
 
-      {/* ÁREA PRINCIPAL: O CENÁRIO DA SALA E O MASCOTE VIVO */}
+      {/* Cenário interativo + Painel da sala */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* COLUNA ESQUERDA: O CENÁRIO INTERATIVO COM O MASCOTE */}
+        {/* Coluna esquerda: palco interativo */}
         <div className="lg:col-span-7">
-          <div className={`relative h-[480px] rounded-[2.5rem] border-2 flex flex-col items-center justify-between p-8 overflow-hidden transition-all duration-700 shadow-2xl ${
-            activeRoom === 'bedroom' && petData?.isSleeping
-              ? 'bg-slate-950 border-indigo-950 shadow-indigo-950/40'
-              : activeRoom === 'kitchen'
-                ? 'bg-gradient-to-b from-amber-500/10 via-slate-900 to-slate-950 border-amber-500/20'
-                : activeRoom === 'bath'
-                  ? 'bg-gradient-to-b from-sky-500/10 via-slate-900 to-slate-950 border-sky-500/20'
-                  : activeRoom === 'bedroom'
-                    ? 'bg-gradient-to-b from-indigo-500/10 via-slate-900 to-slate-950 border-indigo-500/20'
-                    : 'bg-gradient-to-b from-emerald-500/10 via-slate-900 to-slate-950 border-emerald-500/20'
-          }`}>
-            
-            {/* Elementos cenográficos específicos de cada cômodo */}
+          <div className={`relative h-[440px] rounded-xl border flex flex-col items-center justify-between p-6 overflow-hidden transition-colors duration-500 ${roomStageBg}`}>
             {activeRoom === 'bedroom' && (
               <div className="w-full flex justify-between items-start z-20">
-                <div className="bg-slate-900/80 backdrop-blur-md px-3 py-1.5 rounded-full border border-slate-800 text-xs font-black uppercase text-indigo-400">
-                  {petData?.isSleeping ? '🌙 Soneca Tática Ativa' : '☀️ Luz Acesa'}
-                </div>
+                <span className="text-xs font-medium text-indigo-300">
+                  {petData?.isSleeping ? 'Soneca ativa' : 'Luz acesa'}
+                </span>
 
-                {/* Cordinha da Lâmpada do Quarto (Interativa!) */}
                 <button
+                  type="button"
                   onClick={togglePetSleep}
                   className="flex flex-col items-center group cursor-pointer"
-                  title="Puxar cordinha para apagar/acender a luz"
+                  title="Puxar cordinha para apagar ou acender a luz"
                 >
-                  <div className="w-0.5 h-12 bg-slate-400 group-hover:h-14 transition-all" />
-                  <div className={`p-2.5 rounded-full shadow-lg transition-transform group-hover:scale-110 active:scale-90 ${petData?.isSleeping ? 'bg-amber-400 text-slate-900' : 'bg-slate-800 text-amber-400 border border-slate-700'}`}>
-                    {petData?.isSleeping ? <Sun className="w-4 h-4 fill-current" /> : <Moon className="w-4 h-4" />}
+                  <div className="w-0.5 h-10 bg-slate-500 group-hover:h-12 transition-all" />
+                  <div className={`p-2 rounded-full transition-transform group-hover:scale-105 active:scale-95 ${
+                    petData?.isSleeping
+                      ? 'bg-amber-400 text-slate-900'
+                      : 'bg-slate-800 text-amber-400 border border-slate-700'
+                  }`}>
+                    {petData?.isSleeping ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
                   </div>
                 </button>
               </div>
@@ -351,19 +294,18 @@ export default function Pet() {
 
             {activeRoom === 'bath' && (
               <div className="w-full flex justify-between items-center z-20">
-                <span className="text-xs font-black uppercase text-sky-400 bg-sky-500/10 px-3 py-1.5 rounded-full border border-sky-500/20">
-                  🚿 Box de Higienização K9
-                </span>
+                <span className="text-xs font-medium text-sky-300">Box de higienização</span>
                 <button
+                  type="button"
                   onClick={handleWash}
-                  className="flex items-center gap-2 bg-sky-600 hover:bg-sky-500 text-white font-black text-xs uppercase px-4 py-2 rounded-xl shadow-lg transition-all active:scale-95 cursor-pointer"
+                  className="h-8 px-3 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  <Bath className="w-4 h-4" /> Dar Banho Completo
+                  <Bath className="w-3.5 h-3.5" />
+                  Dar banho
                 </button>
               </div>
             )}
 
-            {/* O MASCOTE VIVO (Componente PouMascot) */}
             <div className="my-auto z-10 flex flex-col items-center">
               <PouMascot
                 petData={petData}
@@ -371,274 +313,277 @@ export default function Pet() {
                 onPetClick={handlePetInteraction}
                 isSleeping={Boolean(petData?.isSleeping)}
               />
-              
-              <span className="text-[11px] font-bold text-slate-400 uppercase mt-4 bg-slate-900/60 backdrop-blur-md px-4 py-1.5 rounded-full border border-slate-800">
-                Toque no {petData?.name || 'K9'} para dar carinho ❤️
+              <span className="text-xs text-slate-400 mt-4">
+                Toque no {petData?.name || 'K9'} para dar carinho
               </span>
             </div>
 
-            {/* Chão cenográfico */}
-            <div className="w-full pt-4 border-t border-slate-800/80 flex justify-between items-center text-[10px] font-black text-slate-500 uppercase z-10">
+            <div className="w-full pt-3 border-t border-slate-800/80 flex justify-between items-center text-[11px] text-slate-500 z-10">
               <span>QG Central PRF</span>
-              <span>Companheiro Fiel do Concurso</span>
+              <span>{ROOMS.find(r => r.id === activeRoom)?.label}</span>
             </div>
           </div>
         </div>
 
-        {/* COLUNA DIREITA: PAINEL DE AÇÃO DA SALA ATIVA */}
-        <div className="lg:col-span-5 flex flex-col gap-4">
-          
-          {/* COZINHA: DESPENSA E ALIMENTOS */}
+        {/* Coluna direita: painel da sala */}
+        <div className="lg:col-span-5">
           {activeRoom === 'kitchen' && (
-            <div className="glass-card rounded-[2rem] p-6 border border-slate-200 dark:border-slate-800 h-full flex flex-col justify-between">
+            <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl h-full flex flex-col justify-between overflow-hidden">
               <div>
-                <h3 className="text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2 mb-1">
-                  <Utensils className="text-amber-500 w-5 h-5" /> Despensa do Plantão
-                </h3>
-                <p className="text-xs font-bold text-slate-400 uppercase mb-4">
-                  Clique para dar a comida direto na boca do pet!
-                </p>
+                <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                  <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Utensils className="w-4 h-4 text-amber-500" />
+                    <span>Despensa</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Alimente seu mascote para repor nutrição e energia.
+                  </p>
+                </div>
 
-                <div className="space-y-3">
+                <div className="divide-y divide-slate-100 dark:divide-slate-800">
                   {PET_FOODS.map(food => {
                     const invCount = petData?.foodInventory?.[food.id] || 0;
                     return (
-                      <div 
-                        key={food.id}
-                        className="p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-900/60 border border-slate-200/80 dark:border-slate-800 flex items-center justify-between gap-3 hover:border-amber-500/40 transition-all"
-                      >
-                        <div className="flex items-center gap-3">
-                          <span className="text-3xl">{food.icon}</span>
-                          <div>
-                            <h4 className="text-xs font-black uppercase text-slate-800 dark:text-white">
+                      <div key={food.id} className="px-5 py-3 flex items-center justify-between gap-3">
+                        <div className="flex items-center gap-3 min-w-0">
+                          <span className="text-2xl shrink-0">{food.icon}</span>
+                          <div className="min-w-0">
+                            <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">
                               {food.name}
-                            </h4>
-                            <p className="text-[10px] text-slate-400 font-bold">
-                              +{food.hunger}% Fome • +{food.energy}% Energia
+                            </p>
+                            <p className="text-[11px] text-slate-500 dark:text-slate-400 tabular-nums">
+                              +{food.hunger}% fome · +{food.energy}% energia
                             </p>
                           </div>
                         </div>
 
-                        <div className="flex items-center gap-2">
-                          {invCount > 0 ? (
-                            <button
-                              onClick={() => handleFeed(food)}
-                              className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase px-3.5 py-2 rounded-xl shadow-md transition-all active:scale-95 cursor-pointer flex items-center gap-1.5"
-                            >
-                              <span>Alimentar</span>
-                              <span className="text-[10px] bg-amber-600/30 px-1.5 py-0.5 rounded-md font-mono">
-                                x{invCount}
-                              </span>
-                            </button>
-                          ) : (
-                            <button
-                              onClick={() => handleFeed(food)}
-                              className="bg-slate-200 dark:bg-slate-800 hover:bg-amber-500 text-slate-700 dark:text-white hover:text-slate-950 font-black text-xs uppercase px-3.5 py-2 rounded-xl transition-all active:scale-95 cursor-pointer flex items-center gap-1"
-                            >
-                              <Coins className="w-3.5 h-3.5 text-yellow-500" />
-                              <span>{food.cost}</span>
-                            </button>
-                          )}
-                        </div>
+                        {invCount > 0 ? (
+                          <button
+                            type="button"
+                            onClick={() => handleFeed(food)}
+                            className="h-8 px-3 rounded-lg bg-amber-500 hover:bg-amber-600 text-slate-950 text-xs font-semibold inline-flex items-center gap-1.5 shrink-0 cursor-pointer transition-colors"
+                          >
+                            <span>Alimentar</span>
+                            <span className="font-mono text-[11px] opacity-80">x{invCount}</span>
+                          </button>
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => handleFeed(food)}
+                            className="h-8 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-semibold inline-flex items-center gap-1 shrink-0 cursor-pointer transition-colors"
+                          >
+                            <Coins className="w-3.5 h-3.5 text-amber-500" />
+                            <span className="font-mono tabular-nums">{food.cost}</span>
+                          </button>
+                        )}
                       </div>
                     );
                   })}
                 </div>
               </div>
 
-              <div className="mt-4 p-3 rounded-xl bg-amber-500/10 border border-amber-500/20 text-[10px] text-amber-600 dark:text-amber-400 font-bold uppercase text-center">
-                💡 Dica: Estudar no Ciclo gera moedas para comprar mais suprimentos!
+              <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400">
+                Estudar no ciclo gera moedas para adquirir suprimentos.
               </div>
-            </div>
+            </section>
           )}
 
-          {/* BANHEIRO: PRODUTOS DE HIGIENE */}
           {activeRoom === 'bath' && (
-            <div className="glass-card rounded-[2rem] p-6 border border-slate-200 dark:border-slate-800 h-full flex flex-col justify-between">
+            <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl h-full flex flex-col justify-between overflow-hidden">
               <div>
-                <h3 className="text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2 mb-1">
-                  <Bath className="text-sky-500 w-5 h-5" /> Tratamento e Limpeza
-                </h3>
-                <p className="text-xs font-bold text-slate-400 uppercase mb-4">
-                  Cães operacionais precisam estar sempre com a farda e pelo impecáveis.
-                </p>
-
-                <div className="space-y-4">
-                  <div className="p-5 rounded-2xl bg-sky-500/10 border border-sky-500/20 text-center flex flex-col items-center">
-                    <span className="text-4xl mb-2">🧼</span>
-                    <h4 className="text-sm font-black uppercase text-slate-800 dark:text-white mb-1">
-                      Banho Geral com Shampoo Tático
-                    </h4>
-                    <p className="text-xs text-slate-400 font-bold mb-4 max-w-xs">
-                      Remove toda a poeira das blitzes e enche a barra de higiene para 100%.
-                    </p>
-                    <button
-                      onClick={handleWash}
-                      className="bg-sky-600 hover:bg-sky-500 text-white font-black text-xs uppercase px-6 py-3 rounded-2xl shadow-lg shadow-sky-500/20 transition-all active:scale-95 cursor-pointer flex items-center gap-2"
-                    >
-                      <Sparkles className="w-4 h-4" /> Lavar Mascote Agora
-                    </button>
-                  </div>
-                </div>
-              </div>
-
-              <div className="p-3 rounded-xl bg-sky-500/10 border border-sky-500/20 text-[10px] text-sky-600 dark:text-sky-400 font-bold uppercase text-center">
-                ✨ Higiene alta previne que o K9 fique triste ou desmotivado.
-              </div>
-            </div>
-          )}
-
-          {/* QUARTO: CONTROLE DE REPOUSO */}
-          {activeRoom === 'bedroom' && (
-            <div className="glass-card rounded-[2rem] p-6 border border-slate-200 dark:border-slate-800 h-full flex flex-col justify-between">
-              <div>
-                <h3 className="text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2 mb-1">
-                  <Moon className="text-indigo-500 w-5 h-5" /> Centro de Repouso Tático
-                </h3>
-                <p className="text-xs font-bold text-slate-400 uppercase mb-4">
-                  O descanso é fundamental para a consolidação da memória.
-                </p>
-
-                <div className="p-6 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 text-center flex flex-col items-center">
-                  <span className="text-4xl mb-3">{petData?.isSleeping ? '😴' : '🐕'}</span>
-                  <h4 className="text-sm font-black uppercase text-slate-800 dark:text-white mb-1">
-                    {petData?.isSleeping ? 'Em Sono Reparador' : 'Pronto para o Descanso'}
-                  </h4>
-                  <p className="text-xs text-slate-400 font-bold mb-6 max-w-xs">
-                    {petData?.isSleeping 
-                      ? 'O K9 está dormindo e regenerando sua energia vital continuamente.' 
-                      : 'Apague a luz para que o mascote durma e restaure 100% da disposição.'}
+                <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                  <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Bath className="w-4 h-4 text-sky-500" />
+                    <span>Higiene</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Mantenha a higiene em dia para preservar a moral do K9.
                   </p>
-                  
+                </div>
+
+                <div className="p-6 text-center flex flex-col items-center">
+                  <span className="text-4xl mb-3">🧼</span>
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                    Banho completo
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-5 max-w-xs">
+                    Restaura a barra de higiene para 100% imediatamente.
+                  </p>
                   <button
-                    onClick={togglePetSleep}
-                    className={`font-black text-xs uppercase px-6 py-3 rounded-2xl shadow-lg transition-all active:scale-95 cursor-pointer flex items-center gap-2 ${
-                      petData?.isSleeping
-                        ? 'bg-amber-500 hover:bg-amber-400 text-slate-950'
-                        : 'bg-indigo-600 hover:bg-indigo-500 text-white shadow-indigo-500/20'
-                    }`}
+                    type="button"
+                    onClick={handleWash}
+                    className="h-9 px-4 rounded-lg bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
                   >
-                    {petData?.isSleeping ? <Sun className="w-4 h-4" /> : <Moon className="w-4 h-4" />}
-                    <span>{petData?.isSleeping ? 'Acordar Mascote' : 'Colocar para Dormir'}</span>
+                    <Sparkles className="w-3.5 h-3.5" />
+                    Lavar mascote
                   </button>
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl bg-indigo-500/10 border border-indigo-500/20 text-[10px] text-indigo-600 dark:text-indigo-400 font-bold uppercase text-center">
-                💤 Quando você desliga o app à noite, o pet dorme com você!
+              <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400">
+                Higiene alta evita queda na motivação do mascote.
               </div>
-            </div>
+            </section>
           )}
 
-          {/* PÁTIO DE TREINO: MINIGAME K9 RODOVIA RUN */}
-          {activeRoom === 'play' && (
-            <div className="glass-card rounded-[2rem] p-6 border border-slate-200 dark:border-slate-800 h-full flex flex-col justify-between">
+          {activeRoom === 'bedroom' && (
+            <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl h-full flex flex-col justify-between overflow-hidden">
               <div>
-                <h3 className="text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2 mb-1">
-                  <Gamepad2 className="text-emerald-500 w-5 h-5" /> Pátio Operacional & Treino
-                </h3>
-                <p className="text-xs font-bold text-slate-400 uppercase mb-4">
-                  Brinque com o cão para elevar sua moral e ganhar moedas extras!
-                </p>
+                <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                  <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Moon className="w-4 h-4 text-indigo-500" />
+                    <span>Repouso</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Apague a luz para recuperar energia continuamente.
+                  </p>
+                </div>
 
-                <div className="space-y-4">
-                  {/* Card do Minigame Rodovia Run */}
-                  <div className="p-5 rounded-2xl bg-gradient-to-br from-emerald-500/15 to-blue-500/15 border border-emerald-500/30 flex flex-col items-center text-center">
-                    <span className="text-4xl mb-2">🚧 🐕</span>
-                    <h4 className="text-base font-black uppercase text-slate-800 dark:text-white mb-1">
-                      Minigame: K9 Rodovia Run
-                    </h4>
-                    <p className="text-xs text-slate-400 font-bold mb-5 max-w-xs">
-                      Pule os cones da blitz e radares na rodovia! Colete moedas para transferir pro seu saldo do QG.
-                    </p>
-                    <button
-                      onClick={() => setShowMinigame(true)}
-                      className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-xs uppercase px-8 py-3.5 rounded-2xl shadow-xl shadow-emerald-500/20 transition-all transform hover:scale-105 active:scale-95 cursor-pointer flex items-center gap-2"
-                    >
-                      <Play className="w-4 h-4 fill-current" /> Jogar Agora
-                    </button>
-                  </div>
+                <div className="p-6 text-center flex flex-col items-center">
+                  <span className="text-4xl mb-3">{petData?.isSleeping ? '😴' : '🐕'}</span>
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                    {petData?.isSleeping ? 'Em sono reparador' : 'Acordado e alerta'}
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-5 max-w-xs">
+                    {petData?.isSleeping
+                      ? 'O K9 está descansando e regenerando energia vital.'
+                      : 'Coloque o mascote para dormir para restaurar 100% da disposição.'}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={togglePetSleep}
+                    className={`h-9 px-4 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer ${
+                      petData?.isSleeping
+                        ? 'bg-amber-500 hover:bg-amber-600 text-slate-950'
+                        : 'bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950'
+                    }`}
+                  >
+                    {petData?.isSleeping ? <Sun className="w-3.5 h-3.5" /> : <Moon className="w-3.5 h-3.5" />}
+                    <span>{petData?.isSleeping ? 'Acordar mascote' : 'Colocar para dormir'}</span>
+                  </button>
                 </div>
               </div>
 
-              <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/20 text-[10px] text-emerald-600 dark:text-emerald-400 font-bold uppercase text-center">
-                🎾 Fazer carinho direto nele também restaura moral e aproxima vocês!
+              <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400">
+                Você também pode puxar o interruptor no canto superior direito do quarto.
               </div>
-            </div>
+            </section>
           )}
 
-          {/* GUARDA-ROUPA & BOUTIQUE DE ACESSÓRIOS */}
-          {activeRoom === 'wardrobe' && (
-            <div className="glass-card rounded-[2rem] p-6 border border-slate-200 dark:border-slate-800 h-full flex flex-col">
-              <h3 className="text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2 mb-1">
-                <Shirt className="text-purple-500 w-5 h-5" /> Guarda-Roupa Tático
-              </h3>
-              <p className="text-xs font-bold text-slate-400 uppercase mb-3">
-                Equipe acessórios oficiais da PRF usando suas moedas.
-              </p>
+          {activeRoom === 'play' && (
+            <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl h-full flex flex-col justify-between overflow-hidden">
+              <div>
+                <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                  <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                    <Gamepad2 className="w-4 h-4 text-emerald-500" />
+                    <span>Pátio & Minigame</span>
+                  </h2>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Treine no pátio para elevar a moral e ganhar moedas extras.
+                  </p>
+                </div>
 
-              <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar space-y-2.5 max-h-[380px]">
+                <div className="p-6 text-center flex flex-col items-center">
+                  <span className="text-4xl mb-3">🚧 🐕</span>
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white">
+                    K9 Rodovia Run
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 mb-5 max-w-xs">
+                    Desvie dos cones e radares na rodovia e acumule moedas para o seu saldo.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setShowMinigame(true)}
+                    className="h-9 px-5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                  >
+                    <Play className="w-3.5 h-3.5 fill-current" />
+                    Jogar agora
+                  </button>
+                </div>
+              </div>
+
+              <div className="px-5 py-3 border-t border-slate-100 dark:border-slate-800 text-[11px] text-slate-500 dark:text-slate-400">
+                Fazer carinho direto no mascote também aumenta a moral.
+              </div>
+            </section>
+          )}
+
+          {activeRoom === 'wardrobe' && (
+            <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl h-full flex flex-col overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Shirt className="w-4 h-4 text-purple-500" />
+                  <span>Guarda-Roupa</span>
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Equipe acessórios e pelagens usando suas moedas.
+                </p>
+              </div>
+
+              <div className="flex-1 overflow-y-auto custom-scrollbar max-h-[360px] divide-y divide-slate-100 dark:divide-slate-800">
                 {PET_ACCESSORIES.map(acc => {
                   const isUnlocked = petData?.unlockedItems?.includes(acc.id) || acc.cost === 0;
-                  const isEquipped = (acc.type === 'hat' && petData?.hat === acc.id.replace('hat:', '')) ||
-                                    (acc.type === 'outfit' && petData?.outfit === acc.id.replace('outfit:', '')) ||
-                                    (acc.type === 'skin' && petData?.skin === acc.id.replace('skin:', ''));
+                  const isEquipped =
+                    (acc.type === 'hat' && petData?.hat === acc.id.replace('hat:', '')) ||
+                    (acc.type === 'outfit' && petData?.outfit === acc.id.replace('outfit:', '')) ||
+                    (acc.type === 'skin' && petData?.skin === acc.id.replace('skin:', ''));
                   const badge = RARITY_BADGES[acc.rarity];
 
                   return (
-                    <div 
+                    <div
                       key={acc.id}
-                      className={`p-3 rounded-2xl border transition-all flex items-center justify-between gap-2 ${
-                        isEquipped 
-                          ? 'border-blue-500 bg-blue-500/10' 
-                          : 'border-slate-200/80 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/60'
+                      className={`px-5 py-3 flex items-center justify-between gap-3 ${
+                        isEquipped ? 'bg-sky-50/50 dark:bg-sky-950/20' : ''
                       }`}
                     >
-                      <div className="flex items-center gap-3">
-                        <span className="text-2xl">{acc.icon}</span>
-                        <div>
+                      <div className="flex items-center gap-3 min-w-0">
+                        <span className="text-xl shrink-0">{acc.icon}</span>
+                        <div className="min-w-0">
                           <div className="flex items-center gap-2">
-                            <h4 className="text-xs font-black uppercase text-slate-800 dark:text-white">
+                            <p className="text-xs font-semibold text-slate-900 dark:text-white truncate">
                               {acc.name}
-                            </h4>
-                            <span className={`text-[8px] font-black uppercase px-1.5 py-0.2 rounded-full ${badge.bg}`}>
-                              {badge.label}
+                            </p>
+                            <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500 shrink-0">
+                              {badge?.label}
                             </span>
                           </div>
-                          <p className="text-[10px] text-slate-400 font-bold leading-tight line-clamp-1">
+                          <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
                             {acc.desc}
                           </p>
                         </div>
                       </div>
 
-                      <div>
+                      <div className="shrink-0">
                         {isEquipped ? (
-                          <span className="text-[10px] font-black uppercase text-emerald-500 bg-emerald-500/10 px-3 py-1.5 rounded-xl border border-emerald-500/20 block text-center">
+                          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 inline-flex items-center gap-1">
+                            <Check className="w-3.5 h-3.5" />
                             Equipado
                           </span>
                         ) : isUnlocked ? (
                           <button
+                            type="button"
                             onClick={() => {
                               equipPetItem(acc.type, acc.id.replace(`${acc.type}:`, ''));
-                              toast.success(`${acc.name} equipado!`);
+                              toast.success(`${acc.name} equipado.`);
                             }}
-                            className="bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase px-4 py-1.5 rounded-xl transition-all active:scale-95 cursor-pointer"
+                            className="h-8 px-3 rounded-lg bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 text-xs font-semibold transition-colors cursor-pointer"
                           >
                             Equipar
                           </button>
                         ) : (
                           <button
+                            type="button"
                             onClick={() => {
                               if (coins < acc.cost) {
-                                toast.error(`Moedas insuficientes (${coins}/${acc.cost})! Estude mais para ganhar moedas.`);
+                                toast.error(`Moedas insuficientes (${coins}/${acc.cost}).`);
                                 return;
                               }
                               buyPetAccessory(acc);
                             }}
-                            className="bg-slate-200 dark:bg-slate-800 hover:bg-yellow-500 hover:text-slate-950 text-slate-700 dark:text-white font-black text-xs uppercase px-3.5 py-1.5 rounded-xl transition-all active:scale-95 cursor-pointer flex items-center gap-1"
+                            className="h-8 px-3 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer"
                           >
-                            <Coins className="w-3.5 h-3.5 text-yellow-500" />
-                            <span>{acc.cost}</span>
+                            <Coins className="w-3.5 h-3.5 text-amber-500" />
+                            <span className="font-mono tabular-nums">{acc.cost}</span>
                           </button>
                         )}
                       </div>
@@ -646,20 +591,19 @@ export default function Pet() {
                   );
                 })}
               </div>
-            </div>
+            </section>
           )}
-
         </div>
       </div>
 
-      {/* MODAL DO MINIGAME K9 RODOVIA RUN */}
+      {/* Modal do Minigame K9 Rodovia Run */}
       <AnimatePresence>
         {showMinigame && (
-          <div className="fixed inset-0 z-[150] bg-slate-950/90 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[150] bg-slate-950/85 backdrop-blur-xs flex items-center justify-center p-4">
             <motion.div
-              initial={{ scale: 0.8, opacity: 0 }}
+              initial={{ scale: 0.94, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.8, opacity: 0 }}
+              exit={{ scale: 0.94, opacity: 0 }}
               className="w-full max-w-2xl"
             >
               <K9RodoviaRun
@@ -671,7 +615,6 @@ export default function Pet() {
           </div>
         )}
       </AnimatePresence>
-
     </div>
   );
 }

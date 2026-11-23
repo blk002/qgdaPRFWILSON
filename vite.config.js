@@ -17,6 +17,7 @@ export default defineConfig({
           groups: [
             { name: 'vendor-three', test: /node_modules[\\/]three[\\/]/ },
             { name: 'vendor-recharts', test: /node_modules[\\/]recharts[\\/]/ },
+            { name: 'vendor-tesseract', test: /node_modules[\\/]tesseract\.js[\\/]/ },
             { name: 'vendor-motion', test: /node_modules[\\/]framer-motion[\\/]/ },
             { name: 'vendor-supabase', test: /node_modules[\\/]@supabase[\\/]/ },
             { name: 'bank-ctb', test: /leiSecaCTB\.json/ },

@@ -1,9 +1,20 @@
 import React, { useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useStore } from '../store/useStore';
-import { Dumbbell, Plus, TrendingUp, Edit2, Trash2, Calendar as CalendarIcon, Check, Play, BarChart2, Trophy, Activity, Info } from 'lucide-react';
+import {
+  Dumbbell,
+  Plus,
+  TrendingUp,
+  Edit2,
+  Trash2,
+  Calendar as CalendarIcon,
+  Check,
+  Play,
+  Info,
+  X
+} from 'lucide-react';
 
-// --- TAF Calculation Helpers ---
+// --- TAF Calculation Helpers (Tabelas oficiais PRF) ---
 const calcBarra = (val, isM) => {
   if (isM) {
     if (val < 3) return 0; if (val === 3) return 2; if (val === 4) return 2.5;
@@ -65,6 +76,16 @@ const calcShuttle = (val, isM) => {
   }
 };
 
+const BASE_ROUTINES = [
+  { day: 'Seg', type: 'Tiros / HIIT', detail: 'Velocidade e VO2' },
+  { day: 'Ter', type: 'Força Superior', detail: 'Barra fixa e core' },
+  { day: 'Qua', type: 'Rodagem', detail: 'Resistência aeróbica' },
+  { day: 'Qui', type: 'Força Inferior', detail: 'Impulsão e potência' },
+  { day: 'Sex', type: 'Tempo Run', detail: 'Ritmo de 12 minutos' },
+  { day: 'Sáb', type: 'Livre / Agilidade', detail: 'Shuttle run ou esporte' },
+  { day: 'Dom', type: 'Descanso', detail: 'Recuperação muscular' }
+];
+
 export default function TreinoTAF() {
   const {
     tafHistory,
@@ -83,37 +104,33 @@ export default function TreinoTAF() {
   const [hoveredPoint, setHoveredPoint] = useState(null);
 
   const totalSimuladosTaf = tafHistory.length;
-  const mediaPts = totalSimuladosTaf > 0 ? (tafHistory.reduce((acc, sim) => acc + sim.totalPts, 0) / totalSimuladosTaf).toFixed(1) : 0;
+  const mediaPts = totalSimuladosTaf > 0
+    ? (tafHistory.reduce((acc, sim) => acc + sim.totalPts, 0) / totalSimuladosTaf).toFixed(1)
+    : '0.0';
   const recordePts = totalSimuladosTaf > 0 ? Math.max(...tafHistory.map(s => s.totalPts)) : 0;
-  
-  let weakTest = "Aguardando Simulados";
-  if (totalSimuladosTaf > 0) {
-    const avgBarra = tafHistory.reduce((acc, sim) => acc + sim.ptsBarra, 0);
-    const avgAbdominal = tafHistory.reduce((acc, sim) => acc + sim.ptsAbdominal, 0);
-    const avgImpulsao = tafHistory.reduce((acc, sim) => acc + sim.ptsImpulsao, 0);
-    const avgCorrida = tafHistory.reduce((acc, sim) => acc + sim.ptsCorrida, 0);
-    const avgShuttle = tafHistory.reduce((acc, sim) => acc + sim.ptsShuttle, 0);
 
+  let weakTest = 'Aguardando simulados';
+  if (totalSimuladosTaf > 0) {
     const avgs = [
-      { name: "Barra Fixa", val: avgBarra },
-      { name: "Abdominal", val: avgAbdominal },
-      { name: "Impulsão", val: avgImpulsao },
-      { name: "Corrida", val: avgCorrida },
-      { name: "Shuttle", val: avgShuttle }
+      { name: 'Barra Fixa', val: tafHistory.reduce((acc, sim) => acc + sim.ptsBarra, 0) },
+      { name: 'Abdominal', val: tafHistory.reduce((acc, sim) => acc + sim.ptsAbdominal, 0) },
+      { name: 'Impulsão', val: tafHistory.reduce((acc, sim) => acc + sim.ptsImpulsao, 0) },
+      { name: 'Corrida', val: tafHistory.reduce((acc, sim) => acc + sim.ptsCorrida, 0) },
+      { name: 'Shuttle Run', val: tafHistory.reduce((acc, sim) => acc + sim.ptsShuttle, 0) }
     ];
     avgs.sort((a, b) => a.val - b.val);
     weakTest = avgs[0].name;
   }
 
-  const chartHeight = 420;
+  const chartHeight = 320;
   const chartWidth = 800;
   const maxPts = 25;
   const notaCorte = 12;
 
   const getBezierCurvePath = (points) => {
-    if (points.length === 0) return "";
+    if (points.length === 0) return '';
     if (points.length === 1) return `M 0 ${points[0].y} L ${chartWidth} ${points[0].y}`;
-    
+
     let d = `M ${points[0].x} ${points[0].y}`;
     for (let i = 0; i < points.length - 1; i++) {
       const curr = points[i];
@@ -128,14 +145,14 @@ export default function TreinoTAF() {
   };
 
   const getBezierAreaPath = (points, height) => {
-    if (points.length === 0) return "";
+    if (points.length === 0) return '';
     const curve = getBezierCurvePath(points);
     return `${curve} L ${points[points.length - 1].x} ${height} L ${points[0].x} ${height} Z`;
   };
 
   const getChartData = () => {
-    if (totalSimuladosTaf === 0) return { line: "", area: "", points: [] };
-    
+    if (totalSimuladosTaf === 0) return { line: '', area: '', points: [] };
+
     const ptsObj = tafHistory.map((sim, index) => {
       const x = (index / (totalSimuladosTaf - 1 || 1)) * chartWidth;
       const y = chartHeight - (sim.totalPts / maxPts) * chartHeight;
@@ -143,17 +160,19 @@ export default function TreinoTAF() {
     });
 
     if (totalSimuladosTaf === 1) {
-       const y = ptsObj[0].y;
-       return {
-          line: `M 0 ${y} L ${chartWidth} ${y}`,
-          area: `M 0 ${y} L ${chartWidth} ${y} L ${chartWidth} ${chartHeight} L 0 ${chartHeight} Z`,
-          points: [{ x: chartWidth/2, y, val: ptsObj[0].val, sim: ptsObj[0].sim }]
-       };
+      const y = ptsObj[0].y;
+      return {
+        line: `M 0 ${y} L ${chartWidth} ${y}`,
+        area: `M 0 ${y} L ${chartWidth} ${y} L ${chartWidth} ${chartHeight} L 0 ${chartHeight} Z`,
+        points: [{ x: chartWidth / 2, y, val: ptsObj[0].val, sim: ptsObj[0].sim }]
+      };
     }
 
-    const linePath = getBezierCurvePath(ptsObj);
-    const areaPath = getBezierAreaPath(ptsObj, chartHeight);
-    return { line: linePath, area: areaPath, points: ptsObj };
+    return {
+      line: getBezierCurvePath(ptsObj),
+      area: getBezierAreaPath(ptsObj, chartHeight),
+      points: ptsObj
+    };
   };
 
   const chartData = getChartData();
@@ -161,411 +180,667 @@ export default function TreinoTAF() {
 
   const renderMetricSparkline = (label, metricKey, color, maxValue) => {
     if (totalSimuladosTaf < 2) return null;
-    
-    const sparkHeight = 40;
-    const sparkWidth = 120;
+
+    const sparkHeight = 34;
+    const sparkWidth = 100;
     const pts = tafHistory.map((sim, index) => {
       const x = (index / (totalSimuladosTaf - 1)) * sparkWidth;
-      const y = sparkHeight - (sim[metricKey] / maxValue) * sparkHeight;
+      const clamped = Math.min(maxValue, Math.max(0, Number(sim[metricKey]) || 0));
+      const y = sparkHeight - (clamped / maxValue) * sparkHeight;
       return `${x},${y}`;
-    }).join(" ");
+    }).join(' ');
 
     const lastVal = tafHistory[tafHistory.length - 1][metricKey];
     const prevVal = tafHistory[tafHistory.length - 2][metricKey];
     const improved = metricKey === 'shuttle' ? prevVal > lastVal : lastVal > prevVal;
+    const lastClamped = Math.min(maxValue, Math.max(0, Number(lastVal) || 0));
 
     return (
-      <div className="bg-slate-50 dark:bg-slate-800/50 p-3 rounded-lg border border-slate-100 dark:border-slate-800 flex items-center justify-between gap-4">
-        <div>
-          <span className="text-[9px] font-black text-slate-400 uppercase block leading-none mb-1">{label}</span>
-          <div className="flex items-baseline gap-1">
-             <span className="text-sm font-black text-slate-700 dark:text-slate-200">{lastVal}</span>
-             {improved && <span className="text-[10px] text-emerald-500 font-bold">▲</span>}
+      <div className="p-3.5 flex items-center justify-between gap-3">
+        <div className="min-w-0">
+          <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block truncate">
+            {label}
+          </span>
+          <div className="flex items-baseline gap-1 mt-0.5">
+            <span className="font-mono text-sm font-semibold tabular-nums text-slate-900 dark:text-white">
+              {lastVal}
+            </span>
+            {improved && (
+              <span className="text-[10px] text-emerald-600 dark:text-emerald-400 font-semibold">▲</span>
+            )}
           </div>
         </div>
-        <div className="flex-1 h-[40px]">
-          <svg viewBox={"0 0 " + sparkWidth + " " + sparkHeight} className="w-full h-full overflow-hidden">
-            <polyline points={pts} fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
-            <circle cx={sparkWidth - 2} cy={sparkHeight - (lastVal / maxValue) * sparkHeight} r="3" fill={color} />
+        <div className="w-20 h-[34px] shrink-0">
+          <svg viewBox={`0 0 ${sparkWidth} ${sparkHeight}`} className="w-full h-full overflow-visible">
+            <polyline
+              points={pts}
+              fill="none"
+              stroke={color}
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            />
+            <circle
+              cx={sparkWidth}
+              cy={sparkHeight - (lastClamped / maxValue) * sparkHeight}
+              r="2.75"
+              fill={color}
+            />
           </svg>
         </div>
       </div>
     );
   };
 
+  const daysOfWeek = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+  const todayName = daysOfWeek[new Date().getDay()];
+  const alreadyDoneToday = tafTrainingStatus.lastDoneDate === getLocalDateStr();
+
   return (
-    <div className="fade-in w-full pb-10">
+    <div className="fade-in w-full pb-10 space-y-6">
+      {/* Cabeçalho transparente padronizado */}
+      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-1">
+        <div className="min-w-0">
+          <h1 className="font-display text-lg sm:text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Treino TAF
+          </h1>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+            Tabelas oficiais PRF · Máximo 25 pts · Corte mínimo 12 pts
+            {totalSimuladosTaf > 0 && ` · ${totalSimuladosTaf} ${totalSimuladosTaf === 1 ? 'simulado' : 'simulados'}`}
+          </p>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => {
+            setEditingTaf(null);
+            setShowModal(true);
+          }}
+          className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 inline-flex items-center justify-center gap-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
+        >
+          <Plus className="w-4 h-4" />
+          Registrar simulado
+        </button>
+      </header>
+
       <div className="flex flex-col lg:flex-row gap-6">
-        <div className="flex-1 min-w-0">
-          <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 dark:bg-slate-900 dark:border-slate-800">
-            <div className="flex items-center gap-4">
-              <div className="bg-orange-100 p-3 rounded-full shrink-0"><Dumbbell className="text-orange-600 w-6 h-6 sm:w-8 sm:h-8" /></div>
-              <div>
-                <h2 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">Evolução Analítica do TAF</h2>
-                <p className="text-slate-500 text-xs sm:text-sm dark:text-slate-400">Tabelas oficiais PRF (Máximo: 25 pts | Mínimo: 12 pts).</p>
-              </div>
-            </div>
-            <button onClick={() => { setEditingTaf(null); setShowModal(true); }} className="w-full sm:w-auto justify-center bg-orange-600 hover:bg-orange-700 text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-md transition-colors">
-              <Plus className="w-4 h-4" /> Registrar Simulado Físico
-            </button>
-          </div>
-          
+        {/* Coluna principal */}
+        <div className="flex-1 min-w-0 space-y-6">
+          {/* Curva de desempenho */}
           {totalSimuladosTaf > 0 && (
-            <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 overflow-hidden dark:bg-slate-900 dark:border-slate-800">
-               <div className="flex justify-between items-end mb-6">
-                  <h3 className="font-bold text-slate-700 flex items-center gap-2 dark:text-slate-200"><TrendingUp className="w-5 h-5 text-orange-500"/> Curva de Desempenho (Pontuação TAF)</h3>
-               </div>
-               
-               <div className="relative w-full h-[420px] mt-4">
-                  <div className="absolute w-full border-t-2 border-dashed border-red-400/50 z-0 flex items-end justify-end" style={{ top: `${targetY}px` }}>
-                     <span className="text-[11px] sm:text-xs font-black text-red-500 bg-white px-2 -mt-2.5 sm:-mt-3 absolute left-0 sm:left-auto sm:right-0 dark:bg-slate-900">Corte Mínimo Global (12 pts)</span>
+            <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl overflow-hidden">
+              <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <TrendingUp className="w-4 h-4 text-sky-500" />
+                  <span>Evolução da pontuação</span>
+                </h2>
+                <span className="text-xs font-mono text-slate-500 dark:text-slate-400 tabular-nums">
+                  Corte: 12 / 25 pts
+                </span>
+              </div>
+
+              <div className="p-5">
+                <div className="relative w-full h-[320px]">
+                  <div
+                    className="absolute w-full border-t border-dashed border-rose-400/70 dark:border-rose-500/60 z-0 flex items-end justify-end"
+                    style={{ top: `${targetY}px` }}
+                  >
+                    <span className="text-[11px] font-medium text-rose-600 dark:text-rose-400 bg-white dark:bg-slate-900 px-1.5 -mt-2.5">
+                      Corte mínimo (12 pts)
+                    </span>
                   </div>
-                  
-                  <svg viewBox={"0 0 " + chartWidth + " " + chartHeight} preserveAspectRatio="none" className="w-full h-full overflow-visible z-10 relative">
-                     <defs>
-                        <linearGradient id="chartFillTaf" x1="0" y1="0" x2="0" y2="1">
-                           <stop offset="0%" stopColor="#ea580c" stopOpacity="0.25"/>
-                           <stop offset="100%" stopColor="#ea580c" stopOpacity="0"/>
-                        </linearGradient>
-                     </defs>
-                     
-                     <path d={chartData.area} fill="url(#chartFillTaf)" />
-                     <path d={chartData.line} fill="none" stroke="#ea580c" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
-                     
-                     {chartData.points.map((p, index) => (
-                        <g key={index}>
-                          <circle 
-                            cx={p.x} 
-                            cy={p.y} 
-                            r="5" 
-                            fill="#fff" 
-                            stroke="#ea580c" 
-                            strokeWidth="3" 
-                            className="hover:r-[7px] hover:stroke-orange-500 transition-all cursor-pointer"
-                            onMouseEnter={() => setHoveredPoint({ ...p, index })}
-                            onMouseLeave={() => setHoveredPoint(null)}
-                          />
-                        </g>
-                     ))}
+
+                  <svg
+                    viewBox={`0 0 ${chartWidth} ${chartHeight}`}
+                    preserveAspectRatio="none"
+                    className="w-full h-full overflow-visible z-10 relative"
+                  >
+                    <defs>
+                      <linearGradient id="chartFillTaf" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="0%" stopColor="#0284c7" stopOpacity="0.22" />
+                        <stop offset="100%" stopColor="#0284c7" stopOpacity="0" />
+                      </linearGradient>
+                    </defs>
+
+                    <path d={chartData.area} fill="url(#chartFillTaf)" />
+                    <path
+                      d={chartData.line}
+                      fill="none"
+                      stroke="#0284c7"
+                      strokeWidth="3"
+                      strokeLinejoin="round"
+                      strokeLinecap="round"
+                    />
+
+                    {chartData.points.map((p, index) => (
+                      <g key={index}>
+                        <circle
+                          cx={p.x}
+                          cy={p.y}
+                          r="5"
+                          fill={isDarkMode ? '#0f172a' : '#ffffff'}
+                          stroke="#0284c7"
+                          strokeWidth="2.5"
+                          className="cursor-pointer transition-all"
+                          onMouseEnter={() => setHoveredPoint({ ...p, index })}
+                          onMouseLeave={() => setHoveredPoint(null)}
+                        />
+                      </g>
+                    ))}
                   </svg>
 
                   {hoveredPoint && (
-                    <div 
-                      className="absolute bg-slate-900/95 border border-orange-500/50 text-white rounded-xl p-3 shadow-2xl z-50 pointer-events-none transition-all duration-200 backdrop-blur-md flex flex-col gap-1 min-w-[180px]"
+                    <div
+                      className="absolute bg-slate-900 text-white border border-slate-700 rounded-xl p-3 shadow-lg z-50 pointer-events-none min-w-[190px]"
                       style={{
-                        left: `${(hoveredPoint.x / chartWidth) * 100}%`,
-                        top: `${(hoveredPoint.y / chartHeight) * 100 - 4}%`,
-                        transform: 'translate(-50%, -100%)',
+                        left: `${Math.min(85, Math.max(15, (hoveredPoint.x / chartWidth) * 100))}%`,
+                        top: `${Math.max(18, (hoveredPoint.y / chartHeight) * 100 - 4)}%`,
+                        transform: 'translate(-50%, -100%)'
                       }}
                     >
-                      <div className="absolute top-full left-1/2 -translate-x-1/2 w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-slate-900" />
-                      
-                      <div className="flex justify-between items-center border-b border-slate-700/50 pb-1 mb-1">
-                        <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">TAF #{hoveredPoint.index + 1}</span>
-                        <span className="text-[10px] text-slate-400 font-medium">{hoveredPoint.sim.data.split('-').reverse().join('/')}</span>
+                      <div className="flex justify-between items-center border-b border-slate-800 pb-1.5 mb-1.5 text-[11px] text-slate-400">
+                        <span className="font-semibold text-slate-200">Simulado #{hoveredPoint.index + 1}</span>
+                        <span className="font-mono tabular-nums">{hoveredPoint.sim.data}</span>
                       </div>
-                      
-                      <div className="flex justify-between items-center">
-                        <span className="text-xs text-slate-300">Pontuação Total:</span>
-                        <span className="text-sm font-black text-orange-400">{hoveredPoint.val} pts</span>
+                      <div className="flex justify-between items-center text-xs mb-2">
+                        <span className="text-slate-300">Total</span>
+                        <span className="font-mono font-bold text-sky-400 tabular-nums">{hoveredPoint.val} pts</span>
                       </div>
-                      
-                      <div className="grid grid-cols-2 gap-1.5 mt-2 pt-2 border-t border-slate-800 text-[10px] text-slate-300">
+                      <div className="grid grid-cols-2 gap-x-3 gap-y-1 pt-1.5 border-t border-slate-800 text-[11px] text-slate-300 tabular-nums">
                         <div className="flex justify-between">
-                          <span>Barra:</span>
-                          <span className="font-bold text-white">{hoveredPoint.sim.barra} ({hoveredPoint.sim.ptsBarra} pts)</span>
+                          <span className="text-slate-400">Barra:</span>
+                          <span className="font-mono text-white">{hoveredPoint.sim.ptsBarra}p</span>
                         </div>
                         <div className="flex justify-between">
-                          <span>Abdo:</span>
-                          <span className="font-bold text-white">{hoveredPoint.sim.abdominal} ({hoveredPoint.sim.ptsAbdominal} pts)</span>
+                          <span className="text-slate-400">Abd.:</span>
+                          <span className="font-mono text-white">{hoveredPoint.sim.ptsAbdominal}p</span>
                         </div>
                         <div className="flex justify-between">
-                          <span>Impulso:</span>
-                          <span className="font-bold text-white">{hoveredPoint.sim.impulsao}m ({hoveredPoint.sim.ptsImpulsao} pts)</span>
+                          <span className="text-slate-400">Imp.:</span>
+                          <span className="font-mono text-white">{hoveredPoint.sim.ptsImpulsao}p</span>
                         </div>
                         <div className="flex justify-between">
-                          <span>Corrida:</span>
-                          <span className="font-bold text-white">{hoveredPoint.sim.corrida}m ({hoveredPoint.sim.ptsCorrida} pts)</span>
+                          <span className="text-slate-400">Corr.:</span>
+                          <span className="font-mono text-white">{hoveredPoint.sim.ptsCorrida}p</span>
                         </div>
-                        <div className="flex justify-between col-span-2 border-t border-slate-800/50 pt-1">
-                          <span>Shuttle Run:</span>
-                          <span className="font-bold text-white">{hoveredPoint.sim.shuttle}s ({hoveredPoint.sim.ptsShuttle} pts)</span>
+                        <div className="flex justify-between col-span-2">
+                          <span className="text-slate-400">Shuttle:</span>
+                          <span className="font-mono text-white">{hoveredPoint.sim.shuttle}s ({hoveredPoint.sim.ptsShuttle}p)</span>
                         </div>
                       </div>
                     </div>
                   )}
-               </div>
-               <div className="flex justify-between text-[10px] text-slate-400 font-bold mt-2 border-t border-slate-100 pt-2 px-1 dark:border-slate-800">
+                </div>
+
+                <div className="flex justify-between text-[11px] text-slate-400 dark:text-slate-500 mt-3 pt-2 border-t border-slate-100 dark:border-slate-800">
                   <span>Mais antigo</span>
                   <span>Mais recente</span>
-               </div>
-
-               <div className="mt-6 grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3">
-                  {renderMetricSparkline("Barra Fixa", "barra", "#f97316", 15)}
-                  {renderMetricSparkline("Abdominal", "abdominal", "#8b5cf6", 60)}
-                  {renderMetricSparkline("Impulsão", "impulsao", "#10b981", 3)}
-                  {renderMetricSparkline("Corrida (m)", "corrida", "#3b82f6", 3200)}
-                  {renderMetricSparkline("Shuttle (s)", "shuttle", "#ef4444", 15)}
-               </div>
-            </div>
-          )}
-
-          {tafHistory.length === 0 ? (
-            <div className="text-center p-10 bg-white border-2 border-dashed border-slate-200 rounded-xl text-slate-500 text-sm dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800 mb-8">
-              Nenhum TAF registrado. Execute seu primeiro simulado físico para analisar seus pontos e traçar o gráfico.
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto mb-8 dark:bg-slate-900 dark:border-slate-800">
-              <table className="w-full text-left text-xs sm:text-sm min-w-[700px]">
-                <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800">
-                  <tr>
-                    <th className="p-3 sm:p-4 font-bold">Data</th>
-                    <th className="p-3 sm:p-4 font-bold text-center">Barra</th>
-                    <th className="p-3 sm:p-4 font-bold text-center">Abd.</th>
-                    <th className="p-3 sm:p-4 font-bold text-center">Imp.</th>
-                    <th className="p-3 sm:p-4 font-bold text-center">Corr.</th>
-                    <th className="p-3 sm:p-4 font-bold text-center">Shuttle</th>
-                    <th className="p-3 sm:p-4 font-black text-center text-orange-600">Total</th>
-                    <th className="p-3 sm:p-4 font-bold text-center">Status</th>
-                    <th className="p-3 sm:p-4 font-bold text-center">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {tafHistory.map(sim => {
-                    const reprovouCorte = (sim.ptsBarra === 0 || sim.ptsAbdominal === 0 || sim.ptsImpulsao === 0 || sim.ptsCorrida === 0 || sim.ptsShuttle === 0 || sim.totalPts < notaCorte);
-                    return (
-                    <tr key={sim.id} className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors dark:bg-slate-950">
-                      <td className="p-3 sm:p-4 font-semibold text-slate-700 dark:text-slate-200">{sim.data}</td>
-                      <td className={`p-3 sm:p-4 text-center font-bold ${sim.ptsBarra === 0 ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}`}>{sim.ptsBarra}p</td>
-                      <td className={`p-3 sm:p-4 text-center font-bold ${sim.ptsAbdominal === 0 ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}`}>{sim.ptsAbdominal}p</td>
-                      <td className={`p-3 sm:p-4 text-center font-bold ${sim.ptsImpulsao === 0 ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}`}>{sim.ptsImpulsao}p</td>
-                      <td className={`p-3 sm:p-4 text-center font-bold ${sim.ptsCorrida === 0 ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}`}>{sim.ptsCorrida}p</td>
-                      <td className={`p-3 sm:p-4 text-center font-bold ${sim.ptsShuttle === 0 ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}`}>{sim.ptsShuttle}p</td>
-                      <td className="p-3 sm:p-4 text-center font-black text-slate-800 dark:text-slate-100">{sim.totalPts}</td>
-                      <td className="p-3 sm:p-4 text-center">
-                        {reprovouCorte ? 
-                          <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-[10px] font-black uppercase">F</span> : 
-                          <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-black uppercase">P</span>
-                        }
-                      </td>
-                      <td className="p-3 sm:p-4 text-center flex justify-center gap-1">
-                        <button onClick={() => { setEditingTaf(sim); setShowModal(true); }} className="p-1 text-slate-400 hover:text-orange-600 transition-colors" title="Editar"><Edit2 className="w-3 h-3" /></button>
-                        <button onClick={() => {
-                          setGlobalModal({
-                            title: "Excluir Treino?",
-                            message: "Esta ação é permanente e removerá os pontos deste simulado do seu histórico.",
-                            onConfirm: () => setTafHistory(prev => prev.filter(s => s.id !== sim.id))
-                          });
-                        }} className="p-1 text-slate-400 hover:text-red-600 transition-colors" title="Excluir"><Trash2 className="w-3 h-3" /></button>
-                      </td>
-                    </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-
-          <h3 className="font-bold text-slate-700 mb-4 flex items-center gap-2 border-b border-slate-200 pb-2 dark:text-slate-200 dark:border-slate-800"><CalendarIcon className="w-5 h-5 text-slate-400"/> Rotina de Treinos de Base</h3>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-            {[
-              { day: 'Seg', type: 'Tiros/HIIT', icon: '🏃\u200d\u2642\ufe0f' },
-              { day: 'Ter', type: 'Força Superior', icon: '💪' },
-              { day: 'Qua', type: 'Rodagem', icon: '🏃\u200d\u2642\ufe0f' },
-              { day: 'Qui', type: 'Força Inferior', icon: '🦵' },
-              { day: 'Sex', type: 'Tempo Run', icon: '⏱\ufe0f' },
-              { day: 'Sáb', type: 'Livre/Futebol', icon: '⚽' },
-              { day: 'Dom', type: 'Descanso', icon: '🛌' }
-            ].map((item, idx) => {
-              const days = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
-              const todayName = days[new Date().getDay()];
-              const isToday = item.day === todayName;
-              const alreadyDone = tafTrainingStatus.lastDoneDate === getLocalDateStr();
-
-              return (
-                <div key={idx} className={`p-3 rounded-xl border transition-all ${isToday ? 'border-orange-500 bg-orange-50/30 ring-1 ring-orange-500/20' : 'border-slate-200 bg-white'} shadow-sm flex items-center justify-between gap-3 dark:bg-slate-900 dark:border-slate-800`}>
-                  <div className="flex items-center gap-3">
-                    <span className="text-xl">{item.icon}</span>
-                    <div>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[9px] font-black text-slate-400 uppercase">{item.day}</span>
-                        {isToday && <span className="text-[8px] bg-orange-500 text-white px-1 rounded font-black">HOJE</span>}
-                      </div>
-                      <h3 className="font-bold text-slate-700 text-[13px] dark:text-slate-200 leading-tight">{item.type}</h3>
-                    </div>
-                  </div>
-                  
-                  {isToday && (
-                    <button 
-                      disabled={alreadyDone}
-                      onClick={completeTafTraining}
-                      className={`p-2 rounded-lg transition-all ${alreadyDone ? 'bg-emerald-100 text-emerald-600 cursor-default' : 'bg-orange-600 text-white hover:bg-orange-700 shadow-sm active:scale-90'}`}
-                    >
-                      {alreadyDone ? <Check className="w-4 h-4" /> : <Play className="w-4 h-4" />}
-                    </button>
-                  )}
                 </div>
-              );
-            })}
-          </div>
+              </div>
+
+              {totalSimuladosTaf >= 2 && (
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 border-t border-slate-100 dark:border-slate-800 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 dark:divide-slate-800">
+                  {renderMetricSparkline('Barra fixa', 'barra', '#0284c7', 15)}
+                  {renderMetricSparkline('Abdominal', 'abdominal', '#8b5cf6', 60)}
+                  {renderMetricSparkline('Impulsão (m)', 'impulsao', '#10b981', 3)}
+                  {renderMetricSparkline('Corrida (m)', 'corrida', '#f59e0b', 3200)}
+                  {renderMetricSparkline('Shuttle (s)', 'shuttle', '#ef4444', 15)}
+                </div>
+              )}
+            </section>
+          )}
+
+          {/* Histórico de simulados */}
+          {tafHistory.length === 0 ? (
+            <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-10 text-center">
+              <Dumbbell className="w-8 h-8 text-slate-300 dark:text-slate-700 mx-auto mb-3" />
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                Nenhum simulado registrado
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+                Registre seu primeiro simulado físico para calcular a pontuação nas tabelas oficiais da PRF e acompanhar sua curva de evolução.
+              </p>
+            </section>
+          ) : (
+            <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl overflow-hidden">
+              <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white">
+                  Histórico de simulados
+                </h2>
+                <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                  {tafHistory.length} {tafHistory.length === 1 ? 'registro' : 'registros'}
+                </span>
+              </div>
+
+              <div className="overflow-x-auto">
+                <table className="w-full text-left text-xs min-w-[680px]">
+                  <thead className="bg-slate-50/80 dark:bg-slate-950/60 text-slate-500 dark:text-slate-400 border-b border-slate-100 dark:border-slate-800">
+                    <tr>
+                      <th className="px-4 py-3 font-semibold">Data</th>
+                      <th className="px-3 py-3 font-semibold text-center">Barra</th>
+                      <th className="px-3 py-3 font-semibold text-center">Abd.</th>
+                      <th className="px-3 py-3 font-semibold text-center">Imp.</th>
+                      <th className="px-3 py-3 font-semibold text-center">Corr.</th>
+                      <th className="px-3 py-3 font-semibold text-center">Shuttle</th>
+                      <th className="px-3 py-3 font-semibold text-center">Total</th>
+                      <th className="px-3 py-3 font-semibold text-center">Resultado</th>
+                      <th className="px-4 py-3 font-semibold text-right">Ações</th>
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-slate-100 dark:divide-slate-800">
+                    {tafHistory.map(sim => {
+                      const reprovouCorte =
+                        sim.ptsBarra === 0 ||
+                        sim.ptsAbdominal === 0 ||
+                        sim.ptsImpulsao === 0 ||
+                        sim.ptsCorrida === 0 ||
+                        sim.ptsShuttle === 0 ||
+                        sim.totalPts < notaCorte;
+
+                      return (
+                        <tr
+                          key={sim.id}
+                          className="hover:bg-slate-50/80 dark:hover:bg-slate-800/40 transition-colors"
+                        >
+                          <td className="px-4 py-3 font-mono font-medium text-slate-800 dark:text-slate-200 tabular-nums">
+                            {sim.data}
+                          </td>
+                          <td className={`px-3 py-3 text-center font-mono tabular-nums ${sim.ptsBarra === 0 ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-slate-600 dark:text-slate-300'}`}>
+                            {sim.ptsBarra}p
+                          </td>
+                          <td className={`px-3 py-3 text-center font-mono tabular-nums ${sim.ptsAbdominal === 0 ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-slate-600 dark:text-slate-300'}`}>
+                            {sim.ptsAbdominal}p
+                          </td>
+                          <td className={`px-3 py-3 text-center font-mono tabular-nums ${sim.ptsImpulsao === 0 ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-slate-600 dark:text-slate-300'}`}>
+                            {sim.ptsImpulsao}p
+                          </td>
+                          <td className={`px-3 py-3 text-center font-mono tabular-nums ${sim.ptsCorrida === 0 ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-slate-600 dark:text-slate-300'}`}>
+                            {sim.ptsCorrida}p
+                          </td>
+                          <td className={`px-3 py-3 text-center font-mono tabular-nums ${sim.ptsShuttle === 0 ? 'text-rose-600 dark:text-rose-400 font-semibold' : 'text-slate-600 dark:text-slate-300'}`}>
+                            {sim.ptsShuttle}p
+                          </td>
+                          <td className="px-3 py-3 text-center font-mono font-bold text-slate-900 dark:text-white tabular-nums">
+                            {sim.totalPts}
+                          </td>
+                          <td className="px-3 py-3 text-center">
+                            <span className={`text-xs font-semibold ${reprovouCorte ? 'text-rose-600 dark:text-rose-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                              {reprovouCorte ? 'Abaixo' : 'Apto'}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <div className="inline-flex items-center gap-1">
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setEditingTaf(sim);
+                                  setShowModal(true);
+                                }}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                title="Editar"
+                              >
+                                <Edit2 className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => {
+                                  setGlobalModal({
+                                    title: 'Excluir simulado?',
+                                    message: 'Esta ação remove os pontos deste simulado do seu histórico.',
+                                    onConfirm: () => setTafHistory(prev => prev.filter(s => s.id !== sim.id))
+                                  });
+                                }}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                                title="Excluir"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            </section>
+          )}
+
+          {/* Rotina de treinos de base */}
+          <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl overflow-hidden">
+            <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <CalendarIcon className="w-4 h-4 text-slate-400" />
+                <span>Rotina semanal de base</span>
+              </h2>
+              <span className="text-xs text-slate-500 dark:text-slate-400">Hoje: {todayName}</span>
+            </div>
+
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {BASE_ROUTINES.map((item) => {
+                const isToday = item.day === todayName;
+                return (
+                  <div
+                    key={item.day}
+                    className={`px-5 py-3 flex items-center justify-between gap-4 ${
+                      isToday ? 'bg-sky-50/60 dark:bg-sky-950/20' : ''
+                    }`}
+                  >
+                    <div className="flex items-center gap-4 min-w-0">
+                      <span
+                        className={`w-9 text-xs font-mono font-semibold shrink-0 ${
+                          isToday ? 'text-sky-600 dark:text-sky-400' : 'text-slate-400 dark:text-slate-500'
+                        }`}
+                      >
+                        {item.day}
+                      </span>
+                      <div className="min-w-0">
+                        <p className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                          {item.type}
+                          {isToday && (
+                            <span className="ml-2 text-xs font-medium text-sky-600 dark:text-sky-400">
+                              · Hoje
+                            </span>
+                          )}
+                        </p>
+                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                          {item.detail}
+                        </p>
+                      </div>
+                    </div>
+
+                    {isToday && (
+                      <button
+                        type="button"
+                        disabled={alreadyDoneToday}
+                        onClick={completeTafTraining}
+                        className={`h-8 px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors shrink-0 ${
+                          alreadyDoneToday
+                            ? 'bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-400 cursor-default'
+                            : 'bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 cursor-pointer'
+                        }`}
+                      >
+                        {alreadyDoneToday ? (
+                          <>
+                            <Check className="w-3.5 h-3.5" />
+                            <span>Concluído</span>
+                          </>
+                        ) : (
+                          <>
+                            <Play className="w-3.5 h-3.5" />
+                            <span>Concluir</span>
+                          </>
+                        )}
+                      </button>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         </div>
 
-        <div className="w-full lg:w-80 shrink-0 flex flex-col gap-4">
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm dark:bg-slate-900 dark:border-slate-800 transition-all hover:border-orange-200">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="bg-orange-100 p-3 rounded-lg"><BarChart2 className="w-6 h-6 text-orange-600" /></div>
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Média Geral</p>
-                <p className="text-2xl font-black text-slate-800 dark:text-slate-100 leading-none">{mediaPts} <span className="text-xs text-slate-400">/25</span></p>
+        {/* Coluna lateral */}
+        <aside className="w-full lg:w-72 shrink-0 space-y-4">
+          <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl divide-y divide-slate-100 dark:divide-slate-800">
+            <div className="p-4 space-y-2">
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Média geral</span>
+                <span className="font-mono text-xl font-bold tabular-nums text-slate-900 dark:text-white">
+                  {mediaPts}
+                  <span className="text-xs font-normal text-slate-400"> / 25</span>
+                </span>
+              </div>
+              <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="bg-sky-500 h-full rounded-full transition-all"
+                  style={{ width: `${Math.min(100, (Number(mediaPts) / 25) * 100)}%` }}
+                />
               </div>
             </div>
-            <div className="w-full bg-slate-100 rounded-full h-1.5 dark:bg-slate-800">
-              <div className="bg-orange-500 h-1.5 rounded-full" style={{ width: `${(mediaPts/25)*100}%` }}></div>
-            </div>
-          </div>
 
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm dark:bg-slate-900 dark:border-slate-800 transition-all hover:border-emerald-200">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="bg-emerald-100 p-3 rounded-lg"><Trophy className="w-6 h-6 text-emerald-600" /></div>
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Recorde Atual</p>
-                <p className="text-2xl font-black text-emerald-600 leading-none">{recordePts} <span className="text-xs text-slate-400">/25</span></p>
+            <div className="p-4 space-y-2">
+              <div className="flex items-baseline justify-between">
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Recorde atual</span>
+                <span className="font-mono text-xl font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                  {recordePts}
+                  <span className="text-xs font-normal text-slate-400"> / 25</span>
+                </span>
+              </div>
+              <div className="w-full bg-slate-100 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                <div
+                  className="bg-emerald-500 h-full rounded-full transition-all"
+                  style={{ width: `${Math.min(100, (recordePts / 25) * 100)}%` }}
+                />
               </div>
             </div>
-            <div className="w-full bg-slate-100 rounded-full h-1.5 dark:bg-slate-800">
-              <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${(recordePts/25)*100}%` }}></div>
-            </div>
-          </div>
 
-          <div className="bg-red-50 p-6 rounded-xl border border-red-200 shadow-sm dark:bg-slate-900 dark:border-red-900/30 transition-all hover:bg-red-100/50">
-            <div className="flex items-center gap-4">
-              <div className="bg-red-100 p-3 rounded-lg"><Activity className="w-6 h-6 text-red-600" /></div>
-              <div>
-                <p className="text-[10px] font-black text-red-500 uppercase tracking-widest leading-none mb-1">Gargalo Físico</p>
-                <p className="text-lg font-black text-red-700 dark:text-red-400 leading-tight">{weakTest}</p>
-              </div>
+            <div className="p-4">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400 block">
+                Gargalo físico
+              </span>
+              <p className={`mt-1 text-sm font-semibold ${totalSimuladosTaf > 0 ? 'text-rose-600 dark:text-rose-400' : 'text-slate-500 dark:text-slate-400'}`}>
+                {weakTest}
+              </p>
             </div>
-          </div>
+          </section>
 
-          <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xl mt-2">
-             <h4 className="text-[10px] font-black text-blue-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-               <Info className="w-3 h-3"/> Dica de Treino
-             </h4>
-             <p className="text-xs text-slate-400 leading-relaxed">
-               {totalSimuladosTaf > 0 ? (
-                 <>
-                   Foque em evoluir no seu gargalo (<strong className="text-white">{weakTest}</strong>) para garantir que a soma global ultrapasse os 12 pontos com folga.
-                 </>
-               ) : (
-                 <>
-                   Registre seu primeiro simulado físico para identificar automaticamente seu gargalo entre os 5 testes do TAF da PRF.
-                 </>
-               )}
-             </p>
-          </div>
-        </div>
+          <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-4">
+            <h3 className="text-xs font-semibold text-slate-800 dark:text-slate-200 flex items-center gap-1.5 mb-2">
+              <Info className="w-3.5 h-3.5 text-sky-500" />
+              <span>Recomendação</span>
+            </h3>
+            <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+              {totalSimuladosTaf > 0 ? (
+                <>
+                  Priorize evolução em <strong className="text-slate-900 dark:text-white">{weakTest}</strong> para garantir nota acima do corte mínimo sem zerar nenhuma prova.
+                </>
+              ) : (
+                'Registre seu primeiro simulado para identificar automaticamente o exercício com menor pontuação entre os 5 testes da PRF.'
+              )}
+            </p>
+          </section>
+        </aside>
       </div>
 
+      {/* Modal de registro/edição de simulado */}
       {showModal && createPortal(
-        <div className={`${isDarkMode ? 'dark' : ''} fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[999] p-4 fade-in backdrop-blur-sm`}>
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            const dataVal = e.target.data.value;
-            const genero = e.target.genero.value;
-            const isM = genero === 'masculino';
-            
-            const barra = parseFloat(e.target.barra.value) || 0;
-            const abdominal = parseFloat(e.target.abdominal.value) || 0;
-            const impulsao = parseFloat(e.target.impulsao.value) || 0;
-            const corrida = parseFloat(e.target.corrida.value) || 0;
-            const shuttle = parseFloat(e.target.shuttle.value) || 0;
+        <div className={`${isDarkMode ? 'dark' : ''} fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-[999] p-4 fade-in`}>
+          <form
+            onSubmit={(e) => {
+              e.preventDefault();
+              const dataVal = e.target.data.value;
+              const genero = e.target.genero.value;
+              const isM = genero === 'masculino';
 
-            const ptsBarra = calcBarra(barra, isM);
-            const ptsAbdominal = calcAbdominal(abdominal, isM);
-            const ptsImpulsao = calcImpulsao(impulsao, isM);
-            const ptsCorrida = calcCorrida(corrida, isM);
-            const ptsShuttle = calcShuttle(shuttle, isM);
-            
-            const totalPts = ptsBarra + ptsAbdominal + ptsImpulsao + ptsCorrida + ptsShuttle;
+              const barra = parseFloat(e.target.barra.value) || 0;
+              const abdominal = parseFloat(e.target.abdominal.value) || 0;
+              const impulsao = parseFloat(e.target.impulsao.value) || 0;
+              const corrida = parseFloat(e.target.corrida.value) || 0;
+              const shuttle = parseFloat(e.target.shuttle.value) || 0;
 
-            const payload = {
-              data: dataVal, genero, barra, abdominal, impulsao, corrida, shuttle,
-              ptsBarra, ptsAbdominal, ptsImpulsao, ptsCorrida, ptsShuttle, totalPts
-            };
+              const ptsBarra = calcBarra(barra, isM);
+              const ptsAbdominal = calcAbdominal(abdominal, isM);
+              const ptsImpulsao = calcImpulsao(impulsao, isM);
+              const ptsCorrida = calcCorrida(corrida, isM);
+              const ptsShuttle = calcShuttle(shuttle, isM);
 
-            if (editingTaf) {
-              setTafHistory(prev => prev.map(s => s.id === editingTaf.id ? { ...s, ...payload } : s));
-            } else {
-              setTafHistory(prev => [...prev, { id: Date.now(), ...payload }]);
-              addXP(300, "Simulado TAF registrado");
-              if (payload.totalPts >= 25) unlockMedal('ironman');
-            }
-            setShowModal(false);
-            setEditingTaf(null);
-          }} className="bg-[#0f172a] rounded-2xl shadow-2xl max-w-lg w-full p-8 border border-slate-800 relative overflow-hidden flex flex-col z-[1000]">
-            
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-orange-600 via-yellow-400 to-orange-600 opacity-80"></div>
+              const totalPts = ptsBarra + ptsAbdominal + ptsImpulsao + ptsCorrida + ptsShuttle;
 
-            <div className="flex justify-between items-start mb-6">
+              const payload = {
+                data: dataVal,
+                genero,
+                barra,
+                abdominal,
+                impulsao,
+                corrida,
+                shuttle,
+                ptsBarra,
+                ptsAbdominal,
+                ptsImpulsao,
+                ptsCorrida,
+                ptsShuttle,
+                totalPts
+              };
+
+              if (editingTaf) {
+                setTafHistory(prev => prev.map(s => s.id === editingTaf.id ? { ...s, ...payload } : s));
+              } else {
+                setTafHistory(prev => [...prev, { id: Date.now(), ...payload }]);
+                addXP(300, 'Simulado TAF registrado');
+                if (payload.totalPts >= 25) unlockMedal('ironman');
+              }
+              setShowModal(false);
+              setEditingTaf(null);
+            }}
+            className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-lg w-full border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden z-[1000]"
+          >
+            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between gap-4">
               <div>
-                <h3 className="text-[22px] font-black text-white uppercase tracking-tight flex items-center gap-2 leading-none mb-1">
-                  <Dumbbell className="w-6 h-6 text-orange-500"/> {editingTaf ? 'Editar TAF' : 'Registrar TAF'}
+                <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
+                  {editingTaf ? 'Editar simulado TAF' : 'Registrar simulado TAF'}
                 </h3>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">
-                  Insira as marcas reais. O sistema fará a conversão oficial de pontos.
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Informe as marcas obtidas para cálculo automático nas tabelas da PRF.
                 </p>
               </div>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowModal(false);
+                  setEditingTaf(null);
+                }}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
             </div>
-            
-            <div className="overflow-y-auto custom-scrollbar pr-2 max-h-[60vh] flex flex-col gap-5">
-              <div className="flex gap-4">
-                <div className="flex-1">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Data</label>
-                  <input name="data" type="text" required defaultValue={editingTaf ? editingTaf.data : new Date().toLocaleDateString('pt-BR')} className="w-full bg-[#020617] border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all placeholder:text-slate-600"/>
+
+            <div className="p-6 overflow-y-auto custom-scrollbar max-h-[65vh] space-y-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                    Data
+                  </label>
+                  <input
+                    name="data"
+                    type="text"
+                    required
+                    defaultValue={editingTaf ? editingTaf.data : new Date().toLocaleDateString('pt-BR')}
+                    className="w-full h-10 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-medium text-slate-900 dark:text-white focus:border-sky-500 outline-none"
+                  />
                 </div>
-                <div className="flex-1">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Gênero</label>
-                  <select name="genero" defaultValue={editingTaf ? editingTaf.genero : 'masculino'} className="w-full bg-[#020617] border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-orange-500 focus:ring-1 focus:ring-orange-500 outline-none transition-all appearance-none cursor-pointer">
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                    Tabela de referência
+                  </label>
+                  <select
+                    name="genero"
+                    defaultValue={editingTaf ? editingTaf.genero : 'masculino'}
+                    className="w-full h-10 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-medium text-slate-900 dark:text-white focus:border-sky-500 outline-none cursor-pointer"
+                  >
                     <option value="masculino">Masculino</option>
                     <option value="feminino">Feminino</option>
                   </select>
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
-                <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800">
-                  <label className="text-[10px] font-black text-slate-400 uppercase block mb-2 tracking-widest text-center" title="Masculino: Repetições | Feminino: Segundos de Isometria">Barra (Reps/Segs)</label>
-                  <input name="barra" type="number" step="0.1" min="0" required defaultValue={editingTaf?.barra ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-white text-center text-sm outline-none focus:border-orange-500 transition-colors"/>
+              <div className="grid grid-cols-2 gap-3.5 pt-1">
+                <div>
+                  <label
+                    className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5"
+                    title="Masculino: repetições | Feminino: segundos de isometria"
+                  >
+                    Barra fixa (reps / seg)
+                  </label>
+                  <input
+                    name="barra"
+                    type="number"
+                    step="0.1"
+                    min="0"
+                    required
+                    defaultValue={editingTaf?.barra ?? ''}
+                    className="w-full h-10 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-mono font-semibold text-slate-900 dark:text-white focus:border-sky-500 outline-none tabular-nums"
+                  />
                 </div>
-                <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800">
-                  <label className="text-[10px] font-black text-slate-400 uppercase block mb-2 tracking-widest text-center">Abdominal (Reps)</label>
-                  <input name="abdominal" type="number" min="0" required defaultValue={editingTaf?.abdominal ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-white text-center text-sm outline-none focus:border-orange-500 transition-colors"/>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                    Abdominal (reps)
+                  </label>
+                  <input
+                    name="abdominal"
+                    type="number"
+                    min="0"
+                    required
+                    defaultValue={editingTaf?.abdominal ?? ''}
+                    className="w-full h-10 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-mono font-semibold text-slate-900 dark:text-white focus:border-sky-500 outline-none tabular-nums"
+                  />
                 </div>
-                <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800">
-                  <label className="text-[10px] font-black text-slate-400 uppercase block mb-2 tracking-widest text-center">Impulsão (Metro)</label>
-                  <input name="impulsao" type="number" step="0.01" min="0" required defaultValue={editingTaf?.impulsao ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-white text-center text-sm outline-none focus:border-orange-500 transition-colors"/>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                    Impulsão horizontal (m)
+                  </label>
+                  <input
+                    name="impulsao"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    defaultValue={editingTaf?.impulsao ?? ''}
+                    className="w-full h-10 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-mono font-semibold text-slate-900 dark:text-white focus:border-sky-500 outline-none tabular-nums"
+                  />
                 </div>
-                <div className="bg-slate-900/50 p-3 rounded-xl border border-slate-800">
-                  <label className="text-[10px] font-black text-slate-400 uppercase block mb-2 tracking-widest text-center">Corrida (12 Min)</label>
-                  <input name="corrida" type="number" min="0" required defaultValue={editingTaf?.corrida ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-white text-center text-sm outline-none focus:border-orange-500 transition-colors"/>
+                <div>
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                    Corrida 12 min (m)
+                  </label>
+                  <input
+                    name="corrida"
+                    type="number"
+                    min="0"
+                    required
+                    defaultValue={editingTaf?.corrida ?? ''}
+                    className="w-full h-10 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-mono font-semibold text-slate-900 dark:text-white focus:border-sky-500 outline-none tabular-nums"
+                  />
                 </div>
-                <div className="col-span-2 bg-slate-900/50 p-3 rounded-xl border border-slate-800">
-                  <label className="text-[10px] font-black text-slate-400 uppercase block mb-2 tracking-widest text-center">Shuttle Run (Segundos)</label>
-                  <input name="shuttle" type="number" step="0.01" min="0" required defaultValue={editingTaf?.shuttle ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-white text-center text-sm outline-none focus:border-orange-500 transition-colors"/>
+                <div className="col-span-2">
+                  <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                    Shuttle Run (segundos)
+                  </label>
+                  <input
+                    name="shuttle"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    required
+                    defaultValue={editingTaf?.shuttle ?? ''}
+                    className="w-full h-10 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-mono font-semibold text-slate-900 dark:text-white focus:border-sky-500 outline-none tabular-nums"
+                  />
                 </div>
               </div>
             </div>
 
-            <div className="flex flex-col gap-3 mt-6">
-              <button type="submit" className="w-full py-4 bg-[#ea580c] hover:bg-orange-600 outline-none focus:ring-4 focus:ring-orange-500/50 text-white font-black rounded-xl shadow-[0_0_20px_rgba(234,88,12,0.3)] transition-all transform active:scale-95 flex items-center justify-center uppercase tracking-widest text-sm">
-                Avaliar Pontuação
+            <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setShowModal(false);
+                  setEditingTaf(null);
+                }}
+                className="h-9 px-4 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 transition-colors cursor-pointer"
+              >
+                Cancelar
               </button>
-              <button type="button" onClick={() => { setShowModal(false); setEditingTaf(null); }} className="w-full py-2 text-slate-400 font-bold hover:text-white transition-colors uppercase text-[10px] tracking-widest">
-                Abortar Missão
+              <button
+                type="submit"
+                className="h-9 px-4 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 transition-colors cursor-pointer"
+              >
+                {editingTaf ? 'Salvar alterações' : 'Salvar simulado'}
               </button>
             </div>
           </form>
-        </div>, document.body
+        </div>,
+        document.body
       )}
     </div>
   );

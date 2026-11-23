@@ -14,10 +14,11 @@ import {
   BookOpen,
   AlertTriangle,
   CheckCircle,
+  Check,
+  Clock,
   PlayCircle,
   Target,
   Calendar,
-  Clock,
   ChevronLeft,
   ChevronRight,
   BrainCircuit,
@@ -100,6 +101,50 @@ export default function AbaHoje({ onGoToTab }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [getLocalDateStr, todayKey]
   );
+
+  // Estado persistido diariamente das aulas marcadas nos blocos de hoje
+  const [checkedLessonsMap, setCheckedLessonsMap] = useState(() => {
+    try {
+      const storageKey = `qg_checked_lessons_${getLocalDateStr ? getLocalDateStr() : 'today'}`;
+      const saved = localStorage.getItem(storageKey);
+      const parsed = saved ? JSON.parse(saved) : {};
+      return parsed && typeof parsed === 'object' ? parsed : {};
+    } catch {
+      return {};
+    }
+  });
+  const [checkedLessonsDate, setCheckedLessonsDate] = useState(todayDateStr);
+
+  if (todayDateStr && checkedLessonsDate !== todayDateStr) {
+    setCheckedLessonsDate(todayDateStr);
+    try {
+      const saved = localStorage.getItem(`qg_checked_lessons_${todayDateStr}`);
+      const parsed = saved ? JSON.parse(saved) : {};
+      setCheckedLessonsMap(parsed && typeof parsed === 'object' ? parsed : {});
+    } catch {
+      setCheckedLessonsMap({});
+    }
+  }
+
+  const getLessonCheckKey = (block, les, lIdx) =>
+    `${block.subjectId}:${block.slotIndex}:${block.activeTopic?.id || 'topic'}:${les.index ?? lIdx}`;
+
+  const toggleLessonChecked = (key) => {
+    setCheckedLessonsMap((prev) => {
+      const next = { ...prev };
+      if (next[key]) {
+        delete next[key];
+      } else {
+        next[key] = true;
+      }
+      try {
+        localStorage.setItem(`qg_checked_lessons_${todayDateStr || 'today'}`, JSON.stringify(next));
+      } catch {
+        // Ignora erro de quota do localStorage
+      }
+      return next;
+    });
+  };
 
   const caveiraStats = useMemo(() => {
     const list = Array.isArray(caveiraQuestions) ? caveiraQuestions.filter(Boolean) : [];
@@ -374,8 +419,22 @@ export default function AbaHoje({ onGoToTab }) {
   const activeReview = dueReviews[safeReviewIdx] || null;
   const completedSlotsCount = theoryBlocks.filter((b) => b.isSlotCompleted).length;
   const totalTheoryAccelSec = useMemo(
-    () => theoryBlocks.reduce((acc, b) => acc + (b.isSlotCompleted ? 0 : (Number(b.blockAccelSec) || 0)), 0),
-    [theoryBlocks]
+    () =>
+      theoryBlocks.reduce((acc, b) => {
+        if (b.isSlotCompleted) return acc;
+        if (!b.plannedLessons || b.plannedLessons.length === 0) {
+          return acc + (Number(b.blockAccelSec) || 0);
+        }
+        const remainingBlockSec = b.plannedLessons.reduce((subAcc, les, lIdx) => {
+          const checkKey = `${b.subjectId}:${b.slotIndex}:${b.activeTopic?.id || 'topic'}:${les.index ?? lIdx}`;
+          if (checkedLessonsMap[checkKey]) return subAcc;
+          const origSec = Number(les.origSec) || parseDurationToSeconds(les.durStr) || 0;
+          const accelSec = Number(les.accelSec) || (origSec > 0 ? Math.round(origSec / b.spd) : 0);
+          return subAcc + accelSec;
+        }, 0);
+        return acc + remainingBlockSec;
+      }, 0),
+    [theoryBlocks, checkedLessonsMap]
   );
   const hasAcceleratedTheory = useMemo(
     () => theoryBlocks.some((b) => !b.isSlotCompleted && (Number(b.blockAccelSec) || 0) > 0 && b.spd > 1),
@@ -436,9 +495,13 @@ export default function AbaHoje({ onGoToTab }) {
     if (!block?.activeTopic || !setClassConfirmModal) return;
     const { activeTopic, currentCompleted, plannedLessons, blockCount, goalMin, subjectId, slotIndex } = block;
     const remainingLessons = (activeTopic.lessons || []).slice(currentCompleted, activeTopic.total);
-    const blockLessonNames = (plannedLessons || []).map((pl) => pl?.name).filter(Boolean);
-    const firstName = plannedLessons?.[0]?.name || '';
-    const firstDur = plannedLessons?.[0]?.durStr || '';
+    const checkedInBlock = (plannedLessons || []).filter((les, lIdx) =>
+      Boolean(checkedLessonsMap[getLessonCheckKey(block, les, lIdx)])
+    );
+    const activeSelection = checkedInBlock.length > 0 ? checkedInBlock : (plannedLessons || []);
+    const blockLessonNames = activeSelection.map((pl) => pl?.name).filter(Boolean);
+    const firstName = activeSelection?.[0]?.name || plannedLessons?.[0]?.name || '';
+    const firstDur = activeSelection?.[0]?.durStr || plannedLessons?.[0]?.durStr || '';
 
     setClassConfirmModal({
       subjectId,
@@ -449,7 +512,7 @@ export default function AbaHoje({ onGoToTab }) {
       maxClasses: Math.max(1, (Number(activeTopic.total) || 0) - (Number(activeTopic.completed) || 0)),
       lessonDuration: firstDur,
       allLessonsDurations: remainingLessons.map((l) => l?.duration || '60:00'),
-      suggestedClasses: blockCount,
+      suggestedClasses: checkedInBlock.length > 0 ? checkedInBlock.length : blockCount,
       timeGoalMinutes: goalMin || null,
       skipPrePrompt
     });
@@ -468,26 +531,25 @@ export default function AbaHoje({ onGoToTab }) {
               </h2>
             </div>
 
-            {totalTheoryAccelSec > 0 && (
-              <div
-                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/15 dark:bg-amber-400/15 border border-amber-500/45 dark:border-amber-400/45 text-amber-700 dark:text-amber-300 shadow-xs shrink-0"
-                title="Tempo total somado de todas as aulas pendentes de hoje"
-              >
-                {hasAcceleratedTheory ? (
-                  <Zap className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0" />
-                ) : (
-                  <Clock className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0" />
-                )}
-                <span className="text-[11px] font-sans font-bold uppercase tracking-wide text-amber-800/80 dark:text-amber-200/85">
-                  Total:
-                </span>
-                <span className="font-mono text-sm font-extrabold tabular-nums">
-                  {formatSecondsToFriendly(totalTheoryAccelSec)}
-                </span>
-              </div>
-            )}
-
-            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 shrink-0 tabular-nums">
+            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 shrink-0 tabular-nums flex-wrap">
+              {totalTheoryAccelSec > 0 && (
+                <>
+                  <span
+                    className="inline-flex items-center gap-1.5"
+                    title="Tempo restante somado das aulas pendentes de hoje"
+                  >
+                    {hasAcceleratedTheory ? (
+                      <Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
+                    ) : (
+                      <Clock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
+                    )}
+                    <span className="font-mono text-sm font-extrabold tracking-tight bg-gradient-to-r from-amber-600 via-orange-500 to-amber-500 dark:from-amber-300 dark:via-amber-400 dark:to-orange-400 bg-clip-text text-transparent">
+                      {formatSecondsToFriendly(totalTheoryAccelSec)}
+                    </span>
+                  </span>
+                  <span aria-hidden="true">·</span>
+                </>
+              )}
               <span>{todayHeaderLabel}</span>
               <span aria-hidden="true">·</span>
               <span className="font-mono font-semibold text-slate-700 dark:text-slate-200">
@@ -539,9 +601,27 @@ export default function AbaHoje({ onGoToTab }) {
                 const aulaBadgeText = remainingLessons === 1
                   ? 'Falta 1 aula'
                   : `Faltam ${remainingLessons} aulas`;
-                const totalTimeText = block.blockAccelSec > 0
-                  ? formatSecondsToFriendly(block.blockAccelSec)
-                  : '';
+
+                const checkedCountInBlock = (block.plannedLessons || []).reduce((count, les, lIdx) => {
+                  const key = getLessonCheckKey(block, les, lIdx);
+                  return count + (checkedLessonsMap[key] ? 1 : 0);
+                }, 0);
+
+                const remainingBlockAccelSec = (block.plannedLessons || []).reduce((acc, les, lIdx) => {
+                  const key = getLessonCheckKey(block, les, lIdx);
+                  if (checkedLessonsMap[key]) return acc;
+                  const origSec = Number(les.origSec) || parseDurationToSeconds(les.durStr) || 0;
+                  const accelSec = Number(les.accelSec) || (origSec > 0 ? Math.round(origSec / block.spd) : 0);
+                  return acc + accelSec;
+                }, 0);
+
+                const totalTimeText = remainingBlockAccelSec > 0
+                  ? formatSecondsToFriendly(remainingBlockAccelSec)
+                  : block.blockAccelSec > 0 && checkedCountInBlock > 0
+                    ? 'Pronto'
+                    : block.blockAccelSec > 0
+                      ? formatSecondsToFriendly(block.blockAccelSec)
+                      : '';
 
                 return (
                   <div
@@ -588,10 +668,26 @@ export default function AbaHoje({ onGoToTab }) {
                             {totalTimeText && (
                               <>
                                 <span aria-hidden="true">·</span>
-                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/12 dark:bg-amber-400/12 border border-amber-500/30 dark:border-amber-400/30 font-mono font-bold text-amber-700 dark:text-amber-300">
-                                  {block.spd > 1 && <Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />}
-                                  <span className="text-amber-800/80 dark:text-amber-200/80 font-sans font-semibold">Tempo total:</span>
-                                  <span>{totalTimeText}</span>
+                                <span className="inline-flex items-center gap-1 font-mono tabular-nums">
+                                  {totalTimeText === 'Pronto' ? (
+                                    <>
+                                      <Check className="w-3.5 h-3.5 text-emerald-500 dark:text-emerald-400 stroke-[2.75] shrink-0" />
+                                      <span className="text-[13px] font-bold text-emerald-600 dark:text-emerald-400">
+                                        Pronto
+                                      </span>
+                                    </>
+                                  ) : (
+                                    <>
+                                      {block.spd > 1 ? (
+                                        <Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
+                                      ) : (
+                                        <Clock className="w-3.5 h-3.5 text-amber-500/85 dark:text-amber-400/85 shrink-0" />
+                                      )}
+                                      <span className="text-[13px] font-extrabold tracking-tight bg-gradient-to-r from-amber-600 via-orange-500 to-amber-500 dark:from-amber-300 dark:via-amber-400 dark:to-orange-400 bg-clip-text text-transparent">
+                                        {totalTimeText}
+                                      </span>
+                                    </>
+                                  )}
                                 </span>
                               </>
                             )}
@@ -608,15 +704,14 @@ export default function AbaHoje({ onGoToTab }) {
                         </div>
                       ) : block.activeTopic ? (
                         <>
-                          {/* Lista de aulas planejadas com link direto no título */}
+                          {/* Lista de aulas planejadas com caixa de seleção individual e tempo estilizado */}
                           <div className="space-y-1">
                             {block.plannedLessons.map((les, lIdx) => {
+                              const checkKey = getLessonCheckKey(block, les, lIdx);
+                              const isLessonChecked = Boolean(checkedLessonsMap[checkKey]);
                               const origSec = Number(les.origSec) || parseDurationToSeconds(les.durStr) || 0;
                               const accelSec = Number(les.accelSec) || (origSec > 0 ? Math.round(origSec / block.spd) : 0);
-                              const durationLabel =
-                                accelSec > 0
-                                  ? `${formatSecondsToClock(accelSec)}${block.spd > 1 ? ` (${block.spd}x)` : ''}`
-                                  : les.durStr || '';
+                              const clockLabel = accelSec > 0 ? formatSecondsToClock(accelSec) : les.durStr || '';
 
                               const lessonEntry = block.activeTopic?.lessons?.[les.index ?? lIdx];
                               const indexedUrl = courseIndexUrlByTitle.get(normalizeLessonTitleKey(les.name)) || '';
@@ -637,34 +732,82 @@ export default function AbaHoje({ onGoToTab }) {
                               return (
                                 <div
                                   key={lIdx}
-                                  className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_7.75rem] items-center gap-x-3 gap-y-1 text-sm leading-snug"
+                                  className="grid grid-cols-[auto_minmax(0,1fr)_auto] items-center gap-x-2.5 text-sm leading-snug"
                                 >
+                                  <button
+                                    type="button"
+                                    role="checkbox"
+                                    aria-checked={isLessonChecked}
+                                    aria-label={isLessonChecked ? `Desmarcar aula ${les.name}` : `Marcar aula ${les.name}`}
+                                    onClick={() => toggleLessonChecked(checkKey)}
+                                    className={`w-[18px] h-[18px] rounded-[5px] border flex items-center justify-center shrink-0 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 ${
+                                      isLessonChecked
+                                        ? 'bg-emerald-500 border-emerald-500 text-white dark:text-slate-950'
+                                        : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-900 hover:border-sky-500 dark:hover:border-sky-400'
+                                    }`}
+                                  >
+                                    {isLessonChecked && <Check className="w-3 h-3 stroke-[3]" />}
+                                  </button>
+
                                   <a
                                     href={directUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="group relative flex items-center gap-2.5 min-w-0 -mx-2 px-2 py-1.5 rounded-lg border border-transparent hover:bg-sky-500/[0.09] dark:hover:bg-sky-400/[0.12] hover:border-sky-500/35 dark:hover:border-sky-400/35 hover:shadow-xs active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 transition-all duration-200 ease-out cursor-pointer"
+                                    className="group relative flex items-center gap-2 min-w-0 px-1.5 py-1.5 rounded-lg border border-transparent hover:bg-sky-500/[0.08] dark:hover:bg-sky-400/[0.1] hover:border-sky-500/25 dark:hover:border-sky-400/25 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 transition-colors cursor-pointer"
                                     title={`Assistir "${les.name}" diretamente no Caveira`}
                                   >
-                                    <span className="w-6 h-6 rounded-full bg-sky-500/12 dark:bg-sky-400/12 text-sky-600 dark:text-sky-400 group-hover:bg-sky-600 dark:group-hover:bg-sky-400 group-hover:text-white dark:group-hover:text-slate-950 group-hover:scale-110 group-hover:shadow-sm group-hover:shadow-sky-500/30 flex items-center justify-center shrink-0 transition-all duration-200">
-                                      <PlayCircle className="w-3.5 h-3.5 shrink-0" />
-                                    </span>
-                                    <span className="text-slate-700 dark:text-slate-200 font-medium break-words line-clamp-2 min-w-0 flex-1 group-hover:text-sky-700 dark:group-hover:text-sky-300 group-hover:translate-x-0.5 transition-all duration-200">
+                                    <span
+                                      className={`font-medium break-words line-clamp-2 min-w-0 flex-1 transition-colors ${
+                                        isLessonChecked
+                                          ? 'line-through text-slate-400 dark:text-slate-500'
+                                          : 'text-slate-700 dark:text-slate-200 group-hover:text-sky-700 dark:group-hover:text-sky-300'
+                                      }`}
+                                    >
                                       {les.name}
                                     </span>
-                                    <span className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md bg-sky-600/12 dark:bg-sky-400/15 text-sky-700 dark:text-sky-300 text-[11px] font-bold whitespace-nowrap shrink-0 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0 transition-all duration-200">
+                                    <span className="hidden sm:inline-flex items-center gap-0.5 text-sky-600 dark:text-sky-400 text-[11px] font-semibold whitespace-nowrap shrink-0 opacity-0 group-hover:opacity-100 group-focus-visible:opacity-100 transition-opacity">
                                       <span>Assistir</span>
-                                      <ArrowUpRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                                      <ArrowUpRight className="w-3.5 h-3.5" />
                                     </span>
                                   </a>
-                                  <span className="inline-flex items-center justify-end">
-                                    {durationLabel && (
-                                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/12 dark:bg-amber-400/12 border border-amber-500/35 dark:border-amber-400/35 text-xs sm:text-[13px] font-mono font-bold text-amber-700 dark:text-amber-300 tabular-nums whitespace-nowrap">
-                                        <Clock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
-                                        <span>{durationLabel}</span>
+
+                                  {clockLabel && (
+                                    <span
+                                      className={`inline-flex items-center justify-end gap-1 font-mono tabular-nums whitespace-nowrap text-right transition-colors ${
+                                        isLessonChecked
+                                          ? 'text-slate-400 dark:text-slate-600 line-through'
+                                          : 'text-emerald-600 dark:text-emerald-400'
+                                      }`}
+                                    >
+                                      {!isLessonChecked && (
+                                        accelSec > 0 && block.spd > 1 ? (
+                                          <Zap className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                                        ) : (
+                                          <Clock className="w-3.5 h-3.5 text-emerald-600/85 dark:text-emerald-400/90 shrink-0" />
+                                        )
+                                      )}
+                                      <span className="inline-flex items-baseline gap-1">
+                                        <span
+                                          className={`text-[13.5px] tracking-tight ${
+                                            isLessonChecked ? 'font-medium' : 'font-bold'
+                                          }`}
+                                        >
+                                          {clockLabel}
+                                        </span>
+                                        {accelSec > 0 && block.spd > 1 && (
+                                          <span
+                                            className={`text-[11px] font-semibold ${
+                                              isLessonChecked
+                                                ? 'text-slate-400 dark:text-slate-600'
+                                                : 'text-emerald-700/80 dark:text-emerald-300/90'
+                                            }`}
+                                          >
+                                            {block.spd}x
+                                          </span>
+                                        )}
                                       </span>
-                                    )}
-                                  </span>
+                                    </span>
+                                  )}
                                 </div>
                               );
                             })}
@@ -678,7 +821,11 @@ export default function AbaHoje({ onGoToTab }) {
                               className="h-10 px-3.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 flex items-center justify-center gap-2 transition-colors cursor-pointer"
                             >
                               <PlayCircle className="w-4 h-4 shrink-0" />
-                              <span className="truncate">Aula Assistida</span>
+                              <span className="truncate">
+                                {checkedCountInBlock > 0 && checkedCountInBlock < block.plannedLessons.length
+                                  ? `Concluir ${checkedCountInBlock} ${checkedCountInBlock === 1 ? 'selecionada' : 'selecionadas'}`
+                                  : 'Aula Assistida'}
+                              </span>
                             </button>
                             <button
                               type="button"

@@ -18,6 +18,12 @@ import {
   getCleanInitialState,
   PERSISTED_KEYS
 } from './storeConfig';
+import {
+  saveLocalRestorePoint,
+  listLocalRestorePoints,
+  removeLocalRestorePoint,
+  extractPersistedData,
+} from '../lib/backupManager';
 
 export {
   cleanAlternativeText,
@@ -256,23 +262,12 @@ const writeLocalSnapshot = (state, { dirty = true, savedAt = new Date().toISOStr
   }
 };
 
-const appendLocalBackup = (data, reason = 'auto', userId = null) => {
-  if (!hasMeaningfulUserData(data)) return;
-  try {
-    const backupsJson = localStorage.getItem('prf_qg_backups');
-    let backups = backupsJson ? JSON.parse(backupsJson) : [];
-    if (!Array.isArray(backups)) backups = [];
-    backups.unshift({
-      timestamp: Date.now(),
-      reason,
-      userId: userId || useStore.getState?.().user?.id || null,
-      data
-    });
-    backups = backups.slice(0, 5);
-    localStorage.setItem('prf_qg_backups', JSON.stringify(backups));
-  } catch (err) {
-    console.error("Erro ao criar backup local:", err);
-  }
+const appendLocalBackup = (data, reason = 'auto', userId = null, label = '') => {
+  return saveLocalRestorePoint(data, {
+    reason,
+    label,
+    userId: userId || useStore.getState?.().user?.id || null,
+  });
 };
 
 const hasMeaningfulUserData = (data) => {
@@ -358,6 +353,7 @@ export const useStore = create(
       isSavingToCloud: false,
       savePending: false,
       hasUnsyncedChanges: Boolean(readLocalSnapshot()?.dirty),
+      cloudSyncError: null,
       // Marca temporal da última versão sincronizada da nuvem (controle de concorrência)
       lastSyncedAt: null,
 
@@ -765,7 +761,7 @@ export const useStore = create(
               console.log(`💡 [Estado Offline] Carregando dados locais de ${chosenDateStr}`);
               const safeCaveira = isForeignCaveiraCache ? [] : (get().caveiraQuestions || []);
               const cleanData = normalizeHydratedState(chosenRaw, safeCaveira);
-              set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false, hasCompletedInitialCloudSync: true });
+              set({ ...cleanData, isSyncing: false, isLoadingFromCloud: false, hasCompletedInitialCloudSync: true, cloudSyncError: 'Sem conexão com a nuvem. Usando dados salvos no dispositivo.' });
               get().syncDayRollover();
               get().checkAndResetWeekly();
               get().checkAndAdvanceSeason();
@@ -773,14 +769,15 @@ export const useStore = create(
               get().syncAndRepairCaveiraReviews?.();
               try { const st = get(); const userLabel = (st.userStats?.displayName || user.user_metadata?.display_name || user.email?.split('@')[0] || user.email || '').trim(); window.postMessage({ source: 'QG_WEB_APP', type: 'SET_ACTIVE_USER', payload: { userId: user.id, userEmail: user.email || '', userLabel } }, '*'); } catch (_) {}
 
-              toast.info(`⚠️ Usando dados salvos localmente (${chosenDateStr}) devido a erro de conexão.`);
+              toast.info(`Usando dados salvos localmente (${chosenDateStr}) devido a falha de conexão.`);
               return true;
             }
           } catch (backupErr) {
             console.error("Falha ao restaurar dados locais:", backupErr);
           }
 
-          toast.error("O Supabase está demorando para responder. Tente atualizar a página (F5).");
+          set({ cloudSyncError: 'Não foi possível conectar à nuvem. Tente sincronizar novamente.' });
+          toast.error("Não foi possível carregar da nuvem. Tente sincronizar novamente.");
         } finally {
           if (retryCount === 0 || retryCount >= 2 || !get().isLoadingFromCloud) {
              set({ isSyncing: false, isLoadingFromCloud: false });
@@ -944,17 +941,17 @@ export const useStore = create(
           if (hasMeaningfulUserData(dataToSave)) {
             useStore._lastKnownCloudWasMeaningful = true;
           }
-          set({ lastSyncedAt: finalSyncedAt, hasUnsyncedChanges: false });
+          set({ lastSyncedAt: finalSyncedAt, hasUnsyncedChanges: false, cloudSyncError: null });
           writeLocalSnapshot(get(), {
             dirty: false,
             savedAt: finalSyncedAt,
             keyTimestamps: useStore._keyTimestamps || {}
           });
 
-          // Backup local automático (só adiciona se tiver dados reais, preservando últimos 5 backups íntegros)
+          // Backup local automático (só adiciona se tiver dados reais, preservando últimos pontos íntegros)
           appendLocalBackup(dataToSave, 'cloud_sync');
 
-          toast.success("Nuvem atualizada! ☁️", { id: 'cloud-sync-toast', duration: 1200 });
+          toast.success("Nuvem atualizada!", { id: 'cloud-sync-toast', duration: 1200 });
         } catch (error) {
           clearTimeout(timeoutId);
           // A3: Em caso de timeout/abort, relê o updated_at remoto para checar se o servidor concluiu a gravação
@@ -972,7 +969,7 @@ export const useStore = create(
               recoveredFromTimeout = true;
               useStore._retryCount = 0;
               useStore._unsyncedToastShown = false;
-              set({ lastSyncedAt: finalSyncedAt, hasUnsyncedChanges: false });
+              set({ lastSyncedAt: finalSyncedAt, hasUnsyncedChanges: false, cloudSyncError: null });
               writeLocalSnapshot(get(), {
                 dirty: false,
                 savedAt: finalSyncedAt,
@@ -983,7 +980,10 @@ export const useStore = create(
 
           if (!recoveredFromTimeout) {
             console.error('❌ [Nuvem] Erro no Upload:', error.message);
-            set({ hasUnsyncedChanges: true });
+            set({
+              hasUnsyncedChanges: true,
+              cloudSyncError: 'Alterações salvas no dispositivo, mas pendentes de envio para a nuvem.',
+            });
             writeLocalSnapshot(get(), {
               dirty: true,
               savedAt: new Date().toISOString(),
@@ -3037,16 +3037,71 @@ export const useStore = create(
         return summary;
       },
 
+      createLocalRestorePoint: (reason = 'manual', label = '') => {
+        const st = get();
+        const snapshot = extractPersistedData(st);
+        return saveLocalRestorePoint(snapshot, {
+          reason,
+          label,
+          userId: st.user?.id || null,
+          force: reason === 'manual',
+        });
+      },
+
+      getLocalRestorePoints: () => {
+        return listLocalRestorePoints(get().user?.id || null);
+      },
+
+      deleteLocalRestorePoint: (pointId) => {
+        removeLocalRestorePoint(pointId);
+        return listLocalRestorePoints(get().user?.id || null);
+      },
+
+      restoreFromLocalPoint: async (pointId) => {
+        const st = get();
+        const points = listLocalRestorePoints(st.user?.id || null);
+        const target = points.find((p) => p.id === pointId);
+        if (!target || !target.data) {
+          toast.error('Ponto de restauração não encontrado.');
+          return false;
+        }
+        // Salva ponto preventivo antes da restauração
+        if (hasMeaningfulUserData(st)) {
+          saveLocalRestorePoint(extractPersistedData(st), {
+            reason: 'pre_restore',
+            userId: st.user?.id || null,
+          });
+        }
+        const restored = normalizeHydratedState(target.data, target.data.caveiraQuestions || []);
+        set({ ...restored });
+        get().syncDayRollover?.();
+        get().checkAndResetWeekly?.();
+        get().checkAndResetDailyMissions?.();
+        get().syncAndRepairCaveiraReviews?.();
+        try {
+          localStorage.setItem('prf_caveira_questions', JSON.stringify(restored.caveiraQuestions || []));
+        } catch (_) {}
+        await get().saveToCloud({ allowEmptyOverwrite: true });
+        toast.success('Ponto de restauração aplicado com sucesso.');
+        return true;
+      },
+
       executeTotalWipe: async () => {
-        const { user } = get();
-        console.log("🔴 PROTOCOLO DE DESTRUIÇÃO ABSOLUTA INICIADO...");
+        const st = get();
+        const { user } = st;
+        // Backup preventivo antes de zerar tudo, permitindo desfazer em Backup & Sistema
+        if (hasMeaningfulUserData(st)) {
+          saveLocalRestorePoint(extractPersistedData(st), {
+            reason: 'pre_total_wipe',
+            userId: user?.id || null,
+          });
+        }
         clearTimeout(useStore._debounceTimer);
         clearTimeout(useStore._localDebounceTimer);
         clearTimeout(useStore._retryTimer);
         useStore._keyTimestamps = {};
         try {
           localStorage.removeItem('prf_caveira_questions');
-          localStorage.removeItem('prf_qg_backups');
           localStorage.removeItem(LOCAL_STATE_STORAGE_KEY);
           localStorage.removeItem('alvo_legal_seen_statements_v1');
           localStorage.removeItem('alvo_legal_high_score_v1');

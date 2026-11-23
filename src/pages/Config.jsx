@@ -1,18 +1,87 @@
+import { useState, useRef, lazy, Suspense } from 'react';
+import { createPortal } from 'react-dom';
 import { useStore, getCleanInitialState, PERSISTED_KEYS } from '../store/useStore';
 import { assetUrl } from '../lib/assets';
+import { formatBackupReasonLabel } from '../lib/backupManager';
 import { toast } from 'sonner';
-import { Target, AlertTriangle, Clock, Settings, Plus, Edit2, Trash2, Calendar, Sun, X, Save, User, Volume2, VolumeX, Shield, CheckCircle, Check, Camera, BookOpen, ScanLine, ChevronUp, ChevronDown, ChevronsUp, ChevronsDown, Zap, FastForward, Layers, RotateCcw, RefreshCw, Shuffle, Share2, Download } from 'lucide-react';
-import ImportOCR from '../components/ImportOCR';
-import TopicLessonScanner from '../components/TopicLessonScanner';
-import SelectiveResetModal from '../components/SelectiveResetModal';
-import ShareSyllabusModal from '../components/ShareSyllabusModal';
-import { parseDurationToSeconds, formatSecondsToClock, formatSecondsToFriendly, getSubjectVideoStats, formatMinutesToFriendly, calculateLessonsForGoal } from '../lib/durationHelpers';
+import {
+  Target,
+  AlertTriangle,
+  Clock,
+  Settings,
+  Plus,
+  Edit2,
+  Trash2,
+  Calendar,
+  Sun,
+  X,
+  Save,
+  User,
+  Volume2,
+  VolumeX,
+  Shield,
+  CheckCircle,
+  Check,
+  Camera,
+  BookOpen,
+  ScanLine,
+  ChevronUp,
+  ChevronDown,
+  ChevronsUp,
+  ChevronsDown,
+  Zap,
+  FastForward,
+  Layers,
+  RotateCcw,
+  RefreshCw,
+  Shuffle,
+  Share2,
+  Download,
+  History,
+  Cloud,
+  Upload,
+  Loader2
+} from 'lucide-react';
+import {
+  parseDurationToSeconds,
+  formatSecondsToClock,
+  formatSecondsToFriendly,
+  getSubjectVideoStats,
+  formatMinutesToFriendly,
+  calculateLessonsForGoal
+} from '../lib/durationHelpers';
 import { APP_VERSION } from '../version';
 
-import { useState, useRef } from 'react';
-import { createPortal } from 'react-dom';
+// Lazy-loaded heavy modals (isolates tesseract.js OCR engine from Config bundle)
+const ImportOCR = lazy(() => import('../components/ImportOCR'));
+const TopicLessonScanner = lazy(() => import('../components/TopicLessonScanner'));
+const SelectiveResetModal = lazy(() => import('../components/SelectiveResetModal'));
+const ShareSyllabusModal = lazy(() => import('../components/ShareSyllabusModal'));
 
 const notificationsSupported = typeof Notification !== 'undefined';
+
+function ModalLoadingOverlay() {
+  return (
+    <div className="fixed inset-0 z-[160] bg-slate-950/60 backdrop-blur-xs flex items-center justify-center p-4">
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl px-5 py-4 flex items-center gap-3 shadow-lg">
+        <Loader2 className="w-4 h-4 text-sky-500 animate-spin" />
+        <span className="text-xs font-medium text-slate-700 dark:text-slate-200">Carregando módulo...</span>
+      </div>
+    </div>
+  );
+}
+
+const formatSnapshotTimestamp = (iso) => {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  if (Number.isNaN(d.getTime())) return '—';
+  return d.toLocaleString('pt-BR', {
+    day: '2-digit',
+    month: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
+};
 
 export default function Config({
   availableColors
@@ -23,11 +92,13 @@ export default function Config({
   const [showResetModal, setShowResetModal] = useState(false);
   const [shareModalConfig, setShareModalConfig] = useState(null); // { isOpen: boolean, tab: 'share'|'import', initialSubjectId: string|null }
   const [activeConfigTab, setActiveConfigTab] = useState('disciplinas'); // 'disciplinas' | 'ritmo' | 'perfil' | 'sistema'
-  // Scanner de aulas por assunto
-  const [scannerTopicIdx, setScannerTopicIdx] = useState(null); // índice do tópico sendo escaneado
+  const [scannerTopicIdx, setScannerTopicIdx] = useState(null);
+  const [restoreVersion, setRestoreVersion] = useState(0);
+  const [isRestoringPoint, setIsRestoringPoint] = useState(false);
   const modalBodyRef = useRef(null);
 
   const {
+    user,
     cycle,
     subjects,
     setSubjects,
@@ -53,8 +124,19 @@ export default function Config({
     futureScheduleRules,
     cycleScheduleType,
     cycleWeekStart,
-    getRelativeDateInfo
+    getRelativeDateInfo,
+    createLocalRestorePoint,
+    getLocalRestorePoints,
+    restoreFromLocalPoint,
+    deleteLocalRestorePoint,
+    cloudSyncError,
+    lastSyncedAt,
+    saveToCloud,
+    isSavingToCloud
   } = useStore();
+
+  void restoreVersion;
+  const restorePoints = activeConfigTab === 'sistema' ? (getLocalRestorePoints?.() || []) : [];
 
   const handleForceUpdate = async () => {
     toast.loading("Limpando caches e forçando atualização...", { id: 'force-update' });
@@ -124,11 +206,25 @@ export default function Config({
   const isB2TooHigh = b2Percent > 40; 
   const isB1TooLow = b1Percent > 0 && 35 > b1Percent;
 
+  const subjectsList = Object.values(subjects || {});
+
   return (
-    <div className="fade-in w-full pb-10">
-      {/* Navegação por Abas Internas dos Ajustes */}
-      <div className="mb-6 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-2xl p-1.5 shadow-sm overflow-x-auto custom-scrollbar">
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 min-w-[300px]">
+    <div className="fade-in w-full pb-10 space-y-6">
+      {/* Cabeçalho transparente padronizado */}
+      <header className="flex flex-col sm:flex-row sm:items-end justify-between gap-4 pb-1">
+        <div className="min-w-0">
+          <h1 className="font-display text-lg sm:text-xl font-bold tracking-tight text-slate-900 dark:text-white">
+            Ajustes
+          </h1>
+          <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+            {subjectsList.length} {subjectsList.length === 1 ? 'disciplina' : 'disciplinas'} · {totalSlots} {totalSlots === 1 ? 'bloco' : 'blocos'} no ciclo · v{APP_VERSION}
+          </p>
+        </div>
+      </header>
+
+      {/* Navegação por abas (underline padronizada) */}
+      <div className="border-b border-slate-200/80 dark:border-slate-800 overflow-x-auto no-scrollbar">
+        <div className="flex items-center gap-1 min-w-max">
           {[
             { id: 'disciplinas', label: 'Disciplinas & Edital', icon: BookOpen },
             { id: 'ritmo', label: 'Ritmo & Metas', icon: Target },
@@ -142,886 +238,1091 @@ export default function Config({
                 key={tabItem.id}
                 type="button"
                 onClick={() => setActiveConfigTab(tabItem.id)}
-                className={`flex items-center justify-center gap-2 px-3 py-2.5 rounded-xl text-xs sm:text-sm font-bold transition-all cursor-pointer ${
+                className={`relative px-3.5 py-2.5 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors whitespace-nowrap cursor-pointer ${
                   isActive
-                    ? 'bg-blue-600 text-white shadow-sm shadow-blue-600/20'
-                    : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-850 hover:text-slate-900 dark:hover:text-slate-100'
+                    ? 'text-sky-600 dark:text-sky-400'
+                    : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
                 }`}
               >
-                <TabIcon className="w-4 h-4 shrink-0" />
-                <span className="truncate">{tabItem.label}</span>
+                <TabIcon className="w-3.5 h-3.5 shrink-0" />
+                <span>{tabItem.label}</span>
+                {isActive && (
+                  <span className="absolute inset-x-0 -bottom-px h-0.5 bg-sky-600 dark:bg-sky-400 rounded-full" />
+                )}
               </button>
             );
           })}
         </div>
       </div>
 
-      {activeConfigTab === 'ritmo' && (
-      <>
-      <div className="bg-slate-900 p-5 sm:p-6 rounded-2xl shadow-lg border border-slate-800 mb-6 relative overflow-hidden text-white">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-bl-full pointer-events-none"></div>
-        <h3 className="text-lg font-black text-white flex items-center gap-2 mb-2">
-          <Target className="text-blue-400 w-5 h-5"/> Auditoria do Ciclo (Curva ABC)
-        </h3>
-        <p className="text-sm text-slate-400 mb-5">
-          O seu cronograma possui <strong className="text-white">{totalSlots} vagas (slots)</strong>. Veja como o seu esforço está distribuído em relação ao peso real do edital da PRF.
-        </p>
-
-        <div className="flex flex-col sm:flex-row gap-4 mb-4">
-          <div className="flex-1 bg-slate-800 border border-slate-700 p-4 rounded-lg">
-             <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-black text-slate-300 uppercase">Bloco I (Básicas)</span>
-                <span className="text-xs font-bold text-slate-500">Alvo: ~46%</span>
-             </div>
-             <div className="flex items-end gap-2 mb-2">
-               <span className={`text-2xl font-black ${isB1TooLow ? 'text-red-400' : 'text-blue-400'}`}>{b1Percent}%</span>
-               <span className="text-xs text-slate-400 mb-1">({b1Count} vagas)</span>
-             </div>
-             <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
-               <div className={`h-1.5 rounded-full ${isB1TooLow ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${b1Percent}%` }}></div>
-             </div>
-          </div>
-
-          <div className="flex-1 bg-slate-800 border border-slate-700 p-4 rounded-lg">
-             <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-black text-slate-300 uppercase">Bloco II (Trânsito)</span>
-                <span className="text-xs font-bold text-slate-500">Alvo: ~25%</span>
-             </div>
-             <div className="flex items-end gap-2 mb-2">
-               <span className={`text-2xl font-black ${(isB2TooLow || isB2TooHigh) ? 'text-red-400' : 'text-blue-400'}`}>{b2Percent}%</span>
-               <span className="text-xs text-slate-400 mb-1">({b2Count} vagas)</span>
-             </div>
-             <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
-               <div className={`h-1.5 rounded-full ${(isB2TooLow || isB2TooHigh) ? 'bg-red-500' : 'bg-blue-500'}`} style={{ width: `${b2Percent}%` }}></div>
-             </div>
-          </div>
-
-          <div className="flex-1 bg-slate-800 border border-slate-700 p-4 rounded-lg">
-             <div className="flex justify-between items-center mb-2">
-                <span className="text-xs font-black text-slate-300 uppercase">Bloco III (Direito)</span>
-                <span className="text-xs font-bold text-slate-500">Alvo: ~29%</span>
-             </div>
-             <div className="flex items-end gap-2 mb-2">
-               <span className="text-2xl font-black text-purple-400">{b3Percent}%</span>
-               <span className="text-xs text-slate-400 mb-1">({b3Count} vagas)</span>
-             </div>
-             <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden">
-               <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${b3Percent}%` }}></div>
-             </div>
-          </div>
-        </div>
-
-        {(isB1TooLow || isB2TooLow || isB2TooHigh) && (
-          <div className="bg-red-900/40 border border-red-800 p-3 rounded-lg flex items-start gap-3 mt-4">
-            <AlertTriangle className="text-red-400 w-5 h-5 shrink-0 mt-0.5" />
+      {/* ABA 1: DISCIPLINAS & EDITAL */}
+      {activeConfigTab === 'disciplinas' && (
+        <div className="space-y-5">
+          <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
             <div>
-              <p className="text-xs font-bold text-red-300 uppercase mb-1">Risco Tático Detetado</p>
-              <p className="text-xs text-red-200/80">
-                {isB2TooHigh && "O seu cronograma está excessivamente focado no Trânsito. Embora importante, o Bloco I pode eliminá-lo se não dedicar o volume necessário de horas."}
-                {isB2TooLow && "Pouca alocação no Trânsito. Sendo a disciplina mais pesada do concurso, você precisa de aumentar a cadência no Bloco II."}
-                {isB1TooLow && !isB2TooHigh && "O volume do Bloco I (Básicas) está perigosamente baixo. Lembre-se que o mínimo para não reprovar é 15 pontos num universo de 55 questões."}
+              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Settings className="w-4 h-4 text-slate-400" />
+                <span>Minhas disciplinas</span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Gerencie matérias, assuntos, videoaulas ou compartilhe sua grade.
               </p>
             </div>
+
+            <div className="flex items-center gap-2 flex-wrap">
+              <button
+                type="button"
+                onClick={() => setShareModalConfig({ isOpen: true, tab: 'share', initialSubjectId: null })}
+                className="h-9 px-3 rounded-lg text-xs font-medium bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+                title="Compartilhar matérias, assuntos e videoaulas"
+              >
+                <Share2 className="w-3.5 h-3.5 text-sky-500" />
+                <span>Compartilhar</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShareModalConfig({ isOpen: true, tab: 'import', initialSubjectId: null })}
+                className="h-9 px-3 rounded-lg text-xs font-medium bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+                title="Importar grade recebida de um colega"
+              >
+                <Download className="w-3.5 h-3.5 text-emerald-500" />
+                <span>Importar</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowImportOCR(true)}
+                className="h-9 px-3 rounded-lg text-xs font-medium bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 text-slate-700 dark:text-slate-200 hover:border-slate-300 dark:hover:border-slate-700 inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                <Camera className="w-3.5 h-3.5 text-slate-500" />
+                <span>OCR</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  const newId = 'sub_' + Date.now();
+                  const defaultColor = (availableColors && availableColors[0]?.color) || 'bg-blue-600 text-white';
+                  setDraftSubject({
+                    id: newId,
+                    name: '',
+                    color: defaultColor,
+                    block: 'B1',
+                    speed: 1,
+                    timeGoalMinutes: 0,
+                    onCompleteAction: 'double_remaining',
+                    replacementSubjectId: '',
+                    topics: []
+                  });
+                  setEditingSubjectId(newId);
+                }}
+                className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Nova disciplina</span>
+              </button>
+            </div>
           </div>
-        )}
-      </div>
 
-      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mb-6 border-l-4 border-l-blue-500 dark:bg-slate-900 dark:border-slate-800">
-        <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 mb-2 dark:text-slate-100">
-          <Clock className="text-blue-600 w-5 h-5"/> Data Alvo da Prova
-        </h3>
-        <p className="text-sm text-slate-500 mb-4 dark:text-slate-400">O sistema usará esta data para cruzar com o seu ritmo de estudos e alertar se você corre risco de não fechar o edital a tempo.</p>
-        <div className="flex items-center gap-4">
-           <input 
-              type="date" 
-              value={targetExamDate} 
-              onChange={(e) => setTargetExamDate(e.target.value)}
-              className="border-2 border-slate-200 p-2.5 rounded-lg font-bold text-slate-700 outline-none focus:border-blue-400 dark:text-slate-200 dark:border-slate-800"
-           />
-        </div>
-      </div>
-      </>
-      )}
+          {subjectsList.length === 0 ? (
+            <div className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-10 text-center">
+              <BookOpen className="w-8 h-8 text-slate-300 dark:text-slate-700 mx-auto mb-2.5" />
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">
+                Nenhuma disciplina cadastrada
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                Crie sua primeira matéria, importe via código de compartilhamento ou use o scanner OCR.
+              </p>
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {subjectsList.map(sub => {
+                const st = getSubjectVideoStats(sub);
+                const currentSpeed = Number(sub.speed) || 1;
+                const currentTimeGoal = Number(sub.timeGoalMinutes || subjectTimeGoal?.[sub.id]) || 0;
+                const dotColor = sub.color?.split(' ')[0] || 'bg-sky-500';
+                const completionBehavior =
+                  sub.onCompleteAction === 'replace' && sub.replacementSubjectId && subjects[sub.replacementSubjectId]
+                    ? `Substitui por ${subjects[sub.replacementSubjectId].name}`
+                    : sub.onCompleteAction === 'double_remaining'
+                      ? 'Dobra restante no dia'
+                      : 'Encerra ao concluir';
 
-      {activeConfigTab === 'disciplinas' && (
-      <>
-      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mb-6 flex flex-col md:flex-row justify-between items-start md:items-center gap-3 dark:bg-slate-900 dark:border-slate-800">
-        <div>
-          <h3 className="text-lg font-bold text-slate-800 flex items-center gap-2 dark:text-slate-100">
-            <Settings className="text-slate-600 w-5 h-5 dark:text-slate-300"/> Minhas Disciplinas
-          </h3>
-          <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">Gerencie seu edital, cadastre videoaulas ou compartilhe com outros concurseiros.</p>
-        </div>
-        <div className="flex gap-2 flex-wrap w-full md:w-auto">
-          <button 
-            onClick={() => setShareModalConfig({ isOpen: true, tab: 'share', initialSubjectId: null })}
-            className="bg-blue-600 hover:bg-blue-700 text-white px-3 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all hover:scale-105 active:scale-95"
-            title="Compartilhar matérias, assuntos e videoaulas com outro usuário"
-          >
-            <Share2 className="w-4 h-4" /> Compartilhar Grade
-          </button>
-          <button 
-            onClick={() => setShareModalConfig({ isOpen: true, tab: 'import', initialSubjectId: null })}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-3 py-2 rounded-lg font-bold flex items-center justify-center gap-1.5 text-xs sm:text-sm shadow-sm transition-all hover:scale-105 active:scale-95"
-            title="Importar grade de matérias recebida de um colega"
-          >
-            <Download className="w-4 h-4" /> Importar Grade
-          </button>
-          <button onClick={() => setShowImportOCR(true)}
-            className="bg-slate-100 text-slate-700 hover:bg-slate-200 px-3 py-2 rounded-lg font-bold flex items-center gap-1 text-xs sm:text-sm dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors">
-            <Camera className="w-4 h-4" /> OCR
-          </button>
-          <button onClick={() => {
-              const newId = 'sub_' + Date.now();
-              const defaultColor = (availableColors && availableColors[0]?.color) || 'bg-blue-600 text-white';
-              setDraftSubject({ 
-                id: newId, 
-                name: '', 
-                color: defaultColor, 
-                block: 'B1', 
-                speed: 1, 
-                timeGoalMinutes: 0,
-                onCompleteAction: 'double_remaining',
-                replacementSubjectId: '',
-                topics: [] 
-              });
-              setEditingSubjectId(newId);
-            }} 
-            className="bg-slate-100 text-slate-700 hover:bg-slate-200 px-3 py-2 rounded-lg font-bold flex items-center gap-1 text-xs sm:text-sm dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700 transition-colors">
-            <Plus className="w-4 h-4" /> Nova
-          </button>
-        </div>
-      </div>
-
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {Object.values(subjects || {}).map(sub => {
-          const st = getSubjectVideoStats(sub);
-          const currentSpeed = Number(sub.speed) || 1;
-          const currentTimeGoal = Number(sub.timeGoalMinutes || subjectTimeGoal?.[sub.id]) || 0;
-
-          return (
-            <div key={sub.id} className="border border-slate-200/80 rounded-xl p-4 flex flex-col justify-between gap-2.5 bg-white hover:border-blue-400 transition-colors dark:bg-slate-900 dark:border-slate-800 shadow-xs dark:shadow-none">
-              <div className="flex flex-col gap-2">
-                <div className="flex justify-between items-start gap-2">
-                  <span
-                    className={`text-[10px] font-black px-2 py-1 rounded-md uppercase tracking-wider truncate max-w-full ${sub.color}`}
-                    title={`${sub.name} (${sub.block})`}
+                return (
+                  <div
+                    key={sub.id}
+                    className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 rounded-xl p-4 flex flex-col justify-between gap-3 transition-colors"
                   >
-                    {sub.name} <span className="opacity-65 ml-1">({sub.block})</span>
-                  </span>
-                  <div className="flex gap-1 shrink-0">
-                    <button 
-                      onClick={() => setShareModalConfig({ isOpen: true, tab: 'share', initialSubjectId: sub.id })}
-                      className="p-1.5 bg-slate-50 border border-slate-200 text-slate-500 hover:text-blue-600 rounded-lg dark:bg-slate-850 dark:text-slate-400 dark:border-slate-700 transition-colors cursor-pointer"
-                      title={`Compartilhar ${sub.name}`}
-                    >
-                      <Share2 className="w-3.5 h-3.5" />
-                    </button>
-                    <button onClick={() => {
-                      setDraftSubject({ 
-                        ...sub, 
-                        speed: sub.speed || 1,
-                        timeGoalMinutes: currentTimeGoal,
-                        onCompleteAction: (sub.onCompleteAction === 'replace' || sub.onCompleteAction === 'double_remaining') ? sub.onCompleteAction : 'keep_fixed',
-                        replacementSubjectId: sub.replacementSubjectId || ''
-                      });
-                      setEditingSubjectId(sub.id);
-                    }} className="p-1.5 bg-slate-50 border border-slate-200 text-slate-500 hover:text-blue-600 rounded-lg dark:bg-slate-850 dark:text-slate-400 dark:border-slate-700 cursor-pointer"><Edit2 className="w-3.5 h-3.5" /></button>
-                    <button onClick={() => {
-                      setGlobalModal({
-                        title: "Excluir Disciplina",
-                        message: `Você tem certeza que deseja excluir a matéria "${sub.name}" permanentemente do seu planejamento?`,
-                        onConfirm: () => {
-                          const st = useStore.getState();
-                          const newSubjects = { ...st.subjects };
-                          delete newSubjects[sub.id];
-                          Object.keys(newSubjects).forEach(k => {
-                            if (newSubjects[k]?.replacementSubjectId === sub.id) {
-                              newSubjects[k] = { ...newSubjects[k], replacementSubjectId: '' };
-                            }
-                          });
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${dotColor}`} />
+                          <h3 className="text-sm font-semibold text-slate-900 dark:text-white truncate" title={sub.name}>
+                            {sub.name}
+                          </h3>
+                          <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500 shrink-0">
+                            {sub.block}
+                          </span>
+                        </div>
 
-                          const newCycle = (st.cycle || []).map(day => (day || []).filter(sId => sId !== sub.id));
-                          const newCycleSlotCounts = (st.cycleSlotCounts || []).map((counts, dIdx) => {
-                            const day = st.cycle?.[dIdx] || [];
-                            return (counts || []).filter((_, sIdx) => day[sIdx] !== sub.id);
-                          });
+                        <div className="flex items-center gap-0.5 shrink-0">
+                          <button
+                            type="button"
+                            onClick={() => setShareModalConfig({ isOpen: true, tab: 'share', initialSubjectId: sub.id })}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            title={`Compartilhar ${sub.name}`}
+                          >
+                            <Share2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setDraftSubject({
+                                ...sub,
+                                speed: sub.speed || 1,
+                                timeGoalMinutes: currentTimeGoal,
+                                onCompleteAction: (sub.onCompleteAction === 'replace' || sub.onCompleteAction === 'double_remaining') ? sub.onCompleteAction : 'keep_fixed',
+                                replacementSubjectId: sub.replacementSubjectId || ''
+                              });
+                              setEditingSubjectId(sub.id);
+                            }}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            title="Editar disciplina"
+                          >
+                            <Edit2 className="w-3.5 h-3.5" />
+                          </button>
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setGlobalModal({
+                                title: 'Excluir disciplina?',
+                                message: `Deseja excluir "${sub.name}" permanentemente? Um ponto de restauração será salvo automaticamente antes da exclusão.`,
+                                onConfirm: () => {
+                                  createLocalRestorePoint?.('pre_delete_subject', `Antes de excluir ${sub.name}`);
+                                  const storeState = useStore.getState();
+                                  const newSubjects = { ...storeState.subjects };
+                                  delete newSubjects[sub.id];
+                                  Object.keys(newSubjects).forEach(k => {
+                                    if (newSubjects[k]?.replacementSubjectId === sub.id) {
+                                      newSubjects[k] = { ...newSubjects[k], replacementSubjectId: '' };
+                                    }
+                                  });
 
-                          const newOverrides = {};
-                          const newOverrideCounts = {};
-                          Object.entries(st.calendarOverrides || {}).forEach(([dateKey, arr]) => {
-                            const filtered = (arr || []).filter(sId => sId !== sub.id);
-                            if (filtered.length > 0 || (arr || []).length === 0) {
-                              newOverrides[dateKey] = filtered;
-                              if (st.calendarOverrideCounts?.[dateKey]) {
-                                newOverrideCounts[dateKey] = st.calendarOverrideCounts[dateKey].filter((_, sIdx) => (arr || [])[sIdx] !== sub.id);
-                              }
-                            }
-                          });
+                                  const newCycle = (storeState.cycle || []).map(day => (day || []).filter(sId => sId !== sub.id));
+                                  const newCycleSlotCounts = (storeState.cycleSlotCounts || []).map((counts, dIdx) => {
+                                    const day = storeState.cycle?.[dIdx] || [];
+                                    return (counts || []).filter((_, sIdx) => day[sIdx] !== sub.id);
+                                  });
 
-                          const newRules = (st.futureScheduleRules || []).map(rule => {
-                            const slots = rule.daySlots || rule.subjects || [];
-                            const filtered = slots.filter(sId => sId !== sub.id);
-                            const filteredCounts = (rule.slotCounts || []).filter((_, sIdx) => slots[sIdx] !== sub.id);
-                            return { ...rule, daySlots: filtered, slotCounts: filteredCounts };
-                          });
+                                  const newOverrides = {};
+                                  const newOverrideCounts = {};
+                                  Object.entries(storeState.calendarOverrides || {}).forEach(([dateKey, arr]) => {
+                                    const filtered = (arr || []).filter(sId => sId !== sub.id);
+                                    if (filtered.length > 0 || (arr || []).length === 0) {
+                                      newOverrides[dateKey] = filtered;
+                                      if (storeState.calendarOverrideCounts?.[dateKey]) {
+                                        newOverrideCounts[dateKey] = storeState.calendarOverrideCounts[dateKey].filter((_, sIdx) => (arr || [])[sIdx] !== sub.id);
+                                      }
+                                    }
+                                  });
 
-                          useStore.setState({
-                            subjects: newSubjects,
-                            cycle: newCycle,
-                            cycleSlotCounts: newCycleSlotCounts,
-                            calendarOverrides: newOverrides,
-                            calendarOverrideCounts: newOverrideCounts,
-                            futureScheduleRules: newRules,
-                            reviews: (st.reviews || []).filter(r =>
-                              r.subjectId !== sub.id ||
-                              r.isCaveiraQuestion ||
-                              Boolean(r.questionData) ||
-                              String(r.id || '').startsWith('rev_caveira_') ||
-                              String(r.topicName || '').startsWith('[Caveira')
-                            ),
-                            completedToday: []
-                          });
-                          useStore.getState().syncAndRepairCaveiraReviews?.();
-                        }
-                      });
-                    }} className="p-1.5 bg-slate-50 border border-slate-200 text-slate-500 hover:text-red-600 rounded-lg dark:bg-slate-850 dark:text-slate-400 dark:border-slate-700 cursor-pointer"><Trash2 className="w-3.5 h-3.5" /></button>
+                                  const newRules = (storeState.futureScheduleRules || []).map(rule => {
+                                    const slots = rule.daySlots || rule.subjects || [];
+                                    const filtered = slots.filter(sId => sId !== sub.id);
+                                    const filteredCounts = (rule.slotCounts || []).filter((_, sIdx) => slots[sIdx] !== sub.id);
+                                    return { ...rule, daySlots: filtered, slotCounts: filteredCounts };
+                                  });
+
+                                  useStore.setState({
+                                    subjects: newSubjects,
+                                    cycle: newCycle,
+                                    cycleSlotCounts: newCycleSlotCounts,
+                                    calendarOverrides: newOverrides,
+                                    calendarOverrideCounts: newOverrideCounts,
+                                    futureScheduleRules: newRules,
+                                    reviews: (storeState.reviews || []).filter(r =>
+                                      r.subjectId !== sub.id ||
+                                      r.isCaveiraQuestion ||
+                                      Boolean(r.questionData) ||
+                                      String(r.id || '').startsWith('rev_caveira_') ||
+                                      String(r.topicName || '').startsWith('[Caveira')
+                                    ),
+                                    completedToday: []
+                                  });
+                                  useStore.getState().syncAndRepairCaveiraReviews?.();
+                                  toast.success(`"${sub.name}" removida. Ponto de restauração salvo.`);
+                                }
+                              });
+                            }}
+                            className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            title="Excluir disciplina"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      </div>
+
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                        {completionBehavior}
+                        {currentSpeed > 1 && ` · ${currentSpeed}x`}
+                        {currentTimeGoal > 0 && ` · ${formatMinutesToFriendly(currentTimeGoal)}/bloco`}
+                      </p>
+                    </div>
+
+                    <div className="pt-2.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                      <span>{sub.topics?.length || 0} {sub.topics?.length === 1 ? 'assunto' : 'assuntos'}</span>
+                      <span className="font-mono text-[11px]" title={`Normal: ${st.totalFriendly} | Acelerado: ${st.acceleratedFriendly}`}>
+                        {st.acceleratedFriendly}
+                      </span>
+                    </div>
                   </div>
-                </div>
-
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  {currentSpeed > 1 && (
-                    <span className="text-[9px] font-black bg-blue-100 text-blue-700 dark:bg-blue-950/70 dark:text-blue-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-blue-200 dark:border-blue-900" title={`Aceleração configurada: ${currentSpeed}x`}>
-                      <Zap className="w-2.5 h-2.5 text-yellow-500 fill-yellow-500" /> {currentSpeed}x
-                    </span>
-                  )}
-                  {currentTimeGoal > 0 && (
-                    <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-emerald-200 dark:border-emerald-900" title={`Meta de tempo por bloco: ${currentTimeGoal} min`}>
-                      <Target className="w-2.5 h-2.5" /> {formatMinutesToFriendly(currentTimeGoal)}/bloco
-                    </span>
-                  )}
-                  {sub.onCompleteAction === 'replace' && sub.replacementSubjectId && subjects[sub.replacementSubjectId] ? (
-                    <span className="text-[9px] font-black bg-purple-100 text-purple-700 dark:bg-purple-950/70 dark:text-purple-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-purple-200 dark:border-purple-900" title={`Substitui por ${subjects[sub.replacementSubjectId].name} ao concluir`}>
-                      <Shuffle className="w-2.5 h-2.5 text-purple-400" /> ➔ {subjects[sub.replacementSubjectId].name}
-                    </span>
-                  ) : sub.onCompleteAction === 'double_remaining' ? (
-                    <span className="text-[9px] font-black bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-amber-200 dark:border-amber-900" title="Dobra a outra matéria do dia ao concluir">
-                      <Zap className="w-2.5 h-2.5 text-amber-500 fill-amber-500" /> Dobra no Dia
-                    </span>
-                  ) : (
-                    <span className="text-[9px] font-black bg-slate-100 text-slate-700 dark:bg-slate-800 dark:text-slate-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-slate-200 dark:border-slate-700" title="Encerra e libera a vaga ao fim das aulas">
-                      <Clock className="w-2.5 h-2.5 text-slate-400" /> Encerra ao fim
-                    </span>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center justify-between text-xs text-slate-500 font-medium dark:text-slate-400 pt-2 border-t border-slate-100 dark:border-slate-800/80">
-                <span>{sub.topics?.length || 0} {sub.topics?.length === 1 ? 'assunto' : 'assuntos'}</span>
-                <span className="text-[10px] font-mono text-slate-400" title={`Sem aceleração: ${st.totalFriendly} | Acelerado: ${st.acceleratedFriendly}`}>
-                  {st.acceleratedFriendly} {currentSpeed > 1 && `(${currentSpeed}x)`}
-                </span>
-              </div>
+                );
+              })}
             </div>
-          );
-        })}
-      </div>
-      </>
+          )}
+        </div>
       )}
 
-      {/* ⚡ SEÇÃO: ACELERAÇÃO DE VÍDEO-AULAS POR DISCIPLINA */}
+      {/* ABA 2: RITMO & METAS */}
       {activeConfigTab === 'ritmo' && (
-      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mt-6 mb-6 border-l-4 border-l-yellow-500 dark:bg-slate-900 dark:border-slate-800">
-        <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-3 mb-4">
-          <div>
-            <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 dark:text-slate-100">
-              <Zap className="text-yellow-500 w-5 h-5 fill-yellow-500"/> Aceleração de Vídeo-Aulas & Economia de Tempo
-            </h3>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-0.5">
-              Defina a velocidade em que você assiste as aulas de cada matéria (1x, 1.25x, 1.5x, 1.75x, 2x). O sistema calcula os tempos reais e o total de horas poupadas na sua preparação.
-            </p>
-          </div>
-        </div>
-
-        {/* Banner Geral de Economia de Tempo */}
-        {(() => {
-          let globalLessons = 0;
-          let globalOriginalSec = 0;
-          let globalAccelSec = 0;
-
-          Object.values(subjects || {}).forEach(sub => {
-            const st = getSubjectVideoStats(sub);
-            globalLessons += st.totalLessons;
-            globalOriginalSec += st.totalSeconds;
-            globalAccelSec += st.acceleratedSeconds;
-          });
-
-          const globalSavedSec = Math.max(0, globalOriginalSec - globalAccelSec);
-          const globalPercentSaved = globalOriginalSec > 0 ? Math.round((globalSavedSec / globalOriginalSec) * 100) : 0;
-
-          return (
-            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 bg-slate-900 text-white p-4 rounded-xl mb-6 shadow-md border border-slate-800">
-              <div className="flex flex-col">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Aulas no Edital</span>
-                <span className="text-xl font-black text-white mt-0.5">{globalLessons} aulas</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Sem Aceleração (1x)</span>
-                <span className="text-xl font-black text-slate-300 mt-0.5">{formatSecondsToFriendly(globalOriginalSec)}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] font-black text-blue-400 uppercase tracking-wider">Com Acelerações</span>
-                <span className="text-xl font-black text-blue-400 mt-0.5">{formatSecondsToFriendly(globalAccelSec)}</span>
-              </div>
-              <div className="flex flex-col">
-                <span className="text-[10px] font-black text-emerald-400 uppercase tracking-wider">Tempo Poupado</span>
-                <span className="text-xl font-black text-emerald-400 mt-0.5">
-                  {globalSavedSec > 0 ? `-${formatSecondsToFriendly(globalSavedSec)} (${globalPercentSaved}%)` : '0m'}
-                </span>
+        <div className="space-y-6">
+          {/* Auditoria do Ciclo (Curva ABC) */}
+          <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Target className="w-4 h-4 text-sky-500" />
+                  <span>Auditoria do ciclo (Curva ABC)</span>
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Distribuição dos seus <strong className="text-slate-800 dark:text-slate-200">{totalSlots} blocos</strong> em relação ao peso real do edital PRF.
+                </p>
               </div>
             </div>
-          );
-        })()}
 
-        {/* Lista de Disciplinas com Seletor Rápido e Comparativo */}
-        <div className="space-y-3">
-          {Object.values(subjects || {}).map(sub => {
-            const st = getSubjectVideoStats(sub);
-            const currentSpeed = Number(sub.speed) || 1;
-            const currentTimeGoal = Number(sub.timeGoalMinutes || subjectTimeGoal?.[sub.id]) || 0;
-
-            return (
-              <div key={sub.id} className="p-3.5 sm:p-4 rounded-xl border border-slate-200 bg-slate-50/70 hover:border-blue-300 dark:border-slate-800 dark:bg-slate-950/70 flex flex-col lg:flex-row lg:items-center justify-between gap-4 transition-all">
-                {/* Info da Disciplina */}
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 mb-1 flex-wrap">
-                    <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase tracking-wider ${sub.color}`}>
-                      {sub.name}
-                    </span>
-                    <span className="text-[9px] font-black bg-slate-200 dark:bg-slate-800 text-slate-600 dark:text-slate-400 px-1.5 py-0.5 rounded">
-                      {sub.block}
-                    </span>
-                    <span className="text-xs text-slate-500 dark:text-slate-400 font-medium ml-1">
-                      {st.totalLessons} {st.totalLessons === 1 ? 'aula' : 'aulas'}
-                    </span>
-                    {Number(sub.lessonsPerBlock) > 0 ? (
-                      <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-emerald-200 dark:border-emerald-800">
-                        <Target className="w-2.5 h-2.5" /> Bloco: {sub.lessonsPerBlock} {Number(sub.lessonsPerBlock) === 1 ? 'aula' : 'aulas'}
-                      </span>
-                    ) : currentTimeGoal > 0 && (
-                      <span className="text-[9px] font-black bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 px-1.5 py-0.5 rounded flex items-center gap-0.5 border border-emerald-200 dark:border-emerald-800">
-                        <Target className="w-2.5 h-2.5" /> Bloco: {formatMinutesToFriendly(currentTimeGoal)}
-                      </span>
-                    )}
-                  </div>
-
-                  {/* Comparativo de Tempos */}
-                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-xs mt-2">
-                    <div className="text-slate-500 dark:text-slate-400 font-medium">
-                      <span className="font-bold text-slate-700 dark:text-slate-300">Tempo Normal:</span> {st.totalFriendly}
-                    </div>
-                    <div className="text-blue-600 dark:text-blue-400 font-bold flex items-center gap-1">
-                      <Zap className="w-3.5 h-3.5 text-yellow-500 fill-yellow-500" />
-                      <span>Com Aceleração ({currentSpeed}x):</span> {st.acceleratedFriendly}
-                    </div>
-                    {currentSpeed > 1 && (
-                      <div className="text-emerald-600 dark:text-emerald-400 font-black">
-                        Economia: -{st.savedFriendly} (-{st.percentSaved}%)
-                      </div>
-                    )}
-                  </div>
+            <div className="grid grid-cols-1 sm:grid-cols-3 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 dark:divide-slate-800">
+              <div className="p-5 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">Bloco I · Básicas</span>
+                  <span className="text-slate-400 dark:text-slate-500 font-mono">Alvo ~46%</span>
                 </div>
+                <div className="flex items-baseline gap-2">
+                  <span className={`font-mono text-2xl font-bold tabular-nums ${isB1TooLow ? 'text-rose-600 dark:text-rose-400' : 'text-sky-600 dark:text-sky-400'}`}>
+                    {b1Percent}%
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">{b1Count} blocos</span>
+                </div>
+                <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${isB1TooLow ? 'bg-rose-500' : 'bg-sky-500'}`} style={{ width: `${b1Percent}%` }} />
+                </div>
+              </div>
 
-                {/* Seletores Rápidos: Velocidade e Meta por Bloco */}
-                <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 shrink-0 self-start lg:self-center">
-                  {/* Velocidade */}
-                  <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <span className="text-[9px] font-black text-slate-400 uppercase px-1 hidden sm:inline">Velocidade:</span>
-                    {[1, 1.25, 1.5, 1.75, 2].map(spd => {
-                      const isSelected = currentSpeed === spd;
-                      return (
-                        <button
-                          key={spd}
-                          type="button"
-                          onClick={() => {
-                            setSubjectSpeed(sub.id, spd);
-                            toast.success(`${sub.name}: Velocidade definida em ${spd}x!`, { duration: 1200 });
-                          }}
-                          className={`px-2 py-1 rounded-lg text-xs font-black transition-all ${
-                            isSelected
-                              ? 'bg-blue-600 text-white shadow-sm shadow-blue-500/30 ring-2 ring-blue-400'
-                              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-                          }`}
-                        >
-                          {spd}x
-                        </button>
-                      );
-                    })}
-                  </div>
+              <div className="p-5 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">Bloco II · Trânsito</span>
+                  <span className="text-slate-400 dark:text-slate-500 font-mono">Alvo ~25%</span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className={`font-mono text-2xl font-bold tabular-nums ${(isB2TooLow || isB2TooHigh) ? 'text-rose-600 dark:text-rose-400' : 'text-sky-600 dark:text-sky-400'}`}>
+                    {b2Percent}%
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">{b2Count} blocos</span>
+                </div>
+                <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                  <div className={`h-full rounded-full ${(isB2TooLow || isB2TooHigh) ? 'bg-rose-500' : 'bg-sky-500'}`} style={{ width: `${b2Percent}%` }} />
+                </div>
+              </div>
 
-                  {/* Meta por Bloco */}
-                  <div className="flex items-center gap-1 bg-white dark:bg-slate-900 p-1.5 rounded-xl border border-slate-200 dark:border-slate-800">
-                    <span className="text-[9px] font-black text-slate-400 uppercase px-1 flex items-center gap-0.5">
-                      <Target className="w-2.5 h-2.5 text-emerald-500" /> Bloco:
-                    </span>
-                    {[
-                      { label: '1 aula', val: 0 },
-                      { label: '45m', val: 45 },
-                      { label: '1h', val: 60 },
-                      { label: '1h30', val: 90 },
-                      { label: '2h', val: 120 }
-                    ].map(preset => {
-                      const lessonsN = Number(sub.lessonsPerBlock) || 0;
-                      const isSel = lessonsN === 0 && currentTimeGoal === preset.val;
-                      return (
-                        <button
-                          key={preset.val}
-                          type="button"
-                          onClick={() => {
-                            setSubjectTimeGoal(sub.id, preset.val);
-                            if (preset.val === 0) setSubjectLessonsPerBlock(sub.id, 0);
-                            toast.success(`${sub.name}: Meta por bloco definida em ${preset.label}!`, { duration: 1200 });
-                          }}
-                          className={`px-1.5 py-1 rounded-lg text-[10px] font-black transition-all ${
-                            isSel
-                              ? 'bg-emerald-600 text-white shadow-sm shadow-emerald-500/30 ring-2 ring-emerald-400'
-                              : 'text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-800'
-                          }`}
-                        >
-                          {preset.label}
-                        </button>
-                      );
-                    })}
-                    <div
-                      className={`flex items-center gap-1 pl-1.5 pr-1 py-0.5 rounded-lg border transition-all ${
-                        Number(sub.lessonsPerBlock) > 0
-                          ? 'border-emerald-500 ring-2 ring-emerald-400 bg-emerald-50 dark:bg-emerald-950/40'
-                          : 'border-slate-200 dark:border-slate-700'
+              <div className="p-5 space-y-2">
+                <div className="flex items-center justify-between text-xs">
+                  <span className="font-semibold text-slate-700 dark:text-slate-200">Bloco III · Direito</span>
+                  <span className="text-slate-400 dark:text-slate-500 font-mono">Alvo ~29%</span>
+                </div>
+                <div className="flex items-baseline gap-2">
+                  <span className="font-mono text-2xl font-bold tabular-nums text-purple-600 dark:text-purple-400">
+                    {b3Percent}%
+                  </span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">{b3Count} blocos</span>
+                </div>
+                <div className="w-full bg-slate-100 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
+                  <div className="bg-purple-500 h-full rounded-full" style={{ width: `${b3Percent}%` }} />
+                </div>
+              </div>
+            </div>
+
+            {(isB1TooLow || isB2TooLow || isB2TooHigh) && (
+              <div className="px-5 py-3.5 border-t border-rose-200/70 dark:border-rose-900/50 bg-rose-50/70 dark:bg-rose-950/20 flex items-start gap-2.5">
+                <AlertTriangle className="text-rose-600 dark:text-rose-400 w-4 h-4 shrink-0 mt-0.5" />
+                <p className="text-xs text-rose-800 dark:text-rose-200 leading-relaxed">
+                  {isB2TooHigh && 'Seu cronograma está excessivamente focado em Trânsito. Atenção ao volume mínimo de horas do Bloco I.'}
+                  {isB2TooLow && 'Pouca alocação em Trânsito. Considere aumentar a cadência do Bloco II.'}
+                  {isB1TooLow && !isB2TooHigh && 'O volume do Bloco I (Básicas) está baixo em relação ao mínimo exigido de 15 pontos em 55 questões.'}
+                </p>
+              </div>
+            )}
+          </section>
+
+          {/* Data da prova & Metas diárias */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+            <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-5 space-y-5">
+              <div>
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Clock className="w-4 h-4 text-sky-500" />
+                  <span>Data da prova e meta diária</span>
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Usados para projetar a conclusão do edital e acompanhar seu ritmo diário.
+                </p>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                  Data alvo da prova
+                </label>
+                <input
+                  type="date"
+                  value={targetExamDate}
+                  onChange={(e) => setTargetExamDate(e.target.value)}
+                  className="h-10 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-mono font-medium text-slate-800 dark:text-slate-100 outline-none focus:border-sky-500"
+                />
+              </div>
+
+              <div className="pt-2 border-t border-slate-100 dark:border-slate-800">
+                <label className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-1.5">
+                  Meta diária global (minutos)
+                </label>
+                <div className="flex items-center gap-3">
+                  <input
+                    type="number"
+                    min="10"
+                    max="1440"
+                    value={dailyGoalMinutes}
+                    onChange={(e) => setDailyGoalMinutes(parseInt(e.target.value) || 0)}
+                    className="w-28 h-10 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-3 text-sm font-mono font-semibold text-slate-900 dark:text-white outline-none focus:border-sky-500 tabular-nums"
+                  />
+                  <span className="text-xs text-slate-500 dark:text-slate-400">min / dia</span>
+                </div>
+                <div className="flex flex-wrap gap-1.5 mt-3">
+                  {[60, 120, 180, 240, 300, 360].map(mins => (
+                    <button
+                      key={mins}
+                      type="button"
+                      onClick={() => setDailyGoalMinutes(mins)}
+                      className={`h-8 px-3 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                        dailyGoalMinutes === mins
+                          ? 'bg-sky-600 text-white dark:bg-sky-500 dark:text-slate-950'
+                          : 'bg-slate-100 text-slate-600 hover:bg-slate-200 dark:bg-slate-800 dark:text-slate-300 dark:hover:bg-slate-700'
                       }`}
-                      title="Quantidade fixa de aulas por bloco (deixe vazio para desativar)"
                     >
+                      {mins / 60}h
+                    </button>
+                  ))}
+                </div>
+              </div>
+            </section>
+
+            {/* Metas individuais por disciplina */}
+            <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl overflow-hidden flex flex-col">
+              <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white">
+                  Meta diária por disciplina
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Tempo sugerido de teoria em minutos por dia.
+                </p>
+              </div>
+              <div className="flex-1 max-h-64 overflow-y-auto custom-scrollbar divide-y divide-slate-100 dark:divide-slate-800">
+                {subjectsList.map(sub => (
+                  <div key={sub.id} className="px-5 py-2.5 flex items-center justify-between gap-3">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${sub.color?.split(' ')[0] || 'bg-slate-500'}`} />
+                      <span className="text-xs font-medium text-slate-700 dark:text-slate-200 truncate">{sub.name}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
                       <input
                         type="number"
                         min="0"
-                        max="50"
-                        placeholder="Nº"
-                        value={Number(sub.lessonsPerBlock) > 0 ? sub.lessonsPerBlock : ''}
-                        onChange={(e) => setSubjectLessonsPerBlock(sub.id, e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
-                        className="w-9 bg-transparent text-center text-[10px] font-black text-emerald-600 dark:text-emerald-400 outline-none placeholder:text-slate-400"
+                        placeholder="0"
+                        value={subjectGoals?.[sub.id] || ''}
+                        onChange={(e) => setSubjectGoal(sub.id, parseInt(e.target.value) || 0)}
+                        className="w-16 h-8 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2 text-center text-xs font-mono font-semibold text-slate-900 dark:text-white outline-none focus:border-sky-500 tabular-nums"
                       />
-                      <span className="text-[10px] font-black text-slate-500 dark:text-slate-400">aulas</span>
+                      <span className="text-[11px] text-slate-400">min</span>
                     </div>
                   </div>
-                </div>
-              </div>
-            );
-          })}
-
-          {Object.values(subjects || {}).length === 0 && (
-            <p className="text-xs font-bold text-slate-500 italic text-center py-6">
-              Nenhuma disciplina cadastrada para configurar aceleração.
-            </p>
-          )}
-        </div>
-      </div>
-      )}
-
-      {/* 👤 SEÇÃO: IDENTIDADE E PREFERÊNCIAS */}
-      {activeConfigTab === 'perfil' && (
-      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mb-6 dark:bg-slate-900 dark:border-slate-800">
-        <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-6 dark:text-slate-100">
-          <User className="text-blue-600 w-5 h-5"/> Identidade e Preferências
-        </h3>
-        
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Upload de Foto */}
-          <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Foto de Perfil</label>
-            <div className="flex items-center gap-6">
-              <div className="relative group">
-                <div className="w-20 h-20 rounded-2xl overflow-hidden border-2 border-blue-500 shadow-lg bg-slate-800">
-                  {userStats.avatar ? (
-                    <img src={assetUrl(userStats.avatar)} alt="Avatar" className="w-full h-full object-cover" />
-                  ) : (
-                    <div className="w-full h-full flex items-center justify-center">
-                      <User className="w-8 h-8 text-slate-500" />
-                    </div>
-                  )}
-                </div>
-              </div>
-              <div className="flex flex-col gap-2">
-                <label className="cursor-pointer bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase tracking-wider px-5 py-2.5 rounded-xl transition-all active:scale-95 shadow-md shadow-blue-500/20 text-center">
-                  Enviar Foto
-                  <input 
-                    type="file" 
-                    accept="image/*" 
-                    className="hidden"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0];
-                      if (!file) return;
-                      if (file.size > 500 * 1024) {
-                        setGlobalModal({ title: 'Arquivo Grande', message: 'A imagem deve ter no máximo 500KB. Tente uma foto mais leve.', isAlert: true });
-                        return;
-                      }
-                      const reader = new FileReader();
-                      reader.onloadend = () => {
-                        useStore.setState(s => ({ userStats: { ...s.userStats, avatar: reader.result } }));
-                      };
-                      reader.readAsDataURL(file);
-                    }}
-                  />
-                </label>
-                {userStats.avatar && (
-                  <button 
-                    onClick={() => useStore.setState(s => ({ userStats: { ...s.userStats, avatar: '' } }))}
-                    className="text-[10px] font-black text-red-400 hover:text-red-300 uppercase tracking-wider transition-colors"
-                  >
-                    Remover Foto
-                  </button>
+                ))}
+                {subjectsList.length === 0 && (
+                  <p className="text-xs text-slate-500 text-center py-8">
+                    Nenhuma disciplina cadastrada.
+                  </p>
                 )}
               </div>
-            </div>
-            <p className="text-[9px] text-slate-500 mt-3 font-bold">Formato: JPG, PNG. Máximo: 500KB.</p>
+            </section>
           </div>
 
-          {/* Configuração de Som */}
-          <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Feedback Auditivo</label>
-            <button 
-              onClick={() => setEnableSounds(!enableSounds)}
-              className={`flex items-center gap-4 p-4 rounded-2xl border-2 transition-all w-full max-w-xs ${enableSounds ? 'bg-blue-50 border-blue-200 text-blue-700 dark:bg-blue-900/20 dark:border-blue-900/50 dark:text-blue-400' : 'bg-slate-50 border-slate-200 text-slate-500 dark:bg-slate-800 dark:border-slate-700'}`}
-            >
-              <div className={`p-2 rounded-lg ${enableSounds ? 'bg-blue-600 text-white' : 'bg-slate-400 text-white'}`}>
-                {enableSounds ? <Volume2 className="w-5 h-5" /> : <VolumeX className="w-5 h-5" />}
-              </div>
-              <div className="text-left">
-                <p className="font-black text-sm uppercase">{enableSounds ? 'Sons Ativados' : 'Sons Desativados'}</p>
-                <p className="text-[10px] font-bold opacity-70">Feedback tático ao ganhar XP e moedas.</p>
-              </div>
-            </button>
-          </div>
-        </div>
-      </div>
-      )}
-
-      {/* 🎯 SEÇÃO: METAS DE ESTUDO DIÁRIAS */}
-      {activeConfigTab === 'ritmo' && (
-      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mb-6 dark:bg-slate-900 dark:border-slate-800">
-        <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-6 dark:text-slate-100">
-          <Clock className="text-blue-600 w-5 h-5"/> Metas de Estudo Operacionais
-        </h3>
-
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          {/* Meta Diária Global */}
-          <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Meta Diária Global (Minutos)</label>
-            <div className="flex items-center gap-4">
-              <input 
-                type="number" 
-                min="10" 
-                max="1440"
-                value={dailyGoalMinutes} 
-                onChange={(e) => setDailyGoalMinutes(parseInt(e.target.value) || 0)} 
-                className="w-32 bg-slate-50 border border-slate-200 dark:bg-slate-950 dark:border-slate-800 rounded-xl px-4 py-3 text-sm font-black text-slate-800 dark:text-white"
-              />
-              <span className="text-xs text-slate-500 font-bold dark:text-slate-400">minutos sugeridos de estudo por dia.</span>
+          {/* Aceleração de Videoaulas & Meta por Bloco */}
+          <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800">
+              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Zap className="w-4 h-4 text-amber-500" />
+                <span>Velocidade das aulas e duração por bloco</span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Ajuste a velocidade de reprodução (1x a 2x) e o tamanho dos blocos para estimar o tempo total de estudo.
+              </p>
             </div>
-            <div className="flex gap-2 mt-3">
-              {[60, 120, 180, 240, 300, 360].map(mins => (
-                <button
-                  key={mins}
-                  onClick={() => setDailyGoalMinutes(mins)}
-                  className={`px-3 py-1.5 rounded-lg text-[10px] font-black uppercase transition-all ${dailyGoalMinutes === mins ? 'bg-blue-600 text-white' : 'bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400 hover:bg-slate-200'}`}
-                >
-                  {mins / 60}h
-                </button>
-              ))}
-            </div>
-          </div>
 
-          {/* Metas Individuais por Matéria */}
-          <div>
-            <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-4">Metas de Teoria por Disciplina (Minutos por Dia)</label>
-            <div className="flex flex-col gap-3 max-h-56 overflow-y-auto pr-2 custom-scrollbar">
-              {Object.values(subjects).map(sub => (
-                <div key={sub.id} className="flex items-center justify-between p-2.5 rounded-xl border border-slate-100 bg-slate-50/50 dark:border-slate-800 dark:bg-slate-950/60">
-                  <div className="flex items-center gap-2">
-                    <div className={`w-3 h-3 rounded-full ${sub.color?.split(' ')[0] || 'bg-slate-500'}`}></div>
-                    <span className="text-xs font-bold text-slate-700 dark:text-slate-300 truncate max-w-44">{sub.name}</span>
+            {(() => {
+              let globalLessons = 0;
+              let globalOriginalSec = 0;
+              let globalAccelSec = 0;
+
+              subjectsList.forEach(sub => {
+                const st = getSubjectVideoStats(sub);
+                globalLessons += st.totalLessons;
+                globalOriginalSec += st.totalSeconds;
+                globalAccelSec += st.acceleratedSeconds;
+              });
+
+              const globalSavedSec = Math.max(0, globalOriginalSec - globalAccelSec);
+              const globalPercentSaved = globalOriginalSec > 0 ? Math.round((globalSavedSec / globalOriginalSec) * 100) : 0;
+
+              return (
+                <div className="grid grid-cols-2 sm:grid-cols-4 border-b border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 divide-y sm:divide-y-0 sm:divide-x divide-slate-100 dark:divide-slate-800">
+                  <div className="p-4">
+                    <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block">Aulas no edital</span>
+                    <span className="font-mono text-lg font-bold text-slate-900 dark:text-white tabular-nums mt-0.5 block">
+                      {globalLessons}
+                    </span>
                   </div>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="number" 
-                      min="0"
-                      placeholder="0"
-                      value={subjectGoals?.[sub.id] || ''}
-                      onChange={(e) => setSubjectGoal(sub.id, parseInt(e.target.value) || 0)}
-                      className="w-20 bg-white border border-slate-200 dark:bg-slate-900 dark:border-slate-700 rounded-lg px-2 py-1 text-center text-xs font-black text-slate-800 dark:text-white"
-                    />
-                    <span className="text-[10px] text-slate-400 font-bold">min</span>
+                  <div className="p-4">
+                    <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block">Tempo em 1x</span>
+                    <span className="font-mono text-lg font-bold text-slate-700 dark:text-slate-300 tabular-nums mt-0.5 block">
+                      {formatSecondsToFriendly(globalOriginalSec)}
+                    </span>
+                  </div>
+                  <div className="p-4">
+                    <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block">Com aceleração</span>
+                    <span className="font-mono text-lg font-bold text-sky-600 dark:text-sky-400 tabular-nums mt-0.5 block">
+                      {formatSecondsToFriendly(globalAccelSec)}
+                    </span>
+                  </div>
+                  <div className="p-4">
+                    <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block">Tempo economizado</span>
+                    <span className="font-mono text-lg font-bold text-emerald-600 dark:text-emerald-400 tabular-nums mt-0.5 block">
+                      {globalSavedSec > 0 ? `-${formatSecondsToFriendly(globalSavedSec)} (${globalPercentSaved}%)` : '0m'}
+                    </span>
                   </div>
                 </div>
-              ))}
-              {Object.values(subjects).length === 0 && (
-                <p className="text-[11px] font-bold text-slate-500 italic text-center py-4">Nenhuma disciplina cadastrada para definir metas.</p>
+              );
+            })()}
+
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {subjectsList.map(sub => {
+                const st = getSubjectVideoStats(sub);
+                const currentSpeed = Number(sub.speed) || 1;
+                const currentTimeGoal = Number(sub.timeGoalMinutes || subjectTimeGoal?.[sub.id]) || 0;
+                const dotColor = sub.color?.split(' ')[0] || 'bg-sky-500';
+
+                return (
+                  <div key={sub.id} className="px-5 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${dotColor}`} />
+                        <span className="text-sm font-semibold text-slate-900 dark:text-white">{sub.name}</span>
+                        <span className="text-[11px] font-mono text-slate-400">{sub.block}</span>
+                        <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+                          · {st.totalLessons} {st.totalLessons === 1 ? 'aula' : 'aulas'}
+                        </span>
+                      </div>
+                      <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-slate-500 dark:text-slate-400 mt-1 tabular-nums">
+                        <span>1x: {st.totalFriendly}</span>
+                        <span className="text-sky-600 dark:text-sky-400 font-medium">
+                          {currentSpeed}x: {st.acceleratedFriendly}
+                        </span>
+                        {currentSpeed > 1 && (
+                          <span className="text-emerald-600 dark:text-emerald-400 font-medium">
+                            Economia: -{st.savedFriendly} (-{st.percentSaved}%)
+                          </span>
+                        )}
+                      </div>
+                    </div>
+
+                    <div className="flex flex-wrap items-center gap-2 shrink-0">
+                      <div className="inline-flex items-center gap-0.5 p-1 rounded-lg bg-slate-100 dark:bg-slate-850 border border-slate-200/70 dark:border-slate-800">
+                        {[1, 1.25, 1.5, 1.75, 2].map(spd => {
+                          const isSelected = currentSpeed === spd;
+                          return (
+                            <button
+                              key={spd}
+                              type="button"
+                              onClick={() => {
+                                setSubjectSpeed(sub.id, spd);
+                                toast.success(`${sub.name}: velocidade ${spd}x.`, { duration: 1200 });
+                              }}
+                              className={`px-2 py-1 rounded-md text-[11px] font-mono font-semibold transition-colors cursor-pointer ${
+                                isSelected
+                                  ? 'bg-sky-600 text-white dark:bg-sky-500 dark:text-slate-950'
+                                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                              }`}
+                            >
+                              {spd}x
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="inline-flex items-center gap-0.5 p-1 rounded-lg bg-slate-100 dark:bg-slate-850 border border-slate-200/70 dark:border-slate-800">
+                        {[
+                          { label: '1 aula', val: 0 },
+                          { label: '45m', val: 45 },
+                          { label: '1h', val: 60 },
+                          { label: '1h30', val: 90 },
+                          { label: '2h', val: 120 }
+                        ].map(preset => {
+                          const lessonsN = Number(sub.lessonsPerBlock) || 0;
+                          const isSel = lessonsN === 0 && currentTimeGoal === preset.val;
+                          return (
+                            <button
+                              key={preset.val}
+                              type="button"
+                              onClick={() => {
+                                setSubjectTimeGoal(sub.id, preset.val);
+                                if (preset.val === 0) setSubjectLessonsPerBlock(sub.id, 0);
+                                toast.success(`${sub.name}: bloco definido em ${preset.label}.`, { duration: 1200 });
+                              }}
+                              className={`px-2 py-1 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                                isSel
+                                  ? 'bg-emerald-600 text-white'
+                                  : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                              }`}
+                            >
+                              {preset.label}
+                            </button>
+                          );
+                        })}
+                        <div
+                          className={`flex items-center gap-1 pl-1.5 pr-1.5 py-0.5 rounded-md border ${
+                            Number(sub.lessonsPerBlock) > 0
+                              ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40'
+                              : 'border-transparent'
+                          }`}
+                          title="Quantidade fixa de aulas por bloco"
+                        >
+                          <input
+                            type="number"
+                            min="0"
+                            max="50"
+                            placeholder="Nº"
+                            value={Number(sub.lessonsPerBlock) > 0 ? sub.lessonsPerBlock : ''}
+                            onChange={(e) => setSubjectLessonsPerBlock(sub.id, e.target.value === '' ? 0 : parseInt(e.target.value) || 0)}
+                            className="w-8 bg-transparent text-center text-[11px] font-mono font-semibold text-emerald-700 dark:text-emerald-400 outline-none placeholder:text-slate-400"
+                          />
+                          <span className="text-[10px] text-slate-500 dark:text-slate-400">aulas</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {subjectsList.length === 0 && (
+                <p className="text-xs text-slate-500 text-center py-8">
+                  Nenhuma disciplina cadastrada para configurar aceleração.
+                </p>
               )}
             </div>
-          </div>
+          </section>
         </div>
-      </div>
       )}
 
-      {/* 🔔 SEÇÃO: NOTIFICAÇÕES PUSH */}
+      {/* ABA 3: PERFIL & ALERTAS */}
       {activeConfigTab === 'perfil' && (
-      <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 mb-6 dark:bg-slate-900 dark:border-slate-800">
-        <h3 className="text-lg font-black text-slate-800 flex items-center gap-2 mb-6 dark:text-slate-100">
-          <Shield className="text-blue-600 w-5 h-5"/> Notificações e Lembretes Operacionais
-        </h3>
+        <div className="space-y-6">
+          <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-5 sm:p-6">
+            <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-5">
+              <User className="w-4 h-4 text-sky-500" />
+              <span>Identidade e preferências</span>
+            </h2>
 
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
-          <div>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mb-4 font-bold leading-relaxed">
-              Ative notificações no navegador para receber alertas operacionais e manter a consistência da sua farda. O sistema enviará lembretes de revisões FSRS e alertas quando seu streak diário estiver sob perigo de quebra.
-            </p>
-            {notificationsSupported && Notification.permission === 'default' && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div>
+                <span className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-3">
+                  Foto de perfil
+                </span>
+                <div className="flex items-center gap-4">
+                  <div className="w-16 h-16 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-100 dark:bg-slate-800 shrink-0">
+                    {userStats.avatar ? (
+                      <img src={assetUrl(userStats.avatar)} alt="Avatar" className="w-full h-full object-cover" />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center">
+                        <User className="w-6 h-6 text-slate-400" />
+                      </div>
+                    )}
+                  </div>
+                  <div className="flex flex-col gap-1.5">
+                    <label className="h-9 px-3.5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 text-xs font-semibold inline-flex items-center justify-center cursor-pointer transition-colors">
+                      Enviar foto
+                      <input
+                        type="file"
+                        accept="image/*"
+                        className="hidden"
+                        onChange={(e) => {
+                          const file = e.target.files?.[0];
+                          if (!file) return;
+                          if (file.size > 500 * 1024) {
+                            setGlobalModal({ title: 'Arquivo muito grande', message: 'A imagem deve ter no máximo 500KB.', isAlert: true });
+                            return;
+                          }
+                          const reader = new FileReader();
+                          reader.onloadend = () => {
+                            useStore.setState(s => ({ userStats: { ...s.userStats, avatar: reader.result } }));
+                          };
+                          reader.readAsDataURL(file);
+                        }}
+                      />
+                    </label>
+                    {userStats.avatar && (
+                      <button
+                        type="button"
+                        onClick={() => useStore.setState(s => ({ userStats: { ...s.userStats, avatar: '' } }))}
+                        className="text-xs font-medium text-rose-600 dark:text-rose-400 hover:underline text-left cursor-pointer"
+                      >
+                        Remover foto
+                      </button>
+                    )}
+                  </div>
+                </div>
+                <p className="text-[11px] text-slate-400 dark:text-slate-500 mt-2">
+                  JPG ou PNG até 500KB.
+                </p>
+              </div>
+
+              <div>
+                <span className="block text-xs font-medium text-slate-600 dark:text-slate-300 mb-3">
+                  Feedback sonoro
+                </span>
+                <button
+                  type="button"
+                  onClick={() => setEnableSounds(!enableSounds)}
+                  className={`flex items-center gap-3.5 p-3.5 rounded-xl border transition-colors w-full max-w-xs cursor-pointer ${
+                    enableSounds
+                      ? 'bg-sky-50/70 border-sky-200 text-sky-800 dark:bg-sky-950/30 dark:border-sky-900/60 dark:text-sky-300'
+                      : 'bg-slate-50 border-slate-200 text-slate-600 dark:bg-slate-850 dark:border-slate-800 dark:text-slate-400'
+                  }`}
+                >
+                  <div className={`w-9 h-9 rounded-lg flex items-center justify-center shrink-0 ${enableSounds ? 'bg-sky-600 text-white' : 'bg-slate-300 dark:bg-slate-700 text-white'}`}>
+                    {enableSounds ? <Volume2 className="w-4 h-4" /> : <VolumeX className="w-4 h-4" />}
+                  </div>
+                  <div className="text-left">
+                    <p className="text-xs font-semibold">{enableSounds ? 'Sons ativados' : 'Sons desativados'}</p>
+                    <p className="text-[11px] opacity-80">Efeitos sutis ao ganhar XP e concluir revisões.</p>
+                  </div>
+                </button>
+              </div>
+            </div>
+          </section>
+
+          <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-5 sm:p-6">
+            <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2 mb-5">
+              <Shield className="w-4 h-4 text-sky-500" />
+              <span>Notificações e lembretes</span>
+            </h2>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+              <div>
+                <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed mb-4">
+                  Ative notificações no navegador para receber lembretes de revisões FSRS acumuladas e alertas para manter sua ofensiva diária.
+                </p>
+                {notificationsSupported && Notification.permission === 'default' && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      Notification.requestPermission().then(perm => {
+                        if (perm === 'granted') {
+                          setPushSettings({ ...pushSettings, enabled: true });
+                          toast.success('Notificações autorizadas.');
+                        } else {
+                          toast.error('Permissão de notificações recusada.');
+                        }
+                      });
+                    }}
+                    className="h-9 px-4 rounded-lg bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 text-xs font-semibold transition-colors cursor-pointer"
+                  >
+                    Ativar notificações no navegador
+                  </button>
+                )}
+                {notificationsSupported && Notification.permission === 'granted' && (
+                  <p className="inline-flex items-center gap-1.5 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                    <CheckCircle className="w-4 h-4" />
+                    Permissão concedida pelo navegador
+                  </p>
+                )}
+                {notificationsSupported && Notification.permission === 'denied' && (
+                  <p className="inline-flex items-center gap-1.5 text-xs font-medium text-rose-600 dark:text-rose-400">
+                    <AlertTriangle className="w-4 h-4" />
+                    Notificações bloqueadas nas configurações do navegador
+                  </p>
+                )}
+                {!notificationsSupported && (
+                  <p className="inline-flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
+                    <AlertTriangle className="w-4 h-4" />
+                    Este navegador não suporta notificações nativas
+                  </p>
+                )}
+              </div>
+
+              <div className="divide-y divide-slate-100 dark:divide-slate-800 border border-slate-100 dark:border-slate-800 rounded-xl">
+                <label className="px-4 py-3 flex items-center justify-between gap-3 cursor-pointer">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">Alertas ativos</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Liga ou desliga todos os lembretes.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={pushSettings.enabled}
+                    disabled={!notificationsSupported || Notification.permission !== 'granted'}
+                    onChange={(e) => setPushSettings({ ...pushSettings, enabled: e.target.checked })}
+                    className="w-4 h-4 rounded accent-sky-600 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                </label>
+
+                {pushSettings.enabled && (
+                  <div className="px-4 py-3 flex items-center justify-between gap-3">
+                    <div>
+                      <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">Horário do lembrete</p>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400">Horário diário para iniciar os estudos.</p>
+                    </div>
+                    <input
+                      type="time"
+                      value={pushTime || '08:00'}
+                      onChange={(e) => setPushTime(e.target.value)}
+                      className="h-8 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-lg px-2.5 text-xs font-mono text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500"
+                    />
+                  </div>
+                )}
+
+                <label className="px-4 py-3 flex items-center justify-between gap-3 cursor-pointer">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">Ofensiva em risco</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Aviso no fim do dia caso ainda não tenha estudado.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={pushSettings.streakWarning}
+                    disabled={!pushSettings.enabled}
+                    onChange={(e) => setPushSettings({ ...pushSettings, streakWarning: e.target.checked })}
+                    className="w-4 h-4 rounded accent-sky-600 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                </label>
+
+                <label className="px-4 py-3 flex items-center justify-between gap-3 cursor-pointer">
+                  <div>
+                    <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">Revisões acumuladas</p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400">Alerta quando houver mais de 5 revisões pendentes.</p>
+                  </div>
+                  <input
+                    type="checkbox"
+                    checked={pushSettings.reviewsPending}
+                    disabled={!pushSettings.enabled}
+                    onChange={(e) => setPushSettings({ ...pushSettings, reviewsPending: e.target.checked })}
+                    className="w-4 h-4 rounded accent-sky-600 cursor-pointer disabled:cursor-not-allowed"
+                  />
+                </label>
+              </div>
+            </div>
+          </section>
+        </div>
+      )}
+
+      {/* ABA 4: BACKUP & SISTEMA */}
+      {activeConfigTab === 'sistema' && (
+        <div className="space-y-6">
+          {/* Status da nuvem */}
+          <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div className="flex items-start gap-3">
+              <Cloud className={`w-5 h-5 shrink-0 mt-0.5 ${cloudSyncError ? 'text-amber-500' : 'text-sky-500'}`} />
+              <div>
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white">
+                  Sincronização na nuvem
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  {user
+                    ? cloudSyncError
+                      ? cloudSyncError
+                      : lastSyncedAt
+                        ? `Última sincronização em ${formatSnapshotTimestamp(lastSyncedAt)} (${user.email})`
+                        : `Conectado como ${user.email}`
+                    : 'Modo local ativo. Faça login para sincronizar entre dispositivos.'}
+                </p>
+              </div>
+            </div>
+            {user && (
               <button
+                type="button"
+                disabled={isSavingToCloud}
+                onClick={async () => {
+                  const ok = await saveToCloud?.();
+                  if (ok) toast.success('Dados sincronizados com a nuvem.');
+                  else toast.error('Não foi possível sincronizar agora.');
+                }}
+                className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0 disabled:opacity-60"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isSavingToCloud ? 'animate-spin' : ''}`} />
+                <span>{isSavingToCloud ? 'Sincronizando...' : 'Sincronizar agora'}</span>
+              </button>
+            )}
+          </section>
+
+          {/* Pontos de Restauração Automáticos */}
+          <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl overflow-hidden">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div>
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <History className="w-4 h-4 text-sky-500" />
+                  <span>Pontos de restauração locais</span>
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Snapshots salvos automaticamente antes de ações destrutivas (reset, exclusão de matéria ou importação). Mantém até 8 versões recentes neste navegador.
+                </p>
+              </div>
+              <button
+                type="button"
                 onClick={() => {
-                  Notification.requestPermission().then(perm => {
-                    if (perm === 'granted') {
-                      setPushSettings({ ...pushSettings, enabled: true });
-                      toast.success("Notificações autorizadas com sucesso! 🛡️");
-                    } else {
-                      toast.error("Permissão de notificações recusada.");
+                  const created = createLocalRestorePoint?.('manual', 'Ponto manual');
+                  if (created) {
+                    setRestoreVersion(v => v + 1);
+                    toast.success('Ponto de restauração criado.');
+                  } else {
+                    toast.error('Nenhum dado para salvar no momento.');
+                  }
+                }}
+                className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+              >
+                <Save className="w-3.5 h-3.5" />
+                <span>Criar ponto agora</span>
+              </button>
+            </div>
+
+            {restorePoints.length === 0 ? (
+              <div className="p-6 text-center text-xs text-slate-500 dark:text-slate-400">
+                Nenhum ponto de restauração salvo ainda. Clique em "Criar ponto agora" ou faça alterações para gerar snapshots automáticos.
+              </div>
+            ) : (
+              <div className="divide-y divide-slate-100 dark:divide-slate-800">
+                {restorePoints.map((pt) => (
+                  <div key={pt.id} className="px-5 py-3.5 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-xs font-semibold text-slate-900 dark:text-white">
+                          {pt.label || formatBackupReasonLabel(pt.reason)}
+                        </span>
+                        <span className="text-[11px] font-mono text-slate-400 dark:text-slate-500 tabular-nums">
+                          {formatSnapshotTimestamp(pt.timestamp)}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 tabular-nums">
+                        {pt.summary?.subjectsCount || 0} matérias · {pt.summary?.completedLessons || 0} aulas concluídas · {pt.summary?.reviewsCount || 0} revisões · {(pt.summary?.xp || 0).toLocaleString()} XP
+                      </p>
+                    </div>
+
+                    <div className="flex items-center gap-2 shrink-0">
+                      <button
+                        type="button"
+                        disabled={isRestoringPoint}
+                        onClick={() => {
+                          setGlobalModal({
+                            title: 'Restaurar ponto salvo?',
+                            message: `Seus dados atuais serão substituídos pelo snapshot de ${formatSnapshotTimestamp(pt.timestamp)}. Um ponto de segurança do estado atual será criado automaticamente antes.`,
+                            onConfirm: async () => {
+                              setIsRestoringPoint(true);
+                              try {
+                                const res = await restoreFromLocalPoint?.(pt.id);
+                                if (res?.ok) {
+                                  setRestoreVersion(v => v + 1);
+                                  toast.success('Ponto restaurado com sucesso.');
+                                } else {
+                                  toast.error(res?.error || 'Não foi possível restaurar este ponto.');
+                                }
+                              } finally {
+                                setIsRestoringPoint(false);
+                              }
+                            }
+                          });
+                        }}
+                        className="h-8 px-3 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 inline-flex items-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        <span>Restaurar</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          deleteLocalRestorePoint?.(pt.id);
+                          setRestoreVersion(v => v + 1);
+                          toast.success('Ponto removido.');
+                        }}
+                        className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 dark:hover:text-rose-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                        title="Excluir ponto"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </section>
+
+          {/* Exportar / Importar JSON */}
+          <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Download className="w-4 h-4 text-emerald-500" />
+                <span>Backup em arquivo (.json)</span>
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 max-w-xl">
+                Exporte uma cópia completa do seu progresso para guardar no computador ou importe um arquivo salvo anteriormente.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2 shrink-0">
+              <button
+                type="button"
+                onClick={() => {
+                  const state = useStore.getState();
+                  const dataToExport = {};
+                  PERSISTED_KEYS.forEach(key => { if (state[key] !== undefined) dataToExport[key] = state[key]; });
+
+                  const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
+                  const url = URL.createObjectURL(blob);
+                  const a = document.createElement('a');
+                  a.href = url;
+                  a.download = `qg-prf-backup-${useStore.getState().getLocalDateStr()}.json`;
+                  a.click();
+                  URL.revokeObjectURL(url);
+                  toast.success('Backup exportado.');
+                }}
+                className="h-9 px-3.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                <Download className="w-3.5 h-3.5" />
+                <span>Exportar (.json)</span>
+              </button>
+
+              <label className="h-9 px-3.5 rounded-lg bg-white hover:bg-slate-50 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 border border-slate-200 dark:border-slate-700 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap">
+                <Upload className="w-3.5 h-3.5" />
+                <span>Importar (.json)</span>
+                <input
+                  type="file"
+                  accept=".json"
+                  className="hidden"
+                  onChange={(e) => {
+                    const file = e.target.files[0];
+                    if (!file) return;
+                    const reader = new FileReader();
+                    reader.onload = async (event) => {
+                      try {
+                        const content = event.target.result;
+                        const parsed = JSON.parse(content);
+
+                        if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
+                          throw new Error('formato inválido');
+                        }
+                        if (!PERSISTED_KEYS.some(k => parsed[k] !== undefined)) {
+                          throw new Error('backup sem dados reconhecíveis');
+                        }
+
+                        // Snapshot preventivo antes de sobrescrever com arquivo JSON
+                        createLocalRestorePoint?.('pre_import_backup', `Antes de importar ${file.name}`);
+
+                        const merged = { ...getCleanInitialState() };
+                        PERSISTED_KEYS.forEach(k => { if (parsed[k] !== undefined) merged[k] = parsed[k]; });
+
+                        if (merged.calendarDate) merged.calendarDate = new Date(merged.calendarDate);
+                        if (merged.reviewCalendarDate) merged.reviewCalendarDate = new Date(merged.reviewCalendarDate);
+
+                        useStore.setState(merged);
+                        useStore.getState().syncDayRollover?.();
+                        useStore.getState().syncAndRepairCaveiraReviews?.();
+                        try {
+                          localStorage.setItem('prf_caveira_questions', JSON.stringify(merged.caveiraQuestions || []));
+                        } catch (_) {}
+                        await useStore.getState().saveToCloud();
+                        setRestoreVersion(v => v + 1);
+                        toast.success('Backup restaurado com sucesso.');
+                      } catch {
+                        toast.error('Arquivo de backup inválido.');
+                      }
+                    };
+                    reader.readAsText(file);
+                    e.target.value = '';
+                  }}
+                />
+              </label>
+            </div>
+          </section>
+
+          {/* Versão e cache */}
+          <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-5 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white">
+                  Versão do aplicativo
+                </h2>
+                <span className="font-mono text-xs text-slate-500 dark:text-slate-400">
+                  v{APP_VERSION}
+                </span>
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Caso uma atualização recente não carregue automaticamente, limpe o cache local do navegador.
+              </p>
+            </div>
+            <button
+              type="button"
+              onClick={handleForceUpdate}
+              className="h-9 px-3.5 rounded-lg bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-100 text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0"
+            >
+              <RefreshCw className="w-3.5 h-3.5" />
+              <span>Limpar cache e recarregar</span>
+            </button>
+          </section>
+
+          {/* Zona de perigo */}
+          <section className="bg-white dark:bg-slate-900 border border-rose-200/80 dark:border-rose-900/50 rounded-xl p-5 space-y-4">
+            <div>
+              <h2 className="font-display text-sm font-bold text-rose-700 dark:text-rose-400 flex items-center gap-2">
+                <AlertTriangle className="w-4 h-4" />
+                <span>Zona de perigo</span>
+              </h2>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1 max-w-2xl">
+                Escolha exatamente quais módulos deseja zerar (aulas assistidas, ciclo, Raio-X, revisões FSRS, carreira ou disciplinas). Um ponto de restauração local é salvo automaticamente antes de qualquer reset.
+              </p>
+            </div>
+            <div className="flex flex-wrap gap-2.5">
+              <button
+                type="button"
+                onClick={() => setShowResetModal(true)}
+                className="h-9 px-4 rounded-lg bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+              >
+                <RotateCcw className="w-3.5 h-3.5" />
+                <span>Reset seletivo</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setGlobalModal({
+                    title: 'Zerar todos os dados?',
+                    message: 'Isto apagará todas as matérias, assuntos, histórico, moedas e progresso da nuvem. Um ponto de restauração local será preservado caso precise recuperar.',
+                    onConfirm: () => {
+                      executeTotalWipe();
+                      toast.error('Sistema zerado.');
                     }
                   });
                 }}
-                className="px-5 py-3 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-xs font-black uppercase tracking-wider transition-all shadow-md active:scale-95 flex items-center gap-2"
+                className="h-9 px-4 rounded-lg border border-rose-300 dark:border-rose-800 text-rose-700 dark:text-rose-400 hover:bg-rose-50 dark:hover:bg-rose-950/30 text-xs font-semibold transition-colors cursor-pointer"
               >
-                Ativar Notificações no Navegador
+                Zerar tudo agora
               </button>
-            )}
-            {notificationsSupported && Notification.permission === 'granted' && (
-              <div className="inline-flex items-center gap-2 bg-emerald-50 border border-emerald-200 dark:bg-emerald-950/20 dark:border-emerald-900/50 rounded-lg px-4 py-2 text-emerald-700 dark:text-emerald-400 text-xs font-bold">
-                <CheckCircle className="w-4 h-4" /> Permissão Concedida pelo Navegador
-              </div>
-            )}
-            {notificationsSupported && Notification.permission === 'denied' && (
-              <div className="inline-flex items-center gap-2 bg-red-50 border border-red-200 dark:bg-red-950/20 dark:border-red-900/50 rounded-lg px-4 py-2 text-red-700 dark:text-red-400 text-xs font-bold">
-                <AlertTriangle className="w-4 h-4" /> Notificações bloqueadas nas configurações do seu navegador.
-              </div>
-            )}
-            {!notificationsSupported && (
-              <div className="inline-flex items-center gap-2 bg-slate-100 border border-slate-200 dark:bg-slate-800 dark:border-slate-700 rounded-lg px-4 py-2 text-slate-500 dark:text-slate-400 text-xs font-bold">
-                <AlertTriangle className="w-4 h-4" /> Seu navegador não suporta notificações nativas.
-              </div>
-            )}
-          </div>
-
-          <div className="flex flex-col gap-4">
-            {/* Toggle Geral */}
-            <div className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40">
-              <div>
-                <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase">Alertas Ativos</h4>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Ativa ou desativa todo o fluxo de notificações.</p>
-              </div>
-              <input 
-                type="checkbox"
-                checked={pushSettings.enabled}
-                disabled={!notificationsSupported || Notification.permission !== 'granted'}
-                onChange={(e) => setPushSettings({ ...pushSettings, enabled: e.target.checked })}
-                className="w-5 h-5 rounded accent-blue-600 cursor-pointer disabled:cursor-not-allowed"
-              />
             </div>
-
-            {/* Seletor de Horário para o Pomodoro Push */}
-            {pushSettings.enabled && (
-              <div className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40 animate-fade-in-down">
-                <div>
-                  <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase">Horário de Estudo</h4>
-                  <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Defina o horário diário para receber o lembrete.</p>
-                </div>
-                <input 
-                  type="time"
-                  value={pushTime || '08:00'}
-                  onChange={(e) => setPushTime(e.target.value)}
-                  className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg px-3 py-1.5 text-xs font-bold text-slate-700 dark:text-slate-300 outline-none focus:border-blue-500"
-                />
-              </div>
-            )}
-
-            {/* Toggle Streak Warning */}
-            <div className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40">
-              <div>
-                <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase">Streak em Perigo</h4>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Aviso no fim do dia se você ainda não queimou teoria ou revisou.</p>
-              </div>
-              <input 
-                type="checkbox"
-                checked={pushSettings.streakWarning}
-                disabled={!pushSettings.enabled}
-                onChange={(e) => setPushSettings({ ...pushSettings, streakWarning: e.target.checked })}
-                className="w-5 h-5 rounded accent-blue-600 cursor-pointer disabled:cursor-not-allowed"
-              />
-            </div>
-
-            {/* Toggle Reviews Pending */}
-            <div className="flex items-center justify-between p-3 rounded-xl border border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/40">
-              <div>
-                <h4 className="text-xs font-black text-slate-800 dark:text-slate-200 uppercase">Revisões Acumuladas</h4>
-                <p className="text-[10px] text-slate-500 dark:text-slate-400 font-bold">Alerta inteligente se você tiver mais de 5 revisões pendentes FSRS.</p>
-              </div>
-              <input 
-                type="checkbox"
-                checked={pushSettings.reviewsPending}
-                disabled={!pushSettings.enabled}
-                onChange={(e) => setPushSettings({ ...pushSettings, reviewsPending: e.target.checked })}
-                className="w-5 h-5 rounded accent-blue-600 cursor-pointer disabled:cursor-not-allowed"
-              />
-            </div>
-          </div>
+          </section>
         </div>
-      </div>
-      )}
-
-      {activeConfigTab === 'sistema' && (
-      <>
-      <div className="bg-emerald-50 p-5 sm:p-6 rounded-2xl shadow-sm border border-emerald-200 mt-6 mb-6 relative overflow-hidden dark:bg-emerald-950/20 dark:border-emerald-900/50">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-emerald-500/10 rounded-bl-full pointer-events-none"></div>
-        <h3 className="text-lg font-black text-emerald-800 flex items-center gap-2 mb-2 dark:text-emerald-400">
-          <Save className="text-emerald-600 w-5 h-5"/> Centro de Backup e Segurança
-        </h3>
-        <p className="text-sm text-emerald-700 mb-4 max-w-3xl dark:text-emerald-500/70">
-          Proteja o seu progresso. Exporte os seus dados para um arquivo local ou restaure um backup anterior. Recomendamos fazer um backup semanal.
-        </p>
-        <div className="flex flex-col sm:flex-row gap-3">
-          <button 
-            onClick={() => {
-              const state = useStore.getState();
-              const dataToExport = {};
-              PERSISTED_KEYS.forEach(key => { if (state[key] !== undefined) dataToExport[key] = state[key]; });
-              
-              const blob = new Blob([JSON.stringify(dataToExport, null, 2)], { type: 'application/json' });
-              const url = URL.createObjectURL(blob);
-              const a = document.createElement('a');
-              a.href = url;
-              a.download = `qg-prf-backup-${useStore.getState().getLocalDateStr()}.json`;
-              a.click();
-              URL.revokeObjectURL(url);
-              toast.success("Backup exportado com sucesso!");
-            }}
-            className="bg-emerald-600 hover:bg-emerald-700 text-white px-5 py-2.5 rounded-lg font-bold transition-colors shadow-sm flex items-center justify-center gap-2"
-          >
-            <Save className="w-4 h-4"/> Exportar Backup (.json)
-          </button>
-          
-          <label className="bg-white hover:bg-slate-50 text-emerald-600 border border-emerald-200 px-5 py-2.5 rounded-lg font-bold transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer dark:bg-slate-900 dark:border-emerald-800">
-            <Plus className="w-4 h-4"/> Importar Backup
-            <input 
-              type="file" 
-              accept=".json" 
-              className="hidden" 
-              onChange={(e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-                const reader = new FileReader();
-                reader.onload = async (event) => {
-                  try {
-                    const content = event.target.result;
-                    const parsed = JSON.parse(content);
-
-                    if (typeof parsed !== 'object' || parsed === null || Array.isArray(parsed)) {
-                      throw new Error('formato inválido');
-                    }
-                    // Exige ao menos uma chave reconhecida para não sobrescrever tudo com um arquivo vazio
-                    if (!PERSISTED_KEYS.some(k => parsed[k] !== undefined)) {
-                      throw new Error('backup sem dados reconhecíveis');
-                    }
-
-                    // Mescla sobre os defaults: chaves ausentes no backup não ficam undefined
-                    const merged = { ...getCleanInitialState() };
-                    PERSISTED_KEYS.forEach(k => { if (parsed[k] !== undefined) merged[k] = parsed[k]; });
-
-                    // Hidratar dates
-                    if (merged.calendarDate) merged.calendarDate = new Date(merged.calendarDate);
-                    if (merged.reviewCalendarDate) merged.reviewCalendarDate = new Date(merged.reviewCalendarDate);
-
-                    useStore.setState(merged);
-                    useStore.getState().syncDayRollover?.();
-                    useStore.getState().syncAndRepairCaveiraReviews?.();
-                    try {
-                      localStorage.setItem('prf_caveira_questions', JSON.stringify(merged.caveiraQuestions || []));
-                    } catch (_) {}
-                    await useStore.getState().saveToCloud();
-                    toast.success("Backup restaurado com sucesso!");
-                  } catch {
-                    toast.error("Arquivo de backup inválido.");
-                  }
-                };
-                reader.readAsText(file);
-                e.target.value = '';
-              }}
-            />
-          </label>
-        </div>
-      </div>
-
-      {/* Central de Versão e Atualizações */}
-      <div className="bg-white dark:bg-slate-900 p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 dark:border-slate-800 mb-6 flex flex-col sm:flex-row sm:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center gap-2 mb-1">
-            <h3 className="text-base font-bold text-slate-800 dark:text-slate-200">
-              Versão do Aplicativo
-            </h3>
-            <span className="font-mono font-bold text-xs bg-blue-100 text-blue-700 dark:bg-blue-900/40 dark:text-blue-300 px-2 py-0.5 rounded border border-blue-200 dark:border-blue-800">
-              {APP_VERSION}
-            </span>
-          </div>
-          <p className="text-xs text-slate-500 dark:text-slate-400">
-            Se uma atualização recente não carregar automaticamente, use o botão ao lado para limpar o cache local e forçar o recarregamento.
-          </p>
-        </div>
-        <button
-          onClick={handleForceUpdate}
-          className="shrink-0 bg-blue-600 hover:bg-blue-700 text-white px-4 py-2.5 rounded-lg font-bold text-xs transition-colors shadow-sm flex items-center justify-center gap-2 cursor-pointer active:scale-95"
-        >
-          <RefreshCw className="w-4 h-4" />
-          Forçar Atualização / Limpar Cache
-        </button>
-      </div>
-
-      <div className="bg-red-50 p-5 sm:p-6 rounded-2xl shadow-sm border border-red-200 mb-6 relative overflow-hidden dark:bg-red-950/20 dark:border-red-900/50">
-        <div className="absolute top-0 right-0 w-32 h-32 bg-red-500/10 rounded-bl-full pointer-events-none"></div>
-        <h3 className="text-lg font-black text-red-800 flex items-center gap-2 mb-2 dark:text-red-400">
-          <AlertTriangle className="text-red-600 w-5 h-5"/> Zona de Perigo (Reset & Purga de Dados)
-        </h3>
-        <p className="text-sm text-red-700 mb-4 max-w-3xl dark:text-red-500/70">
-          Gerenciamento modular de dados: selecione exatamente o que deseja apagar (tudo, disciplinas, aulas assistidas, matérias do calendário, Raio-X Caveira, FSRS, Duelo CTB, carreira, mascote K9 ou moedas/recompensas).
-        </p>
-        <div className="flex flex-wrap gap-3">
-          <button 
-            onClick={() => setShowResetModal(true)} 
-            className="w-full sm:w-auto bg-red-600 hover:bg-red-700 text-white px-5 py-2.5 rounded-lg font-bold transition-all shadow-md shadow-red-600/20 flex items-center justify-center gap-2 cursor-pointer"
-          >
-            <RotateCcw className="w-4 h-4" />
-            Configurar Reset de Dados
-          </button>
-
-          <button onClick={() => {
-              setGlobalModal({
-                title: "⚠️ RESET ABSOLUTO ⚠️",
-                message: "ESTA AÇÃO É IRREVERSÍVEL! Isto apagará TUDO: matérias, assuntos, histórico, moedas e progresso. O sistema voltará a uma tela em branco (vazia). Deseja DESTRUIR todos os dados?",
-                onConfirm: () => {
-                  executeTotalWipe();
-                  toast.error("SISTEMA ZERADO ABSOLUTAMENTE.");
-                }
-              });
-            }} 
-            className="w-full sm:w-auto bg-transparent border-2 border-red-600 text-red-600 hover:bg-red-500/10 px-5 py-2.5 rounded-lg font-black transition-colors cursor-pointer"
-          >
-            Zerar Tudo Imediatamente
-          </button>
-        </div>
-      </div>
-      </>
       )}
       {/* Modal de Edição de Disciplina (Estilo Compacto Centralizado) */}
       {editingSubjectId && draftSubject && createPortal((
@@ -1754,59 +2055,64 @@ export default function Config({
         </div>
       ), document.body)}
 
-      {/* Scanner de aulas para assunto específico */}
-      {scannerTopicIdx !== null && draftSubject && (
-        <TopicLessonScanner
-          topicName={(draftSubject.topics || [])[scannerTopicIdx]?.name || 'Assunto'}
-          onClose={() => setScannerTopicIdx(null)}
-          onConfirm={(newLessons, newTopicName) => {
-            setDraftSubject(prev => {
-              const newTopics = [...(prev.topics || [])];
-              const existing = newTopics[scannerTopicIdx].lessons || [];
-              const merged = [...existing, ...newLessons];
-              newTopics[scannerTopicIdx] = {
-                ...newTopics[scannerTopicIdx],
-                name: (newTopicName && newTopicName.trim()) ? newTopicName.trim() : newTopics[scannerTopicIdx].name,
-                lessons: merged,
-                total: merged.length
-              };
-              return { ...prev, topics: newTopics };
-            });
-            setScannerTopicIdx(null);
-            if (newTopicName && newTopicName.trim()) {
-              toast.success(`Assunto renomeado para "${newTopicName.trim()}" e ${newLessons.length} aula(s) adicionada(s)!`);
-            } else {
-              toast.success(`${newLessons.length} aula(s) adicionada(s) ao assunto!`);
-            }
-          }}
-        />
-      )}
+      {/* Modais carregados sob demanda (isolam tesseract.js e demais bundles pesados) */}
+      <Suspense fallback={<ModalLoadingOverlay />}>
+        {scannerTopicIdx !== null && draftSubject && (
+          <TopicLessonScanner
+            topicName={(draftSubject.topics || [])[scannerTopicIdx]?.name || 'Assunto'}
+            onClose={() => setScannerTopicIdx(null)}
+            onConfirm={(newLessons, newTopicName) => {
+              setDraftSubject(prev => {
+                const newTopics = [...(prev.topics || [])];
+                const existing = newTopics[scannerTopicIdx].lessons || [];
+                const merged = [...existing, ...newLessons];
+                newTopics[scannerTopicIdx] = {
+                  ...newTopics[scannerTopicIdx],
+                  name: (newTopicName && newTopicName.trim()) ? newTopicName.trim() : newTopics[scannerTopicIdx].name,
+                  lessons: merged,
+                  total: merged.length
+                };
+                return { ...prev, topics: newTopics };
+              });
+              setScannerTopicIdx(null);
+              if (newTopicName && newTopicName.trim()) {
+                toast.success(`Assunto renomeado para "${newTopicName.trim()}" e ${newLessons.length} aula(s) adicionada(s).`);
+              } else {
+                toast.success(`${newLessons.length} aula(s) adicionada(s) ao assunto.`);
+              }
+            }}
+          />
+        )}
 
-      {showImportOCR && (
-        <ImportOCR
-          subjects={subjects}
-          setSubjects={setSubjects}
-          availableColors={availableColors}
-          onClose={() => setShowImportOCR(false)}
-        />
-      )}
+        {showImportOCR && (
+          <ImportOCR
+            subjects={subjects}
+            setSubjects={setSubjects}
+            availableColors={availableColors}
+            onClose={() => setShowImportOCR(false)}
+          />
+        )}
 
-      {showResetModal && (
-        <SelectiveResetModal
-          isOpen={showResetModal}
-          onClose={() => setShowResetModal(false)}
-        />
-      )}
+        {showResetModal && (
+          <SelectiveResetModal
+            isOpen={showResetModal}
+            onClose={() => {
+              setShowResetModal(false);
+              setRestoreVersion(v => v + 1);
+            }}
+          />
+        )}
 
-      {shareModalConfig?.isOpen && (
-        <ShareSyllabusModal
-          subjects={subjects}
-          setSubjects={setSubjects}
-          initialSubjectId={shareModalConfig.initialSubjectId}
-          initialTab={shareModalConfig.tab || 'share'}
-          onClose={() => setShareModalConfig(null)}
-        />
-      )}
+        {shareModalConfig?.isOpen && (
+          <ShareSyllabusModal
+            subjects={subjects}
+            setSubjects={setSubjects}
+            initialSubjectId={shareModalConfig.initialSubjectId}
+            initialTab={shareModalConfig.tab || 'share'}
+            onClose={() => setShareModalConfig(null)}
+          />
+        )}
+      </Suspense>
 
     </div>
   );
