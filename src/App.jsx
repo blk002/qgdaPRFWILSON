@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useMemo, Suspense, useRef } from 'react';
 import { createPortal } from 'react-dom';
-import { supabase } from './lib/supabaseClient';
+import { supabase, SUPABASE_URL, SUPABASE_ANON_KEY } from './lib/supabaseClient';
 import {
   createLocalTestSession,
   hasStoredLocalTestSession,
@@ -704,8 +704,8 @@ export default function App() {
 
       // #5: Credenciais de sessão para sync direto Extensão -> Supabase (sem depender da aba do QG aberta)
       if (session?.access_token && session?.user?.id) {
-        const supabaseUrl = import.meta.env.VITE_SUPABASE_URL || '';
-        const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY || '';
+        const supabaseUrl = SUPABASE_URL;
+        const anonKey = SUPABASE_ANON_KEY;
         if (supabaseUrl && anonKey && !supabaseUrl.includes('placeholder')) {
           window.postMessage({
             source: 'QG_WEB_APP',
