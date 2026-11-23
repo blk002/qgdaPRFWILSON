@@ -4,22 +4,22 @@ import { useStore } from '../store/useStore';
 import CentralEstudosTutorialModal from '../components/CentralEstudosTutorialModal';
 import AbaHoje from '../components/AbaHoje';
 import {
-  Zap, Repeat, Calendar as CalendarIcon,
-  Settings, Info, Sparkles, ArrowLeft, Skull, Clock, Target
+  Zap, Repeat, Calendar as CalendarIcon, CalendarClock,
+  Settings, Info, Skull, Clock, Target
 } from 'lucide-react';
 
 const Ciclo = React.lazy(() => import('./Ciclo'));
 const RaioXCaveira = React.lazy(() => import('./RaioXCaveira'));
 const Calendario = React.lazy(() => import('./Calendario'));
 const Simulados = React.lazy(() => import('./Simulados'));
+const RotinaVida = React.lazy(() => import('./RotinaVida'));
 
-const TUTORIAL_SEEN_KEY = 'qg_central_tutorial_seen';
-
-const VALID_TABS = new Set(['hoje', 'cronograma', 'caveira', 'calendario', 'simulados']);
+const VALID_TABS = new Set(['hoje', 'cronograma', 'rotina', 'caveira', 'calendario', 'simulados']);
 
 const TAB_CONFIG = [
   { id: 'hoje', label: 'Hoje', icon: Zap, tutorialStep: 1 },
   { id: 'cronograma', label: 'Cronograma', icon: Repeat, tutorialStep: 2 },
+  { id: 'rotina', label: 'Rotina de Vida', icon: CalendarClock, tutorialStep: 2 },
   { id: 'caveira', label: 'Raio-X Caveira', icon: Skull, tutorialStep: 3 },
   { id: 'calendario', label: 'Calendário', icon: CalendarIcon, tutorialStep: 4 },
   { id: 'simulados', label: 'Simulados', icon: Target, tutorialStep: 5 }
@@ -32,13 +32,6 @@ export default function CentralEstudos() {
   const activeTab = VALID_TABS.has(rawTab) ? rawTab : 'hoje';
 
   const [tutorialModalState, setTutorialModalState] = useState({ isOpen: false, step: 0 });
-  const [showOnboardingBanner, setShowOnboardingBanner] = useState(() => {
-    try {
-      return localStorage.getItem(TUTORIAL_SEEN_KEY) !== 'true';
-    } catch {
-      return true;
-    }
-  });
 
   const {
     subjects = {},
@@ -67,22 +60,12 @@ export default function CentralEstudos() {
   const examDateConfigured = Boolean(targetExamDate && targetExamDate !== '2026-08-15');
   const currentTabMeta = TAB_CONFIG.find(t => t.id === activeTab) || TAB_CONFIG[0];
 
-  const markTutorialSeen = () => {
-    setShowOnboardingBanner(false);
-    try {
-      localStorage.setItem(TUTORIAL_SEEN_KEY, 'true');
-    } catch {
-      // ignore storage errors
-    }
-  };
-
   const handleOpenTutorial = (step = 0) => {
     setTutorialModalState({ isOpen: true, step });
   };
 
   const handleCloseTutorial = () => {
     setTutorialModalState(prev => ({ ...prev, isOpen: false }));
-    markTutorialSeen();
   };
 
   const handleTabChange = (tabId) => {
@@ -110,27 +93,62 @@ export default function CentralEstudos() {
 
   return (
     <div className="fade-in w-full pb-6 space-y-5">
-      {/* Cabeçalho Clean com Breadcrumb */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div className="space-y-0.5 min-w-0">
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400">
-            <button
-              type="button"
-              onClick={() => navigate('/carreira')}
-              className="inline-flex items-center gap-1 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
-            >
-              <ArrowLeft className="w-3.5 h-3.5" />
-              <span>Carreira</span>
-            </button>
-            <span aria-hidden="true">/</span>
-            <span className="text-slate-700 dark:text-slate-300 font-medium">Central de Estudos</span>
-          </div>
-          <h1 className="font-display text-xl sm:text-2xl font-bold tracking-tight text-slate-900 dark:text-white truncate">
+      {/* Cabeçalho Unificado com Progresso do Edital */}
+      <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-x-5 gap-y-3">
+        <div className="order-1 min-w-0 shrink-0">
+          <h1 className="font-display text-lg sm:text-xl font-bold tracking-tight text-slate-900 dark:text-white whitespace-nowrap">
             Central de Estudos
           </h1>
         </div>
 
-        <div className="flex items-center gap-2 shrink-0">
+        {/* Progresso do Edital integrado */}
+        <div className="order-3 lg:order-2 w-full lg:w-auto lg:flex-1 min-w-0 pt-3 lg:pt-0 border-t lg:border-t-0 lg:border-x border-slate-200/80 dark:border-slate-800 lg:px-5 space-y-1.5">
+          <div className="flex items-center justify-between gap-3 text-xs">
+            <div className="flex items-center gap-2 min-w-0 text-slate-500 dark:text-slate-400">
+              <span className="font-semibold text-slate-700 dark:text-slate-200 shrink-0">
+                Edital
+              </span>
+              <span className="font-mono font-bold tabular-nums text-sky-600 dark:text-sky-400 shrink-0">
+                {completionPct}%
+              </span>
+              <span aria-hidden="true" className="text-slate-300 dark:text-slate-700 shrink-0">·</span>
+              <span className="tabular-nums truncate">
+                {completedLessons}/{totalLessons} aulas
+              </span>
+              <span aria-hidden="true" className="hidden sm:inline text-slate-300 dark:text-slate-700 shrink-0">·</span>
+              <span className="hidden sm:inline tabular-nums shrink-0">
+                {subjectsList.length} {subjectsList.length === 1 ? 'disciplina' : 'disciplinas'}
+              </span>
+            </div>
+
+            <div className="flex items-center gap-1.5 text-xs shrink-0 whitespace-nowrap">
+              <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
+              {estimatedDate?.short ? (
+                <span className={
+                  examDateConfigured && estimatedDate.isLate
+                    ? 'text-amber-600 dark:text-amber-400 font-medium'
+                    : 'text-slate-500 dark:text-slate-400'
+                }>
+                  <span className="hidden sm:inline">Previsão: </span>
+                  <strong className="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
+                    {estimatedDate.short}
+                  </strong>
+                </span>
+              ) : (
+                <span className="text-slate-400 dark:text-slate-500">Sem previsão</span>
+              )}
+            </div>
+          </div>
+
+          <div className="w-full h-1.5 rounded-full bg-slate-200/80 dark:bg-slate-800 overflow-hidden">
+            <div
+              className="h-full rounded-full bg-gradient-to-r from-sky-600 to-sky-400 dark:from-sky-500 dark:to-cyan-400 transition-all duration-300"
+              style={{ width: `${completionPct}%` }}
+            />
+          </div>
+        </div>
+
+        <div className="order-2 lg:order-3 flex items-center gap-2 shrink-0">
           <button
             type="button"
             onClick={() => handleOpenTutorial(currentTabMeta.tutorialStep)}
@@ -149,82 +167,6 @@ export default function CentralEstudos() {
           </button>
         </div>
       </div>
-
-      {/* Faixa Global de Progresso do Edital */}
-      <div className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-4 py-3 space-y-2">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-1.5 text-xs">
-          <div className="flex items-center gap-2 flex-wrap text-slate-600 dark:text-slate-400">
-            <span className="font-semibold text-slate-900 dark:text-white">
-              Progresso do edital
-            </span>
-            <span className="font-mono font-bold tabular-nums text-sky-600 dark:text-sky-400">
-              {completionPct}%
-            </span>
-            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
-            <span className="tabular-nums">
-              {completedLessons} de {totalLessons} aulas
-            </span>
-            <span aria-hidden="true" className="text-slate-300 dark:text-slate-700">·</span>
-            <span className="tabular-nums">
-              {subjectsList.length} {subjectsList.length === 1 ? 'disciplina' : 'disciplinas'}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1.5 text-xs">
-            <Clock className="w-3.5 h-3.5 text-slate-400 shrink-0" />
-            {estimatedDate?.short ? (
-              <span className={
-                examDateConfigured && estimatedDate.isLate
-                  ? 'text-amber-600 dark:text-amber-400 font-medium'
-                  : 'text-slate-500 dark:text-slate-400'
-              }>
-                Previsão de término:{' '}
-                <strong className="font-semibold text-slate-900 dark:text-slate-100 tabular-nums">
-                  {estimatedDate.short}
-                </strong>
-              </span>
-            ) : (
-              <span className="text-slate-500 dark:text-slate-400">Sem previsão calculada</span>
-            )}
-          </div>
-        </div>
-
-        <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-850 overflow-hidden">
-          <div
-            className="h-full rounded-full bg-sky-500 transition-all duration-300"
-            style={{ width: `${completionPct}%` }}
-          />
-        </div>
-      </div>
-
-      {/* Banner Discreto de Boas-Vindas */}
-      {showOnboardingBanner && (
-        <div className="rounded-xl px-4 py-3 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 text-sm text-slate-700 dark:text-slate-200">
-            <Sparkles className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
-            <span>
-              <strong className="font-semibold">Primeira vez por aqui?</strong> Veja o guia rápido de 1 minuto para dominar sua rotina de estudos.
-            </span>
-          </div>
-
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() => handleOpenTutorial(0)}
-              className="h-8 px-3 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 transition-colors cursor-pointer whitespace-nowrap"
-            >
-              Iniciar tutorial
-            </button>
-            <button
-              type="button"
-              onClick={markTutorialSeen}
-              className="h-8 px-3 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-850 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer whitespace-nowrap"
-            >
-              Já sei usar
-            </button>
-          </div>
-        </div>
-      )}
 
       {/* Abas Horizontais Limpas */}
       <div className="border-b border-slate-200 dark:border-slate-800 overflow-x-auto no-scrollbar">
@@ -269,6 +211,7 @@ export default function CentralEstudos() {
             }
           >
             {activeTab === 'cronograma' && <Ciclo />}
+            {activeTab === 'rotina' && <RotinaVida />}
             {activeTab === 'caveira' && <RaioXCaveira />}
             {activeTab === 'calendario' && <Calendario />}
             {activeTab === 'simulados' && <Simulados />}

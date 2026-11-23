@@ -191,6 +191,24 @@ const normalizeHydratedState = (raw, currentCaveira = []) => {
     }
   }
   if (!cleanData.calendarOverrideCounts) cleanData.calendarOverrideCounts = {};
+  if (!cleanData.lifeRoutine || typeof cleanData.lifeRoutine !== 'object') {
+    cleanData.lifeRoutine = defaults.lifeRoutine;
+  } else {
+    const rawDays = cleanData.lifeRoutine.days || {};
+    cleanData.lifeRoutine = {
+      ...defaults.lifeRoutine,
+      ...cleanData.lifeRoutine,
+      days: {
+        seg: Array.isArray(rawDays.seg) ? rawDays.seg : [],
+        ter: Array.isArray(rawDays.ter) ? rawDays.ter : [],
+        qua: Array.isArray(rawDays.qua) ? rawDays.qua : [],
+        qui: Array.isArray(rawDays.qui) ? rawDays.qui : [],
+        sex: Array.isArray(rawDays.sex) ? rawDays.sex : [],
+        sab: Array.isArray(rawDays.sab) ? rawDays.sab : [],
+        dom: Array.isArray(rawDays.dom) ? rawDays.dom : [],
+      },
+    };
+  }
 
   // Mescla caveiraQuestions preservando dados da nuvem e locais
   const incomingCaveira = Array.isArray(cleanData.caveiraQuestions) ? cleanData.caveiraQuestions : [];
@@ -1342,6 +1360,7 @@ export const useStore = create(
       setReviews: (reviews) => set((state) => ({ reviews: typeof reviews === 'function' ? reviews(state.reviews) : reviews })),
       setReviewStats: (reviewStats) => set((state) => ({ reviewStats: typeof reviewStats === 'function' ? reviewStats(state.reviewStats) : reviewStats })),
       setSimulados: (simulados) => set((state) => ({ simulados: typeof simulados === 'function' ? simulados(state.simulados) : simulados })),
+      setLifeRoutine: (lifeRoutine) => set((state) => ({ lifeRoutine: typeof lifeRoutine === 'function' ? lifeRoutine(state.lifeRoutine) : lifeRoutine })),
       setTafHistory: (tafHistory) => set((state) => ({ tafHistory: typeof tafHistory === 'function' ? tafHistory(state.tafHistory) : tafHistory })),
       setTafTrainingStatus: (tafTrainingStatus) => set({ tafTrainingStatus }),
       setGlobalModal: (globalModal) => set({ globalModal }),
