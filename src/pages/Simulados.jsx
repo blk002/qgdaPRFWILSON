@@ -1,25 +1,63 @@
-import React, { useState } from 'react';
-import { createPortal } from 'react-dom';
+import React, { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
-import { Target, Plus, TrendingUp, Edit2, Trash2, BarChart2, Trophy, Activity, Info, ChevronDown, ChevronUp, Layers } from 'lucide-react';
+import {
+  Target,
+  Plus,
+  Edit2,
+  Trash2,
+  ChevronDown,
+  ChevronUp,
+  Layers,
+  CheckCircle,
+  AlertTriangle,
+  ArrowUpRight,
+  ArrowDownRight
+} from 'lucide-react';
+import SimuladoEvolutionChart from '../components/simulados/SimuladoEvolutionChart';
+import SimuladoFormModal from '../components/simulados/SimuladoFormModal';
+
+const NOTA_CORTE_PRF = 75;
+
+function formatBrDate(dateStr) {
+  if (!dateStr || typeof dateStr !== 'string') return '—';
+  const parts = dateStr.split('-');
+  return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateStr;
+}
+
+function getEliminationInfo(sim) {
+  const hasBlocks =
+    sim.b1Liquida !== undefined && sim.b2Liquida !== undefined && sim.b3Liquida !== undefined;
+  if (!hasBlocks) {
+    const failed = sim.pct !== undefined ? Number(sim.pct) < 50 : 50 > (Number(sim.liquida) || 0);
+    return { failed, reason: failed ? 'Abaixo de 50%' : 'Aprovado' };
+  }
+  const reasons = [];
+  if (sim.b1Liquida < 15) reasons.push('B1 < 15');
+  if (sim.b2Liquida < 10) reasons.push('B2 < 10');
+  if (sim.b3Liquida < 10) reasons.push('B3 < 10');
+  if (sim.liquida < 50) reasons.push('Total < 50');
+  return {
+    failed: reasons.length > 0,
+    reason: reasons.length > 0 ? reasons.join(' · ') : 'Aprovado nos mínimos'
+  };
+}
 
 export default function Simulados() {
   const {
-    simulados,
+    simulados = [],
     setSimulados,
     addXP,
     unlockMedal,
     updateMissionProgress,
-    setGlobalModal,
-    isDarkMode
+    setGlobalModal
   } = useStore();
-  
+
   const [showModal, setShowModal] = useState(false);
   const [editingSimulado, setEditingSimulado] = useState(null);
-  const [hoveredPoint, setHoveredPoint] = useState(null);
   const [expandedSimId, setExpandedSimId] = useState(null);
+  const [subjectBlockFilter, setSubjectBlockFilter] = useState('all'); // 'all' | 'Bloco I' | 'Bloco II' | 'Bloco III'
 
-  const aggregatedSubjects = React.useMemo(() => {
+  const aggregatedSubjects = useMemo(() => {
     const map = new Map();
     const blocoOrder = { 'Bloco I': 1, 'Bloco II': 2, 'Bloco III': 3 };
     (simulados || []).forEach((sim) => {
@@ -34,644 +72,788 @@ export default function Simulados() {
           blank: 0,
           total: 0,
           liquida: 0,
-          count: 0,
+          count: 0
         };
         const h = Number(sc.hits) || 0;
         const e = Number(sc.errors) || 0;
         const bl = Number(sc.blank) || 0;
-        const tot = Number(sc.total) || (h + e + bl);
+        const tot = Number(sc.total) || h + e + bl;
         prev.hits += h;
         prev.errors += e;
         prev.blank += bl;
         prev.total += tot;
-        prev.liquida += sc.liquida !== undefined ? Number(sc.liquida) : (h - e);
+        prev.liquida += sc.liquida !== undefined ? Number(sc.liquida) : h - e;
         prev.count += 1;
         map.set(key, prev);
       });
     });
+
     return Array.from(map.values())
       .map((item) => ({
         ...item,
         pct: item.total > 0 ? Math.round((item.hits / item.total) * 100) : 0,
-        blocoRank: blocoOrder[item.bloco] || 9,
+        blocoRank: blocoOrder[item.bloco] || 9
       }))
       .sort((a, b) => a.pct - b.pct || b.errors - a.errors);
   }, [simulados]);
 
-  const totalSimulados = simulados.length;
-  const caveiraSimuladosCount = simulados.filter(s => s?.source === 'caveira').length;
-  const mediaLiquida = totalSimulados > 0 ? Math.round(simulados.reduce((acc, sim) => acc + sim.liquida, 0) / totalSimulados) : 0;
-  const recorde = totalSimulados > 0 ? Math.max(...simulados.map(s => s.liquida)) : 0;
-  
-  let weakPoint = "Aguardando Simulados";
-  if (totalSimulados > 0) {
-    const avgB1 = simulados.reduce((acc, sim) => acc + (sim.b1Liquida || 0), 0) / totalSimulados / 55;
-    const avgB2 = simulados.reduce((acc, sim) => acc + (sim.b2Liquida || 0), 0) / totalSimulados / 30;
-    const avgB3 = simulados.reduce((acc, sim) => acc + (sim.b3Liquida || 0), 0) / totalSimulados / 35;
-    
-    const minAvg = Math.min(avgB1, avgB2, avgB3);
-    if (avgB2 === minAvg && avgB3 === minAvg && avgB2 < avgB1) weakPoint = "Bloco II / III";
-    else if (avgB2 === minAvg && avgB2 < avgB1) weakPoint = "Bloco II (Trânsito)";
-    else if (avgB3 === minAvg && avgB3 < avgB1) weakPoint = "Bloco III (Direito)";
-    else weakPoint = "Bloco I (Básicas)";
-  }
+  const filteredAggregatedSubjects = useMemo(() => {
+    if (subjectBlockFilter === 'all') return aggregatedSubjects;
+    return aggregatedSubjects.filter((s) => s.bloco === subjectBlockFilter);
+  }, [aggregatedSubjects, subjectBlockFilter]);
 
-  const notaCortePRF = 75; 
-  const maxScore = 120; 
-  const chartHeight = 420;
-  const chartWidth = 800;
-
-  const getBezierCurvePath = (points) => {
-    if (points.length === 0) return "";
-    if (points.length === 1) return `M 0 ${points[0].y} L ${chartWidth} ${points[0].y}`;
-    
-    let d = `M ${points[0].x} ${points[0].y}`;
-    for (let i = 0; i < points.length - 1; i++) {
-      const curr = points[i];
-      const next = points[i + 1];
-      const cp1x = curr.x + (next.x - curr.x) / 3;
-      const cp1y = curr.y;
-      const cp2x = curr.x + 2 * (next.x - curr.x) / 3;
-      const cp2y = next.y;
-      d += ` C ${cp1x} ${cp1y}, ${cp2x} ${cp2y}, ${next.x} ${next.y}`;
+  const metrics = useMemo(() => {
+    const total = simulados.length;
+    const caveiraCount = simulados.filter((s) => s?.source === 'caveira').length;
+    if (total === 0) {
+      return {
+        total: 0,
+        caveiraCount: 0,
+        mediaLiquida: 0,
+        recorde: 0,
+        approvedCount: 0,
+        lastDelta: null,
+        weakPoint: 'Aguardando simulados',
+        blocks: [
+          { id: 'b1', code: 'B1', name: 'Básicas', totalQ: 55, min: 15, avg: 0, pct: 0, hasData: false },
+          { id: 'b2', code: 'B2', name: 'Trânsito', totalQ: 30, min: 10, avg: 0, pct: 0, hasData: false },
+          { id: 'b3', code: 'B3', name: 'Direito', totalQ: 35, min: 10, avg: 0, pct: 0, hasData: false }
+        ]
+      };
     }
-    return d;
+
+    const mediaLiquida = Math.round(
+      simulados.reduce((acc, s) => acc + (Number(s.liquida) || 0), 0) / total
+    );
+    const recorde = Math.max(...simulados.map((s) => Number(s.liquida) || 0));
+    const approvedCount = simulados.filter((s) => !getEliminationInfo(s).failed).length;
+    const lastDelta =
+      total >= 2
+        ? (Number(simulados[total - 1].liquida) || 0) - (Number(simulados[total - 2].liquida) || 0)
+        : null;
+
+    const calcBlockAvg = (field) => {
+      const valid = simulados
+        .map((s) => s?.[field])
+        .filter((v) => v !== undefined && v !== null && Number.isFinite(Number(v)))
+        .map(Number);
+      if (valid.length === 0) return { hasData: false, avg: 0 };
+      const sum = valid.reduce((acc, v) => acc + v, 0);
+      return { hasData: true, avg: sum / valid.length };
+    };
+
+    const b1Stat = calcBlockAvg('b1Liquida');
+    const b2Stat = calcBlockAvg('b2Liquida');
+    const b3Stat = calcBlockAvg('b3Liquida');
+
+    const blocks = [
+      { id: 'b1', code: 'B1', name: 'Básicas', totalQ: 55, min: 15, hasData: b1Stat.hasData, avg: Math.round(b1Stat.avg * 10) / 10, pct: b1Stat.hasData ? Math.round((b1Stat.avg / 55) * 100) : 0 },
+      { id: 'b2', code: 'B2', name: 'Trânsito', totalQ: 30, min: 10, hasData: b2Stat.hasData, avg: Math.round(b2Stat.avg * 10) / 10, pct: b2Stat.hasData ? Math.round((b2Stat.avg / 30) * 100) : 0 },
+      { id: 'b3', code: 'B3', name: 'Direito', totalQ: 35, min: 10, hasData: b3Stat.hasData, avg: Math.round(b3Stat.avg * 10) / 10, pct: b3Stat.hasData ? Math.round((b3Stat.avg / 35) * 100) : 0 }
+    ];
+
+    const blocksWithData = blocks.filter((b) => b.hasData);
+    const weakestBlock = blocksWithData.length > 0
+      ? [...blocksWithData].sort((a, b) => a.pct - b.pct)[0]
+      : null;
+    const weakPoint = weakestBlock ? `${weakestBlock.code} · ${weakestBlock.name}` : 'Sem detalhamento por bloco';
+
+    return {
+      total,
+      caveiraCount,
+      mediaLiquida,
+      recorde,
+      approvedCount,
+      lastDelta,
+      weakPoint,
+      blocks
+    };
+  }, [simulados]);
+
+  const handleOpenNew = () => {
+    setEditingSimulado(null);
+    setShowModal(true);
   };
 
-  const getBezierAreaPath = (points, height) => {
-    if (points.length === 0) return "";
-    const curve = getBezierCurvePath(points);
-    return `${curve} L ${points[points.length - 1].x} ${height} L ${points[0].x} ${height} Z`;
+  const handleSaveSimulado = (payload) => {
+    if (editingSimulado) {
+      setSimulados((prev) =>
+        prev.map((s) =>
+          s.id === editingSimulado.id
+            ? {
+                ...s,
+                ...payload,
+                dateSource: 'manual'
+              }
+            : s
+        )
+      );
+    } else {
+      setSimulados((prev) => [...prev, { id: Date.now(), ...payload }]);
+      addXP(500, 'Simulado de Prova registrado');
+      updateMissionProgress('simulado', 1);
+      if (payload.liquida >= 120 * 0.8) unlockMedal('elite');
+    }
+    setShowModal(false);
+    setEditingSimulado(null);
   };
 
-  const getChartData = () => {
-    if (totalSimulados === 0) return { line: "", area: "", points: [] };
-    
-    const ptsObj = simulados.map((sim, index) => {
-      const x = (index / (totalSimulados - 1 || 1)) * chartWidth;
-      const clampedVal = Math.max(0, Math.min(maxScore, Number(sim.liquida) || 0));
-      const y = chartHeight - (clampedVal / maxScore) * chartHeight;
-      return { x, y, val: sim.liquida, sim };
+  const handleClearCaveira = () => {
+    setGlobalModal({
+      type: 'confirm',
+      variant: 'danger',
+      title: 'Limpar Simulados do Caveira',
+      message: `Remover os ${metrics.caveiraCount} simulado(s) importados do Caveira? Seus simulados cadastrados manualmente serão mantidos.`,
+      confirmText: 'Limpar',
+      onConfirm: () => setSimulados((prev) => prev.filter((s) => s?.source !== 'caveira'))
     });
-    
-    if (totalSimulados === 1) {
-       const y = ptsObj[0].y;
-       return {
-          line: `M 0 ${y} L ${chartWidth} ${y}`,
-          area: `M 0 ${y} L ${chartWidth} ${y} L ${chartWidth} ${chartHeight} L 0 ${chartHeight} Z`,
-          points: [{ x: chartWidth/2, y, val: ptsObj[0].val, sim: ptsObj[0].sim }]
-       };
-    }
-    
-    const linePath = getBezierCurvePath(ptsObj);
-    const areaPath = getBezierAreaPath(ptsObj, chartHeight);
-    return { line: linePath, area: areaPath, points: ptsObj };
   };
 
-  const chartData = getChartData();
-  const targetY = chartHeight - (notaCortePRF / maxScore) * chartHeight;
-
-  const formatBrDate = (dateStr) => {
-    if (!dateStr || typeof dateStr !== 'string') return '—';
-    const parts = dateStr.split('-');
-    return parts.length === 3 ? `${parts[2]}/${parts[1]}/${parts[0]}` : dateStr;
-  };
+  const weakestSubject = aggregatedSubjects[0] || null;
+  const mediaVsCorte = metrics.mediaLiquida - NOTA_CORTE_PRF;
 
   return (
-    <div className="fade-in w-full pb-10">
-      <div className="flex flex-col lg:flex-row gap-6">
-        <div className="flex-1 min-w-0">
-          <div className="bg-white p-5 sm:p-6 rounded-2xl shadow-sm border border-slate-200/80 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mb-6 dark:bg-slate-900 dark:border-slate-800">
-            <div className="flex items-center gap-3 sm:gap-4">
-              <div className="bg-purple-100 p-2 sm:p-3 rounded-full shrink-0"><Target className="text-purple-600 w-6 h-6 sm:w-8 sm:h-8" /></div>
-              <div>
-                <h2 className="text-lg sm:text-xl font-bold text-slate-800 dark:text-slate-100">Evolução Estratégica em Simulados</h2>
-                <p className="text-slate-500 text-xs sm:text-sm dark:text-slate-400">Sistema Cebraspe (Certa anula Errada).</p>
-              </div>
+    <div className="fade-in w-full pb-8 flex flex-col gap-4">
+      {/* ZONA 1: Cabeçalho Estratégico + 4 KPIs Tabulares */}
+      <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 flex flex-col gap-4">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="p-2 rounded-xl border border-sky-200/80 dark:border-sky-900/60 bg-sky-50 dark:bg-sky-950/40 text-sky-600 dark:text-sky-400 shrink-0">
+              <Target className="w-5 h-5" />
             </div>
-            <div className="flex flex-wrap items-center gap-2 w-full sm:w-auto">
-              {caveiraSimuladosCount > 0 && (
-                <button
-                  onClick={() => {
-                    setGlobalModal({
-                      type: 'confirm',
-                      variant: 'danger',
-                      title: 'Limpar Simulados do Caveira',
-                      message: `Remover os ${caveiraSimuladosCount} simulado(s) importados do Caveira? Seus simulados cadastrados manualmente serão mantidos.`,
-                      confirmText: 'Limpar',
-                      onConfirm: () => setSimulados(prev => prev.filter(s => s?.source !== 'caveira'))
-                    });
-                  }}
-                  className="w-full sm:w-auto justify-center bg-red-500/10 hover:bg-red-500/20 text-red-500 border border-red-500/30 px-4 py-2.5 rounded-lg font-bold flex items-center gap-2 transition-colors text-xs sm:text-sm"
-                >
-                  <Trash2 className="w-4 h-4" /> Limpar Caveira ({caveiraSimuladosCount})
-                </button>
-              )}
-              <button onClick={() => { setEditingSimulado(null); setShowModal(true); }} className="w-full sm:w-auto justify-center bg-purple-600 hover:bg-purple-700 text-white px-5 py-2.5 rounded-lg font-bold flex items-center gap-2 shadow-md transition-colors">
-                <Plus className="w-4 h-4" /> Registrar Nota
-              </button>
+            <div className="min-w-0">
+              <h2 className="text-base sm:text-lg font-bold text-slate-900 dark:text-slate-100 leading-snug">
+                Evolução em Simulados
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Padrão Cebraspe · 120 questões · Certa anula errada
+              </p>
             </div>
           </div>
 
-          {totalSimulados > 0 && (
-            <div className="bg-white p-5 sm:p-6 rounded-xl shadow-sm border border-slate-200 mb-6 overflow-visible dark:bg-slate-900 dark:border-slate-800">
-               <div className="flex justify-between items-end mb-6">
-                  <h3 className="font-bold text-slate-700 flex items-center gap-2 dark:text-slate-200"><TrendingUp className="w-5 h-5 text-purple-500"/> Curva de Evolução (Nota Líquida)</h3>
-               </div>
-               
-               <div className="relative w-full h-[420px] mt-4">
-                  <div className="absolute w-full border-t-2 border-dashed border-red-400/50 z-0 flex items-end justify-end" style={{ top: `${targetY}px` }}>
-                     <span className="text-[10px] sm:text-xs font-black text-red-500 bg-white px-2 -mt-2.5 sm:-mt-3 absolute left-0 sm:left-auto sm:right-0 dark:bg-slate-900">Zona de Corte (~{notaCortePRF} pts)</span>
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
+            {metrics.caveiraCount > 0 && (
+              <button
+                type="button"
+                onClick={handleClearCaveira}
+                className="h-9 px-3 rounded-lg border border-red-200 dark:border-red-900/70 bg-red-50/70 hover:bg-red-100 dark:bg-red-950/50 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Limpar Caveira ({metrics.caveiraCount})
+              </button>
+            )}
+
+            <button
+              type="button"
+              onClick={handleOpenNew}
+              className="h-9 px-4 rounded-lg bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <Plus className="w-4 h-4" /> Registrar Simulado
+            </button>
+          </div>
+        </div>
+
+        {/* 4 KPIs tabulares com divisórias finas */}
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 pt-3.5 border-t border-slate-100 dark:border-slate-800/80">
+          <div className="min-w-0">
+            <span className="block text-[11px] text-slate-500 dark:text-slate-400">Média líquida</span>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="text-xl font-mono font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                {metrics.mediaLiquida}
+              </span>
+              <span className="text-xs text-slate-400">pts</span>
+            </div>
+            <span
+              className={`block text-[11px] font-medium mt-0.5 tabular-nums ${
+                metrics.total === 0
+                  ? 'text-slate-400'
+                  : mediaVsCorte >= 0
+                    ? 'text-emerald-600 dark:text-emerald-400'
+                    : 'text-amber-600 dark:text-amber-400'
+              }`}
+            >
+              {metrics.total === 0
+                ? 'Sem histórico'
+                : mediaVsCorte >= 0
+                  ? `+${mediaVsCorte} pts acima do corte (75)`
+                  : `${mediaVsCorte} pts abaixo do corte (75)`}
+            </span>
+          </div>
+
+          <div className="min-w-0 lg:pl-4 lg:border-l border-slate-200/80 dark:border-slate-800">
+            <span className="block text-[11px] text-slate-500 dark:text-slate-400">Recorde pessoal</span>
+            <div className="flex items-baseline gap-1.5 mt-0.5">
+              <span className="text-xl font-mono font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                {metrics.recorde}
+              </span>
+              <span className="text-xs text-slate-400">pts</span>
+            </div>
+            <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 tabular-nums">
+              {metrics.total > 0
+                ? `${Math.round((metrics.recorde / 120) * 100)}% da prova máxima`
+                : 'Meta inicial: 75 pts'}
+            </span>
+          </div>
+
+          <div className="min-w-0 lg:pl-4 lg:border-l border-slate-200/80 dark:border-slate-800">
+            <span className="block text-[11px] text-slate-500 dark:text-slate-400">
+              Aprovação &amp; ritmo
+            </span>
+            <div className="flex items-baseline gap-2 mt-0.5">
+              <span className="text-xl font-mono font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                {metrics.approvedCount}/{metrics.total}
+              </span>
+              {metrics.lastDelta !== null && (
+                <span
+                  className={`inline-flex items-center text-xs font-mono font-bold tabular-nums ${
+                    metrics.lastDelta >= 0
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-red-500 dark:text-red-400'
+                  }`}
+                >
+                  {metrics.lastDelta >= 0 ? (
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  ) : (
+                    <ArrowDownRight className="w-3.5 h-3.5" />
+                  )}
+                  {metrics.lastDelta >= 0 ? `+${metrics.lastDelta}` : metrics.lastDelta}
+                </span>
+              )}
+            </div>
+            <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+              {metrics.lastDelta !== null ? 'Variação no último simulado' : 'Aprovados nos mínimos'}
+            </span>
+          </div>
+
+          <div className="min-w-0 lg:pl-4 lg:border-l border-slate-200/80 dark:border-slate-800">
+            <span className="block text-[11px] text-slate-500 dark:text-slate-400">Ponto crítico</span>
+            <span
+              className={`block text-base sm:text-lg font-bold leading-snug mt-0.5 truncate ${
+                metrics.total > 0 ? 'text-red-600 dark:text-red-400' : 'text-slate-500 dark:text-slate-400'
+              }`}
+              title={metrics.weakPoint}
+            >
+              {metrics.weakPoint}
+            </span>
+            <span className="block text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+              {weakestSubject
+                ? `Matéria mais crítica: ${weakestSubject.name} (${weakestSubject.pct}%)`
+                : 'Menor aproveitamento médio'}
+            </span>
+          </div>
+        </div>
+      </section>
+
+      {/* ZONA 2: Curva de Evolução (8 cols) + Raio-X dos Blocos Cebraspe (4 cols) */}
+      <div className="grid grid-cols-1 xl:grid-cols-12 gap-4 items-stretch">
+        <div className="xl:col-span-8 min-w-0">
+          <SimuladoEvolutionChart simulados={simulados} onOpenNew={handleOpenNew} />
+        </div>
+
+        <aside className="xl:col-span-4 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 flex flex-col justify-between gap-4">
+          <div className="flex flex-col gap-4">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                Auditoria por Bloco (PRF)
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Média líquida comparada ao mínimo eliminatório
+              </p>
+            </div>
+
+            <div className="flex flex-col gap-4">
+              {metrics.blocks.map((blk) => {
+                const minPct = Math.round((blk.min / blk.totalQ) * 100);
+                const clampedPct = blk.hasData ? Math.max(0, Math.min(100, blk.pct)) : 0;
+                const isBelowMin = blk.hasData && blk.avg < blk.min;
+                const margin = Math.round((blk.avg - blk.min) * 10) / 10;
+
+                return (
+                  <div key={blk.id} className="flex flex-col gap-1.5">
+                    <div className="flex items-baseline justify-between gap-2 text-xs">
+                      <span className="font-semibold text-slate-800 dark:text-slate-200">
+                        {blk.code} · {blk.name}
+                      </span>
+                      <span className="font-mono font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                        {blk.hasData ? blk.avg : '—'}
+                        <span className="text-slate-400 font-normal">/{blk.totalQ}</span>
+                      </span>
+                    </div>
+
+                    {/* Barra com marcador vertical do mínimo eliminatório */}
+                    <div className="relative w-full h-2 rounded-full bg-slate-100 dark:bg-slate-800 overflow-visible">
+                      <div
+                        className={`h-full rounded-full transition-all ${
+                          isBelowMin ? 'bg-red-500' : clampedPct >= 65 ? 'bg-emerald-500' : 'bg-sky-500'
+                        }`}
+                        style={{ width: `${clampedPct}%` }}
+                      />
+                      <div
+                        style={{ left: `${minPct}%` }}
+                        title={`Mínimo eliminatório: ${blk.min} pts`}
+                        className="absolute -top-0.5 -bottom-0.5 w-0.5 bg-amber-500 dark:bg-amber-400"
+                      />
+                    </div>
+
+                    <div className="flex items-center justify-between text-[11px] tabular-nums">
+                      <span className="text-slate-500 dark:text-slate-400">
+                        Mínimo: {blk.min} pts
+                      </span>
+                      {blk.hasData ? (
+                        <span
+                          className={
+                            isBelowMin
+                              ? 'font-semibold text-red-600 dark:text-red-400'
+                              : 'font-medium text-emerald-600 dark:text-emerald-400'
+                          }
+                        >
+                          {margin >= 0 ? `+${margin} acima` : `${margin} abaixo`} ({clampedPct}%)
+                        </span>
+                      ) : (
+                        <span className="text-slate-400">—</span>
+                      )}
+                    </div>
                   </div>
-                  
-                  <svg viewBox={"0 0 " + chartWidth + " " + chartHeight} preserveAspectRatio="none" className="w-full h-full overflow-visible z-10 relative">
-                     <defs>
-                        <linearGradient id="chartFill" x1="0" y1="0" x2="0" y2="1">
-                           <stop offset="0%" stopColor="#9333ea" stopOpacity="0.25"/>
-                           <stop offset="100%" stopColor="#9333ea" stopOpacity="0"/>
-                        </linearGradient>
-                     </defs>
-                     
-                     <path d={chartData.area} fill="url(#chartFill)" />
-                     <path d={chartData.line} fill="none" stroke="#9333ea" strokeWidth="4" strokeLinejoin="round" strokeLinecap="round" />
-                     
-                     {chartData.points.map((p, index) => (
-                        <g key={index}>
-                          <circle 
-                            cx={p.x} 
-                            cy={p.y} 
-                            r="5" 
-                            fill="#fff" 
-                            stroke="#9333ea" 
-                            strokeWidth="3" 
-                            className="hover:r-[7px] hover:stroke-purple-500 transition-all cursor-pointer"
-                            onMouseEnter={() => setHoveredPoint({ ...p, index })}
-                            onMouseLeave={() => setHoveredPoint(null)}
-                          />
-                        </g>
-                     ))}
-                  </svg>
-
-                  {hoveredPoint && (() => {
-                    const xPct = (hoveredPoint.x / chartWidth) * 100;
-                    const yPct = (hoveredPoint.y / chartHeight) * 100;
-                    const isLeftEdge = xPct <= 18;
-                    const isRightEdge = xPct >= 82;
-                    const isNearTop = yPct < 34;
-                    const translateX = isLeftEdge ? '-14px' : isRightEdge ? 'calc(-100% + 14px)' : '-50%';
-                    const translateY = isNearTop ? '0%' : '-100%';
-                    const caretXClass = isLeftEdge
-                      ? 'left-[14px] -translate-x-1/2'
-                      : isRightEdge
-                        ? 'right-[14px] translate-x-1/2'
-                        : 'left-1/2 -translate-x-1/2';
-                    const caretYClass = isNearTop
-                      ? 'bottom-full border-l-[6px] border-r-[6px] border-b-[6px] border-l-transparent border-r-transparent border-b-slate-900'
-                      : 'top-full border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-slate-900';
-
-                    return (
-                      <div 
-                        className="absolute bg-slate-900/95 border border-purple-500/50 text-white rounded-xl p-3 shadow-2xl z-50 pointer-events-none transition-all duration-200 backdrop-blur-md flex flex-col gap-1 min-w-[185px]"
-                        style={{
-                          left: `${xPct}%`,
-                          top: isNearTop ? `calc(${yPct}% + 14px)` : `calc(${yPct}% - 14px)`,
-                          transform: `translate(${translateX}, ${translateY})`,
-                        }}
-                      >
-                        <div className={`absolute w-0 h-0 ${caretXClass} ${caretYClass}`} />
-                        
-                        <div className="flex justify-between items-center gap-3 whitespace-nowrap border-b border-slate-700/50 pb-1 mb-1">
-                          <span className="text-[10px] font-black text-slate-400 uppercase tracking-wider">Simulado #{hoveredPoint.index + 1}</span>
-                          <span className="text-[10px] text-slate-400 font-medium">{formatBrDate(hoveredPoint.sim.data)}</span>
-                        </div>
-                        
-                        <div className="flex justify-between items-center">
-                          <span className="text-xs text-slate-300">Nota Líquida:</span>
-                          <span className="text-sm font-black text-purple-400">{hoveredPoint.val} pts</span>
-                        </div>
-                        
-                        <div className="grid grid-cols-3 gap-1 mt-1.5 pt-1.5 border-t border-slate-800 text-[10px]">
-                          <div className="flex flex-col items-center bg-slate-800/40 rounded p-1">
-                            <span className="font-bold text-slate-400">B1</span>
-                            <span className="font-black text-blue-400">{hoveredPoint.sim.b1Liquida}</span>
-                          </div>
-                          <div className="flex flex-col items-center bg-slate-800/40 rounded p-1">
-                            <span className="font-bold text-slate-400">B2</span>
-                            <span className="font-black text-yellow-400">{hoveredPoint.sim.b2Liquida}</span>
-                          </div>
-                          <div className="flex flex-col items-center bg-slate-800/40 rounded p-1">
-                            <span className="font-bold text-slate-400">B3</span>
-                            <span className="font-black text-emerald-400">{hoveredPoint.sim.b3Liquida}</span>
-                          </div>
-                        </div>
-                      </div>
-                    );
-                  })()}
-               </div>
-               <div className="flex justify-between text-[10px] text-slate-400 font-bold mt-2 border-t border-slate-100 pt-2 px-1 dark:border-slate-800">
-                  <span>Mais antigo</span>
-                  <span>Mais recente</span>
-               </div>
+                );
+              })}
             </div>
-          )}
+          </div>
 
-          {simulados.length === 0 ? (
-            <div className="text-center p-10 bg-white border-2 border-dashed border-slate-200 rounded-xl text-slate-500 text-sm dark:bg-slate-900 dark:text-slate-400 dark:border-slate-800">
-              Nenhum simulado registrado. Insira seus resultados por bloco para ativar o motor de diagnóstico de eliminação.
-            </div>
-          ) : (
-            <div className="bg-white rounded-xl shadow-sm border border-slate-200 overflow-x-auto mb-8 dark:bg-slate-900 dark:border-slate-800">
-              <table className="w-full text-left text-xs sm:text-sm min-w-[700px]">
-                <thead className="bg-slate-50 text-slate-600 border-b border-slate-200 dark:bg-slate-950 dark:text-slate-300 dark:border-slate-800">
-                  <tr>
-                    <th className="p-3 sm:p-4 font-bold">Data</th>
-                    <th className="p-3 sm:p-4 font-bold text-center" title="Básicas - 55 Questões (Mínimo: 15)">B1 (55)</th>
-                    <th className="p-3 sm:p-4 font-bold text-center" title="Trânsito - 30 Questões (Mínimo: 10)">B2 (30)</th>
-                    <th className="p-3 sm:p-4 font-bold text-center" title="Direito - 35 Questões (Mínimo: 10)">B3 (35)</th>
-                    <th className="p-3 sm:p-4 font-black text-center text-purple-700">Líquida</th>
-                    <th className="p-3 sm:p-4 font-bold text-center">Status</th>
-                    <th className="p-3 sm:p-4 font-bold text-center">Ações</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-100">
-                  {simulados.map(sim => {
-                    const hasBlockBreakdown = sim.b1Liquida !== undefined && sim.b2Liquida !== undefined && sim.b3Liquida !== undefined;
-                    const hasSubjectScores = Array.isArray(sim.subjectScores) && sim.subjectScores.length > 0;
-                    const isExpanded = expandedSimId === sim.id;
-                    const reprovouCorte = hasBlockBreakdown
-                      ? ((15 > sim.b1Liquida) || (10 > sim.b2Liquida) || (10 > sim.b3Liquida) || (50 > sim.liquida))
-                      : (sim.pct !== undefined ? Number(sim.pct) < 50 : 50 > sim.liquida);
-                    const sortedSubjects = hasSubjectScores
-                      ? [...sim.subjectScores].sort((a, b) => {
-                          const ord = { 'Bloco I': 1, 'Bloco II': 2, 'Bloco III': 3 };
-                          return ((ord[a.bloco] || 9) - (ord[b.bloco] || 9)) || ((a.pct || 0) - (b.pct || 0));
-                        })
-                      : [];
-                    
-                    return (
+          <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
+            {metrics.total > 0 ? (
+              <>
+                Prioridade recomendada:{' '}
+                <strong className="text-slate-900 dark:text-slate-100">{metrics.weakPoint}</strong>
+                {weakestSubject ? (
+                  <>
+                    {' '}— atenção especial em{' '}
+                    <strong className="text-slate-900 dark:text-slate-100">{weakestSubject.name}</strong> (
+                    {weakestSubject.pct}% de acertos).
+                  </>
+                ) : (
+                  '. Reforce baterias de questões estilo Cebraspe para elevar sua margem líquida.'
+                )}
+              </>
+            ) : (
+              'Registre seu primeiro simulado para destravar o diagnóstico automático de eliminação por bloco.'
+            )}
+          </div>
+        </aside>
+      </div>
+
+      {/* ZONA 3: Histórico de Simulados */}
+      {simulados.length > 0 && (
+        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl overflow-hidden">
+          <div className="px-4 py-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 bg-slate-50/70 dark:bg-slate-950/50">
+            <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100">
+              Histórico de Simulados
+            </h3>
+            <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+              {simulados.length} {simulados.length === 1 ? 'registro' : 'registros'}
+            </span>
+          </div>
+
+          <div className="overflow-x-auto custom-scrollbar">
+            <table className="w-full text-left text-xs min-w-[720px]">
+              <thead className="border-b border-slate-200 dark:border-slate-800 text-[11px] font-semibold text-slate-500 dark:text-slate-400 bg-slate-50/40 dark:bg-slate-950/30">
+                <tr>
+                  <th className="py-2.5 px-4">Simulado &amp; Data</th>
+                  <th className="py-2.5 px-3 text-center" title="Básicas — 55 questões (Mínimo: 15)">
+                    B1 (55)
+                  </th>
+                  <th className="py-2.5 px-3 text-center" title="Trânsito — 30 questões (Mínimo: 10)">
+                    B2 (30)
+                  </th>
+                  <th className="py-2.5 px-3 text-center" title="Direito — 35 questões (Mínimo: 10)">
+                    B3 (35)
+                  </th>
+                  <th className="py-2.5 px-3 text-center">Líquida</th>
+                  <th className="py-2.5 px-3 text-center">Resultado</th>
+                  <th className="py-2.5 px-4 text-right">Ações</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-slate-200/70 dark:divide-slate-800/70">
+                {simulados.map((sim, index) => {
+                  const hasSubjectScores = Array.isArray(sim.subjectScores) && sim.subjectScores.length > 0;
+                  const isExpanded = expandedSimId === sim.id;
+                  const elim = getEliminationInfo(sim);
+                  const prevSim = index > 0 ? simulados[index - 1] : null;
+                  const delta = prevSim !== null ? (Number(sim.liquida) || 0) - (Number(prevSim.liquida) || 0) : null;
+
+                  const sortedSubjects = hasSubjectScores
+                    ? [...sim.subjectScores].sort((a, b) => {
+                        const ord = { 'Bloco I': 1, 'Bloco II': 2, 'Bloco III': 3 };
+                        return (ord[a.bloco] || 9) - (ord[b.bloco] || 9) || (a.pct || 0) - (b.pct || 0);
+                      })
+                    : [];
+
+                  const dateNote =
+                    sim.dateSource === 'release'
+                      ? 'liberação'
+                      : sim.dateSource === 'api_date'
+                        ? 'API'
+                        : sim.dateSource === 'import'
+                          ? 'importado'
+                          : '';
+
+                  return (
                     <React.Fragment key={sim.id}>
-                    <tr className="hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-colors dark:bg-slate-950">
-                      <td className="p-3 sm:p-4 font-semibold text-slate-700 dark:text-slate-200">
-                        <div className="flex items-center gap-1.5 flex-wrap">
-                          <span title={sim.dateSource === 'attempt' ? 'Data de realização extraída da API do Caveira' : undefined}>
-                            {formatBrDate(sim.data)}
-                          </span>
-                          {sim.dateSource === 'release' && (
-                            <span
-                              className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-amber-500/15 text-amber-600 dark:text-amber-400 border border-amber-500/30"
-                              title={`Data de liberação no Caveira${sim.dateField ? ` (${sim.dateField})` : ''} — edite no lápis se quiser informar o dia exato em que realizou`}
-                            >
-                              liberação
-                            </span>
-                          )}
-                          {sim.dateSource === 'api_date' && (
-                            <span
-                              className="text-[9px] font-bold px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-600 dark:text-sky-400 border border-sky-500/30"
-                              title={`Data encontrada na API (${sim.dateField || 'registro'}) — edite no lápis se necessário`}
-                            >
-                              API
-                            </span>
-                          )}
-                          {sim.dateSource === 'import' && (
-                            <span
-                              className="text-[9px] font-semibold px-1.5 py-0.5 rounded bg-slate-500/10 text-slate-500 dark:text-slate-400 border border-slate-500/20"
-                              title="Nenhuma data encontrada na API ou tela — clique no lápis para ajustar"
-                            >
-                              importado
-                            </span>
-                          )}
-                        </div>
-                        {(sim.title || sim.source === 'caveira' || hasSubjectScores) && (
-                          <div className="flex items-center gap-1.5 mt-1 flex-wrap">
-                            {sim.source === 'caveira' && (
-                              <span className="text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-sky-500/15 text-sky-500 border border-sky-500/30">
-                                Caveira
+                      <tr className="hover:bg-slate-50/80 dark:hover:bg-slate-800/35 transition-colors">
+                        <td className="py-3 px-4">
+                          <div className="flex flex-col gap-0.5">
+                            <div className="flex items-center gap-2 flex-wrap">
+                              <span className="font-mono font-bold tabular-nums text-slate-900 dark:text-slate-100">
+                                {formatBrDate(sim.data)}
                               </span>
-                            )}
-                            {sim.title && (
-                              <span className="text-[11px] text-slate-500 dark:text-slate-400 font-medium truncate max-w-[200px]" title={sim.title}>
-                                {sim.title}
-                              </span>
-                            )}
-                            {hasSubjectScores && (
-                              <button
-                                type="button"
-                                onClick={() => setExpandedSimId(prev => prev === sim.id ? null : sim.id)}
-                                className="inline-flex items-center gap-1 text-[10px] font-black uppercase px-1.5 py-0.5 rounded bg-purple-500/15 hover:bg-purple-500/25 text-purple-600 dark:text-purple-400 border border-purple-500/30 transition-colors cursor-pointer"
+                              {sim.source === 'caveira' && (
+                                <span className="text-[11px] font-semibold text-sky-600 dark:text-sky-400">
+                                  · Caveira
+                                </span>
+                              )}
+                              {dateNote && (
+                                <span className="text-[11px] text-amber-600 dark:text-amber-400">
+                                  · {dateNote}
+                                </span>
+                              )}
+                            </div>
+
+                            <div className="flex items-center gap-2 flex-wrap">
+                              {sim.title && (
+                                <span
+                                  className="text-xs text-slate-600 dark:text-slate-300 truncate max-w-[260px]"
+                                  title={sim.title}
+                                >
+                                  {sim.title}
+                                </span>
+                              )}
+                              {hasSubjectScores && (
+                                <button
+                                  type="button"
+                                  onClick={() => setExpandedSimId((prev) => (prev === sim.id ? null : sim.id))}
+                                  className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-600 dark:text-sky-400 hover:underline cursor-pointer"
+                                >
+                                  <span>Matérias ({sim.subjectScores.length})</span>
+                                  {isExpanded ? (
+                                    <ChevronUp className="w-3 h-3" />
+                                  ) : (
+                                    <ChevronDown className="w-3 h-3" />
+                                  )}
+                                </button>
+                              )}
+                            </div>
+                          </div>
+                        </td>
+
+                        <td
+                          className={`py-3 px-3 text-center font-mono font-bold tabular-nums ${
+                            sim.b1Liquida != null && sim.b1Liquida < 15
+                              ? 'text-red-600 dark:text-red-400'
+                              : 'text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {sim.b1Liquida != null ? sim.b1Liquida : '—'}
+                        </td>
+                        <td
+                          className={`py-3 px-3 text-center font-mono font-bold tabular-nums ${
+                            sim.b2Liquida != null && sim.b2Liquida < 10
+                              ? 'text-red-600 dark:text-red-400'
+                              : 'text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {sim.b2Liquida != null ? sim.b2Liquida : '—'}
+                        </td>
+                        <td
+                          className={`py-3 px-3 text-center font-mono font-bold tabular-nums ${
+                            sim.b3Liquida != null && sim.b3Liquida < 10
+                              ? 'text-red-600 dark:text-red-400'
+                              : 'text-slate-700 dark:text-slate-300'
+                          }`}
+                        >
+                          {sim.b3Liquida != null ? sim.b3Liquida : '—'}
+                        </td>
+
+                        <td className="py-3 px-3 text-center">
+                          <div className="inline-flex items-baseline gap-1.5 font-mono tabular-nums">
+                            <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                              {sim.liquida}
+                            </span>
+                            {delta !== null && (
+                              <span
+                                className={`text-[11px] font-semibold ${
+                                  delta > 0
+                                    ? 'text-emerald-600 dark:text-emerald-400'
+                                    : delta < 0
+                                      ? 'text-red-500 dark:text-red-400'
+                                      : 'text-slate-400'
+                                }`}
                               >
-                                <span>Matérias ({sim.subjectScores.length})</span>
-                                {isExpanded ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-                              </button>
+                                {delta > 0 ? `+${delta}` : delta}
+                              </span>
                             )}
                           </div>
-                        )}
-                      </td>
-                      <td className={`p-3 sm:p-4 text-center font-bold ${(15 > sim.b1Liquida) ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}`}>{sim.b1Liquida !== undefined ? sim.b1Liquida : '-'}</td>
-                      <td className={`p-3 sm:p-4 text-center font-bold ${(10 > sim.b2Liquida) ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}`}>{sim.b2Liquida !== undefined ? sim.b2Liquida : '-'}</td>
-                      <td className={`p-3 sm:p-4 text-center font-bold ${(10 > sim.b3Liquida) ? 'text-red-500' : 'text-slate-600 dark:text-slate-300'}`}>{sim.b3Liquida !== undefined ? sim.b3Liquida : '-'}</td>
-                      <td className="p-3 sm:p-4 text-center font-black text-base sm:text-lg text-slate-800 dark:text-slate-100">{sim.liquida}</td>
-                      <td className="p-3 sm:p-4 text-center">
-                        {reprovouCorte ? 
-                          <span className="bg-red-100 text-red-700 px-2 py-1 rounded text-[10px] font-black uppercase">Reprovado</span> : 
-                          <span className="bg-emerald-100 text-emerald-700 px-2 py-1 rounded text-[10px] font-black uppercase">Aprovado</span>
-                        }
-                      </td>
-                      <td className="p-3 sm:p-4 text-center">
-                        <div className="flex justify-center gap-2">
-                           <button onClick={() => { setEditingSimulado(sim); setShowModal(true); }} className="p-2 text-slate-400 hover:text-blue-500 hover:bg-white rounded transition-all dark:hover:bg-slate-800 shadow-sm border border-transparent hover:border-blue-100" title="Editar"><Edit2 className="w-4 h-4" /></button>
-                           <button onClick={() => {
-                             setGlobalModal({
-                               title: "Excluir Simulado?",
-                               message: "Esta ação removerá permanentemente a nota do seu histórico de evolução estratégica.",
-                               onConfirm: () => setSimulados(prev => prev.filter(s => s.id !== sim.id))
-                             });
-                           }} className="p-2 text-slate-400 hover:text-red-500 hover:bg-white rounded transition-all dark:hover:bg-slate-800 shadow-sm border border-transparent hover:border-red-100" title="Excluir"><Trash2 className="w-4 h-4" /></button>
-                        </div>
-                      </td>
-                    </tr>
-                    {isExpanded && hasSubjectScores && (
-                      <tr className="bg-slate-50/80 dark:bg-slate-900/70">
-                        <td colSpan={7} className="p-3 sm:p-4 border-t border-slate-200/70 dark:border-slate-800">
-                          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-2.5">
-                            {sortedSubjects.map((sc, sIdx) => {
-                              const bShort = sc.bloco === 'Bloco III' ? 'B3' : sc.bloco === 'Bloco II' ? 'B2' : 'B1';
-                              const pctNum = Number(sc.pct) || 0;
-                              const deltaOthers = sc.othersPct !== undefined ? Math.round((pctNum - Number(sc.othersPct)) * 10) / 10 : null;
-                              return (
-                                <div key={`${sc.name}-${sIdx}`} className="p-2.5 rounded-lg bg-white dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 flex flex-col gap-1.5">
-                                  <div className="flex items-start justify-between gap-2">
-                                    <div className="min-w-0 flex-1">
-                                      <span className="inline-block text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-500 dark:text-slate-400 mr-1.5">
-                                        {bShort}
-                                      </span>
-                                      <span className="text-xs font-bold text-slate-800 dark:text-slate-100 break-words">
-                                        {sc.name}
-                                      </span>
-                                    </div>
-                                    <span className={`text-xs font-black shrink-0 ${pctNum >= 75 ? 'text-emerald-500' : pctNum >= 50 ? 'text-amber-500' : 'text-red-500'}`}>
-                                      {pctNum}%
-                                    </span>
-                                  </div>
-                                  <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
-                                    <div
-                                      className={`h-full rounded-full ${pctNum >= 75 ? 'bg-emerald-500' : pctNum >= 50 ? 'bg-amber-500' : 'bg-red-500'}`}
-                                      style={{ width: `${Math.max(0, Math.min(100, pctNum))}%` }}
-                                    />
-                                  </div>
-                                  <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-                                    <span>
-                                      <strong className="text-emerald-500">{sc.hits}✓</strong> ·{' '}
-                                      <strong className="text-red-500">{sc.errors}✗</strong> ·{' '}
-                                      <span>{sc.blank}○</span> ·{' '}
-                                      <strong className={sc.liquida > 0 ? 'text-slate-700 dark:text-slate-200' : 'text-red-500'}>
-                                        Líq: {sc.liquida}
-                                      </strong>
-                                    </span>
-                                    {deltaOthers !== null && (
-                                      <span title={`Média Caveira: ${sc.othersPct}%`} className={deltaOthers >= 0 ? 'text-emerald-500 font-bold' : 'text-red-400 font-bold'}>
-                                        {deltaOthers >= 0 ? `+${deltaOthers}%` : `${deltaOthers}%`} vs turma
-                                      </span>
-                                    )}
-                                  </div>
-                                </div>
-                              );
-                            })}
+                        </td>
+
+                        <td className="py-3 px-3 text-center">
+                          {elim.failed ? (
+                            <span
+                              title={elim.reason}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-red-600 dark:text-red-400"
+                            >
+                              <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                              <span>Reprovado</span>
+                            </span>
+                          ) : (
+                            <span
+                              title={elim.reason}
+                              className="inline-flex items-center gap-1 text-xs font-semibold text-emerald-600 dark:text-emerald-400"
+                            >
+                              <CheckCircle className="w-3.5 h-3.5 shrink-0" />
+                              <span>Aprovado</span>
+                            </span>
+                          )}
+                        </td>
+
+                        <td className="py-3 px-4 text-right">
+                          <div className="inline-flex items-center gap-1">
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setEditingSimulado(sim);
+                                setShowModal(true);
+                              }}
+                              title="Editar simulado"
+                              aria-label="Editar simulado"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                            >
+                              <Edit2 className="w-4 h-4" />
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setGlobalModal({
+                                  title: 'Excluir Simulado?',
+                                  message:
+                                    'Esta ação removerá permanentemente esta nota do seu histórico de evolução.',
+                                  onConfirm: () => setSimulados((prev) => prev.filter((s) => s.id !== sim.id))
+                                });
+                              }}
+                              title="Excluir simulado"
+                              aria-label="Excluir simulado"
+                              className="p-1.5 rounded-lg text-slate-400 hover:text-red-500 hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors cursor-pointer"
+                            >
+                              <Trash2 className="w-4 h-4" />
+                            </button>
                           </div>
                         </td>
                       </tr>
-                    )}
-                    </React.Fragment>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
 
-          {aggregatedSubjects.length > 0 && (
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-sm border border-slate-200 dark:border-slate-800 p-4 sm:p-5 mb-8">
-              <div className="flex flex-wrap items-center justify-between gap-2 mb-4">
-                <h3 className="font-bold text-slate-800 dark:text-slate-100 flex items-center gap-2 text-sm sm:text-base">
-                  <Layers className="w-4 h-4 text-purple-500" />
-                  <span>Raio-X por Matéria nos Simulados</span>
-                </h3>
-                <span className="text-[11px] font-semibold text-slate-400">
-                  Consolidado de {aggregatedSubjects.length} disciplina(s) (da mais crítica para a mais forte)
-                </span>
-              </div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
-                {aggregatedSubjects.map((sub) => {
-                  const bShort = sub.bloco === 'Bloco III' ? 'B3' : sub.bloco === 'Bloco II' ? 'B2' : 'B1';
-                  return (
-                    <div key={sub.name} className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800 flex flex-col gap-1.5">
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="min-w-0 flex-1">
-                          <span className="inline-block text-[9px] font-black uppercase px-1.5 py-0.5 rounded bg-purple-500/15 text-purple-500 mr-1.5">
-                            {bShort}
-                          </span>
-                          <span className="text-xs font-bold text-slate-800 dark:text-slate-100 break-words">
-                            {sub.name}
-                          </span>
-                        </div>
-                        <span className={`text-xs font-black shrink-0 ${sub.pct >= 75 ? 'text-emerald-500' : sub.pct >= 60 ? 'text-amber-500' : 'text-red-500'}`}>
-                          {sub.pct}%
-                        </span>
-                      </div>
-                      <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div
-                          className={`h-full rounded-full ${sub.pct >= 75 ? 'bg-emerald-500' : sub.pct >= 60 ? 'bg-amber-500' : 'bg-red-500'}`}
-                          style={{ width: `${Math.max(0, Math.min(100, sub.pct))}%` }}
-                        />
-                      </div>
-                      <div className="flex items-center justify-between text-[10px] font-semibold text-slate-500 dark:text-slate-400">
-                        <span>
-                          <strong className="text-emerald-500">{sub.hits}✓</strong> ·{' '}
-                          <strong className="text-red-500">{sub.errors}✗</strong> ·{' '}
-                          <span>{sub.blank}○</span> ({sub.total}q)
-                        </span>
-                        <span className={sub.liquida > 0 ? 'text-slate-700 dark:text-slate-200 font-bold' : 'text-red-500 font-bold'}>
-                          Líq: {sub.liquida}
-                        </span>
-                      </div>
-                    </div>
+                      {isExpanded && hasSubjectScores && (
+                        <tr className="bg-slate-50/75 dark:bg-slate-950/60">
+                          <td colSpan={7} className="p-4 border-t border-slate-200/70 dark:border-slate-800">
+                            <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+                              {sortedSubjects.map((sc, sIdx) => {
+                                const bShort =
+                                  sc.bloco === 'Bloco III' ? 'B3' : sc.bloco === 'Bloco II' ? 'B2' : 'B1';
+                                const pctNum = Number(sc.pct) || 0;
+                                const scLiquida =
+                                  sc.liquida != null ? Number(sc.liquida) : (Number(sc.hits) || 0) - (Number(sc.errors) || 0);
+                                const deltaOthers =
+                                  sc.othersPct !== undefined
+                                    ? Math.round((pctNum - Number(sc.othersPct)) * 10) / 10
+                                    : null;
+
+                                return (
+                                  <div
+                                    key={`${sc.name}-${sIdx}`}
+                                    className="p-3 rounded-lg bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 flex flex-col gap-1.5"
+                                  >
+                                    <div className="flex items-start justify-between gap-2">
+                                      <div className="min-w-0 flex-1 text-xs">
+                                        <span className="font-mono font-semibold text-slate-400 mr-1.5">
+                                          {bShort}
+                                        </span>
+                                        <span className="font-semibold text-slate-900 dark:text-slate-100 break-words">
+                                          {sc.name}
+                                        </span>
+                                      </div>
+                                      <span
+                                        className={`text-xs font-mono font-bold tabular-nums shrink-0 ${
+                                          pctNum >= 75
+                                            ? 'text-emerald-600 dark:text-emerald-400'
+                                            : pctNum >= 50
+                                              ? 'text-amber-600 dark:text-amber-400'
+                                              : 'text-red-600 dark:text-red-400'
+                                        }`}
+                                      >
+                                        {pctNum}%
+                                      </span>
+                                    </div>
+
+                                    <div className="w-full h-1.5 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
+                                      <div
+                                        className={`h-full rounded-full ${
+                                          pctNum >= 75
+                                            ? 'bg-emerald-500'
+                                            : pctNum >= 50
+                                              ? 'bg-amber-500'
+                                              : 'bg-red-500'
+                                        }`}
+                                        style={{ width: `${Math.max(0, Math.min(100, pctNum))}%` }}
+                                      />
+                                    </div>
+
+                                    <div className="flex items-center justify-between text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                                      <span>
+                                        <strong className="text-emerald-600 dark:text-emerald-400">{sc.hits}✓</strong> ·{' '}
+                                        <strong className="text-red-600 dark:text-red-400">{sc.errors}✗</strong> ·{' '}
+                                        <span>{sc.blank}○</span> ·{' '}
+                                        <strong
+                                          className={
+                                            scLiquida > 0
+                                              ? 'text-slate-800 dark:text-slate-200'
+                                              : 'text-red-600 dark:text-red-400'
+                                          }
+                                        >
+                                          Líq {scLiquida}
+                                        </strong>
+                                      </span>
+                                      {deltaOthers !== null && (
+                                        <span
+                                          title={`Média Caveira: ${sc.othersPct}%`}
+                                          className={
+                                            deltaOthers >= 0
+                                              ? 'text-emerald-600 dark:text-emerald-400 font-semibold'
+                                              : 'text-red-500 dark:text-red-400 font-semibold'
+                                          }
+                                        >
+                                          {deltaOthers >= 0 ? `+${deltaOthers}%` : `${deltaOthers}%`} vs turma
+                                        </span>
+                                      )}
+                                    </div>
+                                  </div>
+                                );
+                              })}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </React.Fragment>
                   );
                 })}
-              </div>
-            </div>
-          )}
-        </div>
+              </tbody>
+            </table>
+          </div>
+        </section>
+      )}
 
-        {/* Sidebar de Estatísticas */}
-        <div className="w-full lg:w-80 shrink-0 flex flex-col gap-4">
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm dark:bg-slate-900 dark:border-slate-800 transition-all hover:border-purple-200">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="bg-purple-100 p-3 rounded-lg"><BarChart2 className="w-6 h-6 text-purple-600" /></div>
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Média Líquida</p>
-                <p className="text-2xl font-black text-slate-800 dark:text-slate-100 leading-none">{mediaLiquida} <span className="text-xs text-slate-400">pts</span></p>
-              </div>
+      {/* ZONA 4: Raio-X Consolidado por Matéria (quando disponível) */}
+      {aggregatedSubjects.length > 0 && (
+        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 flex flex-col gap-4">
+          <div className="flex flex-wrap items-center justify-between gap-2.5">
+            <div>
+              <h3 className="text-sm font-bold text-slate-900 dark:text-slate-100 flex items-center gap-2">
+                <Layers className="w-4 h-4 text-sky-500 shrink-0" />
+                <span>Raio-X por Matéria nos Simulados</span>
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Consolidado de {aggregatedSubjects.length} disciplina(s) · ordenado da mais crítica para a mais forte
+              </p>
             </div>
-            <div className="w-full bg-slate-100 rounded-full h-1.5 dark:bg-slate-800">
-              <div className="bg-purple-500 h-1.5 rounded-full" style={{ width: `${Math.max(0, Math.min(100, (mediaLiquida / 120) * 100))}%` }}></div>
+
+            <div className="flex items-center gap-0.5 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200/80 dark:border-slate-700/70">
+              {[
+                { id: 'all', label: 'Todos' },
+                { id: 'Bloco I', label: 'B1' },
+                { id: 'Bloco II', label: 'B2' },
+                { id: 'Bloco III', label: 'B3' }
+              ].map((tab) => (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setSubjectBlockFilter(tab.id)}
+                  className={`h-7 px-2.5 rounded-md text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                    subjectBlockFilter === tab.id
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-slate-100 shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                  }`}
+                >
+                  {tab.label}
+                </button>
+              ))}
             </div>
           </div>
 
-          <div className="bg-white p-6 rounded-xl border border-slate-200 shadow-sm dark:bg-slate-900 dark:border-slate-800 transition-all hover:border-emerald-200">
-            <div className="flex items-center gap-4 mb-4">
-              <div className="bg-emerald-100 p-3 rounded-lg"><Trophy className="w-6 h-6 text-emerald-600" /></div>
-              <div>
-                <p className="text-[10px] font-black text-slate-400 uppercase tracking-widest leading-none mb-1">Recorde Pessoal</p>
-                <p className="text-2xl font-black text-emerald-600 leading-none">{recorde} <span className="text-xs text-slate-400">pts</span></p>
-              </div>
-            </div>
-            <div className="w-full bg-slate-100 rounded-full h-1.5 dark:bg-slate-800">
-              <div className="bg-emerald-500 h-1.5 rounded-full" style={{ width: `${Math.max(0, Math.min(100, (recorde / 120) * 100))}%` }}></div>
-            </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {filteredAggregatedSubjects.map((sub) => {
+              const bShort = sub.bloco === 'Bloco III' ? 'B3' : sub.bloco === 'Bloco II' ? 'B2' : 'B1';
+              return (
+                <div
+                  key={sub.name}
+                  className="p-3 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/45 flex flex-col gap-1.5"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1 text-xs">
+                      <span className="font-mono font-semibold text-slate-400 mr-1.5">{bShort}</span>
+                      <span className="font-semibold text-slate-900 dark:text-slate-100 break-words">
+                        {sub.name}
+                      </span>
+                    </div>
+                    <span
+                      className={`text-xs font-mono font-bold tabular-nums shrink-0 ${
+                        sub.pct >= 75
+                          ? 'text-emerald-600 dark:text-emerald-400'
+                          : sub.pct >= 60
+                            ? 'text-amber-600 dark:text-amber-400'
+                            : 'text-red-600 dark:text-red-400'
+                      }`}
+                    >
+                      {sub.pct}%
+                    </span>
+                  </div>
+
+                  <div className="w-full h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
+                    <div
+                      className={`h-full rounded-full ${
+                        sub.pct >= 75 ? 'bg-emerald-500' : sub.pct >= 60 ? 'bg-amber-500' : 'bg-red-500'
+                      }`}
+                      style={{ width: `${Math.max(0, Math.min(100, sub.pct))}%` }}
+                    />
+                  </div>
+
+                  <div className="flex items-center justify-between text-[11px] font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                    <span>
+                      <strong className="text-emerald-600 dark:text-emerald-400">{sub.hits}✓</strong> ·{' '}
+                      <strong className="text-red-600 dark:text-red-400">{sub.errors}✗</strong> ·{' '}
+                      <span>{sub.blank}○</span> ({sub.total}q)
+                    </span>
+                    <span
+                      className={
+                        sub.liquida > 0
+                          ? 'text-slate-800 dark:text-slate-200 font-semibold'
+                          : 'text-red-600 dark:text-red-400 font-semibold'
+                      }
+                    >
+                      Líq {sub.liquida}
+                    </span>
+                  </div>
+                </div>
+              );
+            })}
           </div>
+        </section>
+      )}
 
-          <div className="bg-red-50 p-6 rounded-xl border border-red-200 shadow-sm dark:bg-slate-900 dark:border-red-900/30 transition-all hover:bg-red-100/50">
-            <div className="flex items-center gap-4">
-              <div className="bg-red-100 p-3 rounded-lg"><Activity className="w-6 h-6 text-red-600" /></div>
-              <div>
-                <p className="text-[10px] font-black text-red-500 uppercase tracking-widest leading-none mb-1">Ponto Crítico</p>
-                <p className="text-lg font-black text-red-700 dark:text-red-400 leading-tight">{weakPoint}</p>
-              </div>
-            </div>
-          </div>
-
-          <div className="bg-slate-900 p-6 rounded-xl border border-slate-800 shadow-xl mt-2">
-             <h4 className="text-[10px] font-black text-purple-400 uppercase tracking-widest mb-3 flex items-center gap-2">
-               <Info className="w-3 h-3"/> Diagnóstico Cebraspe
-             </h4>
-             <p className="text-xs text-slate-400 leading-relaxed">
-               {totalSimulados > 0 ? (
-                 <>
-                   O seu bloco mais fraco atualmente é o <strong className="text-white">{weakPoint}</strong>. Foque em exercícios de fixação para subir sua média líquida geral.
-                 </>
-               ) : (
-                 <>
-                   Registre seu primeiro simulado para destravar o diagnóstico automático de ponto crítico por bloco (B1, B2 e B3).
-                 </>
-               )}
-             </p>
-          </div>
-        </div>
-      </div>
-
-      {showModal && createPortal(
-        <div className={`${isDarkMode ? 'dark' : ''} fixed inset-0 bg-slate-900/80 flex items-center justify-center z-[999] p-4 fade-in backdrop-blur-sm`}>
-          <form onSubmit={(e) => {
-            e.preventDefault();
-            const dataVal = e.target.data.value;
-            
-            const b1C = parseInt(e.target.b1C.value) || 0;
-            const b1E = parseInt(e.target.b1E.value) || 0;
-            const b2C = parseInt(e.target.b2C.value) || 0;
-            const b2E = parseInt(e.target.b2E.value) || 0;
-            const b3C = parseInt(e.target.b3C.value) || 0;
-            const b3E = parseInt(e.target.b3E.value) || 0;
-
-            const b1Liquida = b1C - b1E;
-            const b2Liquida = b2C - b2E;
-            const b3Liquida = b3C - b3E;
-            const liquida = b1Liquida + b2Liquida + b3Liquida;
-
-            if (editingSimulado) {
-              setSimulados(prev => prev.map(s => s.id === editingSimulado.id ? { ...s, data: dataVal, dateSource: 'manual', b1C, b1E, b2C, b2E, b3C, b3E, b1Liquida, b2Liquida, b3Liquida, liquida } : s));
-            } else {
-              setSimulados(prev => [...prev, { id: Date.now(), data: dataVal, b1C, b1E, b2C, b2E, b3C, b3E, b1Liquida, b2Liquida, b3Liquida, liquida }]);
-              addXP(500, "Simulado de Prova registrado");
-              updateMissionProgress('simulado', 1);
-              const MAX_PONTOS = 120;
-              const LIMIAR_ELITE = MAX_PONTOS * 0.8;
-              if (liquida >= LIMIAR_ELITE) unlockMedal('elite');
-            }
+      {/* Modal de Registro / Edição */}
+      {showModal && (
+        <SimuladoFormModal
+          key={editingSimulado ? editingSimulado.id : 'new'}
+          isOpen={showModal}
+          editingSimulado={editingSimulado}
+          onClose={() => {
             setShowModal(false);
             setEditingSimulado(null);
-          }} className="bg-[#0f172a] rounded-2xl shadow-2xl max-w-lg w-full p-8 border border-slate-800 relative overflow-hidden flex flex-col">
-            
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-purple-600 via-pink-400 to-purple-600 opacity-80"></div>
-
-            <div className="flex justify-between items-start mb-6">
-              <div>
-                <h3 className="text-[22px] font-black text-white uppercase tracking-tight flex items-center gap-2 leading-none mb-1">
-                  <Target className="w-6 h-6 text-purple-500"/> {editingSimulado ? 'Corrigir Simulado' : 'Registro de Combate'}
-                </h3>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest mt-1">
-                  Insira seus erros e acertos segmentados. Auditoria de eliminação ativa.
-                </p>
-              </div>
-            </div>
-            
-            <div className="overflow-y-auto custom-scrollbar pr-2 max-h-[60vh] flex flex-col gap-5">
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Data de Execução</label>
-                <input name="data" type="text" required defaultValue={editingSimulado ? editingSimulado.data : new Date().toLocaleDateString('pt-BR')} className="w-full bg-[#020617] border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-purple-500 focus:ring-1 focus:ring-purple-500 outline-none transition-all placeholder:text-slate-600"/>
-              </div>
-
-              <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-xs font-black text-white uppercase tracking-widest">Bloco I - Básicas</span>
-                  <span className="text-[10px] font-black text-slate-500 uppercase">Tot: 55 | Min: 15</span>
-                </div>
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <label className="text-[10px] font-black text-emerald-500 uppercase mb-1 block">Certas</label>
-                    <input name="b1C" type="number" min="0" max="55" required defaultValue={editingSimulado?.b1C ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-emerald-400 text-center text-sm outline-none focus:border-emerald-500 transition-colors"/>
-                  </div>
-                  <div className="flex-1">
-                    <label className="text-[10px] font-black text-red-500 uppercase mb-1 block">Erradas</label>
-                    <input name="b1E" type="number" min="0" max="55" required defaultValue={editingSimulado?.b1E ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-red-400 text-center text-sm outline-none focus:border-red-500 transition-colors"/>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-xs font-black text-white uppercase tracking-widest">Bloco II - Trânsito</span>
-                  <span className="text-[10px] font-black text-slate-500 uppercase">Tot: 30 | Min: 10</span>
-                </div>
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <label className="text-[10px] font-black text-emerald-500 uppercase mb-1 block">Certas</label>
-                    <input name="b2C" type="number" min="0" max="30" required defaultValue={editingSimulado?.b2C ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-emerald-400 text-center text-sm outline-none focus:border-emerald-500 transition-colors"/>
-                  </div>
-                  <div className="flex-1">
-                    <label className="text-[10px] font-black text-red-500 uppercase mb-1 block">Erradas</label>
-                    <input name="b2E" type="number" min="0" max="30" required defaultValue={editingSimulado?.b2E ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-red-400 text-center text-sm outline-none focus:border-red-500 transition-colors"/>
-                  </div>
-                </div>
-              </div>
-
-              <div className="bg-slate-900/50 p-4 rounded-xl border border-slate-800">
-                <div className="flex justify-between items-center mb-3">
-                  <span className="text-xs font-black text-white uppercase tracking-widest">Bloco III - Direito</span>
-                  <span className="text-[10px] font-black text-slate-500 uppercase">Tot: 35 | Min: 10</span>
-                </div>
-                <div className="flex gap-4">
-                  <div className="flex-1">
-                    <label className="text-[10px] font-black text-emerald-500 uppercase mb-1 block">Certas</label>
-                    <input name="b3C" type="number" min="0" max="35" required defaultValue={editingSimulado?.b3C ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-emerald-400 text-center text-sm outline-none focus:border-emerald-500 transition-colors"/>
-                  </div>
-                  <div className="flex-1">
-                    <label className="text-[10px] font-black text-red-500 uppercase mb-1 block">Erradas</label>
-                    <input name="b3E" type="number" min="0" max="35" required defaultValue={editingSimulado?.b3E ?? ''} className="w-full bg-[#020617] border border-slate-800 p-2.5 rounded-lg font-black text-red-400 text-center text-sm outline-none focus:border-red-500 transition-colors"/>
-                  </div>
-                </div>
-              </div>
-            </div>
-
-            <div className="flex flex-col gap-3 mt-6">
-              <button type="submit" className="w-full py-4 bg-[#9333ea] hover:bg-purple-600 outline-none focus:ring-4 focus:ring-purple-500/50 text-white font-black rounded-xl shadow-[0_0_20px_rgba(147,51,234,0.3)] transition-all transform active:scale-95 flex items-center justify-center uppercase tracking-widest text-sm">
-                Executar Auditoria
-              </button>
-              <button type="button" onClick={() => { setShowModal(false); setEditingSimulado(null); }} className="w-full py-2 text-slate-400 font-bold hover:text-white transition-colors uppercase text-[10px] tracking-widest">
-                Abortar Missão
-              </button>
-            </div>
-          </form>
-        </div>,
-        document.body
+          }}
+          onSubmit={handleSaveSimulado}
+        />
       )}
     </div>
   );

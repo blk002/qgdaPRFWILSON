@@ -1,11 +1,9 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store/useStore';
-import { 
-  Target, AlertTriangle, ShieldCheck, TrendingUp, Clock, 
-  RefreshCw, Download, Upload, Trash2, CheckCircle2, XCircle,
-  BookOpen, ChevronDown, ChevronUp, Copy, Check,
-  BrainCircuit, Skull, Search, MessageSquarePlus, Save, Scale, Layers, Sparkles,
-  Crosshair, ArrowRight, TrendingDown, Video, Flame, RotateCcw
+import {
+  Target, RefreshCw, Download, Upload, Trash2,
+  BookOpen, Copy, Check, Skull, Scale, X,
+  LayoutDashboard, Crosshair
 } from 'lucide-react';
 import {
   findCourseVideoMatch,
@@ -15,6 +13,10 @@ import {
 } from '../utils/caveiraAnalytics';
 import { motion, AnimatePresence } from 'framer-motion';
 import { toast } from 'sonner';
+import RaioXOverview from '../components/raiox/RaioXOverview';
+import RaioXDiagnostics from '../components/raiox/RaioXDiagnostics';
+import RaioXIntelligence from '../components/raiox/RaioXIntelligence';
+import RaioXNotebook from '../components/raiox/RaioXNotebook';
 
 // Classificador Inteligente para a Estrutura Oficial do Edital PRF (Cebraspe)
 function classifyPRFCategory(subject, topic, content) {
@@ -123,29 +125,29 @@ function classifyPRFCategory(subject, topic, content) {
 const BLOCO_METADATA = {
   'Bloco I': {
     short: 'B-I',
-    title: 'Bloco I • Básicas',
+    title: 'Bloco I · Básicas',
     subtitle: 'Português, RLM, Informática, Física, Ética, Geopolítica e Língua Estrangeira',
     examWeight: '55 itens',
-    badgeClass: 'bg-sky-500/15 text-sky-400 border-sky-500/30',
-    activeClass: 'bg-sky-600 text-white border-sky-500 shadow-sm',
+    badgeClass: 'bg-sky-500/12 text-sky-600 dark:text-sky-400 border-sky-500/30',
+    activeClass: 'bg-sky-600 text-white border-sky-500 dark:bg-sky-500 dark:text-slate-950 dark:border-sky-400',
     accentBorder: 'border-sky-500/40'
   },
   'Bloco II': {
     short: 'B-II',
-    title: 'Bloco II • Trânsito',
+    title: 'Bloco II · Trânsito',
     subtitle: 'Código de Trânsito Brasileiro (CTB) e Resoluções do CONTRAN',
     examWeight: '30 itens',
-    badgeClass: 'bg-amber-500/15 text-amber-400 border-amber-500/30',
-    activeClass: 'bg-amber-500 text-slate-950 border-amber-400 shadow-sm',
+    badgeClass: 'bg-amber-500/12 text-amber-700 dark:text-amber-400 border-amber-500/30',
+    activeClass: 'bg-amber-500 text-slate-950 border-amber-400',
     accentBorder: 'border-amber-500/40'
   },
   'Bloco III': {
     short: 'B-III',
-    title: 'Bloco III • Direito',
+    title: 'Bloco III · Direito',
     subtitle: 'Penal, Processo Penal, Leg. Especial, Constitucional, Administrativo e DH',
     examWeight: '35 itens',
-    badgeClass: 'bg-purple-500/15 text-purple-400 border-purple-500/30',
-    activeClass: 'bg-purple-600 text-white border-purple-500 shadow-sm',
+    badgeClass: 'bg-purple-500/12 text-purple-700 dark:text-purple-400 border-purple-500/30',
+    activeClass: 'bg-purple-600 text-white border-purple-500',
     accentBorder: 'border-purple-500/40'
   }
 };
@@ -172,12 +174,14 @@ export default function RaioXCaveira() {
   const [extensionDetected, setExtensionDetected] = useState(() => {
     return typeof document !== 'undefined' && document.documentElement.getAttribute('data-qg-caveira-extension-installed') === 'true';
   });
+  const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'diagnostics' | 'intelligence' | 'notebook'
+  const [diagnosticsSubView, setDiagnosticsSubView] = useState('topics'); // 'topics' | 'disciplines'
+  const [inspectedDiscipline, setInspectedDiscipline] = useState(null);
   const [selectedBloco, setSelectedBloco] = useState('all'); // 'all' | 'Bloco I' | 'Bloco II' | 'Bloco III'
   const [selectedSubject, setSelectedSubject] = useState('all');
   const [selectedTopic, setSelectedTopic] = useState('all');
   const [filterType, setFilterType] = useState('all'); // 'all' | 'errors' | 'hits' | 'guesses' | 'avoidable' | 'pegadinha' | 'attention' | 'theory'
   const [searchQuery, setSearchQuery] = useState('');
-  const [expandedSubject, setExpandedSubject] = useState(null);
   const [editingNoteId, setEditingNoteId] = useState(null);
   const [noteDraft, setNoteDraft] = useState('');
   const [expandedComments, setExpandedComments] = useState({});
@@ -187,14 +191,13 @@ export default function RaioXCaveira() {
   const [copiedExtensionPath, setCopiedExtensionPath] = useState(false);
   const [selectedLegalDevice, setSelectedLegalDevice] = useState(null);
   const [topicReportScope, setTopicReportScope] = useState('all'); // 'all' | 'bloco2' | 'fps'
-  const [showForgettingMap, setShowForgettingMap] = useState(false);
-  const [showDecorebaTable, setShowDecorebaTable] = useState(false);
   const [decorebaCategory, setDecorebaCategory] = useState('Todos');
   const [decorebaSearch, setDecorebaSearch] = useState('');
 
   // Escuta detecção e reset da extensão via bridge (sincronização centralizada em App.jsx)
   useEffect(() => {
     const handleMessage = (event) => {
+      if (!event || event.source !== window || event.origin !== window.location.origin) return;
       if (event.data && event.data.source === 'QG_CAVEIRA_EXTENSION') {
         if (['EXTENSION_DETECTED', 'SYNC_UPDATE', 'CAVEIRA_DATA_RESPONSE'].includes(event.data.type)) {
           setExtensionDetected(true);
@@ -209,7 +212,7 @@ export default function RaioXCaveira() {
     window.addEventListener('message', handleMessage);
     const activeUserId = useStore.getState().user?.id;
     if (activeUserId && useStore.getState().hasCompletedInitialCloudSync) {
-      window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA', payload: { userId: activeUserId } }, '*');
+      window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA', payload: { userId: activeUserId } }, window.location.origin);
     }
 
     return () => window.removeEventListener('message', handleMessage);
@@ -606,14 +609,19 @@ export default function RaioXCaveira() {
   const handleRequestSync = () => {
     const activeUserId = useStore.getState().user?.id;
     if (!activeUserId) return;
-    window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA', payload: { userId: activeUserId } }, '*');
+    window.postMessage({ source: 'QG_WEB_APP', type: 'FETCH_CAVEIRA_DATA', payload: { userId: activeUserId } }, window.location.origin);
     toast.info('Sincronizando questões com a extensão...');
   };
 
   const handleImportJson = () => {
     try {
       const parsed = JSON.parse(importJsonText);
-      const list = Array.isArray(parsed) ? parsed : [parsed];
+      const rawList = Array.isArray(parsed) ? parsed : [parsed];
+      const list = rawList.filter((item) => item && typeof item === 'object' && !Array.isArray(item));
+      if (list.length === 0) {
+        toast.error('Nenhuma questão válida encontrada no JSON.');
+        return;
+      }
       importCaveiraQuestions(list, false);
       setShowImportModal(false);
       setImportJsonText('');
@@ -626,7 +634,12 @@ export default function RaioXCaveira() {
     try {
       const text = await navigator.clipboard.readText();
       const parsed = JSON.parse(text);
-      const list = Array.isArray(parsed) ? parsed : [parsed];
+      const rawList = Array.isArray(parsed) ? parsed : [parsed];
+      const list = rawList.filter((item) => item && typeof item === 'object' && !Array.isArray(item));
+      if (list.length === 0) {
+        toast.error('Nenhuma questão válida encontrada na área de transferência.');
+        return;
+      }
       importCaveiraQuestions(list, false);
       setShowImportModal(false);
       setImportJsonText('');
@@ -692,65 +705,124 @@ export default function RaioXCaveira() {
     }
   };
 
-  return (
-    <div className="fade-in w-full pb-12 font-sans space-y-4">
+  const handleNavigateTab = (tab, subView = null) => {
+    if (subView) setDiagnosticsSubView(subView);
+    setActiveTab(tab);
+  };
 
-      {/* 1. BARRA EXECUTIVA DE COMANDO + SELETOR DE BLOCOS INTEGRADO */}
-      <div className="glass-card rounded-2xl p-4 border border-slate-200 dark:border-slate-800 shadow-lg space-y-3.5">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3">
-          {/* Título e Status da Extensão */}
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-slate-900 to-red-950 border border-red-500/40 flex items-center justify-center text-xl shadow-sm shrink-0">
-              💀
+  const handleInspectDiscipline = (disciplineName) => {
+    setInspectedDiscipline(disciplineName);
+    setDiagnosticsSubView('disciplines');
+    setActiveTab('diagnostics');
+  };
+
+  const handleOpenNotebookWithFilter = ({
+    subject,
+    topic,
+    filterType: nextFilterType,
+    searchQuery: nextSearch,
+    legalDevice
+  } = {}) => {
+    setSelectedSubject(subject !== undefined ? subject : 'all');
+    setSelectedTopic(topic !== undefined ? topic : 'all');
+    setSelectedLegalDevice(legalDevice !== undefined ? legalDevice : null);
+    if (nextFilterType !== undefined) setFilterType(nextFilterType);
+    if (nextSearch !== undefined) setSearchQuery(nextSearch);
+    else if (legalDevice || topic || subject) setSearchQuery('');
+    setActiveTab('notebook');
+  };
+
+  const workspaceTabs = [
+    {
+      id: 'overview',
+      label: 'Visão Geral',
+      icon: <LayoutDashboard className="w-4 h-4" />,
+      badge: stats.total > 0 ? `${stats.grossRate}%` : null
+    },
+    {
+      id: 'diagnostics',
+      label: 'Diagnóstico',
+      icon: <Target className="w-4 h-4" />,
+      badge: topicRankings.criticalCount > 0 ? `${topicRankings.criticalCount} crít.` : `${subjectGroups.length}`
+    },
+    {
+      id: 'intelligence',
+      label: 'Inteligência & Lei Seca',
+      icon: <Scale className="w-4 h-4" />,
+      badge: legalRadarList.length + decorebaRows.length > 0 ? `${legalRadarList.length}` : null
+    },
+    {
+      id: 'notebook',
+      label: 'Caderno Tático',
+      icon: <BookOpen className="w-4 h-4" />,
+      badge: `${filteredQuestions.length}`
+    }
+  ];
+
+  return (
+    <div className="fade-in w-full pb-12 font-sans space-y-5">
+      {/* CABEÇALHO DE COMANDO + NAVEGAÇÃO EM 4 WORKSPACES + RAIL DE BLOCOS */}
+      <header className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
+        {/* Linha 1: Identidade + Status Extensão + Ações */}
+        <div className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
+          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
+            <div className="w-11 h-11 rounded-xl bg-red-500/10 border border-red-500/25 flex items-center justify-center shrink-0">
+              <Skull className="w-5 h-5 text-red-600 dark:text-red-400" />
             </div>
-            <div>
-              <div className="flex items-center gap-2 flex-wrap">
-                <h1 className="text-lg sm:text-xl font-black text-slate-800 dark:text-white uppercase tracking-tight">
+            <div className="min-w-0">
+              <div className="flex items-center gap-2.5 flex-wrap">
+                <h1 className="font-display text-lg sm:text-xl font-bold text-slate-900 dark:text-white tracking-tight">
                   Raio-X Projeto Caveira
                 </h1>
-                <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-full border flex items-center gap-1.5 ${
+                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-md border ${
                   extensionDetected
-                    ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/25'
-                    : 'bg-amber-500/10 text-amber-400 border-amber-500/25'
+                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25'
+                    : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25'
                 }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${extensionDetected ? 'bg-emerald-400 animate-pulse' : 'bg-amber-400'}`} />
-                  {extensionDetected ? 'Sincronizado' : 'Extensão Offline'}
+                  <span className={`w-1.5 h-1.5 rounded-full ${extensionDetected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
+                  {extensionDetected ? 'Extensão ativa' : 'Extensão offline'}
                 </span>
               </div>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Diagnóstico tático de questões, disciplinas, artigos de lei e caderno de erros.
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Central de telemetria Cebraspe, diagnóstico de vulnerabilidades, lei seca e caderno tático de revisão.
               </p>
             </div>
           </div>
 
-          {/* Ações Rápidas */}
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2 shrink-0">
             {extensionDetected ? (
               <button
+                type="button"
                 onClick={handleRequestSync}
-                className="flex items-center gap-1.5 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs uppercase px-3 py-1.5 rounded-xl transition-all cursor-pointer"
+                className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <RefreshCw className="w-3.5 h-3.5" /> Sincronizar
+                <RefreshCw className="w-3.5 h-3.5" />
+                <span>Sincronizar</span>
               </button>
             ) : (
               <button
+                type="button"
                 onClick={() => setShowInstallModal(true)}
-                className="flex items-center gap-1.5 bg-red-600 hover:bg-red-500 text-white font-bold text-xs uppercase px-3 py-1.5 rounded-xl transition-all cursor-pointer"
+                className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-500 text-white inline-flex items-center gap-1.5 transition-colors cursor-pointer"
               >
-                <Download className="w-3.5 h-3.5" /> Ativar Extensão
+                <Download className="w-3.5 h-3.5" />
+                <span>Ativar extensão</span>
               </button>
             )}
 
             <button
+              type="button"
               onClick={() => setShowImportModal(true)}
-              className="flex items-center gap-1.5 bg-slate-100 dark:bg-slate-850 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-200 font-bold text-xs uppercase px-3 py-1.5 rounded-xl border border-slate-200 dark:border-slate-700 transition-all cursor-pointer"
+              className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200/80 text-slate-800 border border-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
               title="Importar questões via JSON"
             >
-              <Upload className="w-3.5 h-3.5" /> Importar
+              <Upload className="w-3.5 h-3.5" />
+              <span>Importar</span>
             </button>
 
             {caveiraQuestions.length > 0 && (
               <button
+                type="button"
                 onClick={() => {
                   useStore.getState().setGlobalModal({
                     title: 'Limpar Histórico do Caveira?',
@@ -758,8 +830,9 @@ export default function RaioXCaveira() {
                     onConfirm: () => clearCaveiraQuestions()
                   });
                 }}
-                className="p-1.5 bg-red-500/10 hover:bg-red-600 text-red-400 hover:text-white rounded-xl border border-red-500/20 transition-all cursor-pointer"
+                className="h-9 w-9 rounded-lg border border-red-500/25 bg-red-500/8 hover:bg-red-600 text-red-600 dark:text-red-400 hover:text-white inline-flex items-center justify-center transition-colors cursor-pointer"
                 title="Limpar histórico do Caveira"
+                aria-label="Limpar histórico do Caveira"
               >
                 <Trash2 className="w-4 h-4" />
               </button>
@@ -767,1483 +840,354 @@ export default function RaioXCaveira() {
           </div>
         </div>
 
-        {/* SELETOR DE BLOCOS DO EDITAL PRF (INTEGRADO E CONCISO) */}
-        <div className="pt-3 border-t border-slate-200/70 dark:border-slate-800 flex flex-wrap items-center justify-between gap-2">
-          <div className="flex flex-wrap items-center gap-1.5">
-            <button
-              type="button"
-              onClick={() => {
-                setSelectedBloco('all');
-                setSelectedSubject('all');
-                setSelectedTopic('all');
-              }}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold uppercase transition-all cursor-pointer border ${
-                selectedBloco === 'all'
-                  ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
-                  : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:text-white'
-              }`}
-            >
-              Todos os Blocos ({enrichedQuestions.length})
-            </button>
-
-            {blocoStats.map(b => {
-              const isSelected = selectedBloco === b.blocoKey;
-              return (
-                <button
-                  key={b.blocoKey}
-                  type="button"
-                  onClick={() => {
-                    setSelectedBloco(isSelected ? 'all' : b.blocoKey);
-                    setSelectedSubject('all');
-                    setSelectedTopic('all');
-                  }}
-                  className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-2 ${
-                    isSelected
-                      ? b.activeClass
-                      : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-100 border-slate-200 dark:border-slate-800 hover:border-slate-500'
-                  }`}
-                >
-                  <span className="uppercase">{b.title}</span>
-                  <span className={`px-1.5 py-0.5 rounded text-[11px] font-black ${
-                    isSelected
-                      ? 'bg-black/20 text-current'
-                      : b.total === 0
-                      ? 'bg-slate-200 dark:bg-slate-850 text-slate-400'
-                      : b.grossRate >= 75
-                      ? 'bg-emerald-500/15 text-emerald-400'
-                      : b.grossRate >= 50
-                      ? 'bg-amber-500/15 text-amber-400'
-                      : 'bg-red-500/15 text-red-400'
-                  }`}>
-                    {b.total > 0 ? `${b.grossRate}% (${b.hits}C/${b.errors}E)` : '0q'}
-                  </span>
-                </button>
-              );
-            })}
-          </div>
-
-          {hasActiveFilters && (
-            <button
-              type="button"
-              onClick={resetAllFilters}
-              className="text-xs font-bold uppercase text-amber-400 hover:underline cursor-pointer px-2 py-1"
-            >
-              Limpar Filtros Ativos ✕
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* 2. DASHBOARD DE DESEMPENHO (LAYOUT PAINEL CAVEIRA: GRÁFICO CIRCULAR + MÉTRICAS) */}
-      {(() => {
-        const hitPercent = stats?.total > 0 ? (((stats.hits || 0) / stats.total) * 100).toFixed(2) : '0.00';
-        const errorPercent = stats?.total > 0 ? (((stats.errors || 0) / stats.total) * 100).toFixed(2) : '0.00';
-
-        const radius = 58;
-        const circumference = 2 * Math.PI * radius; // ~364.425
-        const hasBoth = stats.total > 0 && stats.hits > 0 && stats.errors > 0;
-        const gap = hasBoth ? 14 : 0;
-        const availableLength = circumference - (gap * 2);
-
-        const hitLength = stats.total > 0 && stats.hits > 0
-          ? (stats.errors > 0 ? Math.max(4, (stats.hits / stats.total) * availableLength) : circumference)
-          : 0;
-        const errorLength = stats.total > 0 && stats.errors > 0
-          ? (stats.hits > 0 ? Math.max(4, (stats.errors / stats.total) * availableLength) : circumference)
-          : 0;
-
-        const hitOffset = gap > 0 ? -(gap / 2) : 0;
-        const errorOffset = -(gap / 2 + hitLength + gap);
-
-        return (
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            {/* CARD 1 (ESQUERDA): GRÁFICO CIRCULAR DE DESEMPENHO */}
-            <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800 flex flex-col items-center justify-between min-h-[250px]">
-              {/* Gráfico Donut com texto central */}
-              <div className="relative flex items-center justify-center my-auto py-1">
-                <svg width="180" height="180" viewBox="0 0 160 160" className="transform -rotate-90">
-                  {/* Trilha de fundo */}
-                  <circle
-                    cx="80"
-                    cy="80"
-                    r={radius}
-                    fill="transparent"
-                    stroke="currentColor"
-                    strokeWidth="9"
-                    className="text-slate-100 dark:text-slate-800"
-                  />
-                  {/* Arco de Acertos (Teal / Ciano) */}
-                  {hitLength > 0 && (
-                    <circle
-                      cx="80"
-                      cy="80"
-                      r={radius}
-                      fill="transparent"
-                      stroke="#0891b2"
-                      className="dark:stroke-[#06b6d4] transition-all duration-700 ease-out"
-                      strokeWidth="9"
-                      strokeDasharray={`${hitLength} ${circumference - hitLength}`}
-                      strokeDashoffset={hitOffset}
-                      strokeLinecap={hasBoth ? 'round' : 'butt'}
-                    />
-                  )}
-                  {/* Arco de Erros (Vermelho) */}
-                  {errorLength > 0 && (
-                    <circle
-                      cx="80"
-                      cy="80"
-                      r={radius}
-                      fill="transparent"
-                      stroke="#dc2626"
-                      className="dark:stroke-[#ef4444] transition-all duration-700 ease-out"
-                      strokeWidth="9"
-                      strokeDasharray={`${errorLength} ${circumference - errorLength}`}
-                      strokeDashoffset={errorOffset}
-                      strokeLinecap={hasBoth ? 'round' : 'butt'}
-                    />
-                  )}
-                </svg>
-
-                {/* Conteúdo Central */}
-                <div className="absolute inset-0 flex flex-col items-center justify-center text-center pointer-events-none select-none">
-                  <span className="text-3xl sm:text-4xl font-black text-slate-800 dark:text-white leading-tight">
-                    {stats.total}
-                  </span>
-                  <span className="text-xs sm:text-sm font-semibold text-slate-500 dark:text-slate-300 leading-tight mt-0.5">
-                    Questões<br />Resolvidas
-                  </span>
-                </div>
-              </div>
-
-              {/* Legenda inferior (Acertos & Erros alinhados à esquerda) */}
-              <div className="w-full pt-3 mt-1 border-t border-slate-200/60 dark:border-slate-800 flex flex-col items-start justify-center gap-1.5 pl-8 sm:pl-12 text-xs sm:text-sm font-semibold">
-                <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#0891b2] dark:bg-[#06b6d4] shrink-0" />
-                  <span>{hitPercent}% {stats.hits} acertos</span>
-                </div>
-                <div className="flex items-center gap-2 text-slate-700 dark:text-slate-200">
-                  <span className="w-2.5 h-2.5 rounded-full bg-[#dc2626] dark:bg-[#ef4444] shrink-0" />
-                  <span>{errorPercent}% {stats.errors} erros</span>
-                </div>
-              </div>
-            </div>
-
-            {/* CARD 2 (DIREITA): MÉTRICAS DETALHADAS */}
-            <div className="glass-card rounded-2xl p-5 border border-slate-200 dark:border-slate-800 flex flex-col justify-between min-h-[250px] space-y-3">
-              {/* Topo: QUESTÕES RESPONDIDAS */}
-              <div className="text-center py-1">
-                <span className="block text-xs sm:text-sm font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
-                  QUESTÕES RESPONDIDAS
-                </span>
-                <span className="block text-3xl sm:text-4xl font-black text-slate-800 dark:text-white mt-1 leading-tight">
-                  {stats.total}
-                </span>
-              </div>
-
-              {/* Meio: ACERTOS | ERROS */}
-              <div className="grid grid-cols-2 gap-3 text-center py-3 border-y border-slate-200/60 dark:border-slate-800">
-                <div>
-                  <span className="block text-xs sm:text-sm font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
-                    ACERTOS
-                  </span>
-                  <span className="block text-2xl sm:text-3xl font-black text-[#0891b2] dark:text-[#06b6d4] mt-1 leading-tight">
-                    {stats.hits}
-                  </span>
-                </div>
-                <div>
-                  <span className="block text-xs sm:text-sm font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
-                    ERROS
-                  </span>
-                  <span className="block text-2xl sm:text-3xl font-black text-[#dc2626] dark:text-[#ef4444] mt-1 leading-tight">
-                    {stats.errors}
-                  </span>
-                </div>
-              </div>
-
-              {/* Fundo: Tempo total gasto | Tempo médio por questão */}
-              <div className="grid grid-cols-2 gap-3 text-center pt-1 items-stretch">
-                <div className="flex flex-col justify-between">
-                  <span className="block text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400">
-                    Tempo total gasto
-                  </span>
-                  <span className="block text-xl sm:text-2xl font-extrabold text-slate-800 dark:text-white tabular-nums mt-1 leading-tight">
-                    {formatDurationHMS(stats.totalSeconds)}
-                  </span>
-                </div>
-                <div className="flex flex-col justify-between">
-                  <span className="block text-xs sm:text-sm font-medium text-slate-500 dark:text-slate-400">
-                    Tempo médio por questão
-                  </span>
-                  <span className="block text-xl sm:text-2xl font-extrabold text-slate-800 dark:text-white tabular-nums mt-1 leading-tight">
-                    {formatDurationHMS(stats.avgTimeSec)}
-                  </span>
-                </div>
-              </div>
-            </div>
-          </div>
-        );
-      })()}
-
-      {/* 2.2. BARRA TÁTICA DE INTELIGÊNCIA CAVEIRA (SUPERAÇÃO, ERROS EVITÁVEIS, ESQUECIMENTO & DECOREBA) */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <div className="glass-card rounded-2xl p-3.5 border border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
-          <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-slate-400 flex items-center gap-1">
-              <Flame className="w-3.5 h-3.5 text-amber-400" /> Taxa de Superação
-            </span>
-            <p className="text-xl font-black text-slate-800 dark:text-white mt-0.5 tabular-nums">
-              {overcomingStats.initiallyMissedRetried > 0 ? `${overcomingStats.ratePct}%` : '—'}
-            </p>
-            <span className="text-[10px] text-slate-500 font-semibold">
-              {overcomingStats.overcomeCount}/{overcomingStats.initiallyMissedRetried} erros superados ({overcomingStats.retriedCount} refeitas)
-            </span>
-          </div>
-        </div>
-
-        <button
-          type="button"
-          onClick={() => {
-            setFilterType(filterType === 'avoidable' ? 'all' : 'avoidable');
-            const el = document.getElementById('caderno-questoes');
-            if (el) el.scrollIntoView({ behavior: 'smooth' });
-          }}
-          className={`glass-card rounded-2xl p-3.5 border text-left transition-all cursor-pointer flex items-center justify-between gap-2 ${
-            filterType === 'avoidable'
-              ? 'border-amber-400 bg-amber-500/10'
-              : 'border-slate-200 dark:border-slate-800 hover:border-amber-500/40'
-          }`}
-        >
-          <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-amber-400 flex items-center gap-1">
-              <AlertTriangle className="w-3.5 h-3.5" /> Erros Evitáveis (&ge;65% acerto)
-            </span>
-            <p className="text-xl font-black text-slate-800 dark:text-white mt-0.5 tabular-nums">
-              {avoidableCount}
-            </p>
-            <span className="text-[10px] text-slate-500 font-semibold">
-              Clique para filtrar no Caderno
-            </span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setShowForgettingMap(v => !v)}
-          className={`glass-card rounded-2xl p-3.5 border text-left transition-all cursor-pointer flex items-center justify-between gap-2 ${
-            showForgettingMap
-              ? 'border-sky-400 bg-sky-500/10'
-              : 'border-slate-200 dark:border-slate-800 hover:border-sky-500/40'
-          }`}
-        >
-          <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-sky-400 flex items-center gap-1">
-              <Clock className="w-3.5 h-3.5" /> Curva de Esquecimento
-            </span>
-            <p className="text-xl font-black text-slate-800 dark:text-white mt-0.5 tabular-nums">
-              {forgettingCurveRows.length} mat.
-            </p>
-            <span className="text-[10px] text-sky-400 font-bold uppercase">
-              {showForgettingMap ? '▲ Ocultar Mapa' : '▼ Abrir Mapa 0–30d+'}
-            </span>
-          </div>
-        </button>
-
-        <button
-          type="button"
-          onClick={() => setShowDecorebaTable(v => !v)}
-          className={`glass-card rounded-2xl p-3.5 border text-left transition-all cursor-pointer flex items-center justify-between gap-2 ${
-            showDecorebaTable
-              ? 'border-teal-400 bg-teal-500/10'
-              : 'border-slate-200 dark:border-slate-800 hover:border-teal-500/40'
-          }`}
-        >
-          <div>
-            <span className="text-[10px] font-black uppercase tracking-wider text-teal-400 flex items-center gap-1">
-              <Scale className="w-3.5 h-3.5" /> Tabela Decoreba PRF
-            </span>
-            <p className="text-xl font-black text-slate-800 dark:text-white mt-0.5 tabular-nums">
-              {decorebaRows.length} itens
-            </p>
-            <span className="text-[10px] text-teal-400 font-bold uppercase">
-              {showDecorebaTable ? '▲ Ocultar Tabela' : '▼ Prazos, Multas & Penas'}
-            </span>
-          </div>
-        </button>
-      </div>
-
-      {/* PAINEL #63: MAPA DE ESQUECIMENTO REAL POR DISCIPLINA */}
-      {showForgettingMap && (
-        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-sky-500/30 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200/70 dark:border-slate-800">
-            <div>
-              <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
-                <Clock className="w-4 h-4 text-sky-400" /> Mapa de Esquecimento Real por Disciplina
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Comparativo da taxa de acerto entre questões recentes (0–7d) e antigas (16–30d / 30d+). Quedas sinalizam urgência de revisão.
-              </p>
-            </div>
-            <button
-              type="button"
-              onClick={() => setShowForgettingMap(false)}
-              className="text-xs font-bold text-slate-400 hover:text-white cursor-pointer"
-            >
-              Fechar ✕
-            </button>
-          </div>
-
-          {forgettingCurveRows.length === 0 ? (
-            <p className="text-xs text-slate-400 py-4 text-center">Resolva mais questões com datas variadas para calcular o decaimento por disciplina.</p>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full text-left text-xs min-w-[600px]">
-                <thead className="text-[10px] uppercase tracking-wider text-slate-400 border-b border-slate-200 dark:border-slate-800">
-                  <tr>
-                    <th className="py-2 pr-3 font-black">Disciplina</th>
-                    <th className="py-2 px-2 text-center font-black">0–7 dias</th>
-                    <th className="py-2 px-2 text-center font-black">8–15 dias</th>
-                    <th className="py-2 px-2 text-center font-black">16–30 dias</th>
-                    <th className="py-2 px-2 text-center font-black">30d+</th>
-                    <th className="py-2 pl-2 text-center font-black">Tendência</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-slate-200/50 dark:divide-slate-800/80">
-                  {forgettingCurveRows.map((row) => {
-                    const renderBucket = (b) => {
-                      if (!b || b.pct === null) return <span className="text-slate-600">—</span>;
-                      const badge = b.pct >= 75
-                        ? 'bg-emerald-500/15 text-emerald-400 border-emerald-500/30'
-                        : b.pct >= 55
-                        ? 'bg-amber-500/15 text-amber-300 border-amber-500/30'
-                        : 'bg-red-500/15 text-red-400 border-red-500/30';
-                      return (
-                        <span className={`inline-block px-2 py-0.5 rounded-md border font-mono font-bold ${badge}`}>
-                          {b.pct}% <span className="text-[10px] opacity-75">({b.total})</span>
-                        </span>
-                      );
-                    };
-                    return (
-                      <tr key={row.discipline} className="hover:bg-slate-800/30">
-                        <td className="py-2.5 pr-3 font-bold text-slate-800 dark:text-slate-100">{row.discipline}</td>
-                        <td className="py-2.5 px-2 text-center">{renderBucket(row.buckets.b0_7)}</td>
-                        <td className="py-2.5 px-2 text-center">{renderBucket(row.buckets.b8_15)}</td>
-                        <td className="py-2.5 px-2 text-center">{renderBucket(row.buckets.b16_30)}</td>
-                        <td className="py-2.5 px-2 text-center">{renderBucket(row.buckets.b30p)}</td>
-                        <td className="py-2.5 pl-2 text-center font-mono font-bold">
-                          {row.decayDelta === null ? (
-                            <span className="text-slate-500">—</span>
-                          ) : row.decayDelta < -5 ? (
-                            <span className="text-red-400">{row.decayDelta}% ↓</span>
-                          ) : row.decayDelta > 5 ? (
-                            <span className="text-emerald-400">+{row.decayDelta}% ↑</span>
-                          ) : (
-                            <span className="text-slate-400">Estável</span>
-                          )}
-                        </td>
-                      </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
-            </div>
-          )}
-        </div>
-      )}
-
-      {/* PAINEL #74: TABELA AUTOMÁTICA DE PRAZOS, MULTAS & PENAS (DECOREBA PRF) */}
-      {showDecorebaTable && (
-        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-teal-500/30 space-y-3">
-          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-2 border-b border-slate-200/70 dark:border-slate-800">
-            <div>
-              <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
-                <Scale className="w-4 h-4 text-teal-400" /> Tabela Decoreba PRF (Prazos, Multas &amp; Penas)
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Extraída automaticamente dos seus bizus, comentários e questões do Caveira.
-              </p>
-            </div>
-            <div className="flex flex-wrap items-center gap-1.5">
-              {['Todos', 'Prazo', 'Multa/CTB', 'Pena'].map((cat) => (
-                <button
-                  key={cat}
-                  type="button"
-                  onClick={() => setDecorebaCategory(cat)}
-                  className={`px-2.5 py-1 rounded-lg text-[11px] font-bold uppercase cursor-pointer border ${
-                    decorebaCategory === cat
-                      ? 'bg-teal-500 text-slate-950 border-teal-400'
-                      : 'bg-slate-900 text-slate-400 border-slate-700 hover:text-white'
-                  }`}
-                >
-                  {cat}
-                </button>
-              ))}
-              <input
-                type="text"
-                value={decorebaSearch}
-                onChange={(e) => setDecorebaSearch(e.target.value)}
-                placeholder="Filtrar prazo/valor..."
-                className="bg-slate-900 border border-slate-700 rounded-lg px-2.5 py-1 text-xs text-slate-100 outline-none focus:border-teal-400 w-36"
-              />
-            </div>
-          </div>
-
-          {filteredDecorebaRows.length === 0 ? (
-            <p className="text-xs text-slate-400 py-4 text-center">Nenhum prazo, multa ou pena encontrado neste filtro.</p>
-          ) : (
-            <div className="space-y-1.5 max-h-[340px] overflow-y-auto custom-scrollbar pr-1">
-              {filteredDecorebaRows.map((row) => (
-                <div
-                  key={row.id}
-                  className="p-2.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex flex-col sm:flex-row sm:items-center justify-between gap-2 text-xs"
-                >
-                  <div className="space-y-0.5 min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="px-2 py-0.5 rounded bg-teal-500/15 text-teal-400 border border-teal-500/30 font-black text-[10px] uppercase">
-                        {row.category}
-                      </span>
-                      <span className="font-black text-amber-400">{row.highlight}</span>
-                      <span className="text-[10px] text-slate-400 font-semibold">• {row.subject} ({row.sourceLabel})</span>
-                    </div>
-                    <p className="text-slate-600 dark:text-slate-300 leading-snug">{row.snippet}</p>
-                  </div>
+        {/* Linha 2: Navegação de Workspaces + Seletor de Bloco Global */}
+        {caveiraQuestions.length > 0 && (
+          <div className="px-4 sm:px-5 pt-2 pb-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+            {/* Abas de Workspace */}
+            <nav aria-label="Seções do Raio-X Caveira" className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+              {workspaceTabs.map((tab) => {
+                const isActive = activeTab === tab.id;
+                return (
                   <button
+                    key={tab.id}
+                    type="button"
+                    onClick={() => setActiveTab(tab.id)}
+                    className={`h-9 px-3.5 rounded-xl text-xs font-semibold inline-flex items-center gap-2 transition-all cursor-pointer shrink-0 border ${
+                      isActive
+                        ? 'bg-slate-900 text-white border-slate-900 dark:bg-sky-500 dark:text-slate-950 dark:border-sky-400 shadow-xs'
+                        : 'bg-transparent text-slate-600 dark:text-slate-300 border-transparent hover:bg-white dark:hover:bg-slate-900 hover:text-slate-900 dark:hover:text-white'
+                    }`}
+                  >
+                    {tab.icon}
+                    <span>{tab.label}</span>
+                    {tab.badge && (
+                      <span className={`font-mono text-[11px] px-1.5 py-0.5 rounded-md tabular-nums ${
+                        isActive
+                          ? 'bg-white/15 dark:bg-slate-950/20'
+                          : 'bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
+                      }`}>
+                        {tab.badge}
+                      </span>
+                    )}
+                  </button>
+                );
+              })}
+            </nav>
+
+            {/* Seletor de Bloco PRF */}
+            <div className="flex flex-wrap items-center gap-1.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setSelectedBloco('all');
+                  setSelectedSubject('all');
+                  setSelectedTopic('all');
+                }}
+                className={`h-8 px-2.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer border inline-flex items-center gap-1 ${
+                  selectedBloco === 'all'
+                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white border-slate-300 dark:border-slate-600 shadow-xs'
+                    : 'bg-transparent text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-900 dark:hover:text-white'
+                }`}
+              >
+                <span>Todos</span>
+                <span className="font-mono text-[11px] opacity-75">({enrichedQuestions.length})</span>
+              </button>
+
+              {blocoStats.map((b) => {
+                const isSelected = selectedBloco === b.blocoKey;
+                return (
+                  <button
+                    key={b.blocoKey}
                     type="button"
                     onClick={() => {
-                      setSearchQuery(row.questionId);
-                      setFilterType('all');
-                      const el = document.getElementById('caderno-questoes');
-                      if (el) el.scrollIntoView({ behavior: 'smooth' });
+                      setSelectedBloco(isSelected ? 'all' : b.blocoKey);
+                      setSelectedSubject('all');
+                      setSelectedTopic('all');
                     }}
-                    className="shrink-0 px-2.5 py-1 rounded-lg bg-slate-800 hover:bg-sky-600 text-sky-400 hover:text-white font-mono text-[11px] font-bold transition-colors cursor-pointer"
+                    className={`h-8 px-2.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer border inline-flex items-center gap-1.5 ${
+                      isSelected
+                        ? b.activeClass
+                        : 'bg-white/70 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
+                    }`}
+                    title={b.subtitle}
                   >
-                    {row.questionId} ➔
+                    <span>{b.short}</span>
+                    <span className={`font-mono text-[11px] font-bold tabular-nums ${
+                      isSelected
+                        ? 'opacity-90'
+                        : b.total === 0
+                        ? 'text-slate-400'
+                        : b.grossRate >= 75
+                        ? 'text-emerald-600 dark:text-emerald-400'
+                        : b.grossRate >= 50
+                        ? 'text-amber-600 dark:text-amber-400'
+                        : 'text-red-600 dark:text-red-400'
+                    }`}>
+                      {b.total > 0 ? `${b.grossRate}%` : '0q'}
+                    </span>
                   </button>
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-      )}
+                );
+              })}
 
-      {/* 2.5. RELATÓRIO TÁTICO: ASSUNTOS MAIS ERRADOS (ZONA CRÍTICA) & MAIS ACERTADOS (ZONA BLINDADA) */}
-      <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 space-y-4">
-        {/* Cabeçalho do Relatório de Assuntos */}
-        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3 pb-3 border-b border-slate-200/70 dark:border-slate-800">
-          <div>
-            <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
-              <Skull className="w-4 h-4 text-red-500" />
-              Relatório de Assuntos: Mais Errados vs Mais Acertados
+              {hasActiveFilters && (
+                <button
+                  type="button"
+                  onClick={resetAllFilters}
+                  className="h-8 px-2 rounded-lg text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 inline-flex items-center gap-1 cursor-pointer"
+                  title="Limpar todos os filtros ativos"
+                >
+                  <X className="w-3.5 h-3.5" />
+                  <span className="hidden sm:inline">Limpar</span>
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+      </header>
+
+      {/* ESTADO VAZIO (ONBOARDING TÁTICO) */}
+      {caveiraQuestions.length === 0 ? (
+        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-8 sm:p-12 text-center max-w-2xl mx-auto space-y-5">
+          <div className="w-14 h-14 rounded-2xl bg-red-500/10 border border-red-500/25 flex items-center justify-center mx-auto">
+            <Skull className="w-7 h-7 text-red-600 dark:text-red-400" />
+          </div>
+          <div className="space-y-1.5">
+            <h2 className="font-display text-xl font-bold text-slate-900 dark:text-white">
+              Conecte seu Projeto Caveira ao QG da PRF
             </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-              Mapeamento tático de vulnerabilidades e pontos fortes para a PRF com base no histórico geral e no Duelo FPS 3D.
+            <p className="text-sm text-slate-500 dark:text-slate-400 max-w-lg mx-auto">
+              Cada questão respondida no Projeto Caveira ou no Duelo FPS é classificada automaticamente nos 3 blocos do edital PRF, gerando saldo Cebraspe, radar de lei seca, curva de esquecimento e caderno de erros.
             </p>
           </div>
-
-          {/* Filtro do Relatório: Geral vs Duelo FPS vs Bloco II */}
-          <div className="flex flex-wrap items-center gap-1.5 self-start md:self-auto">
+          <div className="flex flex-wrap items-center justify-center gap-2.5 pt-2">
+            {extensionDetected ? (
+              <button
+                type="button"
+                onClick={handleRequestSync}
+                className="h-10 px-5 rounded-xl bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 font-semibold text-xs inline-flex items-center gap-2 transition-colors cursor-pointer"
+              >
+                <RefreshCw className="w-4 h-4" />
+                <span>Sincronizar questões agora</span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => setShowInstallModal(true)}
+                className="h-10 px-5 rounded-xl bg-red-600 hover:bg-red-500 text-white font-semibold text-xs inline-flex items-center gap-2 transition-colors cursor-pointer"
+              >
+                <Download className="w-4 h-4" />
+                <span>Instalar extensão no Chrome</span>
+              </button>
+            )}
             <button
               type="button"
-              onClick={() => setTopicReportScope('all')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                topicReportScope === 'all'
-                  ? 'bg-blue-600 text-white border-blue-500 shadow-sm'
-                  : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:text-white'
-              }`}
+              onClick={() => setShowImportModal(true)}
+              className="h-10 px-5 rounded-xl bg-slate-100 hover:bg-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 text-slate-800 dark:text-slate-100 border border-slate-200 dark:border-slate-700 font-semibold text-xs inline-flex items-center gap-2 transition-colors cursor-pointer"
             >
-              Todos os Assuntos ({enrichedQuestions.length})
+              <Upload className="w-4 h-4" />
+              <span>Importar backup JSON</span>
             </button>
-
-            <button
-              type="button"
-              onClick={() => setTopicReportScope('fps')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border flex items-center gap-1.5 ${
-                topicReportScope === 'fps'
-                  ? 'bg-amber-500 text-slate-950 border-amber-400 font-black shadow-sm'
-                  : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-100 border-slate-200 dark:border-slate-800 hover:border-amber-400'
-              }`}
-            >
-              <Crosshair className="w-3.5 h-3.5" />
-              <span>Duelo FPS 3D ({topicRankings.fpsCount})</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={() => setTopicReportScope('bloco2')}
-              className={`px-3 py-1.5 rounded-xl text-xs font-bold transition-all cursor-pointer border ${
-                topicReportScope === 'bloco2'
-                  ? 'bg-amber-600 text-white border-amber-500 shadow-sm'
-                  : 'bg-slate-100 dark:bg-slate-900 text-slate-700 dark:text-slate-100 border-slate-200 dark:border-slate-800 hover:text-white'
-              }`}
-            >
-              Bloco II: Trânsito ({topicRankings.bloco2Count})
-            </button>
-          </div>
-        </div>
-
-        {/* Resumo Rápido dos Indicadores */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-center">
-            <span className="text-[10px] sm:text-xs font-bold uppercase text-slate-400 block">Itens no Filtro</span>
-            <span className="text-xl sm:text-2xl font-black text-slate-800 dark:text-white mt-0.5 block">
-              {topicRankings.totalScoped}
-            </span>
-          </div>
-
-          <div className="p-3 rounded-xl bg-red-500/10 border border-red-500/25 text-center">
-            <span className="text-[10px] sm:text-xs font-bold uppercase text-red-400 block">Assuntos Críticos</span>
-            <span className="text-xl sm:text-2xl font-black text-red-500 dark:text-red-400 mt-0.5 block">
-              {topicRankings.criticalCount}
-            </span>
-          </div>
-
-          <div className="p-3 rounded-xl bg-emerald-500/10 border border-emerald-500/25 text-center">
-            <span className="text-[10px] sm:text-xs font-bold uppercase text-emerald-400 block">Assuntos Blindados</span>
-            <span className="text-xl sm:text-2xl font-black text-emerald-500 dark:text-emerald-400 mt-0.5 block">
-              {topicRankings.shieldedCount}
-            </span>
-          </div>
-
-          <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 text-center flex flex-col justify-center items-center">
             <a
               href="#/duelo"
-              className="px-3 py-1.5 rounded-lg bg-amber-500 hover:bg-amber-400 text-slate-950 font-black text-xs uppercase flex items-center gap-1.5 transition-all shadow-md shadow-amber-500/20"
+              className="h-10 px-5 rounded-xl bg-amber-500 hover:bg-amber-400 text-slate-950 font-semibold text-xs inline-flex items-center gap-2 transition-colors"
             >
-              <Crosshair className="w-3.5 h-3.5" />
+              <Crosshair className="w-4 h-4" />
               <span>Jogar Duelo FPS</span>
             </a>
           </div>
-        </div>
-
-        {/* Duas Colunas: Mais Errados vs Mais Acertados */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-4">
-          {/* COLUNA ESQUERDA: ASSUNTOS MAIS ERRADOS (ZONA CRÍTICA) */}
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-red-500/25 space-y-3">
-            <div className="flex flex-wrap items-center justify-between gap-2 pb-2 border-b border-slate-200 dark:border-slate-800">
-              <h3 className="text-xs sm:text-sm font-black uppercase text-red-500 dark:text-red-400 flex items-center gap-2">
-                <TrendingDown className="w-4 h-4" />
-                Zona Crítica: Assuntos Mais Errados ({topicRankings.mostErrored.length})
-              </h3>
-              {topicRankings.mostErrored.length > 0 ? (
-                <div className="flex items-center gap-1.5 flex-wrap">
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const topSubject = topicRankings.mostErrored[0].subject;
-                      const sameSubjectCritical = topicRankings.mostErrored
-                        .filter(item => item.subject === topSubject)
-                        .slice(0, 3)
-                        .map(item => item.topic);
-                      triggerCriticalTopicPractice(topSubject, sameSubjectCritical, 'wrong');
-                    }}
-                    className="px-2.5 py-1 rounded-lg bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/30 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-colors cursor-pointer"
-                    title="Refazer no Projeto Caveira apenas as questões erradas dos piores assuntos"
-                  >
-                    <RotateCcw className="w-3 h-3" />
-                    <span>Refazer erradas</span>
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      const topSubject = topicRankings.mostErrored[0].subject;
-                      const sameSubjectCritical = topicRankings.mostErrored
-                        .filter(item => item.subject === topSubject)
-                        .slice(0, 3)
-                        .map(item => item.topic);
-                      triggerCriticalTopicPractice(topSubject, sameSubjectCritical, 'not_resolved');
-                    }}
-                    className="px-2.5 py-1 rounded-lg bg-red-500/15 hover:bg-red-600 text-red-400 hover:text-white border border-red-500/30 text-[10px] font-black uppercase tracking-wider flex items-center gap-1 transition-colors cursor-pointer"
-                    title="Abrir o Projeto Caveira já filtrado nos piores assuntos da sua disciplina mais crítica"
-                  >
-                    <Target className="w-3 h-3" />
-                    <span>Treinar Top Críticos no Caveira</span>
-                  </button>
-                </div>
-              ) : (
-                <span className="text-[10px] font-bold uppercase text-slate-400">Requer Atenção Imediata</span>
-              )}
-            </div>
-
-            {topicRankings.mostErrored.length === 0 ? (
-              <div className="py-10 text-center text-slate-400 text-xs">
-                <CheckCircle2 className="w-8 h-8 text-emerald-400 mx-auto mb-2 opacity-80" />
-                <p className="font-bold">Nenhum erro registrado neste filtro.</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">Sua pontaria nos tópicos está impecável!</p>
-              </div>
-            ) : (
-              <div className="space-y-2.5 max-h-[380px] overflow-y-auto custom-scrollbar pr-1">
-                {topicRankings.mostErrored.slice(0, 15).map((t, idx) => (
-                  <div
-                    key={t.key}
-                    className="p-3 rounded-xl bg-slate-50 dark:bg-slate-850 border border-red-500/20 hover:border-red-500/40 transition-all space-y-2"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="w-5 h-5 rounded-md bg-red-500/20 text-red-400 font-mono text-[10px] font-black flex items-center justify-center shrink-0">
-                          #{idx + 1}
-                        </span>
-                        <div className="min-w-0">
-                          <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 block truncate" title={t.topic}>
-                            {t.topic}
-                          </span>
-                          <span className="text-[10px] font-semibold uppercase text-slate-400">
-                            {t.subject}
-                            {t.fpsCount > 0 && (
-                              <span className="ml-1.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">
-                                🎯 {t.fpsCount} no FPS
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <span className="px-2 py-0.5 rounded bg-red-500/15 text-red-400 font-mono font-bold text-[11px] block">
-                          ✗ {t.errors} {t.errors === 1 ? 'erro' : 'erros'}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
-                          de {t.total} {t.total === 1 ? 'questão' : 'questões'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Barra de Letalidade / Erro */}
-                    <div className="space-y-1">
-                      <div className="flex flex-wrap items-center justify-between gap-2 text-[10px] font-semibold text-slate-400">
-                        <span>Taxa de Erro: <strong className="text-red-400">{t.errorPercent}%</strong></span>
-                        <div className="flex items-center gap-2">
-                          <button
-                            type="button"
-                            onClick={() => triggerCriticalTopicPractice(t.subject, [t.topic], 'wrong')}
-                            className="px-2 py-0.5 rounded bg-amber-500/15 hover:bg-amber-500 text-amber-300 hover:text-slate-950 border border-amber-500/30 font-black uppercase tracking-wider cursor-pointer flex items-center gap-1 transition-colors"
-                            title={`Refazer apenas as questões que você errou em ${t.topic} (${t.subject})`}
-                          >
-                            <RotateCcw className="w-2.5 h-2.5" />
-                            <span>Refazer erradas</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => triggerCriticalTopicPractice(t.subject, [t.topic], 'not_resolved')}
-                            className="px-2 py-0.5 rounded bg-sky-500/15 hover:bg-sky-500 text-sky-400 hover:text-slate-950 border border-sky-500/30 font-black uppercase tracking-wider cursor-pointer flex items-center gap-1 transition-colors"
-                            title={`Resolver questões inéditas/não resolvidas de ${t.topic} (${t.subject}) no Projeto Caveira`}
-                          >
-                            <Target className="w-2.5 h-2.5" />
-                            <span>Treinar no Caveira</span>
-                          </button>
-                          <button
-                            type="button"
-                            onClick={() => {
-                              setSelectedSubject('all');
-                              setSelectedTopic(t.topic);
-                              const el = document.getElementById('caderno-questoes');
-                              if (el) el.scrollIntoView({ behavior: 'smooth' });
-                            }}
-                            className="text-amber-400 hover:underline cursor-pointer flex items-center gap-1"
-                          >
-                            <span>Ver no Caderno</span>
-                            <ArrowRight className="w-3 h-3" />
-                          </button>
-                        </div>
-                      </div>
-                      <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                        <div
-                          className="bg-red-500 h-full rounded-full transition-all"
-                          style={{ width: `${Math.min(100, t.errorPercent)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-
-          {/* COLUNA DIREITA: ASSUNTOS MAIS ACERTADOS (ZONA BLINDADA) */}
-          <div className="p-4 rounded-2xl bg-white dark:bg-slate-950 border border-emerald-500/25 space-y-3">
-            <div className="flex items-center justify-between pb-2 border-b border-slate-200 dark:border-slate-800">
-              <h3 className="text-xs sm:text-sm font-black uppercase text-emerald-500 dark:text-emerald-400 flex items-center gap-2">
-                <TrendingUp className="w-4 h-4" />
-                Zona Blindada: Assuntos Mais Acertados ({topicRankings.mostHit.length})
-              </h3>
-              <span className="text-[10px] font-bold uppercase text-slate-400">Alto Domínio Legal</span>
-            </div>
-
-            {topicRankings.mostHit.length === 0 ? (
-              <div className="py-10 text-center text-slate-400 text-xs">
-                <Target className="w-8 h-8 text-slate-600 mx-auto mb-2" />
-                <p className="font-bold">Nenhum acerto registrado neste filtro.</p>
-                <p className="text-[11px] text-slate-500 mt-0.5">Resolva questões ou vença rodadas no Duelo FPS para consolidar seus pontos fortes!</p>
-              </div>
-            ) : (
-              <div className="space-y-2.5 max-h-[380px] overflow-y-auto custom-scrollbar pr-1">
-                {topicRankings.mostHit.slice(0, 15).map((t, idx) => (
-                  <div
-                    key={t.key}
-                    className="p-3 rounded-xl bg-slate-50 dark:bg-slate-850 border border-emerald-500/20 hover:border-emerald-500/40 transition-all space-y-2"
-                  >
-                    <div className="flex items-start justify-between gap-2">
-                      <div className="flex items-center gap-2 min-w-0">
-                        <span className="w-5 h-5 rounded-md bg-emerald-500/20 text-emerald-400 font-mono text-[10px] font-black flex items-center justify-center shrink-0">
-                          #{idx + 1}
-                        </span>
-                        <div className="min-w-0">
-                          <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 block truncate" title={t.topic}>
-                            {t.topic}
-                          </span>
-                          <span className="text-[10px] font-semibold uppercase text-slate-400">
-                            {t.subject}
-                            {t.fpsCount > 0 && (
-                              <span className="ml-1.5 px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-300 font-mono font-bold">
-                                🎯 {t.fpsCount} no FPS
-                              </span>
-                            )}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="text-right shrink-0">
-                        <span className="px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-400 font-mono font-bold text-[11px] block">
-                          ✓ {t.hits} {t.hits === 1 ? 'acerto' : 'acertos'}
-                        </span>
-                        <span className="text-[10px] text-slate-400 font-mono block mt-0.5">
-                          de {t.total} {t.total === 1 ? 'questão' : 'questões'}
-                        </span>
-                      </div>
-                    </div>
-
-                    {/* Barra de Domínio / Acerto */}
-                    <div className="space-y-1">
-                      <div className="flex items-center justify-between text-[10px] font-semibold text-slate-400">
-                        <span>Taxa de Acerto: <strong className="text-emerald-400">{t.grossPercent}%</strong></span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedSubject('all');
-                            setSelectedTopic(t.topic);
-                            const el = document.getElementById('caderno-questoes');
-                            if (el) el.scrollIntoView({ behavior: 'smooth' });
-                          }}
-                          className="text-amber-400 hover:underline cursor-pointer flex items-center gap-1"
-                        >
-                          <span>Ver no Caderno</span>
-                          <ArrowRight className="w-3 h-3" />
-                        </button>
-                      </div>
-                      <div className="w-full bg-slate-200 dark:bg-slate-800 h-1.5 rounded-full overflow-hidden">
-                        <div
-                          className="bg-emerald-500 h-full rounded-full transition-all"
-                          style={{ width: `${Math.min(100, t.grossPercent)}%` }}
-                        />
-                      </div>
-                    </div>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 3. PAINÉIS ANALÍTICOS LADO A LADO: DISCIPLINAS (ESQUERDA) + RADAR DE LEI SECA (DIREITA) */}
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
-
-        {/* COLUNA ESQUERDA: DESEMPENHO POR DISCIPLINA (LISTA HORIZONTAL DE ALTA LEITURA) */}
-        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-200/70 dark:border-slate-800">
-              <div>
-                <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
-                  <ShieldCheck className="w-4 h-4 text-blue-400" /> Desempenho por Disciplina ({subjectGroups.length})
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Ordenado da matéria mais crítica para a mais forte. Clique para ver os tópicos.
-                </p>
-              </div>
-              {selectedSubject !== 'all' && (
-                <button
-                  type="button"
-                  onClick={() => {
-                    setSelectedSubject('all');
-                    setSelectedTopic('all');
-                  }}
-                  className="px-2.5 py-1 rounded-lg bg-blue-500/20 border border-blue-500/40 text-blue-300 text-[11px] font-bold uppercase cursor-pointer shrink-0"
-                >
-                  {selectedSubject} ✕
-                </button>
-              )}
-            </div>
-
-            {subjectGroups.length === 0 ? (
-              <div className="text-center py-10 text-slate-400">
-                <Skull className="w-9 h-9 mx-auto text-slate-600 mb-2" />
-                <p className="font-bold text-xs uppercase">Nenhuma disciplina registrada</p>
-                <p className="text-xs mt-1 text-slate-500">
-                  Resolva questões no Projeto Caveira para alimentar o diagnóstico.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-[430px] overflow-y-auto custom-scrollbar pr-1">
-                {subjectGroups.map(sub => {
-                  const isExpanded = expandedSubject === sub.name;
-                  const isFiltered = selectedSubject === sub.name;
-                  const blocoMeta = BLOCO_METADATA[sub.bloco] || BLOCO_METADATA['Bloco I'];
-
-                  return (
-                    <div
-                      key={sub.name}
-                      className={`rounded-xl border transition-all overflow-hidden ${
-                        isFiltered
-                          ? 'border-blue-500 bg-blue-500/5 dark:bg-slate-900'
-                          : sub.status === 'vulnerabilidade'
-                          ? 'border-red-500/25 bg-white dark:bg-slate-900'
-                          : 'border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900'
-                      }`}
-                    >
-                      {/* Linha Principal da Disciplina */}
-                      <div
-                        onClick={() => setExpandedSubject(isExpanded ? null : sub.name)}
-                        className="p-3 cursor-pointer hover:bg-slate-100/50 dark:hover:bg-slate-850/70 transition-colors flex flex-col gap-2"
-                      >
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2 min-w-0">
-                            <span className={`text-[10px] font-bold uppercase px-1.5 py-0.5 rounded border shrink-0 ${blocoMeta.badgeClass}`}>
-                              {blocoMeta.short}
-                            </span>
-                            <h3 className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 truncate">
-                              {sub.name}
-                            </h3>
-                          </div>
-
-                          <div className="flex items-center gap-2 shrink-0">
-                            <span className="text-xs font-medium text-slate-400">
-                              <strong className="text-emerald-400">{sub.hits}C</strong> / <strong className="text-red-400">{sub.errors}E</strong>
-                              <span className="text-slate-500 ml-1">({sub.total}q • {sub.avgTime}s)</span>
-                            </span>
-
-                            <span className={`text-sm font-black min-w-[40px] text-right ${
-                              sub.grossPercent >= 75 ? 'text-emerald-400' : sub.grossPercent >= 50 ? 'text-amber-400' : 'text-red-400'
-                            }`}>
-                              {sub.grossPercent}%
-                            </span>
-
-                            <button
-                              type="button"
-                              onClick={(e) => {
-                                e.stopPropagation();
-                                setSelectedSubject(isFiltered ? 'all' : sub.name);
-                                setSelectedTopic('all');
-                              }}
-                              className={`text-[10px] font-bold uppercase px-2 py-1 rounded-lg border transition-all cursor-pointer ${
-                                isFiltered
-                                  ? 'bg-blue-600 text-white border-blue-500'
-                                  : 'bg-slate-100 dark:bg-slate-850 text-slate-400 border-slate-300 dark:border-slate-700 hover:text-white'
-                              }`}
-                            >
-                              {isFiltered ? '✓ Ativo' : 'Filtrar'}
-                            </button>
-
-                            <div className="text-slate-400">
-                              {isExpanded ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
-                            </div>
-                          </div>
-                        </div>
-
-                        {/* Barra de Progresso Limpa */}
-                        <div className="w-full bg-slate-200 dark:bg-slate-850 h-1.5 rounded-full overflow-hidden">
-                          <div
-                            className={`h-full rounded-full transition-all ${
-                              sub.grossPercent >= 75 ? 'bg-emerald-500' : sub.grossPercent >= 50 ? 'bg-amber-500' : 'bg-red-500'
-                            }`}
-                            style={{ width: `${Math.max(4, Math.min(100, sub.grossPercent))}%` }}
-                          />
-                        </div>
-                      </div>
-
-                      {/* Sub-tópicos Expandidos */}
-                      <AnimatePresence>
-                        {isExpanded && (
-                          <motion.div
-                            initial={{ height: 0, opacity: 0 }}
-                            animate={{ height: 'auto', opacity: 1 }}
-                            exit={{ height: 0, opacity: 0 }}
-                            className="border-t border-slate-200 dark:border-slate-800 p-3 bg-slate-50 dark:bg-slate-950 space-y-1.5"
-                          >
-                            <div className="flex items-center justify-between mb-1">
-                              <span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">
-                                Assuntos da Disciplina ({sub.topicsList.length}) — Clique para filtrar:
-                              </span>
-                              {selectedTopic !== 'all' && (
-                                <button
-                                  type="button"
-                                  onClick={() => setSelectedTopic('all')}
-                                  className="text-[10px] font-bold uppercase text-blue-400 hover:underline cursor-pointer"
-                                >
-                                  Mostrar todos
-                                </button>
-                              )}
-                            </div>
-
-                            {sub.topicsList.map(topic => {
-                              const isTopicActive = selectedTopic === topic.name && selectedSubject === sub.name;
-                              return (
-                                <div
-                                  key={topic.name}
-                                  onClick={() => {
-                                    setSelectedSubject(sub.name);
-                                    setSelectedTopic(isTopicActive ? 'all' : topic.name);
-                                  }}
-                                  className={`px-3 py-2 rounded-lg border flex items-center justify-between gap-3 cursor-pointer transition-all ${
-                                    isTopicActive
-                                      ? 'bg-blue-500/15 border-blue-500 text-white'
-                                      : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-500'
-                                  }`}
-                                >
-                                  <span className="text-xs font-medium text-slate-700 dark:text-slate-100 leading-snug">
-                                    {topic.name}
-                                  </span>
-                                  <div className="flex items-center gap-2.5 shrink-0 text-xs">
-                                    <span className="text-slate-400 font-medium">
-                                      {topic.hits}C / {topic.errors}E
-                                    </span>
-                                    <span className={`font-black min-w-[34px] text-right ${
-                                      topic.grossPercent >= 75 ? 'text-emerald-400' : topic.grossPercent >= 50 ? 'text-amber-400' : 'text-red-400'
-                                    }`}>
-                                      {topic.grossPercent}%
-                                    </span>
-                                  </div>
-                                </div>
-                              );
-                            })}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-
-        {/* COLUNA DIREITA: RADAR DE LEI SECA (LISTA HORIZONTAL SEM TRUNCAMENTO) */}
-        <div className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 flex flex-col justify-between">
-          <div>
-            <div className="flex items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-200/70 dark:border-slate-800">
-              <div>
-                <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
-                  <Scale className="w-4 h-4 text-amber-400" /> Radar de Lei Seca ({legalRadarList.length})
-                </h2>
-                <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Leis, artigos e súmulas mais cobrados ou errados. Clique para filtrar o Caderno.
-                </p>
-              </div>
-              {selectedLegalDevice && (
-                <button
-                  type="button"
-                  onClick={() => setSelectedLegalDevice(null)}
-                  className="px-2.5 py-1 rounded-lg bg-amber-500/20 border border-amber-500/40 text-amber-300 text-[11px] font-bold uppercase cursor-pointer shrink-0"
-                >
-                  Filtro Ativo ✕
-                </button>
-              )}
-            </div>
-
-            {legalRadarList.length === 0 ? (
-              <div className="text-center py-10 text-slate-400">
-                <Scale className="w-9 h-9 mx-auto text-slate-600 mb-2" />
-                <p className="font-bold text-xs uppercase">Nenhum dispositivo legal detectado neste filtro</p>
-                <p className="text-xs mt-1 text-slate-500">
-                  Artigos, leis e resoluções citados nas questões aparecerão listados aqui automaticamente.
-                </p>
-              </div>
-            ) : (
-              <div className="space-y-2 max-h-[430px] overflow-y-auto custom-scrollbar pr-1">
-                {legalRadarList.slice(0, 15).map((dev, idx) => {
-                  const isSelected = selectedLegalDevice?.key === dev.key;
-                  const hasErrors = dev.errors > 0;
-                  return (
-                    <button
-                      key={dev.key}
-                      type="button"
-                      onClick={() => setSelectedLegalDevice(isSelected ? null : dev)}
-                      className={`w-full p-3 rounded-xl border text-left transition-all cursor-pointer flex items-center justify-between gap-3 ${
-                        isSelected
-                          ? 'bg-amber-500/15 border-amber-400 ring-1 ring-amber-500/30'
-                          : hasErrors
-                          ? 'bg-white dark:bg-slate-900 border-red-500/25 hover:border-red-400/60'
-                          : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-500'
-                      }`}
-                    >
-                      <div className="flex items-center gap-2.5 min-w-0">
-                        <span className="w-6 h-6 rounded-lg bg-slate-900 border border-slate-700 text-[11px] font-mono font-black text-amber-400 flex items-center justify-center shrink-0">
-                          #{idx + 1}
-                        </span>
-                        <div className="min-w-0">
-                          <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100 block leading-snug">
-                            {dev.label}
-                          </span>
-                          <span className="text-[10px] font-semibold uppercase text-slate-400">
-                            {dev.category} • {dev.total} {dev.total === 1 ? 'questão' : 'questões'}
-                          </span>
-                        </div>
-                      </div>
-
-                      <div className="flex items-center gap-2 shrink-0 text-xs font-bold">
-                        {dev.errors > 0 ? (
-                          <span className="px-2 py-0.5 rounded-md bg-red-500/15 text-red-400 border border-red-500/25">
-                            ✗ {dev.errors} {dev.errors === 1 ? 'erro' : 'erros'}
-                          </span>
-                        ) : (
-                          <span className="px-2 py-0.5 rounded-md bg-emerald-500/15 text-emerald-400 border border-emerald-500/25">
-                            ✓ 100%
-                          </span>
-                        )}
-                        {dev.guessesOrDoubts > 0 && (
-                          <span className="px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/25" title="Respondida com dúvida ou chute">
-                            🎲 {dev.guessesOrDoubts}
-                          </span>
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-
-      {/* 4. CADERNO DE QUESTÕES (LAYOUT LIMPO, ESCANEÁVEL E SEM POLUIÇÃO VISUAL) */}
-      <div id="caderno-questoes" className="glass-card rounded-2xl p-4 sm:p-5 border border-slate-200 dark:border-slate-800 space-y-4">
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-3 pb-3 border-b border-slate-200/70 dark:border-slate-800">
-          <div>
-            <h2 className="text-sm sm:text-base font-black text-slate-800 dark:text-white uppercase flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-purple-400" /> Caderno Tático de Questões ({filteredQuestions.length})
-            </h2>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              Enunciados completos, revisão de erros, bizus pessoais e envio para o FSRS.
-            </p>
-          </div>
-
-          {/* Busca e Filtros Rápidos */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative flex-1 sm:w-64">
-              <Search className="w-3.5 h-3.5 text-slate-400 absolute left-3 top-1/2 -translate-y-1/2" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Buscar código, lei ou palavra-chave..."
-                className="w-full bg-slate-100 dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl pl-8 pr-3 py-1.5 text-xs font-medium text-slate-800 dark:text-slate-100 outline-none focus:border-purple-500"
+        </section>
+      ) : (
+        /* WORKSPACE ATIVO */
+        <AnimatePresence mode="wait">
+          <motion.div
+            key={activeTab}
+            initial={{ opacity: 0, y: 6 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -6 }}
+            transition={{ duration: 0.15 }}
+          >
+            {activeTab === 'overview' && (
+              <RaioXOverview
+                stats={stats}
+                blocoStats={blocoStats}
+                selectedBloco={selectedBloco}
+                onSelectBloco={(blocoKey) => {
+                  setSelectedBloco(blocoKey);
+                  setSelectedSubject('all');
+                  setSelectedTopic('all');
+                }}
+                subjectGroups={subjectGroups}
+                topicRankings={topicRankings}
+                legalRadarList={legalRadarList}
+                overcomingStats={overcomingStats}
+                avoidableCount={avoidableCount}
+                pegadinhaCount={pegadinhaCount}
+                forgettingCurveRows={forgettingCurveRows}
+                decorebaRows={decorebaRows}
+                formatDurationHMS={formatDurationHMS}
+                onTriggerPractice={triggerCriticalTopicPractice}
+                onOpenNotebookWithFilter={handleOpenNotebookWithFilter}
+                onNavigateTab={handleNavigateTab}
+                onInspectDiscipline={handleInspectDiscipline}
               />
-            </div>
-
-            {[
-              { id: 'all', label: `Todas (${blockScopedQuestions.length})` },
-              { id: 'errors', label: `✗ Erros (${stats.errors})` },
-              { id: 'avoidable', label: `⚠️ Evitáveis (${avoidableCount})` },
-              { id: 'pegadinha', label: `💀 Pegadinhas (${pegadinhaCount})` },
-              { id: 'hits', label: `✓ Acertos (${stats.hits})` },
-              { id: 'guesses', label: `🎲 Dúvida/Chute (${stats.guessesOrDoubtsTotal})` }
-            ].map(f => (
-              <button
-                key={f.id}
-                type="button"
-                onClick={() => setFilterType(f.id)}
-                className={`px-3 py-1.5 rounded-xl font-bold text-xs uppercase transition-all cursor-pointer border ${
-                  filterType === f.id
-                    ? 'bg-purple-600 text-white border-purple-500 shadow-sm'
-                    : 'bg-slate-100 dark:bg-slate-900 text-slate-500 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:text-white'
-                }`}
-              >
-                {f.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Badges de Filtros Específicos Ativos */}
-        {(selectedSubject !== 'all' || selectedTopic !== 'all' || selectedLegalDevice) && (
-          <div className="flex flex-wrap items-center gap-2 bg-slate-100 dark:bg-slate-950 p-2.5 rounded-xl border border-slate-200 dark:border-slate-800">
-            <span className="text-[11px] font-bold uppercase text-slate-400">Filtrando por:</span>
-            {selectedSubject !== 'all' && (
-              <span className="px-2.5 py-1 rounded-lg bg-blue-500/15 border border-blue-500/30 text-blue-300 text-xs font-bold flex items-center gap-1.5">
-                Disciplina: {selectedSubject}
-                <button onClick={() => { setSelectedSubject('all'); setSelectedTopic('all'); }} className="hover:text-white cursor-pointer">✕</button>
-              </span>
             )}
-            {selectedTopic !== 'all' && (
-              <span className="px-2.5 py-1 rounded-lg bg-sky-500/15 border border-sky-500/30 text-sky-300 text-xs font-bold flex items-center gap-1.5">
-                Assunto: {selectedTopic}
-                <button onClick={() => setSelectedTopic('all')} className="hover:text-white cursor-pointer">✕</button>
-              </span>
+
+            {activeTab === 'diagnostics' && (
+              <RaioXDiagnostics
+                key={`${diagnosticsSubView}-${inspectedDiscipline || 'first'}`}
+                initialSubView={diagnosticsSubView}
+                initialDiscipline={inspectedDiscipline}
+                enrichedQuestions={enrichedQuestions}
+                subjectGroups={subjectGroups}
+                topicRankings={topicRankings}
+                topicReportScope={topicReportScope}
+                setTopicReportScope={setTopicReportScope}
+                blocoMetadata={BLOCO_METADATA}
+                onTriggerPractice={triggerCriticalTopicPractice}
+                onOpenNotebookWithFilter={handleOpenNotebookWithFilter}
+              />
             )}
-            {selectedLegalDevice && (
-              <span className="px-2.5 py-1 rounded-lg bg-amber-500/15 border border-amber-500/30 text-amber-300 text-xs font-bold flex items-center gap-1.5">
-                Dispositivo: {selectedLegalDevice.label}
-                <button onClick={() => setSelectedLegalDevice(null)} className="hover:text-white cursor-pointer">✕</button>
-              </span>
+
+            {activeTab === 'intelligence' && (
+              <RaioXIntelligence
+                forgettingCurveRows={forgettingCurveRows}
+                legalRadarList={legalRadarList}
+                selectedLegalDevice={selectedLegalDevice}
+                decorebaRows={decorebaRows}
+                filteredDecorebaRows={filteredDecorebaRows}
+                decorebaCategory={decorebaCategory}
+                setDecorebaCategory={setDecorebaCategory}
+                decorebaSearch={decorebaSearch}
+                setDecorebaSearch={setDecorebaSearch}
+                onOpenNotebookWithFilter={handleOpenNotebookWithFilter}
+              />
             )}
-          </div>
-        )}
 
-        {/* Lista de Questões */}
-        {filteredQuestions.length === 0 ? (
-          <div className="text-center py-10 text-slate-400">
-            <CheckCircle2 className="w-8 h-8 mx-auto text-slate-600 mb-2" />
-            <p className="font-bold text-xs uppercase">Nenhuma questão encontrada para este filtro</p>
-          </div>
-        ) : (
-          <div className="space-y-3.5">
-            {filteredQuestions.slice(0, 80).map(q => {
-              const blocoMeta = BLOCO_METADATA[q.bloco] || BLOCO_METADATA['Bloco I'];
-              const isEditingThisNote = editingNoteId === q.id;
-              const isCommentOpen = Boolean(expandedComments[q.id]);
-              const cleanTopic = (q.topic && q.topic !== q.subject && q.topic !== q.canonicalSubject) ? q.topic : null;
-              const videoMatch = findCourseVideoMatch(q, caveiraCourseIndexMap);
+            {activeTab === 'notebook' && (
+              <RaioXNotebook
+                filteredQuestions={filteredQuestions}
+                blockScopedQuestions={blockScopedQuestions}
+                subjectGroups={subjectGroups}
+                stats={stats}
+                avoidableCount={avoidableCount}
+                pegadinhaCount={pegadinhaCount}
+                blocoMetadata={BLOCO_METADATA}
+                caveiraCourseIndexMap={caveiraCourseIndexMap}
+                findCourseVideoMatch={findCourseVideoMatch}
+                searchQuery={searchQuery}
+                setSearchQuery={setSearchQuery}
+                filterType={filterType}
+                setFilterType={setFilterType}
+                selectedSubject={selectedSubject}
+                setSelectedSubject={setSelectedSubject}
+                selectedTopic={selectedTopic}
+                setSelectedTopic={setSelectedTopic}
+                selectedLegalDevice={selectedLegalDevice}
+                setSelectedLegalDevice={setSelectedLegalDevice}
+                editingNoteId={editingNoteId}
+                setEditingNoteId={setEditingNoteId}
+                noteDraft={noteDraft}
+                setNoteDraft={setNoteDraft}
+                expandedComments={expandedComments}
+                toggleComment={toggleComment}
+                handleSaveNote={handleSaveNote}
+                updateCaveiraQuestion={updateCaveiraQuestion}
+                createFsrsCardFromCaveira={createFsrsCardFromCaveira}
+                deleteCaveiraQuestion={deleteCaveiraQuestion}
+                resetAllFilters={resetAllFilters}
+              />
+            )}
+          </motion.div>
+        </AnimatePresence>
+      )}
 
-              return (
-                <div
-                  key={q.id + (q.timestamp || '')}
-                  className={`rounded-2xl border transition-all overflow-hidden bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 border-l-4 ${
-                    q.hit ? 'border-l-emerald-500' : 'border-l-red-500'
-                  }`}
-                >
-                  <div className="p-4 sm:p-5 space-y-3">
-                    {/* Cabeçalho Conciso da Questão */}
-                    <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2.5">
-                      <div className="flex items-center gap-2 flex-wrap min-w-0">
-                        <span className={`text-[11px] font-black uppercase px-2 py-0.5 rounded-md ${
-                          q.hit ? 'bg-emerald-500/15 text-emerald-400' : 'bg-red-500/15 text-red-400'
-                        }`}>
-                          {q.hit ? '✓ Acerto' : '✗ Erro'}
-                        </span>
-
-                        <span className="font-mono text-xs font-black text-white bg-slate-800 dark:bg-slate-850 border border-slate-700 dark:border-slate-700 px-2 py-0.5 rounded-md">
-                          {q.id}
-                        </span>
-
-                        <span className={`text-[10px] font-bold uppercase px-2 py-0.5 rounded-md border ${blocoMeta.badgeClass}`}>
-                          {blocoMeta.short}
-                        </span>
-
-                        <span className="text-xs sm:text-sm font-bold text-slate-800 dark:text-slate-100">
-                          {q.canonicalSubject}
-                        </span>
-
-                        {cleanTopic && (
-                          <span className="text-xs text-slate-500 dark:text-slate-400 truncate max-w-md" title={cleanTopic}>
-                            ➔ {cleanTopic}
-                          </span>
-                        )}
-
-                        {(q.isAvoidableError || (!q.hit && Number(q.communityCorrectPct) >= 65)) && (
-                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-amber-500/15 text-amber-300 border border-amber-500/30">
-                            ⚠️ Evitável ({q.communityCorrectPct}% acertaram)
-                          </span>
-                        )}
-
-                        {(q.isPegadinha || Number(q.communityErrorPct) >= 65) && (
-                          <span className="text-[10px] font-black uppercase px-2 py-0.5 rounded-md bg-purple-500/15 text-purple-300 border border-purple-500/30">
-                            💀 Pegadinha ({q.communityErrorPct}% erraram)
-                          </span>
-                        )}
-
-                        {Array.isArray(q.attempts) && q.attempts.length >= 2 && (
-                          <span className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-md bg-slate-800 text-slate-200 border border-slate-700">
-                            {q.attempts.slice(-4).map(a => a?.hit ? '✓' : '✗').join(' → ')} ({q.attempts.length}x)
-                          </span>
-                        )}
-                      </div>
-
-                      {/* Direita: Gabarito + Tempo + Ações */}
-                      <div className="flex items-center gap-2 shrink-0 flex-wrap">
-                        <div className="text-xs font-semibold bg-slate-100 dark:bg-slate-850 border border-slate-200 dark:border-slate-700 px-2.5 py-1 rounded-lg">
-                          <span className="text-slate-400">Marcou: </span>
-                          <strong className={q.hit ? 'text-emerald-400' : 'text-red-400'}>{q.userChoice || '?'}</strong>
-                          <span className="text-slate-600 mx-1.5">|</span>
-                          <span className="text-slate-400">Gabarito: </span>
-                          <strong className="text-emerald-400">{q.correctChoice || '?'}</strong>
-                        </div>
-
-                        <span className="text-[11px] font-semibold text-slate-400 bg-slate-100 dark:bg-slate-850 px-2 py-1 rounded-lg">
-                          ⏱️ {q.durationSeconds}s
-                        </span>
-
-                        {videoMatch && (
-                          <a
-                            href={videoMatch.url}
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            onClick={() => {
-                              try { navigator.clipboard?.writeText(`${videoMatch.mmss} ${videoMatch.topicLabel}`); } catch (_) {}
-                              toast.info(`Abrindo aula em ${videoMatch.mmss}`);
-                            }}
-                            className="inline-flex items-center gap-1 px-2 py-1 rounded-lg bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 border border-sky-500/30 text-[11px] font-black uppercase transition-colors"
-                            title={`Rever em ${videoMatch.lessonTitle} (${videoMatch.topicLabel || videoMatch.mmss})`}
-                          >
-                            <Video className="w-3.5 h-3.5" />
-                            <span>{videoMatch.mmss}</span>
-                          </a>
-                        )}
-
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingNoteId(isEditingThisNote ? null : q.id);
-                            setNoteDraft(q.userNote || '');
-                          }}
-                          className={`p-1.5 rounded-lg border transition-colors cursor-pointer ${
-                            q.userNote
-                              ? 'bg-amber-500/15 text-amber-400 border-amber-500/30'
-                              : 'bg-slate-100 dark:bg-slate-850 text-slate-400 border-slate-200 dark:border-slate-700 hover:text-amber-400'
-                          }`}
-                          title="Adicionar ou editar Bizu Tático"
-                        >
-                          <MessageSquarePlus className="w-3.5 h-3.5" />
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => createFsrsCardFromCaveira(q)}
-                          className={`${
-                            q.fsrsCreated
-                              ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/30'
-                              : 'bg-purple-600 hover:bg-purple-500 text-white'
-                          } font-bold text-[11px] uppercase px-2.5 py-1 rounded-lg transition-all cursor-pointer flex items-center gap-1`}
-                          title="Enviar questão para revisão espaçada FSRS"
-                        >
-                          <BrainCircuit className="w-3.5 h-3.5" /> {q.fsrsCreated ? 'FSRS ✓' : '+FSRS'}
-                        </button>
-
-                        <button
-                          type="button"
-                          onClick={() => deleteCaveiraQuestion(q.id)}
-                          className="p-1.5 text-slate-400 hover:text-red-400 rounded-lg hover:bg-red-500/10 transition-colors cursor-pointer"
-                          title="Excluir questão"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    </div>
-
-                    {/* Enunciado de Alta Legibilidade */}
-                    <div className="text-[15px] font-medium text-slate-800 dark:text-slate-100 leading-relaxed bg-slate-50 dark:bg-slate-850 p-3.5 sm:p-4 rounded-xl border border-slate-200/70 dark:border-slate-800">
-                      {q.content}
-                    </div>
-
-                    {/* Bizu Pessoal Salvo */}
-                    {q.userNote && !isEditingThisNote && (
-                      <div className="px-3.5 py-2.5 rounded-xl bg-amber-500/10 border border-amber-500/25 text-xs sm:text-sm text-amber-200 flex items-center justify-between gap-2">
-                        <span>💡 <strong>Seu Bizu:</strong> {q.userNote}</span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setEditingNoteId(q.id);
-                            setNoteDraft(q.userNote || '');
-                          }}
-                          className="text-xs font-bold uppercase text-amber-400 hover:underline shrink-0 cursor-pointer"
-                        >
-                          Editar
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Editor de Bizu */}
-                    {isEditingThisNote && (
-                      <div className="flex items-center gap-2">
-                        <input
-                          type="text"
-                          value={noteDraft}
-                          onChange={(e) => setNoteDraft(e.target.value)}
-                          placeholder="Anote a pegadinha, artigo de lei ou mnemônico desta questão..."
-                          className="flex-1 bg-slate-100 dark:bg-slate-850 border border-amber-500/40 rounded-xl px-3.5 py-2 text-xs sm:text-sm text-slate-800 dark:text-slate-100 outline-none"
-                        />
-                        <button
-                          type="button"
-                          onClick={() => handleSaveNote(q.id)}
-                          className="bg-amber-500 hover:bg-amber-400 text-slate-950 font-bold text-xs uppercase px-3.5 py-2 rounded-xl flex items-center gap-1.5 cursor-pointer"
-                        >
-                          <Save className="w-3.5 h-3.5" /> Salvar
-                        </button>
-                      </div>
-                    )}
-
-                    {/* Barra Inferior Unificada: Classificação Tática + Botão de Comentário do Professor */}
-                    <div className="flex flex-wrap items-center justify-between gap-2 pt-2 border-t border-slate-200/60 dark:border-slate-800">
-                      <div className="flex flex-wrap items-center gap-3">
-                        {/* Seletor Único de Confiança */}
-                        <div className="flex items-center gap-1">
-                          <span className="text-[10px] font-bold uppercase text-slate-400 mr-1">Confiança:</span>
-                          {[
-                            { id: 'sabia', label: '🎯 Sabia' },
-                            { id: 'duvida', label: '🤔 Dúvida' },
-                            { id: 'chute', label: '🎲 Chute' }
-                          ].map(c => (
-                            <button
-                              key={c.id}
-                              type="button"
-                              onClick={() => updateCaveiraQuestion(q.id, {
-                                confidence: c.id,
-                                fsrsRequested: c.id === 'chute' || c.id === 'duvida'
-                              })}
-                              className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                                (q.confidence || 'sabia') === c.id
-                                  ? 'bg-sky-500 text-slate-950 shadow-sm'
-                                  : 'bg-slate-100 dark:bg-slate-850 text-slate-500 dark:text-slate-400 hover:text-white'
-                              }`}
-                            >
-                              {c.label}
-                            </button>
-                          ))}
-                        </div>
-
-                        {/* Seletor Único de Causa do Erro (se errou) */}
-                        {!q.hit && (
-                          <div className="flex items-center gap-1">
-                            <span className="text-[10px] font-bold uppercase text-red-400 mr-1">Causa:</span>
-                            {[
-                              { id: 'conteudo', label: '📚 Teoria' },
-                              { id: 'atencao', label: '⚠️ Atenção' },
-                              { id: 'interpretacao', label: '🔍 Interpr.' }
-                            ].map(r => (
-                              <button
-                                key={r.id}
-                                type="button"
-                                onClick={() => updateCaveiraQuestion(q.id, { errorReason: r.id })}
-                                className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition-all cursor-pointer ${
-                                  (q.errorReason || 'conteudo') === r.id
-                                    ? 'bg-red-500 text-white shadow-sm'
-                                    : 'bg-slate-100 dark:bg-slate-850 text-slate-500 dark:text-slate-400 hover:text-white'
-                                }`}
-                              >
-                                {r.label}
-                              </button>
-                            ))}
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Botão para Expandir/Recolher Comentário do Professor */}
-                      {q.teacherComment && (
-                        <button
-                          type="button"
-                          onClick={() => toggleComment(q.id)}
-                          className="text-xs font-bold text-blue-400 hover:text-blue-300 flex items-center gap-1 cursor-pointer"
-                        >
-                          {q.commentSource === 'charlie'
-                            ? '🤖'
-                            : q.commentSource === 'aluno'
-                            ? '💬'
-                            : '🎓'}{' '}
-                          {isCommentOpen
-                            ? 'Ocultar Comentário'
-                            : q.commentSource === 'charlie'
-                            ? 'Ver Explicação Charlie IA'
-                            : q.commentSource === 'aluno'
-                            ? 'Ver Comentário Comunidade'
-                            : 'Ver Comentário do Professor'}
-                          {isCommentOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-                        </button>
-                      )}
-                    </div>
-
-                    {/* Comentário do Professor (Recolhível para manter leitura concisa) */}
-                    <AnimatePresence>
-                      {q.teacherComment && isCommentOpen && (
-                        <motion.div
-                          initial={{ height: 0, opacity: 0 }}
-                          animate={{ height: 'auto', opacity: 1 }}
-                          exit={{ height: 0, opacity: 0 }}
-                          className="p-3.5 rounded-xl bg-blue-500/10 border border-blue-500/25 text-xs sm:text-sm text-slate-200 leading-relaxed whitespace-pre-line overflow-hidden"
-                        >
-                          <span className="font-bold text-blue-300 block mb-1">
-                            {q.commentSource === 'charlie'
-                              ? '🤖 Explicação Charlie IA:'
-                              : q.commentSource === 'aluno'
-                              ? '💬 Comentário mais curtido da Comunidade:'
-                              : '🎓 Comentário do Professor / Gabarito:'}
-                          </span>
-                          {q.teacherComment}
-                        </motion.div>
-                      )}
-                    </AnimatePresence>
-                  </div>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-
-      {/* MODAL DE INSTRUÇÃO DE INSTALAÇÃO DA EXTENSÃO */}
+      {/* MODAL DE INSTALAÇÃO DA EXTENSÃO (LIGHT + DARK) */}
       <AnimatePresence>
         {showInstallModal && (
-          <div className="fixed inset-0 z-[150] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[150] bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-2xl relative"
+              exit={{ scale: 0.96, opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl relative"
             >
-              <div className="flex items-center gap-3 mb-4">
-                <div className="w-10 h-10 rounded-xl bg-blue-600/20 text-blue-400 flex items-center justify-center text-xl">
-                  🚀
+              <button
+                type="button"
+                onClick={() => setShowInstallModal(false)}
+                aria-label="Fechar modal"
+                className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-850 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <div className="flex items-center gap-3 mb-5">
+                <div className="w-10 h-10 rounded-xl bg-sky-500/12 border border-sky-500/25 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                  <Download className="w-5 h-5" />
                 </div>
                 <div>
-                  <h3 className="text-lg font-black text-white uppercase">Instalar Extensão no Chrome</h3>
-                  <p className="text-xs font-bold text-slate-400">Ativação em menos de 30 segundos</p>
+                  <h3 className="font-display text-lg font-bold text-slate-900 dark:text-white">
+                    Instalar extensão no Chrome
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                    Ativação em menos de 30 segundos
+                  </p>
                 </div>
               </div>
 
-              <div className="space-y-4 text-xs font-bold text-slate-300">
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex gap-3 items-start">
-                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] shrink-0 font-black">1</span>
-                  <div>
-                    <p className="text-white font-black uppercase mb-0.5">Abra as Extensões do Chrome</p>
-                    <p className="text-slate-400">Digite na barra de endereços do Chrome ou Edge:</p>
-                    <code className="text-blue-400 bg-slate-900 px-2 py-0.5 rounded text-[11px] block mt-1 select-all font-mono">chrome://extensions</code>
+              <div className="space-y-3 text-xs text-slate-600 dark:text-slate-300">
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex gap-3 items-start">
+                  <span className="w-5 h-5 rounded-full bg-sky-600 text-white flex items-center justify-center text-[11px] shrink-0 font-mono font-bold">1</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-slate-900 dark:text-white font-semibold mb-0.5">Abra as extensões do navegador</p>
+                    <p className="text-slate-500 dark:text-slate-400">Digite na barra de endereços do Chrome ou Edge:</p>
+                    <code className="text-sky-600 dark:text-sky-400 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2 py-1 rounded text-[11px] block mt-1.5 select-all font-mono">
+                      chrome://extensions
+                    </code>
                   </div>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex gap-3 items-start">
-                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] shrink-0 font-black">2</span>
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex gap-3 items-start">
+                  <span className="w-5 h-5 rounded-full bg-sky-600 text-white flex items-center justify-center text-[11px] shrink-0 font-mono font-bold">2</span>
                   <div>
-                    <p className="text-white font-black uppercase mb-0.5">Ative o "Modo do Desenvolvedor"</p>
-                    <p className="text-slate-400">Fica no canto superior direito da tela de extensões.</p>
+                    <p className="text-slate-900 dark:text-white font-semibold mb-0.5">Ative o &quot;Modo do desenvolvedor&quot;</p>
+                    <p className="text-slate-500 dark:text-slate-400">Localizado no canto superior direito da página de extensões.</p>
                   </div>
                 </div>
 
-                <div className="p-3.5 rounded-xl bg-slate-950 border border-slate-800 flex gap-3 items-start">
-                  <span className="w-5 h-5 rounded-full bg-blue-600 text-white flex items-center justify-center text-[10px] shrink-0 font-black">3</span>
-                  <div>
-                    <p className="text-white font-black uppercase mb-0.5">Clique em "Carregar sem compactação"</p>
-                    <p className="text-slate-400 mb-1">Selecione a pasta raiz da extensão:</p>
-                    <div className="flex items-center gap-1.5 mb-2">
-                      <code className="text-amber-400 bg-slate-900 px-2 py-1 rounded text-[10px] truncate block font-mono flex-1">
+                <div className="p-3.5 rounded-xl bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 flex gap-3 items-start">
+                  <span className="w-5 h-5 rounded-full bg-sky-600 text-white flex items-center justify-center text-[11px] shrink-0 font-mono font-bold">3</span>
+                  <div className="min-w-0 flex-1">
+                    <p className="text-slate-900 dark:text-white font-semibold mb-0.5">Clique em &quot;Carregar sem compactação&quot;</p>
+                    <p className="text-slate-500 dark:text-slate-400 mb-1.5">Selecione a pasta raiz da extensão:</p>
+                    <div className="flex items-center gap-1.5">
+                      <code className="text-amber-700 dark:text-amber-400 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 px-2 py-1 rounded text-[11px] truncate block font-mono flex-1">
                         C:\Users\wilso\Downloads\teste\extensao PC
                       </code>
                       <button
+                        type="button"
                         onClick={() => {
                           navigator.clipboard.writeText('C:\\Users\\wilso\\Downloads\\teste\\extensao PC');
                           setCopiedExtensionPath(true);
                           setTimeout(() => setCopiedExtensionPath(false), 2000);
                         }}
-                        className="bg-slate-800 hover:bg-slate-700 text-white p-1 rounded-md transition-colors"
+                        className="h-7 w-7 bg-slate-200 dark:bg-slate-800 hover:bg-slate-300 dark:hover:bg-slate-700 text-slate-700 dark:text-white rounded-md inline-flex items-center justify-center transition-colors cursor-pointer shrink-0"
                         title="Copiar caminho da pasta"
                       >
-                        {copiedExtensionPath ? <Check className="w-3.5 h-3.5 text-emerald-400" /> : <Copy className="w-3.5 h-3.5" />}
+                        {copiedExtensionPath ? <Check className="w-3.5 h-3.5 text-emerald-500" /> : <Copy className="w-3.5 h-3.5" />}
                       </button>
                     </div>
                   </div>
                 </div>
               </div>
 
-              <div className="mt-6 flex justify-end">
+              <div className="mt-5 flex justify-end">
                 <button
+                  type="button"
                   onClick={() => setShowInstallModal(false)}
-                  className="bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase px-6 py-2.5 rounded-xl transition-all cursor-pointer"
+                  className="h-9 px-5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 font-semibold text-xs transition-colors cursor-pointer"
                 >
-                  Entendido!
+                  Entendido
                 </button>
               </div>
             </motion.div>
@@ -2251,19 +1195,31 @@ export default function RaioXCaveira() {
         )}
       </AnimatePresence>
 
-      {/* MODAL DE IMPORTAÇÃO JSON */}
+      {/* MODAL DE IMPORTAÇÃO JSON (LIGHT + DARK) */}
       <AnimatePresence>
         {showImportModal && (
-          <div className="fixed inset-0 z-[150] bg-slate-950/85 backdrop-blur-md flex items-center justify-center p-4">
+          <div className="fixed inset-0 z-[150] bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
             <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
+              initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
-              exit={{ scale: 0.9, opacity: 0 }}
-              className="bg-slate-900 border border-slate-800 rounded-3xl p-6 max-w-lg w-full shadow-2xl"
+              exit={{ scale: 0.96, opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 max-w-lg w-full shadow-2xl relative"
             >
-              <h3 className="text-base font-black text-white uppercase mb-2">Importar Questões (JSON)</h3>
-              <p className="text-xs text-slate-400 mb-4 font-bold">
-                Cole aqui o JSON gerado no popup da extensão ou backup:
+              <button
+                type="button"
+                onClick={() => setShowImportModal(false)}
+                aria-label="Fechar modal"
+                className="absolute top-4 right-4 w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-850 cursor-pointer"
+              >
+                <X className="w-4 h-4" />
+              </button>
+
+              <h3 className="font-display text-base font-bold text-slate-900 dark:text-white mb-1">
+                Importar questões (JSON)
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mb-4">
+                Cole aqui o JSON gerado no popup da extensão ou arquivo de backup:
               </p>
 
               <textarea
@@ -2271,27 +1227,30 @@ export default function RaioXCaveira() {
                 onChange={(e) => setImportJsonText(e.target.value)}
                 placeholder="[ { id: 'Q111494', ... } ]"
                 rows={8}
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl p-3 font-mono text-xs text-slate-200 outline-none focus:border-blue-500"
+                className="w-full bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl p-3 font-mono text-xs text-slate-800 dark:text-slate-200 outline-none focus:border-sky-500"
               />
 
               <div className="flex flex-wrap items-center justify-between gap-2 mt-4">
                 <button
                   type="button"
                   onClick={handlePasteClipboard}
-                  className="bg-slate-800 hover:bg-slate-700 text-amber-400 font-black text-xs uppercase px-3 py-2 rounded-xl border border-amber-500/30 flex items-center gap-1.5"
+                  className="h-9 px-3 rounded-lg bg-amber-500/12 hover:bg-amber-500/20 text-amber-700 dark:text-amber-400 font-semibold text-xs border border-amber-500/30 inline-flex items-center gap-1.5 cursor-pointer"
                 >
-                  <Copy className="w-3.5 h-3.5" /> Colar do Clipboard
+                  <Copy className="w-3.5 h-3.5" />
+                  <span>Colar do clipboard</span>
                 </button>
                 <div className="flex gap-2">
                   <button
+                    type="button"
                     onClick={() => setShowImportModal(false)}
-                    className="bg-slate-800 hover:bg-slate-700 text-slate-300 font-black text-xs uppercase px-4 py-2 rounded-xl"
+                    className="h-9 px-4 rounded-lg bg-slate-100 dark:bg-slate-850 hover:bg-slate-200 dark:hover:bg-slate-800 text-slate-700 dark:text-slate-300 font-semibold text-xs cursor-pointer"
                   >
                     Cancelar
                   </button>
                   <button
+                    type="button"
                     onClick={handleImportJson}
-                    className="bg-blue-600 hover:bg-blue-500 text-white font-black text-xs uppercase px-6 py-2 rounded-xl shadow-lg"
+                    className="h-9 px-5 rounded-lg bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 font-semibold text-xs cursor-pointer"
                   >
                     Importar
                   </button>
@@ -2301,7 +1260,6 @@ export default function RaioXCaveira() {
           </div>
         )}
       </AnimatePresence>
-
     </div>
   );
 }

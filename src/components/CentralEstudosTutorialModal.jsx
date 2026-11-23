@@ -11,15 +11,15 @@ const TUTORIAL_STEPS = [
     tabId: null,
     badge: 'Visão Geral',
     title: 'Bem-vindo à Central de Estudos',
-    subtitle: 'Sua estação diária de execução com 4 abas integradas: Hoje, Cronograma, Raio-X Caveira e Calendário.',
+    subtitle: 'Sua estação diária de execução com 5 abas integradas: Hoje, Cronograma, Raio-X Caveira, Calendário e Simulados.',
     icon: Sparkles,
     accentClass: 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30',
     description:
-      'A Central de Estudos reúne as 4 abas operacionais do seu dia a dia (Hoje, Cronograma, Raio-X Caveira e Calendário), enquanto Revisões FSRS, Histórico, Edital, Simulados, Treino TAF e Duelo CTB ficam acessíveis com um clique no menu lateral.',
+      'A Central de Estudos reúne as 5 abas operacionais da sua preparação (Hoje, Cronograma, Raio-X Caveira, Calendário e Simulados), enquanto Revisões FSRS, Histórico, Edital, Treino TAF e Duelo CTB ficam acessíveis com um clique no menu lateral.',
     bullets: [
       'Acompanhe na faixa superior quantas aulas do edital você já concluiu e a data prevista de fechamento.',
       'Comece pela aba Hoje para executar imediatamente suas aulas do dia, revisões pendentes e conferir sua consistência.',
-      'Use o menu lateral esquerdo a qualquer momento para abrir Revisões FSRS, Histórico, Edital e Simulados.'
+      'Use o menu lateral esquerdo a qualquer momento para abrir Revisões FSRS, Histórico, Edital, TAF e Duelo CTB.'
     ],
     proTip: 'Rotina recomendada: 1) Abra a aba Hoje → 2) Zere suas Revisões FSRS → 3) Assista às aulas do dia e clique em "Exercícios da Aula".'
   },
@@ -44,16 +44,16 @@ const TUTORIAL_STEPS = [
     id: 'cronograma',
     tabId: 'cronograma',
     badge: 'Passo 2 • Visão Semanal',
-    title: 'Aba Cronograma — Seus Dias em 3 Colunas',
-    subtitle: 'Navegue pelos dias da semana com visão ampla dos títulos completos das aulas.',
+    title: 'Aba Cronograma — Foco no Dia e Grade Semanal',
+    subtitle: 'Alterne entre a estação focada de um dia ou a grade completa da semana.',
     icon: Repeat,
     accentClass: 'bg-indigo-500/15 text-indigo-600 dark:text-indigo-400 border-indigo-500/30',
     description:
-      'O Cronograma exibe 3 colunas largas por vez para que os nomes completos das disciplinas, tópicos e aulas fiquem sempre legíveis, com rolagem horizontal fluida entre os 7 dias.',
+      'O Cronograma permite focar nos blocos do dia selecionado com acesso direto às videoaulas e anotações, ou alternar para a Grade Semanal completa para inspecionar todos os dias e semanas futuras.',
     bullets: [
-      'Use as pílulas dos dias no topo (DOM, SEG, TER...) para saltar instantaneamente para qualquer dia da semana.',
-      'Reordene blocos, personalize o ciclo semanal ou flexível e registre aulas de dias anteriores se necessário.',
-      'Veja o tempo total original e acelerado (ex.: 1.5x) de cada dia antes mesmo de começar.'
+      'Use a linha do tempo de 7 dias no topo para saltar instantaneamente para qualquer dia da semana.',
+      'Navegue entre semanas futuras, registre aulas de dias anteriores e troque disciplinas concluídas.',
+      'Veja o tempo total original e acelerado (ex.: 1.5x) de cada dia e da semana antes mesmo de começar.'
     ],
     proTip: 'Se você perder um dia de estudo, a reposição automática desloca a fila para você não deixar nenhuma matéria para trás.'
   },
@@ -68,8 +68,8 @@ const TUTORIAL_STEPS = [
     description:
       'O Raio-X Caveira consolida todas as questões que você resolveu, calculando aproveitamento líquido, tempo médio por questão e ranking de assuntos mais errados vs. mais acertados.',
     bullets: [
-      'Filtre por período (Hoje, 7 dias, 30 dias), disciplina, assunto ou modalidade (Certo/Errado vs. Múltipla Escolha).',
-      'Expanda qualquer disciplina em "Desempenho por Disciplina" para ver a precisão assunto por assunto.',
+      'Filtre por Bloco PRF (B1, B2, B3), disciplina, assunto, modalidade ou tipo de erro.',
+      'Explore os 4 workspaces internos: Visão Geral, Diagnóstico, Inteligência & Lei Seca e Caderno Tático.',
       'Questões erradas podem entrar automaticamente na sua fila de Revisões FSRS para retenção espaçada.'
     ],
     proTip: 'Antes de iniciar um bloco de teoria, confira no Raio-X Caveira quais subassuntos daquela matéria estão na Zona Crítica.'
@@ -83,24 +83,41 @@ const TUTORIAL_STEPS = [
     icon: Calendar,
     accentClass: 'bg-cyan-500/15 text-cyan-600 dark:text-cyan-400 border-cyan-500/30',
     description:
-      'O Calendário projeta todas as aulas restantes dia a dia com base no seu ritmo atual, exibindo quais aulas serão vistas em cada data e quando cada disciplina será concluída.',
+      'O Calendário projeta todas as aulas restantes dia a dia com base no seu ritmo atual, exibindo visão mensal ou em agenda e ordenando "Fim das Disciplinas" da matéria que encerra primeiro até a última.',
     bullets: [
-      'Em "Fim das Disciplinas", clique em uma matéria para destacá-la no mês inteiro.',
-      'Clique em qualquer célula do calendário para abrir o modal "Gerenciar Dia" em 2 colunas (sem rolagem).',
+      'Em "Fim das Disciplinas", clique em uma matéria para destacá-la no mês inteiro ou configurar sua regra de transição.',
+      'Clique em qualquer data futura para abrir o modal "Gerenciar Dia" em 2 colunas sem disciplinas duplicadas.',
       'Use as setas ← e → do teclado dentro do modal para navegar entre dias rapidamente.'
     ],
     proTip: 'Compare a Previsão de Fechamento do Edital com a Data Alvo da Prova para saber se precisa aumentar o ritmo.'
   },
   {
+    id: 'simulados',
+    tabId: 'simulados',
+    badge: 'Passo 5 • Simulados PRF',
+    title: 'Aba Simulados — Evolução Líquida Cebraspe',
+    subtitle: 'Acompanhe sua nota líquida, mínimos eliminatórios por bloco e raio-x por matéria.',
+    icon: Target,
+    accentClass: 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30',
+    description:
+      'A aba Simulados reúne seus resultados no padrão Cebraspe (120 questões, certa anula errada), com curva de evolução interativa (Geral, B1, B2 e B3), auditoria dos mínimos eliminatórios e histórico completo.',
+    bullets: [
+      'Registre simulados manualmente com cálculo automático da nota líquida ou importe direto pela extensão do Caveira.',
+      'Alterne a curva entre Geral, Bloco I, Bloco II e Bloco III para identificar gargalos rapidamente.',
+      'Expanda simulados importados para ver o aproveitamento matéria por matéria comparado à média da turma.'
+    ],
+    proTip: 'Fique de olho nos mínimos eliminatórios da PRF: B1 ≥ 15, B2 ≥ 10, B3 ≥ 10 e Total Líquido ≥ 50 pts.'
+  },
+  {
     id: 'revisoes',
     tabId: 'revisoes',
-    badge: 'Passo 5 • Desempenho & Edital',
+    badge: 'Passo 6 • Desempenho & Edital',
     title: 'Menu Lateral — Revisões FSRS, Histórico e Edital',
     subtitle: 'Acesse suas ferramentas de retenção e evolução na seção Desempenho da barra lateral.',
     icon: BrainCircuit,
     accentClass: 'bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
     description:
-      'Para manter a Central de Estudos limpa e rápida, os módulos analíticos ficam organizados na seção "Desempenho" do menu lateral esquerdo.',
+      'Para manter a Central de Estudos limpa e rápida, os módulos complementares ficam organizados na seção "Desempenho" do menu lateral esquerdo.',
     bullets: [
       'Revisões: resolva sua fila diária calculada pelo algoritmo FSRS v6 e veja o mapa de carga dos próximos 7 dias.',
       'Histórico: acompanhe seus gráficos de horas estudadas (7, 15 ou 30 dias) e distribuição de tempo por matéria.',

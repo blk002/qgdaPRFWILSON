@@ -4,10 +4,10 @@ import { useStore } from '../store/useStore';
 import { PATENTES, MEDALHAS } from '../hooks/useGamification';
 import RankBadge from '../components/RankBadge';
 import { assetUrl } from '../lib/assets';
-import { 
-  Activity, Trophy, Clock, AlertTriangle, CheckCircle, Coins, 
+import {
+  Activity, Trophy, Clock, AlertTriangle, CheckCircle, Coins,
   Flame, ShieldCheck, Target, Pencil, Check as CheckIcon,
-  BookOpen, TrendingUp, Zap, X, Lock, Dog, ArrowRight, Calendar
+  BookOpen, TrendingUp, Zap, X, Lock, Dog, ArrowRight, Calendar, Shield
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -20,37 +20,61 @@ function XpSparkline({ xpHistory }) {
     const key = getLocalDateStr
       ? getLocalDateStr(d)
       : `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
-    const label = d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.','');
+    const label = d.toLocaleDateString('pt-BR', { weekday: 'short' }).replace('.', '');
     const entry = (xpHistory || []).find(h => h.date === key);
     return { key, label, xp: entry?.xp || 0 };
   });
   const maxXp = Math.max(...days.map(d => d.xp), 1);
-  const W = 280, H = 48, padX = 10, padY = 6;
-  const barW = (W - padX * 2) / 7 - 4;
+  const W = 320, H = 56, padX = 12, padY = 10;
+  const slotW = (W - padX * 2) / 7;
+  const barW = slotW - 10;
 
-  const emptyBarColor = isDarkMode ? '#1e293b' : '#e2e8f0';
-  const filledBarColor = isDarkMode ? '#6366f1' : '#4f46e5';
-  const todayBarColor = '#3b82f6';
+  const emptyBarColor = isDarkMode ? '#1d2536' : '#e2e8f0';
+  const filledBarColor = isDarkMode ? '#334155' : '#cbd5e1';
+  const todayBarColor = '#0ea5e9';
+  const labelColor = isDarkMode ? '#94a3b8' : '#64748b';
+  const valueColor = isDarkMode ? '#cbd5e1' : '#334155';
 
   return (
     <div className="w-full">
-      <svg viewBox={`0 0 ${W} ${H + 20}`} className="w-full" style={{ maxHeight: 80 }}>
+      <svg viewBox={`0 0 ${W} ${H + 22}`} className="w-full max-h-[96px]">
         {days.map((day, i) => {
-          const barH = Math.max(3, ((day.xp / maxXp) * (H - padY * 2)));
-          const x = padX + i * ((W - padX * 2) / 7) + 2;
+          const barH = Math.max(4, ((day.xp / maxXp) * (H - padY * 2)));
+          const x = padX + i * slotW + 5;
           const y = H - padY - barH;
           const isToday = i === 6;
           return (
             <g key={day.key}>
-              <rect x={x} y={y} width={barW} height={barH} rx={3}
+              <rect
+                x={x}
+                y={y}
+                width={barW}
+                height={barH}
+                rx={3}
                 fill={isToday ? todayBarColor : day.xp > 0 ? filledBarColor : emptyBarColor}
-                opacity={day.xp > 0 ? 1 : 0.4} />
+              />
               {day.xp > 0 && (
-                <text x={x + barW / 2} y={y - 2} textAnchor="middle" fontSize="6"
-                  fill={isToday ? '#3b82f6' : '#6366f1'} fontWeight="bold">{day.xp}</text>
+                <text
+                  x={x + barW / 2}
+                  y={y - 3}
+                  textAnchor="middle"
+                  fontSize="7"
+                  fill={isToday ? '#38bdf8' : valueColor}
+                  fontWeight="600"
+                >
+                  {day.xp}
+                </text>
               )}
-              <text x={x + barW / 2} y={H + 14} textAnchor="middle" fontSize="7"
-                fill={isToday ? '#94a3b8' : '#475569'} fontWeight="bold">{day.label}</text>
+              <text
+                x={x + barW / 2}
+                y={H + 12}
+                textAnchor="middle"
+                fontSize="7.5"
+                fill={isToday ? '#38bdf8' : labelColor}
+                fontWeight={isToday ? '700' : '500'}
+              >
+                {day.label}
+              </text>
             </g>
           );
         })}
@@ -70,49 +94,19 @@ const ALL_AVATARS = [
   { id: 'diretor_geral', name: 'Diretor Geral', path: '/assets/gamification/diretor_geral.png', isPremium: true, rarity: 'legendary', cost: 1500 },
 ];
 
-const RARITY_STYLES = {
-  common: { 
-    border: 'border-slate-200 dark:border-slate-800', 
-    glow: 'hover:shadow-slate-500/10 dark:hover:shadow-slate-500/5', 
-    neonGlow: 'hover:border-slate-400 dark:hover:border-slate-600',
-    label: 'Comum', 
-    labelColor: 'text-slate-400 bg-slate-100 dark:bg-slate-800' 
-  },
-  uncommon: { 
-    border: 'border-emerald-200 dark:border-emerald-950', 
-    glow: 'hover:shadow-emerald-500/20 dark:hover:shadow-emerald-500/10', 
-    neonGlow: 'hover:border-emerald-500 hover:shadow-[0_0_15px_rgba(16,185,129,0.35)]',
-    label: 'Incomum', 
-    labelColor: 'text-emerald-600 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/50' 
-  },
-  rare: { 
-    border: 'border-blue-200 dark:border-blue-950', 
-    glow: 'hover:shadow-blue-500/30 dark:hover:shadow-blue-500/15', 
-    neonGlow: 'hover:border-blue-500 hover:shadow-[0_0_15px_rgba(59,130,246,0.35)]',
-    label: 'Raro', 
-    labelColor: 'text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/50' 
-  },
-  epic: { 
-    border: 'border-purple-200 dark:border-purple-950', 
-    glow: 'hover:shadow-purple-500/40 dark:hover:shadow-purple-500/20', 
-    neonGlow: 'hover:border-purple-500 hover:shadow-[0_0_20px_rgba(168,85,247,0.45)]',
-    label: 'Épico', 
-    labelColor: 'text-purple-600 dark:text-purple-400 bg-purple-50 dark:bg-purple-950/50' 
-  },
-  legendary: { 
-    border: 'border-amber-200 dark:border-amber-950', 
-    glow: 'hover:shadow-amber-500/50 dark:hover:shadow-amber-500/25', 
-    neonGlow: 'hover:border-amber-500 hover:shadow-[0_0_25px_rgba(245,158,11,0.55)]',
-    label: 'Lendário', 
-    labelColor: 'text-amber-600 dark:text-amber-400 bg-amber-50 dark:bg-amber-950/50' 
-  },
+const RARITY_LABELS = {
+  common: { label: 'Comum', text: 'text-slate-500 dark:text-slate-400' },
+  uncommon: { label: 'Incomum', text: 'text-emerald-600 dark:text-emerald-400' },
+  rare: { label: 'Raro', text: 'text-sky-600 dark:text-sky-400' },
+  epic: { label: 'Épico', text: 'text-purple-600 dark:text-purple-400' },
+  legendary: { label: 'Lendário', text: 'text-amber-600 dark:text-amber-400' },
 };
 
 export default function Dashboard() {
   const navigate = useNavigate();
   const [isAvatarModalOpen, setIsAvatarModalOpen] = useState(false);
 
-  const { 
+  const {
     userStats, coins, user,
     getCurrentPatente, getEstimatedCompletionDate,
     weeklyMissions = [], claimMissionReward,
@@ -152,39 +146,23 @@ export default function Dashboard() {
 
   if (isSyncing) {
     return (
-      <div className="fade-in w-full pb-10 space-y-6 animate-pulse font-sans">
-        {/* Skeleton CABEÇALHO */}
-        <div className="glass-card rounded-2xl p-5 sm:p-6 flex flex-col md:flex-row items-center gap-6 border border-slate-200 dark:border-slate-800/80 bg-slate-900/10">
-          <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-slate-200 dark:bg-slate-800" />
-          <div className="flex-1 space-y-4">
-            <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded-lg w-2/3" />
+      <div className="fade-in w-full pb-10 space-y-5 animate-pulse">
+        <div className="glass-card rounded-xl p-6 flex flex-col md:flex-row items-center gap-6">
+          <div className="w-24 h-24 rounded-full bg-slate-200 dark:bg-slate-800 shrink-0" />
+          <div className="flex-1 w-full space-y-3">
+            <div className="h-7 bg-slate-200 dark:bg-slate-800 rounded-lg w-1/2" />
             <div className="h-4 bg-slate-200 dark:bg-slate-800 rounded-lg w-1/3" />
-            <div className="h-6 bg-slate-200 dark:bg-slate-800 rounded-lg w-full mt-4" />
+            <div className="h-2.5 bg-slate-200 dark:bg-slate-800 rounded-full w-full max-w-md" />
           </div>
         </div>
-
-        {/* Skeleton KPIs */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
           {[1, 2, 3, 4].map(n => (
-            <div key={n} className="glass-card rounded-2xl p-4 border border-slate-200 dark:border-slate-800 bg-slate-900/10 space-y-2">
+            <div key={n} className="glass-card rounded-xl p-5 space-y-3">
               <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-1/2" />
-              <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded w-3/4" />
+              <div className="h-7 bg-slate-200 dark:bg-slate-800 rounded w-2/3" />
               <div className="h-3 bg-slate-200 dark:bg-slate-800 rounded w-1/3" />
             </div>
           ))}
-        </div>
-
-        {/* Skeleton Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Col 1 */}
-          <div className="lg:col-span-2 space-y-6">
-            <div className="glass-card rounded-2xl p-6 border border-slate-200 dark:border-slate-800 bg-slate-900/10 h-64 animate-pulse" />
-            <div className="glass-card rounded-2xl p-6 border border-slate-200 dark:border-slate-800 bg-slate-900/10 h-64 animate-pulse" />
-          </div>
-          {/* Col 2 */}
-          <div className="space-y-6">
-            <div className="glass-card rounded-2xl p-6 border border-slate-200 dark:border-slate-800 bg-slate-900/10 h-96 animate-pulse" />
-          </div>
         </div>
       </div>
     );
@@ -194,7 +172,9 @@ export default function Dashboard() {
   const patenteAtual = getCurrentPatente();
   const currentLevelIndex = PATENTES.findIndex(p => p.id === patenteAtual.id);
   const nextPatente = PATENTES[currentLevelIndex + 1] || null;
-  const progressToNext = nextPatente ? ((userStats.xp - patenteAtual.minXp) / (nextPatente.minXp - patenteAtual.minXp)) * 100 : 100;
+  const progressToNext = nextPatente
+    ? Math.max(0, Math.min(100, ((userStats.xp - patenteAtual.minXp) / (nextPatente.minXp - patenteAtual.minXp)) * 100))
+    : 100;
 
   const estimatedDate = getEstimatedCompletionDate();
   const completionPercent = (() => {
@@ -228,8 +208,9 @@ export default function Dashboard() {
     ? Math.round((combinedTotalCorrect / combinedTotalAnswered) * 100)
     : 0;
   const acertoSubLabel = combinedTotalAnswered > 0
-    ? `${combinedTotalCorrect}/${combinedTotalAnswered} questões & revisões`
-    : 'taxa de correção';
+    ? `${combinedTotalCorrect}/${combinedTotalAnswered} resolvidas`
+    : 'sem questões ainda';
+
   const last7DayKeys = new Set(
     Array.from({ length: 7 }, (_, i) => {
       const d = new Date();
@@ -312,529 +293,653 @@ export default function Dashboard() {
   const completedBlocksCount = todayBlocks.filter(b => b.completed).length;
 
   const kpis = [
-    { label: 'Ofensiva', value: `${effectiveStreak}d`, sub: 'dias consecutivos', icon: Flame, color: 'text-orange-500', glow: 'hover:shadow-orange-500/10 hover:border-orange-500/30' },
-    { label: 'Revisões', value: reviewStats.totalDone, sub: 'total realizadas', icon: BookOpen, color: 'text-purple-500', glow: 'hover:shadow-purple-500/10 hover:border-purple-500/30' },
-    { label: 'XP Semana', value: xpThisWeek.toLocaleString(), sub: 'pontos esta semana', icon: Zap, color: 'text-blue-500', glow: 'hover:shadow-blue-500/10 hover:border-blue-500/30' },
-    { label: 'Acertos', value: `${acertoRate}%`, sub: acertoSubLabel, icon: TrendingUp, color: 'text-emerald-500', glow: 'hover:shadow-emerald-500/10 hover:border-emerald-500/30' },
+    { label: 'Ofensiva', value: `${effectiveStreak}d`, sub: 'dias consecutivos', icon: Flame, iconColor: 'text-amber-500' },
+    { label: 'Revisões', value: reviewStats.totalDone, sub: 'concluídas no total', icon: BookOpen, iconColor: 'text-sky-500' },
+    { label: 'XP semanal', value: xpThisWeek.toLocaleString(), sub: 'últimos 7 dias', icon: Zap, iconColor: 'text-sky-500' },
+    { label: 'Taxa de acertos', value: `${acertoRate}%`, sub: acertoSubLabel, icon: TrendingUp, iconColor: 'text-emerald-500' },
   ];
 
-  const stagger = { hidden: {}, visible: { transition: { staggerChildren: 0.1 } } };
-  const fadeUp = { hidden: { opacity: 0, y: 16 }, visible: { opacity: 1, y: 0, transition: { duration: 0.4 } } };
+  const petOverallHealth = Math.round(
+    ((petData?.hunger ?? 100) + (petData?.energy ?? 100) + (petData?.hygiene ?? 100) + (petData?.fun ?? 100)) / 4
+  );
 
   return (
-    <div className="fade-in w-full pb-10">
-      
-      {/* CABEÇALHO */}
-      <section className="relative mb-6">
-        <div className="absolute inset-0 bg-gradient-to-r from-blue-500/10 via-transparent to-amber-500/5 blur-2xl rounded-3xl -z-10"></div>
-        <div className="glass-card rounded-2xl p-5 sm:p-6 flex flex-col md:flex-row items-center gap-6">
-                  <div className="relative group cursor-pointer" onClick={() => setIsAvatarModalOpen(true)}>
-            <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full overflow-hidden border-2 border-blue-500/70 ring-4 ring-blue-500/15 shadow-lg relative z-10 bg-slate-800 transition-all duration-300 group-hover:scale-105 group-hover:border-blue-400">
-               {userStats.avatar ? (
-                 <img src={assetUrl(userStats.avatar)} alt="Avatar" className="w-full h-full object-cover" />
-               ) : (
-                 <div className="w-full h-full flex items-center justify-center bg-gradient-to-br from-slate-700 to-slate-900">
-                    <RankBadge level={patenteAtual.level} size={80} />
-                 </div>
-               )}
-               <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity duration-300 flex items-center justify-center z-20">
-                 <span className="text-white text-xs font-black uppercase tracking-wider">Alterar</span>
-               </div>
-            </div>
-            <div className="absolute -bottom-1 -right-1 bg-blue-600 text-white p-2 rounded-xl shadow-lg border-2 border-white dark:border-slate-900 z-20 group-hover:bg-blue-500 transition-colors">
-              <ShieldCheck className="w-5 h-5" />
+    <div className="fade-in w-full pb-8 space-y-6">
+      {/* CABEÇALHO DE CARREIRA — Superfície única limpa */}
+      <section className="glass-card rounded-xl p-5 sm:p-6">
+        <div className="flex flex-col lg:flex-row lg:items-center gap-6">
+          {/* Avatar + Identidade */}
+          <div className="flex flex-col sm:flex-row items-center sm:items-start gap-5 flex-1 min-w-0">
+            <button
+              type="button"
+              onClick={() => setIsAvatarModalOpen(true)}
+              className="relative group shrink-0 rounded-full focus-visible:outline-sky-500 cursor-pointer"
+              title="Alterar avatar"
+              aria-label="Alterar avatar do perfil"
+            >
+              <div className="w-24 h-24 sm:w-28 sm:h-28 rounded-full overflow-hidden border-2 border-slate-200 dark:border-slate-700 group-hover:border-sky-500 transition-colors bg-slate-100 dark:bg-slate-850">
+                {userStats.avatar ? (
+                  <img
+                    src={assetUrl(userStats.avatar)}
+                    alt="Avatar do perfil"
+                    className="w-full h-full object-cover"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center">
+                    <RankBadge level={patenteAtual.level} size={64} />
+                  </div>
+                )}
+              </div>
+              <span className="absolute bottom-0 right-0 w-8 h-8 rounded-full bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300 group-hover:text-sky-500 group-hover:border-sky-500 flex items-center justify-center transition-colors">
+                <Pencil className="w-3.5 h-3.5" />
+              </span>
+            </button>
+
+            <div className="flex-1 min-w-0 text-center sm:text-left w-full">
+              <div className="flex items-center justify-center sm:justify-start gap-2 flex-wrap">
+                {isEditingName ? (
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="text"
+                      value={tempName}
+                      onChange={e => setTempName(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSaveName()}
+                      autoFocus
+                      maxLength={30}
+                      className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white bg-transparent border-b-2 border-sky-500 outline-none w-56 sm:w-64"
+                      placeholder="Seu nome..."
+                    />
+                    <button
+                      type="button"
+                      onClick={handleSaveName}
+                      aria-label="Salvar nome"
+                      className="w-9 h-9 bg-sky-600 hover:bg-sky-500 text-white rounded-lg flex items-center justify-center transition-colors cursor-pointer"
+                    >
+                      <CheckIcon className="w-4 h-4" />
+                    </button>
+                  </div>
+                ) : (
+                  <>
+                    <h1 className="font-display text-2xl sm:text-3xl font-bold text-slate-900 dark:text-white tracking-tight truncate">
+                      {displayName}
+                    </h1>
+                    <button
+                      type="button"
+                      onClick={() => { setTempName(displayName); setIsEditingName(true); }}
+                      aria-label="Editar nome de exibição"
+                      title="Editar nome"
+                      className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-850 transition-colors cursor-pointer"
+                    >
+                      <Pencil className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {/* Metadados limpos em linha (sem cápsulas) */}
+              <div className="mt-1.5 flex flex-wrap items-center justify-center sm:justify-start gap-x-2.5 gap-y-1 text-xs text-slate-500 dark:text-slate-400">
+                <span className="font-semibold text-slate-800 dark:text-slate-200 inline-flex items-center gap-1.5">
+                  <RankBadge level={patenteAtual.level} size={16} />
+                  {patenteAtual.name}
+                </span>
+                <span aria-hidden="true">·</span>
+                <span className="font-mono tabular-nums">{enrollmentId}</span>
+                <span aria-hidden="true">·</span>
+                <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-400 font-medium tabular-nums">
+                  <Flame className="w-3.5 h-3.5" />
+                  Ofensiva de {effectiveStreak} {effectiveStreak === 1 ? 'dia' : 'dias'}
+                </span>
+              </div>
+
+              {/* Barra de Progresso de Carreira */}
+              <div className="mt-4 max-w-xl mx-auto sm:mx-0 space-y-1.5">
+                <div className="flex items-baseline justify-between gap-2 text-xs">
+                  <span className="text-slate-500 dark:text-slate-400 font-medium">
+                    {nextPatente
+                      ? `Faltam ${(nextPatente.minXp - userStats.xp).toLocaleString()} XP para ${nextPatente.name}`
+                      : 'Patente máxima alcançada'}
+                  </span>
+                  <span className="font-mono font-semibold tabular-nums text-slate-800 dark:text-slate-100 shrink-0">
+                    {userStats.xp.toLocaleString()} XP
+                  </span>
+                </div>
+                <div className="w-full bg-slate-100 dark:bg-slate-850 rounded-full h-2 overflow-hidden">
+                  <motion.div
+                    initial={{ width: 0 }}
+                    animate={{ width: `${progressToNext}%` }}
+                    transition={{ duration: 0.7, ease: 'easeOut' }}
+                    className="bg-sky-500 h-full rounded-full"
+                  />
+                </div>
+              </div>
             </div>
           </div>
 
-          <div className="flex-1 text-center md:text-left">
-            <div className="flex flex-col md:flex-row md:items-end gap-2 mb-2">
-              {isEditingName ? (
-                <div className="flex items-center gap-2">
-                  <input type="text" value={tempName} onChange={e => setTempName(e.target.value)}
-                    onKeyDown={e => e.key === 'Enter' && handleSaveName()} autoFocus maxLength={30}
-                    className="text-2xl sm:text-3xl font-black text-slate-800 dark:text-white tracking-tighter uppercase bg-transparent border-b-2 border-blue-500 outline-none w-64"
-                    placeholder="Seu nome..." />
-                  <button onClick={handleSaveName} className="p-2 bg-blue-600 text-white rounded-xl hover:bg-blue-500 transition-all">
-                    <CheckIcon className="w-5 h-5" />
-                  </button>
-                </div>
-              ) : (
-                <div className="flex items-center gap-2 group/name">
-                  <h1 className="text-3xl sm:text-4xl font-black text-slate-800 dark:text-white tracking-tighter uppercase">{displayName}</h1>
-                  <button onClick={() => { setTempName(displayName); setIsEditingName(true); }}
-                    className="p-1.5 text-slate-400 hover:text-blue-500 opacity-0 group-hover/name:opacity-100 transition-all rounded-lg hover:bg-blue-50 dark:hover:bg-blue-900/20">
-                    <Pencil className="w-4 h-4" />
-                  </button>
-                </div>
-              )}
-              <span className={`text-xs font-bold px-3 py-1 rounded-lg uppercase tracking-widest bg-slate-100 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 ${patenteAtual.color}`}>{patenteAtual.name}</span>
-            </div>
-            
-            <div className="flex flex-wrap justify-center md:justify-start gap-3 mb-5">
-              <div className="flex items-center gap-1.5 text-slate-500 dark:text-slate-400 font-mono text-xs bg-slate-100 dark:bg-slate-850 px-3 py-1 rounded-full border border-slate-200 dark:border-slate-800">
-                <Target className="w-3.5 h-3.5" /> ID: {enrollmentId}
+          {/* Resumo Numérico Lateral (Moedas & Edital) */}
+          <div className="flex items-center justify-around lg:justify-end gap-6 pt-4 lg:pt-0 border-t lg:border-t-0 lg:border-l border-slate-100 dark:border-slate-800 lg:pl-6 shrink-0">
+            <div className="text-center lg:text-right">
+              <div className="flex items-center justify-center lg:justify-end gap-1.5 text-amber-600 dark:text-amber-400">
+                <Coins className="w-4 h-4" />
+                <span className="font-mono text-2xl font-bold tabular-nums leading-none">{coins}</span>
               </div>
-              <div className="flex items-center gap-1.5 text-orange-500 font-bold text-xs bg-orange-50 dark:bg-orange-500/10 px-3 py-1 rounded-full border border-orange-200 dark:border-orange-500/25">
-                <Flame className="w-3.5 h-3.5 fill-current" /> OFENSIVA: {effectiveStreak} {effectiveStreak === 1 ? 'DIA' : 'DIAS'}
-              </div>
+              <span className="text-xs text-slate-500 dark:text-slate-400 block mt-1">Moedas</span>
             </div>
-
-            <div className="max-w-xl mx-auto md:mx-0">
-              <div className="flex justify-between items-end mb-2">
-                <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-[0.15em]">Evolução de Carreira</span>
-                <span className="text-sm font-black tabular-nums text-slate-700 dark:text-slate-200">{userStats.xp.toLocaleString()} <span className="text-slate-400">XP</span></span>
+            <div className="w-px h-9 bg-slate-200 dark:bg-slate-800" />
+            <div className="text-center lg:text-right">
+              <div className="flex items-center justify-center lg:justify-end gap-1.5 text-emerald-600 dark:text-emerald-400">
+                <CheckCircle className="w-4 h-4" />
+                <span className="font-mono text-2xl font-bold tabular-nums leading-none">{completionPercent}%</span>
               </div>
-              <div className="w-full bg-slate-200 dark:bg-slate-950 rounded-full h-3 p-0.5 border border-slate-300 dark:border-slate-800 shadow-inner">
-                <motion.div initial={{ width: 0 }} animate={{ width: `${progressToNext}%` }}
-                  transition={{ duration: 1.5, ease: "easeOut" }}
-                  className="bg-gradient-to-r from-blue-600 via-blue-500 to-cyan-400 h-full rounded-full relative">
-                   <div className="absolute inset-0 bg-gradient-to-b from-white/20 to-transparent rounded-full"></div>
-                </motion.div>
-              </div>
-              {nextPatente && (
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-2 font-semibold uppercase tracking-wider">Faltam {(nextPatente.minXp - userStats.xp).toLocaleString()} XP para promoção a {nextPatente.name}</p>
-              )}
-            </div>
-          </div>
-
-          <div className="grid grid-cols-2 gap-3 w-full md:w-auto">
-            <div className="bg-amber-50/80 dark:bg-slate-950/70 border border-amber-200 dark:border-slate-800 p-4 rounded-2xl flex flex-col items-center justify-center min-w-[120px]">
-               <Coins className="text-amber-500 w-6 h-6 mb-1.5" />
-               <span className="text-2xl font-black tabular-nums text-amber-600 dark:text-amber-400 leading-none">{coins}</span>
-               <span className="text-[11px] font-bold text-amber-700/70 dark:text-slate-400 uppercase mt-1">Moedas</span>
-            </div>
-            <div className="bg-emerald-50/80 dark:bg-slate-950/70 border border-emerald-200 dark:border-slate-800 p-4 rounded-2xl flex flex-col items-center justify-center min-w-[120px]">
-               <CheckCircle className="text-emerald-500 w-6 h-6 mb-1.5" />
-               <span className="text-2xl font-black tabular-nums text-emerald-600 dark:text-emerald-400 leading-none">{completionPercent}%</span>
-               <span className="text-[11px] font-bold text-emerald-700/70 dark:text-slate-400 uppercase mt-1">Edital</span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 block mt-1">Edital concluído</span>
             </div>
           </div>
         </div>
       </section>
 
-      {/* MISSÃO DE HOJE */}
-      <section className="glass-card rounded-xl p-3.5 sm:p-4 mb-4 border border-slate-200 dark:border-slate-800">
-        <div className="flex flex-wrap items-center justify-between gap-2 mb-3 pb-2.5 border-b border-slate-100 dark:border-slate-800">
+      {/* MISSÃO DE HOJE — Faixa Operacional 2 Colunas */}
+      <section className="glass-card rounded-xl overflow-hidden">
+        <div className="px-5 py-3.5 border-b border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2">
           <div className="flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-sky-500/10 dark:bg-sky-500/15 border border-sky-500/25 flex items-center justify-center text-sky-600 dark:text-sky-400">
-              <Target className="w-3.5 h-3.5" />
-            </div>
-            <div>
-              <h3 className="text-sm font-black text-slate-800 dark:text-slate-100 leading-tight">Missão de Hoje</h3>
-              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400">Prioridades imediatas para hoje</p>
-            </div>
+            <Target className="w-4 h-4 text-sky-500 dark:text-sky-400" />
+            <h2 className="font-display text-base font-bold text-slate-900 dark:text-white">
+              Prioridades de hoje
+            </h2>
           </div>
-          <span className="text-[10px] font-bold px-2 py-0.5 rounded-md bg-slate-100 text-slate-600 dark:bg-slate-850 dark:text-slate-300 border border-slate-200 dark:border-slate-700 tabular-nums uppercase">
+          <span className="text-xs font-mono text-slate-500 dark:text-slate-400 tabular-nums">
             {new Date().toLocaleDateString('pt-BR', { weekday: 'short', day: '2-digit', month: 'short' })}
           </span>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-3">
-          {/* Coluna 1: Revisões FSRS */}
-          <div className="rounded-lg p-3 bg-slate-50/90 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between gap-2.5">
-            <div className="flex items-start justify-between gap-2">
+        <div className="grid grid-cols-1 lg:grid-cols-2 divide-y lg:divide-y-0 lg:divide-x divide-slate-100 dark:divide-slate-800">
+          {/* Revisões FSRS */}
+          <div className="p-5 flex flex-col justify-between gap-4">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400">Revisões FSRS</span>
-                <div className="mt-0.5 flex items-baseline gap-2">
-                  <span className={`text-xl sm:text-2xl font-black tabular-nums leading-none ${pendingReviewsCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Revisões FSRS</span>
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className={`font-mono text-2xl font-bold tabular-nums leading-none ${pendingReviewsCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
                     {pendingReviewsCount}
                   </span>
-                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
                     {pendingReviewsCount === 0
-                      ? 'Tudo em dia por hoje'
+                      ? 'em dia por hoje'
                       : pendingReviewsCount === 1
-                        ? 'questão aguardando revisão'
-                        : 'questões aguardando revisão'}
+                        ? 'item aguardando revisão'
+                        : 'itens aguardando revisão'}
                   </span>
                 </div>
               </div>
-              <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${
-                pendingReviewsCount > 0
-                  ? 'bg-amber-100 text-amber-800 dark:bg-amber-950/70 dark:text-amber-300 border border-amber-200 dark:border-amber-800/80'
-                  : 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80'
-              }`}>
-                {pendingReviewsCount > 0 ? 'Pendente' : 'Em dia'}
+              <span className={`text-xs font-semibold ${pendingReviewsCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                {pendingReviewsCount > 0 ? 'Pendente' : 'Concluído'}
               </span>
             </div>
 
-            <div className="flex items-center justify-between gap-2 pt-0.5">
-              <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+            <div className="flex items-center justify-between gap-3">
+              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
                 {pendingReviewsCount > 0
-                  ? 'Elimine sua fila antes da teoria.'
-                  : 'Memória em dia.'}
+                  ? 'Elimine sua fila antes de avançar na teoria.'
+                  : 'Sua memória espaçada está em dia.'}
               </p>
               <button
                 type="button"
                 onClick={() => navigate('/revisoes')}
-                className="shrink-0 h-7 px-3 rounded-lg text-[11px] font-black bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 flex items-center gap-1 transition-colors cursor-pointer"
+                className="shrink-0 h-9 px-3.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
               >
                 <span>{pendingReviewsCount > 0 ? 'Revisar agora' : 'Ver revisões'}</span>
-                <ArrowRight className="w-3 h-3" />
+                <ArrowRight className="w-3.5 h-3.5" />
               </button>
             </div>
           </div>
 
-          {/* Coluna 2: Blocos do Ciclo de Hoje */}
-          <div className="rounded-lg p-3 bg-slate-50/90 dark:bg-slate-850 border border-slate-200/80 dark:border-slate-800 flex flex-col justify-between gap-2.5">
-            <div className="flex items-start justify-between gap-2">
+          {/* Blocos do Ciclo de Hoje */}
+          <div className="p-5 flex flex-col justify-between gap-4">
+            <div className="flex items-start justify-between gap-3">
               <div>
-                <span className="text-[10px] font-extrabold uppercase tracking-wider text-slate-500 dark:text-slate-400 flex items-center gap-1">
-                  <Calendar className="w-3 h-3 text-slate-400" /> Ciclo de Hoje
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400 inline-flex items-center gap-1.5">
+                  <Calendar className="w-3.5 h-3.5" />
+                  Ciclo de hoje
                 </span>
-                <div className="mt-0.5 flex items-baseline gap-2">
-                  <span className="text-xl sm:text-2xl font-black tabular-nums text-slate-800 dark:text-slate-100 leading-none">
+                <div className="mt-1 flex items-baseline gap-2">
+                  <span className="font-mono text-2xl font-bold tabular-nums text-slate-900 dark:text-white leading-none">
                     {todayBlocks.length > 0 ? `${completedBlocksCount}/${todayBlocks.length}` : '0'}
                   </span>
-                  <span className="text-xs font-bold text-slate-600 dark:text-slate-300">
+                  <span className="text-sm font-medium text-slate-700 dark:text-slate-300">
                     {todayBlocks.length === 0
-                      ? 'Nenhum bloco programado hoje'
+                      ? 'nenhum bloco programado'
                       : completedBlocksCount === todayBlocks.length
-                        ? 'Todos os blocos concluídos!'
+                        ? 'todos os blocos concluídos'
                         : `${todayBlocks.length - completedBlocksCount} ${todayBlocks.length - completedBlocksCount === 1 ? 'bloco restante' : 'blocos restantes'}`}
                   </span>
                 </div>
               </div>
               {todayBlocks.length > 0 && (
-                <span className={`text-[10px] font-black px-2 py-0.5 rounded uppercase ${
-                  completedBlocksCount === todayBlocks.length
-                    ? 'bg-emerald-100 text-emerald-700 dark:bg-emerald-950/70 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800/80'
-                    : 'bg-slate-200 text-slate-700 dark:bg-slate-900 dark:text-slate-300 border border-slate-300 dark:border-slate-700'
-                }`}>
+                <span className="font-mono text-xs font-semibold tabular-nums text-slate-600 dark:text-slate-300">
                   {Math.round((completedBlocksCount / todayBlocks.length) * 100)}%
                 </span>
               )}
             </div>
 
-            <div className="flex flex-wrap items-center justify-between gap-2 pt-0.5">
-              <div className="flex flex-wrap items-center gap-1 min-w-0 flex-1">
-                {todayBlocks.slice(0, 5).map((block) => (
-                  <span
-                    key={block.slotIdx}
-                    className={`inline-flex items-center gap-1 text-[10px] font-bold px-1.5 py-0.5 rounded truncate max-w-[130px] ${block.color} ${block.completed ? 'opacity-60 line-through' : ''}`}
-                    title={`${block.name}${block.completed ? ' (concluído)' : ''}`}
-                  >
-                    {block.completed && <CheckIcon className="w-2.5 h-2.5 shrink-0" />}
-                    <span className="truncate">{block.name}</span>
-                  </span>
-                ))}
-                {todayBlocks.length > 5 && (
-                  <span className="text-[10px] font-bold text-slate-500 dark:text-slate-400">
-                    +{todayBlocks.length - 5}
-                  </span>
-                )}
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {todayBlocks.length > 0 ? (
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-1.5 flex-1 min-w-0">
+                  {todayBlocks.slice(0, 5).map((b) => (
+                    <span
+                      key={`${b.id}-${b.slotIdx}`}
+                      className={`inline-flex items-center gap-1.5 text-xs ${
+                        b.completed
+                          ? 'text-emerald-600 dark:text-emerald-400 line-through opacity-75'
+                          : 'text-slate-700 dark:text-slate-200 font-medium'
+                      }`}
+                    >
+                      {b.completed ? (
+                        <CheckCircle className="w-3.5 h-3.5 shrink-0 text-emerald-500" />
+                      ) : (
+                        <span className={`w-2 h-2 rounded-full shrink-0 ${b.color || 'bg-sky-500'}`} />
+                      )}
+                      <span className="truncate max-w-[140px]">{b.name}</span>
+                    </span>
+                  ))}
+                  {todayBlocks.length > 5 && (
+                    <span className="text-xs font-mono text-slate-400">+{todayBlocks.length - 5}</span>
+                  )}
+                </div>
+              ) : (
+                <p className="text-xs text-slate-500 dark:text-slate-400 flex-1 min-w-0">
+                  Configure suas disciplinas no cronograma.
+                </p>
+              )}
+              <div className="flex items-center gap-2 shrink-0">
+                <button
+                  type="button"
+                  onClick={() => navigate('/estudos?tab=cronograma')}
+                  className="h-9 px-3 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-850 transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  Ir para o Ciclo
+                </button>
+                <button
+                  type="button"
+                  onClick={() => navigate('/estudos?tab=hoje')}
+                  className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200/80 text-slate-800 border border-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700 inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+                >
+                  <span>Estudar hoje</span>
+                  <ArrowRight className="w-3.5 h-3.5" />
+                </button>
               </div>
-              <button
-                type="button"
-                onClick={() => navigate('/estudos?tab=cronograma')}
-                className="shrink-0 h-7 px-3 rounded-lg text-[11px] font-bold bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-900 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700 flex items-center gap-1 transition-colors cursor-pointer"
-              >
-                <span>Ir para o Ciclo</span>
-                <ArrowRight className="w-3 h-3" />
-              </button>
             </div>
           </div>
         </div>
       </section>
 
-      {/* KPI CARDS */}
-      <motion.div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6"
-        variants={stagger} initial="hidden" animate="visible">
+      {/* KPI STRIP — 4 COLUNAS */}
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
         {kpis.map((kpi) => {
           const Icon = kpi.icon;
           return (
-            <motion.div key={kpi.label} variants={fadeUp}
-              className="glass-card rounded-2xl p-5 flex flex-col gap-2.5 hover:-translate-y-0.5 hover:border-slate-300 dark:hover:border-slate-700 transition-all duration-200">
-              <div className="flex items-center justify-between">
-                <span className="text-[11px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">{kpi.label}</span>
-                <div className="w-8 h-8 rounded-lg bg-slate-100 dark:bg-slate-850 border border-slate-200/70 dark:border-slate-800 flex items-center justify-center">
-                  <Icon className={`w-4 h-4 ${kpi.color}`} />
-                </div>
+            <div
+              key={kpi.label}
+              className="glass-card rounded-xl p-4 sm:p-5 flex flex-col gap-2"
+            >
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-slate-500 dark:text-slate-400">{kpi.label}</span>
+                <Icon className={`w-4 h-4 shrink-0 ${kpi.iconColor}`} />
               </div>
-              <span className={`text-3xl font-black tabular-nums leading-none ${kpi.color}`}>{kpi.value}</span>
-              <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">{kpi.sub}</span>
-            </motion.div>
+              <span className="font-mono text-2xl sm:text-3xl font-bold tabular-nums leading-none text-slate-900 dark:text-white">
+                {kpi.value}
+              </span>
+              <span className="text-xs text-slate-500 dark:text-slate-400 truncate">{kpi.sub}</span>
+            </div>
           );
         })}
-      </motion.div>
+      </div>
 
       {/* GRÁFICO XP SEMANAL */}
-      <div className="glass-card rounded-2xl px-5 py-4 mb-6">
-        <div className="flex items-center justify-between mb-2">
-          <h3 className="font-black text-slate-800 dark:text-white uppercase text-xs flex items-center gap-2">
-            <Zap className="w-3.5 h-3.5 text-blue-500" /> XP por Dia — Últimos 7 Dias
-          </h3>
-          <span className="text-xs text-slate-500 dark:text-slate-400 font-semibold tabular-nums">
-            Semana: <span className="text-blue-500 dark:text-blue-400 font-black">{xpThisWeek.toLocaleString()} XP</span>
+      <section className="glass-card rounded-xl p-5">
+        <div className="flex items-center justify-between gap-2 mb-3">
+          <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+            <Zap className="w-4 h-4 text-sky-500" />
+            <span>XP nos últimos 7 dias</span>
+          </h2>
+          <span className="text-xs text-slate-500 dark:text-slate-400 tabular-nums">
+            Total: <strong className="font-mono font-semibold text-slate-900 dark:text-white">{xpThisWeek.toLocaleString()} XP</strong>
           </span>
         </div>
         <XpSparkline xpHistory={xpHistory} />
-      </div>
+      </section>
 
+      {/* CONTEÚDO PRINCIPAL 2/3 + LATERAL 1/3 */}
       <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-        
-        {/* COLUNA CENTRAL */}
         <div className="lg:col-span-2 space-y-6">
-          <div className="glass-card rounded-2xl p-6 sm:p-8 overflow-hidden">
-            <h3 className="font-black text-slate-800 dark:text-white uppercase text-base mb-8 flex items-center gap-3">
-              <Trophy className="w-5 h-5 text-amber-500" /> Jornada de Promoções
-            </h3>
-            <div className="relative flex justify-between items-center sm:px-4">
-               <div className="absolute top-1/2 left-0 w-full h-1 bg-slate-200 dark:bg-slate-800 -translate-y-1/2 z-0"></div>
-               {PATENTES.map((p, idx) => {
-                 const isCompleted = userStats.xp >= p.minXp;
-                 const isNext = !isCompleted && PATENTES[idx-1] && userStats.xp >= PATENTES[idx-1].minXp;
-                 const isActive = patenteAtual.id === p.id;
-                 return (
-                   <div key={p.id} className="relative z-10 flex flex-col items-center group">
-                      <div className={`transition-all duration-500 ${isActive ? 'scale-125' : isCompleted ? 'scale-100' : 'opacity-30 grayscale saturate-0'}`}>
-                        <RankBadge level={p.level} size={48} />
-                      </div>
-                      <div className="absolute top-full mt-3 text-center w-max">
-                        <p className={`text-[10px] font-black uppercase tracking-tight ${isActive ? patenteAtual.color : isCompleted ? 'text-blue-600 dark:text-blue-400' : 'text-slate-400'}`}>
-                          {p.name.replace('Policial Rodoviário', 'PRF').replace('Agente ', 'Ag. ').replace('Classe', 'Cl.')}
-                        </p>
-                      </div>
-                      {isNext && <span className="absolute -top-3 left-1/2 -translate-x-1/2 bg-blue-500 text-[9px] font-black text-white px-2 py-0.5 rounded-full">PRÓXIMO</span>}
-                   </div>
-                 );
-               })}
+          {/* JORNADA DE PROMOÇÕES */}
+          <section className="glass-card rounded-xl p-5 sm:p-6">
+            <div className="flex items-center justify-between gap-2 mb-6">
+              <h2 className="font-display text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Trophy className="w-4 h-4 text-amber-500" />
+                <span>Jornada de promoções</span>
+              </h2>
+              <span className="text-xs text-slate-500 dark:text-slate-400">
+                Atual: <strong className="font-semibold text-slate-800 dark:text-slate-100">{patenteAtual.name}</strong>
+              </span>
             </div>
-            <div className="mt-10 text-center">
-               <p className="text-xs font-bold text-slate-500 uppercase">Sua patente atual: <span className={`font-black ${patenteAtual.color}`}>{patenteAtual.name}</span></p>
+
+            <div className="overflow-x-auto no-scrollbar pb-2">
+              <div className="relative flex justify-between items-center min-w-[460px] px-2 pt-4 pb-8">
+                <div className="absolute top-10 left-4 right-4 h-0.5 bg-slate-200 dark:bg-slate-800 z-0" />
+                {PATENTES.map((p, idx) => {
+                  const isCompleted = userStats.xp >= p.minXp;
+                  const isNext = !isCompleted && PATENTES[idx - 1] && userStats.xp >= PATENTES[idx - 1].minXp;
+                  const isActive = patenteAtual.id === p.id;
+                  return (
+                    <div key={p.id} className="relative z-10 flex flex-col items-center">
+                      {isNext && (
+                        <span className="absolute -top-5 text-[10px] font-semibold text-sky-600 dark:text-sky-400 whitespace-nowrap">
+                          Próxima
+                        </span>
+                      )}
+                      <div className={`transition-transform duration-300 rounded-full p-1 bg-white dark:bg-slate-900 ${
+                        isActive ? 'scale-115 ring-2 ring-sky-500' : isCompleted ? 'opacity-100' : 'opacity-30 grayscale'
+                      }`}>
+                        <RankBadge level={p.level} size={40} />
+                      </div>
+                      <p className={`mt-2 text-[11px] font-medium text-center whitespace-nowrap ${
+                        isActive
+                          ? 'text-slate-900 dark:text-white font-semibold'
+                          : isCompleted
+                            ? 'text-slate-600 dark:text-slate-300'
+                            : 'text-slate-400 dark:text-slate-600'
+                      }`}>
+                        {p.name.replace('Policial Rodoviário', 'PRF').replace('Agente ', 'Ag. ').replace('Classe', 'Cl.')}
+                      </p>
+                    </div>
+                  );
+                })}
+              </div>
             </div>
-          </div>
+          </section>
 
           {/* CONTRATOS DIÁRIOS */}
-          <div className="glass-card rounded-2xl p-6 sm:p-8 relative overflow-hidden">
-            <h3 className="font-black text-slate-800 dark:text-white uppercase text-base mb-6 flex items-center justify-between">
-              <span className="flex items-center gap-3"><Activity className="w-5 h-5 text-emerald-500" /> Contratos Diários do Agente</span>
-              <span className="text-[11px] bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 px-3 py-1 rounded-full border border-emerald-500/25 font-bold">DIÁRIO</span>
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-               {dailyMissions.map(mission => (
-                 <div key={mission.id} className={`p-5 rounded-2xl border transition-all relative overflow-hidden flex flex-col justify-between ${
-                   mission.claimed 
-                     ? 'bg-slate-100/60 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 opacity-60' 
-                     : mission.completed 
-                       ? 'bg-emerald-500/10 border-emerald-500/60 dark:border-emerald-500/40' 
-                       : 'bg-slate-50/70 dark:bg-slate-850/70 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                 }`}>
-                    <div className="relative z-10 flex-1">
-                      <div className="flex items-center gap-2 mb-1.5">
-                        <CheckCircle className={`w-4 h-4 flex-shrink-0 ${mission.completed ? 'text-emerald-500' : 'text-slate-400'}`} />
-                        <h4 className={`text-xs font-black uppercase tracking-tight leading-tight ${mission.completed ? 'text-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-200'}`}>{mission.title}</h4>
-                      </div>
-                      <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold leading-snug mb-4 min-h-[32px]">{mission.description}</p>
-                      
-                      {/* Barra de Progresso */}
-                      <div className="w-full bg-slate-200 dark:bg-slate-950 rounded-full h-1.5 mb-2 overflow-hidden">
-                        <div className={`h-full transition-all duration-300 ${mission.completed ? 'bg-emerald-500' : 'bg-blue-500'}`} style={{ width: `${Math.min(100, (mission.current / mission.goal) * 100)}%` }}></div>
-                      </div>
-                      <div className="flex justify-between items-center gap-1 text-[11px] text-slate-500 dark:text-slate-400 mb-4 font-semibold tabular-nums whitespace-nowrap">
-                        <span>Progresso:</span>
-                        <span>{mission.current} / {mission.goal}{mission.type === 'minutes' ? ' min' : ''}</span>
-                      </div>
-                    </div>
-                    
-                    <div className="relative z-10 flex items-center justify-between mt-auto pt-2 border-t border-slate-200 dark:border-slate-800">
-                      <div className="flex flex-col gap-1">
-                         <div className="text-[10px] font-black text-emerald-600 dark:text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded border border-emerald-500/20 w-fit">+{mission.xpReward} XP</div>
-                         <div className="flex items-center gap-1 text-[10px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20 w-fit">+{mission.coinReward} <Coins className="w-2.5 h-2.5" /></div>
-                      </div>
-                      {mission.completed && !mission.claimed && (
-                        <button onClick={() => claimDailyMissionReward(mission.id)}
-                          className="bg-emerald-600 hover:bg-emerald-500 text-white font-black text-[10px] px-3 py-1.5 rounded-lg shadow-sm transition-all hover:-translate-y-0.5 cursor-pointer">
-                          RESGATAR
-                        </button>
-                      )}
-                    </div>
-                    {mission.claimed && <div className="absolute inset-0 bg-slate-950/50 backdrop-blur-[1px] flex items-center justify-center z-20"><div className="rotate-12 text-[11px] font-black text-emerald-400 border-2 border-emerald-500/50 px-3 py-1.5 rounded uppercase bg-slate-950 shadow-lg">Contrato Concluído</div></div>}
-                 </div>
-               ))}
+          <section className="glass-card rounded-xl p-5 sm:p-6">
+            <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h2 className="font-display text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Activity className="w-4 h-4 text-emerald-500" />
+                <span>Contratos diários</span>
+              </h2>
+              <span className="text-xs text-slate-500 dark:text-slate-400">Renovam à meia-noite</span>
             </div>
-          </div>
 
-          <div className="glass-card rounded-2xl p-6 sm:p-8 relative overflow-hidden">
-            <h3 className="font-black text-slate-800 dark:text-white uppercase text-base mb-6 flex items-center justify-between">
-              <span className="flex items-center gap-3"><Activity className="w-5 h-5 text-blue-500" /> Contratos Operacionais da Semana</span>
-              <span className="text-[11px] bg-blue-500/15 text-blue-600 dark:text-blue-400 px-3 py-1 rounded-full border border-blue-500/25 font-bold">ATIVAS</span>
-            </h3>
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-               {weeklyMissions.map(mission => (
-                 <div key={mission.id} className={`p-5 rounded-2xl border transition-all relative overflow-hidden ${
-                   mission.claimed 
-                     ? 'bg-slate-100/60 dark:bg-slate-950/60 border-slate-200 dark:border-slate-800 opacity-60' 
-                     : mission.completed 
-                       ? 'bg-blue-500/10 border-blue-500/60 dark:border-blue-500/40' 
-                       : 'bg-slate-50/70 dark:bg-slate-850/70 border-slate-200/80 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                 }`}>
-                    <div className="flex justify-between items-start relative z-10">
-                      <div className="flex-1">
-                        <div className="flex items-center gap-2 mb-1">
-                          <CheckCircle className={`w-4 h-4 ${mission.completed ? 'text-blue-500' : 'text-slate-400'}`} />
-                          <h4 className={`text-sm font-black uppercase tracking-tight ${mission.completed ? 'text-slate-800 dark:text-white' : 'text-slate-600 dark:text-slate-200'}`}>{mission.title}</h4>
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+              {dailyMissions.map(mission => {
+                const pct = Math.min(100, Math.round((mission.current / Math.max(1, mission.goal)) * 100));
+                return (
+                  <div
+                    key={mission.id}
+                    className={`p-4 rounded-xl border flex flex-col justify-between gap-3 transition-colors ${
+                      mission.claimed
+                        ? 'bg-slate-50/70 dark:bg-slate-950/40 border-slate-200/70 dark:border-slate-800/70 opacity-65'
+                        : mission.completed
+                          ? 'bg-emerald-500/5 border-emerald-500/40'
+                          : 'bg-slate-50/50 dark:bg-slate-850/40 border-slate-200/80 dark:border-slate-800'
+                    }`}
+                  >
+                    <div className="space-y-2">
+                      <div className="flex items-start justify-between gap-2">
+                        <h3 className="text-sm font-semibold text-slate-900 dark:text-white leading-snug">
+                          {mission.title}
+                        </h3>
+                        <CheckCircle className={`w-4 h-4 shrink-0 mt-0.5 ${mission.completed ? 'text-emerald-500' : 'text-slate-300 dark:text-slate-700'}`} />
+                      </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                        {mission.description}
+                      </p>
+                      <div className="pt-1 space-y-1">
+                        <div className="w-full bg-slate-200/80 dark:bg-slate-800 rounded-full h-1.5 overflow-hidden">
+                          <div
+                            className={`h-full rounded-full transition-all duration-300 ${mission.completed ? 'bg-emerald-500' : 'bg-sky-500'}`}
+                            style={{ width: `${pct}%` }}
+                          />
                         </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 font-semibold leading-snug mb-4">{mission.description}</p>
-                        <div className="flex items-center gap-2.5">
-                           <div className="text-[10px] font-black text-blue-600 dark:text-blue-400 bg-blue-500/10 px-2 py-0.5 rounded border border-blue-500/20">+{mission.xpReward} XP</div>
-                           <div className="flex items-center gap-1 text-[10px] font-black text-amber-600 dark:text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded border border-amber-500/20">+{mission.coinReward} <Coins className="w-3 h-3" /></div>
+                        <div className="flex justify-between text-xs text-slate-500 dark:text-slate-400 font-mono tabular-nums">
+                          <span>{mission.current}/{mission.goal}{mission.type === 'minutes' ? ' min' : ''}</span>
+                          <span>{pct}%</span>
                         </div>
                       </div>
-                      {mission.completed && !mission.claimed && (
-                        <button onClick={() => claimMissionReward(mission.id)}
-                          className="absolute bottom-4 right-4 bg-blue-600 hover:bg-blue-500 text-white font-black text-[10px] px-4 py-2 rounded-xl shadow-sm transition-all hover:-translate-y-0.5 cursor-pointer">
-                          RESGATAR
-                        </button>
-                      )}
                     </div>
-                    {mission.claimed && <div className="absolute top-2 right-2 rotate-12 text-[10px] font-black text-slate-500 border-2 border-slate-500/50 px-2 py-1 rounded">CONCLUÍDO</div>}
-                 </div>
-               ))}
+
+                    <div className="pt-3 border-t border-slate-200/70 dark:border-slate-800 flex items-center justify-between gap-2">
+                      <span className="text-xs font-mono text-slate-600 dark:text-slate-300 tabular-nums">
+                        +{mission.xpReward} XP · +{mission.coinReward} <Coins className="w-3 h-3 inline text-amber-500 -mt-0.5" />
+                      </span>
+                      {mission.claimed ? (
+                        <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400">Resgatado</span>
+                      ) : mission.completed ? (
+                        <button
+                          type="button"
+                          onClick={() => claimDailyMissionReward(mission.id)}
+                          className="h-8 px-3 rounded-lg bg-emerald-600 hover:bg-emerald-500 text-white text-xs font-semibold transition-colors cursor-pointer"
+                        >
+                          Resgatar
+                        </button>
+                      ) : null}
+                    </div>
+                  </div>
+                );
+              })}
             </div>
-          </div>
+          </section>
+
+          {/* CONTRATOS SEMANAIS */}
+          <section className="glass-card rounded-xl p-5 sm:p-6">
+            <div className="flex items-center justify-between gap-2 mb-4 pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h2 className="font-display text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <Activity className="w-4 h-4 text-sky-500" />
+                <span>Contratos da semana</span>
+              </h2>
+              <span className="text-xs text-slate-500 dark:text-slate-400">Metas semanais</span>
+            </div>
+
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
+              {weeklyMissions.map(mission => (
+                <div
+                  key={mission.id}
+                  className={`py-3.5 first:pt-1 last:pb-1 flex flex-col sm:flex-row sm:items-center justify-between gap-3 ${mission.claimed ? 'opacity-60' : ''}`}
+                >
+                  <div className="flex items-start gap-3 min-w-0">
+                    <CheckCircle className={`w-4 h-4 shrink-0 mt-0.5 ${mission.completed ? 'text-sky-500' : 'text-slate-300 dark:text-slate-700'}`} />
+                    <div className="min-w-0">
+                      <h3 className="text-sm font-semibold text-slate-900 dark:text-white">{mission.title}</h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{mission.description}</p>
+                    </div>
+                  </div>
+
+                  <div className="flex items-center justify-between sm:justify-end gap-3 pl-7 sm:pl-0 shrink-0">
+                    <span className="text-xs font-mono text-slate-600 dark:text-slate-300 tabular-nums whitespace-nowrap">
+                      +{mission.xpReward} XP · +{mission.coinReward} <Coins className="w-3 h-3 inline text-amber-500 -mt-0.5" />
+                    </span>
+                    {mission.claimed ? (
+                      <span className="text-xs font-medium text-emerald-600 dark:text-emerald-400 whitespace-nowrap">Concluído</span>
+                    ) : mission.completed ? (
+                      <button
+                        type="button"
+                        onClick={() => claimMissionReward(mission.id)}
+                        className="h-8 px-3 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-colors cursor-pointer whitespace-nowrap"
+                      >
+                        Resgatar
+                      </button>
+                    ) : null}
+                  </div>
+                </div>
+              ))}
+            </div>
+          </section>
         </div>
 
         {/* COLUNA LATERAL */}
         <div className="space-y-6">
-          {/* WIDGET K9 COMPANHEIRO */}
-          <div 
+          {/* WIDGET K9 */}
+          <button
+            type="button"
             onClick={() => navigate('/pet')}
-            className="glass-card rounded-2xl p-6 hover:border-blue-500/40 transition-all cursor-pointer group relative overflow-hidden"
+            className="w-full text-left glass-card glass-card-hover rounded-xl p-5 transition-colors cursor-pointer group"
           >
-            <div className="flex items-center justify-between mb-3">
-              <span className="text-[11px] font-black uppercase tracking-widest text-blue-500 flex items-center gap-1.5">
-                <Dog className="w-4 h-4" /> Mascote K9
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <span className="text-xs font-semibold text-sky-600 dark:text-sky-400 inline-flex items-center gap-1.5">
+                <Dog className="w-4 h-4" />
+                Mascote K9
               </span>
-              <span className="text-[11px] font-bold bg-blue-500/10 text-blue-500 dark:text-blue-400 px-2.5 py-0.5 rounded-full border border-blue-500/20 uppercase">
+              <span className="text-xs font-mono text-slate-500 dark:text-slate-400">
                 Nível {petData?.level || 1}
               </span>
             </div>
 
-            <div className="flex items-center gap-4">
-              <div className="w-14 h-14 rounded-2xl bg-gradient-to-tr from-amber-500 to-amber-700 flex items-center justify-center text-3xl shadow-md border border-amber-400/30 group-hover:scale-105 transition-transform shrink-0">
-                🐕
+            <div className="flex items-center gap-3.5">
+              <div className="w-12 h-12 rounded-xl bg-amber-500/12 border border-amber-500/25 flex items-center justify-center shrink-0">
+                <Dog className="w-6 h-6 text-amber-600 dark:text-amber-400" />
               </div>
               <div className="flex-1 min-w-0">
-                <h4 className="text-sm font-black text-slate-800 dark:text-white uppercase truncate">
-                  {petData?.name || 'Recruta K9'}
-                </h4>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400 font-semibold uppercase mt-0.5 leading-snug">
-                  {(petData?.hunger || 0) < 35 
-                    ? '⚠️ Com fome, precisa de lanche!' 
-                    : petData?.isSleeping 
-                      ? '😴 Tirando uma soneca tática' 
-                      : '❤️ Motivado e pronto para a ronda!'}
+                <div className="flex items-center justify-between gap-2">
+                  <h3 className="text-sm font-semibold text-slate-900 dark:text-white truncate">
+                    {petData?.name || 'Recruta K9'}
+                  </h3>
+                  <ArrowRight className="w-4 h-4 text-slate-400 group-hover:text-sky-500 transition-colors shrink-0" />
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                  {(petData?.hunger || 0) < 35
+                    ? 'Com fome — precisa de ração'
+                    : petData?.isSleeping
+                      ? 'Descansando na base'
+                      : 'Pronto para a próxima ronda'}
                 </p>
 
-                <div className="flex items-center gap-2 mt-2">
-                  <div className="flex-1 bg-slate-200 dark:bg-slate-950 rounded-full h-1.5 overflow-hidden">
-                    <div 
-                      className="bg-gradient-to-r from-blue-500 to-emerald-400 h-full rounded-full transition-all" 
-                      style={{ width: `${Math.round(((petData?.hunger ?? 100) + (petData?.energy ?? 100) + (petData?.hygiene ?? 100) + (petData?.fun ?? 100)) / 4)}%` }} 
+                <div className="flex items-center gap-2 mt-2.5">
+                  <div className="flex-1 bg-slate-100 dark:bg-slate-850 rounded-full h-1.5 overflow-hidden">
+                    <div
+                      className="bg-emerald-500 h-full rounded-full transition-all"
+                      style={{ width: `${petOverallHealth}%` }}
                     />
                   </div>
-                  <span className="text-[11px] font-black tabular-nums text-slate-500 dark:text-slate-400 shrink-0">
-                    {Math.round(((petData?.hunger ?? 100) + (petData?.energy ?? 100) + (petData?.hygiene ?? 100) + (petData?.fun ?? 100)) / 4)}%
+                  <span className="text-xs font-mono font-semibold tabular-nums text-slate-600 dark:text-slate-300 shrink-0">
+                    {petOverallHealth}%
                   </span>
                 </div>
               </div>
             </div>
-          </div>
-          <div className="glass-card rounded-2xl p-5 sm:p-6">
-             <h3 className="font-black text-slate-800 dark:text-white uppercase text-sm mb-4 flex items-center gap-2.5">
-               <ShieldCheck className="w-5 h-5 text-blue-500" /> Vitrine de Honra
-             </h3>
-             <div className="grid grid-cols-2 gap-3">
-                {MEDALHAS.map(medal => {
-                  const isUnlocked = userStats.medals.includes(medal.id);
-                  return (
-                    <div key={medal.id} className={`p-3 rounded-xl border text-center transition-all hover:-translate-y-0.5 flex flex-col items-center ${
-                      isUnlocked 
-                        ? 'bg-slate-50/80 dark:bg-slate-850/80 border-blue-500/25 dark:border-slate-700/80' 
-                        : 'bg-slate-100/30 dark:bg-slate-950/60 border-slate-200/50 dark:border-slate-800/50 opacity-40'
-                    }`}>
-                       <div className="relative w-12 h-12 mb-2 flex items-center justify-center shrink-0">
-                          {isUnlocked ? (
-                            <motion.img whileHover={{ scale: 1.1, rotate: 4 }} src={assetUrl(medal.icon)} alt={medal.title}
-                              className="w-full h-full object-contain drop-shadow-[0_10px_15px_rgba(0,0,0,0.3)]"
-                              onError={e => { e.target.src = 'https://cdn-icons-png.flaticon.com/512/190/190411.png' }} />
-                          ) : (
-                            <div className="text-3xl filter grayscale contrast-0 opacity-25">🛡️</div>
-                          )}
-                       </div>
-                       <p className={`text-[11px] font-black uppercase leading-tight ${isUnlocked ? 'text-slate-800 dark:text-white' : 'text-slate-400'}`}>{medal.title}</p>
-                       <p className="text-[10px] text-slate-500 dark:text-slate-400 font-medium mt-1 leading-snug">{medal.desc}</p>
+          </button>
+
+          {/* STATUS DO EDITAL */}
+          <section className={`glass-card rounded-xl p-5 ${estimatedDate.isLate ? 'border-amber-500/40' : ''}`}>
+            <div className="flex items-center justify-between gap-2 mb-3">
+              <span className="text-xs font-medium text-slate-500 dark:text-slate-400">Previsão de edital</span>
+              {estimatedDate.isLate ? (
+                <AlertTriangle className="w-4 h-4 text-amber-500" />
+              ) : (
+                <Clock className="w-4 h-4 text-sky-500" />
+              )}
+            </div>
+            <p className={`font-display text-xl font-bold leading-snug ${estimatedDate.isLate ? 'text-amber-600 dark:text-amber-400' : 'text-slate-900 dark:text-white'}`}>
+              {estimatedDate.full}
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-1.5">
+              Data alvo da prova: <strong className="font-mono text-slate-700 dark:text-slate-200">{estimatedDate.examDateFormatted}</strong>
+            </p>
+            {estimatedDate.isLate && (
+              <p className="text-xs font-medium text-amber-600 dark:text-amber-400 mt-2">
+                Ritmo atual ultrapassa a data da prova — ajuste seu ciclo ou meta diária.
+              </p>
+            )}
+          </section>
+
+          {/* VITRINE DE HONRA */}
+          <section className="glass-card rounded-xl p-5">
+            <div className="flex items-center justify-between gap-2 mb-4">
+              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                <ShieldCheck className="w-4 h-4 text-sky-500" />
+                <span>Conquistas</span>
+              </h2>
+              <span className="text-xs font-mono text-slate-500 dark:text-slate-400 tabular-nums">
+                {userStats.medals.length}/{MEDALHAS.length}
+              </span>
+            </div>
+            <div className="grid grid-cols-2 gap-3">
+              {MEDALHAS.map(medal => {
+                const isUnlocked = userStats.medals.includes(medal.id);
+                return (
+                  <div
+                    key={medal.id}
+                    className={`p-3 rounded-xl border text-center flex flex-col items-center ${
+                      isUnlocked
+                        ? 'bg-slate-50/70 dark:bg-slate-850/50 border-slate-200 dark:border-slate-700/80'
+                        : 'bg-transparent border-slate-200/60 dark:border-slate-800/60 opacity-45'
+                    }`}
+                  >
+                    <div className="w-11 h-11 mb-2 flex items-center justify-center shrink-0">
+                      {isUnlocked ? (
+                        <img
+                          src={assetUrl(medal.icon)}
+                          alt={medal.title}
+                          className="w-full h-full object-contain"
+                          onError={e => { e.currentTarget.style.display = 'none'; }}
+                        />
+                      ) : (
+                        <Shield className="w-7 h-7 text-slate-400 dark:text-slate-600" />
+                      )}
                     </div>
-                  );
-                })}
-             </div>
-          </div>
-
-          <div className={`glass-card rounded-2xl p-6 relative overflow-hidden transition-all duration-200 ${
-            estimatedDate.isLate 
-              ? 'border-red-500/30 dark:border-red-500/30' 
-              : 'border-blue-500/25 dark:border-slate-800'
-          }`}>
-             <div className="relative z-10">
-                <div className="flex items-center gap-3 mb-4">
-                   <div className={`p-2 rounded-xl ${estimatedDate.isLate ? 'bg-red-600 text-white' : 'bg-blue-600 text-white'}`}>
-                      {estimatedDate.isLate ? <AlertTriangle className="w-5 h-5" /> : <Clock className="w-5 h-5" />}
-                   </div>
-                   <span className="text-[11px] font-black text-slate-500 dark:text-slate-400 uppercase tracking-widest leading-none">Status de Edital</span>
-                </div>
-                <h2 className={`text-2xl font-black mb-1 ${estimatedDate.isLate ? 'text-red-500' : 'text-blue-500 dark:text-blue-400'}`}>{estimatedDate.full}</h2>
-                <div className="flex flex-col gap-1">
-                   <span className="text-[11px] font-bold text-slate-500 dark:text-slate-400 uppercase tracking-wider">Prova: {estimatedDate.examDateFormatted}</span>
-                   {estimatedDate.isLate && <span className="text-[11px] font-black text-red-600 dark:text-red-400 bg-red-500/10 px-2 py-0.5 rounded w-fit uppercase mt-1">⚠️ ATENÇÃO AO CRONOGRAMA</span>}
-                </div>
-             </div>
-             <div className={`absolute -bottom-10 -right-10 w-28 h-28 ${estimatedDate.isLate ? 'text-red-600/10' : 'text-blue-600/10'}`}>
-                <Activity className="w-full h-full" />
-             </div>
-          </div>
+                    <p className={`text-xs font-semibold leading-tight ${isUnlocked ? 'text-slate-900 dark:text-white' : 'text-slate-500'}`}>
+                      {medal.title}
+                    </p>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 leading-snug">
+                      {medal.desc}
+                    </p>
+                  </div>
+                );
+              })}
+            </div>
+          </section>
         </div>
-    </div>
+      </div>
 
-      {/* SELETOR DE AVATAR MODAL */}
+      {/* SELETOR DE AVATAR MODAL (SUPORTE COMPLETO LIGHT & DARK) */}
       <AnimatePresence>
         {isAvatarModalOpen && (
-          <div className="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center z-[150] p-4">
-            <motion.div 
-              initial={{ scale: 0.9, opacity: 0, y: 20 }}
+          <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center z-[150] p-4">
+            <motion.div
+              initial={{ scale: 0.96, opacity: 0, y: 10 }}
               animate={{ scale: 1, opacity: 1, y: 0 }}
-              exit={{ scale: 0.9, opacity: 0, y: 20 }}
-              transition={{ type: 'spring', damping: 25, stiffness: 350 }}
-              className="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 w-full max-w-3xl max-h-[85vh] flex flex-col relative shadow-[0_0_50px_rgba(59,130,246,0.15)]"
+              exit={{ scale: 0.96, opacity: 0, y: 10 }}
+              transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+              className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-6 w-full max-w-3xl max-h-[85vh] flex flex-col relative shadow-2xl"
             >
-              <button 
+              <button
+                type="button"
                 onClick={() => setIsAvatarModalOpen(false)}
-                className="absolute top-6 right-6 p-2 text-slate-400 hover:text-white hover:bg-slate-800/50 rounded-xl transition-all"
+                aria-label="Fechar seletor de avatar"
+                className="absolute top-5 right-5 w-9 h-9 flex items-center justify-center text-slate-400 hover:text-slate-900 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-850 rounded-lg transition-colors cursor-pointer"
               >
                 <X className="w-5 h-5" />
               </button>
 
-              <div className="mb-6">
-                <h3 className="text-xl font-black text-white uppercase tracking-tight flex items-center gap-2">
-                  <ShieldCheck className="text-blue-500 w-6 h-6" /> Dossiê do Agente — Seleção de Avatar
+              <div className="mb-5 pr-10">
+                <h3 className="font-display text-xl font-bold text-slate-900 dark:text-white">
+                  Seleção de avatar
                 </h3>
-                <p className="text-xs font-bold text-slate-500 uppercase mt-1">Personalize sua identidade operational no QG.</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  Escolha seu avatar ativo ou desbloqueie novos na Loja.
+                </p>
               </div>
 
-              <div className="flex-1 overflow-y-auto pr-2 custom-scrollbar grid grid-cols-2 sm:grid-cols-4 gap-4 pb-4">
+              <div className="flex-1 overflow-y-auto pr-1 custom-scrollbar grid grid-cols-2 sm:grid-cols-4 gap-3.5 pb-2">
                 {ALL_AVATARS.map(avatar => {
                   const isUnlocked = unlockedAvatars.includes(avatar.path);
                   const isActive = userStats.avatar === avatar.path;
-                  const rarity = RARITY_STYLES[avatar.rarity];
-                  
+                  const rarity = RARITY_LABELS[avatar.rarity] || RARITY_LABELS.common;
+
                   return (
-                    <div 
+                    <div
                       key={avatar.id}
-                      className={`p-4 rounded-2xl border-2 flex flex-col items-center justify-between text-center transition-all duration-300 relative overflow-hidden group bg-slate-950/40 ${
-                        isActive 
-                          ? 'border-blue-500 shadow-[0_0_20px_rgba(59,130,246,0.25)]' 
-                          : isUnlocked 
-                            ? `${rarity.border} ${rarity.neonGlow} cursor-pointer` 
-                            : 'border-slate-800 opacity-60'
+                      className={`p-3.5 rounded-xl border flex flex-col items-center justify-between text-center transition-colors bg-slate-50/70 dark:bg-slate-850/60 ${
+                        isActive
+                          ? 'border-sky-500 ring-1 ring-sky-500/40'
+                          : isUnlocked
+                            ? 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 cursor-pointer'
+                            : 'border-slate-200/70 dark:border-slate-800/70 opacity-65'
                       }`}
                       onClick={() => {
                         if (isUnlocked && !isActive) {
@@ -842,48 +947,51 @@ export default function Dashboard() {
                         }
                       }}
                     >
-                      <div className="absolute top-2 right-2">
-                        <span className={`text-[7px] font-black uppercase tracking-widest ${rarity.labelColor} px-1.5 py-0.5 rounded-full border border-slate-200/10`}>
-                          {rarity.label}
-                        </span>
-                      </div>
+                      <span className={`text-[11px] font-medium mb-2 ${rarity.text}`}>
+                        {rarity.label}
+                      </span>
 
-                      <div className="relative w-20 h-20 rounded-full overflow-hidden border-2 border-slate-700 mb-3 bg-slate-800 group-hover:scale-105 transition-transform duration-300">
+                      <div className="relative w-20 h-20 rounded-full overflow-hidden border border-slate-200 dark:border-slate-700 mb-3 bg-slate-200 dark:bg-slate-800">
                         <img src={assetUrl(avatar.path)} alt={avatar.name} className="w-full h-full object-cover" />
                         {!isUnlocked && (
-                          <div className="absolute inset-0 bg-slate-950/70 backdrop-blur-[2px] flex items-center justify-center">
-                            <Lock className="w-5 h-5 text-slate-400" />
+                          <div className="absolute inset-0 bg-slate-950/65 flex items-center justify-center">
+                            <Lock className="w-5 h-5 text-slate-300" />
                           </div>
                         )}
                       </div>
 
-                      <h4 className="text-[11px] font-black uppercase text-slate-200 tracking-tight mb-2 leading-tight min-h-[22px]">{avatar.name}</h4>
+                      <h4 className="text-xs font-semibold text-slate-900 dark:text-slate-100 leading-tight mb-3">
+                        {avatar.name}
+                      </h4>
 
-                      <div className="w-full mt-2">
+                      <div className="w-full">
                         {isActive ? (
-                          <span className="w-full py-2 bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 rounded-xl text-[9px] font-black uppercase tracking-wider block">
-                            Ativo
+                          <span className="w-full h-8 flex items-center justify-center rounded-lg bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 text-xs font-semibold">
+                            Em uso
                           </span>
                         ) : isUnlocked ? (
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               selectAvatar(avatar.path);
                             }}
-                            className="w-full py-2 bg-blue-600 hover:bg-blue-500 text-white rounded-xl text-[9px] font-black uppercase tracking-wider transition-all hover:scale-[1.02] active:scale-95 shadow-md shadow-blue-500/10"
+                            className="w-full h-8 rounded-lg bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold transition-colors cursor-pointer"
                           >
                             Equipar
                           </button>
                         ) : (
                           <button
+                            type="button"
                             onClick={(e) => {
                               e.stopPropagation();
                               setIsAvatarModalOpen(false);
                               navigate('/loja');
                             }}
-                            className="w-full py-2 bg-slate-800 hover:bg-slate-700 text-slate-300 border border-slate-700 hover:border-slate-600 rounded-xl text-[9px] font-black uppercase tracking-wider transition-all flex items-center justify-center gap-1"
+                            className="w-full h-8 rounded-lg bg-slate-200/80 dark:bg-slate-800 hover:bg-slate-300/80 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-200 text-xs font-semibold transition-colors inline-flex items-center justify-center gap-1 cursor-pointer"
                           >
-                            <Lock className="w-3 h-3 text-yellow-500" /> Loja
+                            <Lock className="w-3 h-3 text-amber-500" />
+                            <span>Ver na loja</span>
                           </button>
                         )}
                       </div>

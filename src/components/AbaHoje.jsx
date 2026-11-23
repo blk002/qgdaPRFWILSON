@@ -9,6 +9,7 @@ import {
   calculateLessonsForGoal
 } from '../lib/durationHelpers';
 import { getSubjectTextColorClass, getSubjectAccentBorderClass } from '../lib/subjectColors';
+import { getSafeExternalUrl } from '../lib/safeUrl';
 import {
   BookOpen,
   AlertTriangle,
@@ -20,7 +21,8 @@ import {
   ChevronLeft,
   ChevronRight,
   BrainCircuit,
-  Zap
+  Zap,
+  Pencil
 } from 'lucide-react';
 
 const SHORT_WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
@@ -47,6 +49,19 @@ const isSubjectFullyDone = (sub) => {
   return topics.every((t) => (Number(t.completed) || 0) >= (Number(t.total) || 0));
 };
 
+const normalizeLessonTitleKey = (str) =>
+  String(str || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .trim();
+
+const extractCourseIdFromUrl = (url) => {
+  const match = String(url || '').match(/\/courses\/(\d+)/i);
+  return match ? match[1] : '';
+};
+
 export default function AbaHoje({ onGoToTab }) {
   const {
     subjects = {},
@@ -67,6 +82,7 @@ export default function AbaHoje({ onGoToTab }) {
     caveiraQuestions = [],
     caveiraDailyGoal = 50,
     caveiraSessionStats = null,
+    caveiraCourseIndexMap = {},
     setCaveiraDailyGoal,
     getLocalDateStr,
     getCycleIndexForDate,
@@ -356,6 +372,64 @@ export default function AbaHoje({ onGoToTab }) {
   const safeReviewIdx = dueReviews.length > 0 ? Math.min(reviewIdx, dueReviews.length - 1) : 0;
   const activeReview = dueReviews[safeReviewIdx] || null;
   const completedSlotsCount = theoryBlocks.filter((b) => b.isSlotCompleted).length;
+  const totalTheoryAccelSec = useMemo(
+    () => theoryBlocks.reduce((acc, b) => acc + (b.isSlotCompleted ? 0 : (Number(b.blockAccelSec) || 0)), 0),
+    [theoryBlocks]
+  );
+  const hasAcceleratedTheory = useMemo(
+    () => theoryBlocks.some((b) => !b.isSlotCompleted && (Number(b.blockAccelSec) || 0) > 0 && b.spd > 1),
+    [theoryBlocks]
+  );
+
+  // Mapa de URLs das aulas capturadas + fallback inteligente de curso no Caveira
+  const { courseIndexUrlByTitle, fallbackCaveiraCourseBaseUrl } = useMemo(() => {
+    const byTitle = new Map();
+    let inferredCourseId = '';
+
+    Object.values(caveiraCourseIndexMap || {}).forEach((entry) => {
+      if (!entry || !entry.url) return;
+      const key = normalizeLessonTitleKey(entry.title || entry.lessonTitle || '');
+      if (key && !byTitle.has(key)) {
+        byTitle.set(key, entry.url);
+      }
+      if (!inferredCourseId) {
+        inferredCourseId = extractCourseIdFromUrl(entry.url);
+      }
+    });
+
+    if (!inferredCourseId) {
+      for (const sub of Object.values(subjects || {})) {
+        if (!sub) continue;
+        if (sub.caveiraCourseId) {
+          inferredCourseId = String(sub.caveiraCourseId);
+          break;
+        }
+        const fromMod = extractCourseIdFromUrl(sub.caveiraModuleUrl);
+        if (fromMod) {
+          inferredCourseId = fromMod;
+          break;
+        }
+        for (const tp of sub.topics || []) {
+          for (const ls of tp?.lessons || []) {
+            const fromLes = extractCourseIdFromUrl(ls?.caveiraUrl || ls?.url);
+            if (fromLes) {
+              inferredCourseId = fromLes;
+              break;
+            }
+          }
+          if (inferredCourseId) break;
+        }
+        if (inferredCourseId) break;
+      }
+    }
+
+    return {
+      courseIndexUrlByTitle: byTitle,
+      fallbackCaveiraCourseBaseUrl: inferredCourseId
+        ? `https://app.caveira.com/courses/${inferredCourseId}`
+        : 'https://app.caveira.com/courses'
+    };
+  }, [caveiraCourseIndexMap, subjects]);
 
   const openLessonModal = (block, skipPrePrompt) => {
     if (!block?.activeTopic || !setClassConfirmModal) return;
@@ -381,31 +455,57 @@ export default function AbaHoje({ onGoToTab }) {
   };
 
   return (
-    <div className="fade-in w-full pb-6">
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 items-stretch">
+    <div className="fade-in w-full pb-6 space-y-5">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
         {/* COLUNA ESQUERDA: TEORIA */}
-        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 space-y-3 flex flex-col">
-          <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2">
-              <BookOpen className="w-4 h-4 text-sky-500 dark:text-sky-400" />
-              <h2 className="text-sm font-black uppercase tracking-wider text-slate-800 dark:text-white">
-                Teoria
+        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 flex flex-col">
+          <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3.5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <BookOpen className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
+              <h2 className="font-display text-base font-bold text-slate-900 dark:text-white truncate">
+                Teoria de hoje
               </h2>
             </div>
-            <span className="text-[11px] font-bold px-2 py-0.5 rounded-md bg-slate-100 dark:bg-slate-850 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700 tabular-nums">
-              {theoryBlocks.length > 0 ? `${completedSlotsCount}/${theoryBlocks.length} concluídos` : 'Sem blocos'}
-            </span>
+
+            {totalTheoryAccelSec > 0 && (
+              <div
+                className="inline-flex items-center gap-1.5 px-3 py-1 rounded-lg bg-amber-500/15 dark:bg-amber-400/15 border border-amber-500/45 dark:border-amber-400/45 text-amber-700 dark:text-amber-300 shadow-xs shrink-0"
+                title="Tempo total somado de todas as aulas pendentes de hoje"
+              >
+                {hasAcceleratedTheory ? (
+                  <Zap className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0" />
+                ) : (
+                  <Clock className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0" />
+                )}
+                <span className="text-[11px] font-sans font-bold uppercase tracking-wide text-amber-800/80 dark:text-amber-200/85">
+                  Total:
+                </span>
+                <span className="font-mono text-sm font-extrabold tabular-nums">
+                  {formatSecondsToFriendly(totalTheoryAccelSec)}
+                </span>
+              </div>
+            )}
+
+            <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 shrink-0 tabular-nums">
+              <span>{todayHeaderLabel}</span>
+              <span aria-hidden="true">·</span>
+              <span className="font-mono font-semibold text-slate-700 dark:text-slate-200">
+                {theoryBlocks.length > 0 ? `${completedSlotsCount}/${theoryBlocks.length} concluídos` : 'Sem blocos'}
+              </span>
+            </div>
           </div>
 
           {theoryBlocks.length === 0 ? (
-            <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-850/40 p-5 text-center space-y-2.5">
-              <Calendar className="w-6 h-6 text-slate-400 mx-auto" />
-              <div className="space-y-0.5">
-                <p className="text-xs font-black uppercase text-slate-700 dark:text-slate-200">
+            <div className="my-auto py-8 px-4 text-center space-y-3">
+              <div className="w-10 h-10 rounded-xl bg-slate-100 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 flex items-center justify-center mx-auto">
+                <Calendar className="w-5 h-5 text-slate-400" />
+              </div>
+              <div className="space-y-1">
+                <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
                   Nenhum bloco programado para hoje
                 </p>
-                <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                  Adicione matérias neste dia pelo Calendário ou ajuste seu Cronograma semanal.
+                <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
+                  Adicione disciplinas no Calendário ou configure seu Cronograma semanal para ver suas aulas aqui.
                 </p>
               </div>
               {onGoToTab && (
@@ -413,25 +513,25 @@ export default function AbaHoje({ onGoToTab }) {
                   <button
                     type="button"
                     onClick={() => onGoToTab('calendario')}
-                    className="h-7 px-3 rounded-lg text-[11px] font-black bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 transition-colors cursor-pointer"
+                    className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 transition-colors cursor-pointer"
                   >
-                    Abrir Calendário
+                    Abrir calendário
                   </button>
                   <button
                     type="button"
                     onClick={() => onGoToTab('cronograma')}
-                    className="h-7 px-3 rounded-lg text-[11px] font-bold bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                    className="h-9 px-3.5 rounded-lg text-xs font-medium bg-white dark:bg-slate-850 border border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-200 hover:bg-slate-50 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                   >
-                    Ver Cronograma
+                    Ver cronograma
                   </button>
                 </div>
               )}
             </div>
           ) : (
-            <div className="space-y-3">
+            <div className="divide-y divide-slate-100 dark:divide-slate-800">
               {theoryBlocks.map((block) => {
                 const textColorClass = getSubjectTextColorClass(block.subject?.color);
-                const borderColorClass = getSubjectAccentBorderClass(block.subject?.color);
+                const accentBorderClass = getSubjectAccentBorderClass(block.subject?.color);
                 const displayTotalLessons = block.subjectTotalLessons > 0 ? block.subjectTotalLessons : block.currentTotal;
                 const startBase = block.subjectTotalLessons > 0 ? block.subjectCompletedBefore : block.currentCompleted;
                 const startNum = displayTotalLessons > 0 ? Math.min(displayTotalLessons, startBase + 1) : 1;
@@ -446,62 +546,70 @@ export default function AbaHoje({ onGoToTab }) {
                 return (
                   <div
                     key={`${block.subjectId}-${block.slotIndex}`}
-                    className={`rounded-xl border bg-slate-50/70 dark:bg-slate-850/70 overflow-hidden ${
-                      block.isSlotCompleted
-                        ? 'border-emerald-300 dark:border-emerald-800/70'
-                        : 'border-slate-200 dark:border-slate-800'
-                    }`}
+                    className="py-4 first:pt-4 last:pb-1"
                   >
-                    {/* Faixa Topo do Bloco: Dia da Semana, XX/MM + Tempo Total Centralizado */}
-                    <div className="px-3 py-2 bg-white dark:bg-slate-900 border-b border-slate-200/80 dark:border-slate-800 grid grid-cols-3 items-center gap-2 text-xs sm:text-sm">
-                      <div className="flex items-center gap-1.5 font-black text-slate-700 dark:text-slate-200 uppercase tracking-wide justify-self-start">
-                        <Calendar className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
-                        <span>{todayHeaderLabel}</span>
-                      </div>
-                      {totalTimeText && !block.isSlotCompleted ? (
-                        <div className="flex items-center justify-center gap-1 text-xs sm:text-sm font-black text-amber-600 dark:text-amber-300 tabular-nums justify-self-center whitespace-nowrap">
-                          {block.spd > 1 && <Zap className="w-4 h-4 text-amber-500 dark:text-amber-300" />}
-                          <span>Tempo total: {totalTimeText}</span>
+                    <div className={`border-l-2 pl-3.5 space-y-3 ${block.isSlotCompleted ? 'border-emerald-500/60' : accentBorderClass}`}>
+                      {/* Cabeçalho limpo do bloco */}
+                      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+                        <div className="flex-1 min-w-0">
+                          <div
+                            className="flex items-center gap-1.5 flex-nowrap min-w-0"
+                            title={block.activeTopic?.name ? `${block.subject.name} / ${block.activeTopic.name}` : block.subject.name}
+                          >
+                            <h3 className={`text-sm font-bold tracking-tight whitespace-nowrap shrink-0 max-w-[50%] truncate ${textColorClass}`}>
+                              {block.subject.name}
+                            </h3>
+                            {block.activeTopic?.name && (
+                              <>
+                                <span aria-hidden="true" className="text-slate-300 dark:text-slate-700 shrink-0">/</span>
+                                <span className="text-sm font-medium text-slate-700 dark:text-slate-200 truncate min-w-0">
+                                  {block.activeTopic.name}
+                                </span>
+                              </>
+                            )}
+                          </div>
                         </div>
-                      ) : (
-                        <div />
-                      )}
-                      <div />
-                    </div>
 
-                    {/* Caixa da Disciplina + Aulas + Botões */}
-                    <div className={`p-3 m-2 rounded-lg border bg-white dark:bg-slate-900 ${borderColorClass} space-y-2.5`}>
-                      {/* Cabeçalho: DISCIPLINA -> TÓPICO + AULA XX/YY em destaque */}
-                      <div className="flex items-center justify-between gap-2 pb-1.5 border-b border-slate-100 dark:border-slate-800">
-                        <div className={`text-sm font-black uppercase tracking-wide truncate min-w-0 flex-1 ${textColorClass}`}>
-                          {block.subject.name}
-                          {block.activeTopic?.name ? ` → ${block.activeTopic.name}` : ''}
-                        </div>
-                        <div className="flex items-center gap-1.5 shrink-0">
-                          {(block.isReplaced || block.isDoubled) && (
-                            <span className="text-[10px] font-black px-1.5 py-0.5 rounded bg-slate-100 dark:bg-slate-850 text-slate-500 dark:text-slate-300 uppercase">
-                              {block.isReplaced ? 'Subst.' : '2x'}
-                            </span>
-                          )}
-                          {!block.isSlotCompleted && block.activeTopic && displayTotalLessons > 0 && (
-                            <span className="px-2.5 py-0.5 rounded-md bg-sky-500/20 text-sky-700 dark:text-sky-200 border border-sky-500/45 text-xs font-black uppercase tracking-wider tabular-nums shadow-xs">
-                              {aulaBadgeText}
-                            </span>
-                          )}
-                        </div>
+                        {!block.isSlotCompleted && (
+                          <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400 shrink-0 tabular-nums flex-wrap">
+                            {(block.isReplaced || block.isDoubled) && (
+                              <>
+                                <span className="font-medium text-slate-600 dark:text-slate-300">
+                                  {block.isReplaced ? 'Substituída' : 'Dobrada 2x'}
+                                </span>
+                                <span aria-hidden="true">·</span>
+                              </>
+                            )}
+                            {block.activeTopic && displayTotalLessons > 0 && (
+                              <span className="font-mono font-semibold text-sky-600 dark:text-sky-400">
+                                {aulaBadgeText}
+                              </span>
+                            )}
+                            {totalTimeText && (
+                              <>
+                                <span aria-hidden="true">·</span>
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/12 dark:bg-amber-400/12 border border-amber-500/30 dark:border-amber-400/30 font-mono font-bold text-amber-700 dark:text-amber-300">
+                                  {block.spd > 1 && <Zap className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />}
+                                  <span className="text-amber-800/80 dark:text-amber-200/80 font-sans font-semibold">Tempo total:</span>
+                                  <span>{totalTimeText}</span>
+                                </span>
+                              </>
+                            )}
+                          </div>
+                        )}
                       </div>
 
                       {block.isSlotCompleted ? (
-                        <div className="py-2 flex items-center justify-center gap-2 text-emerald-600 dark:text-emerald-400">
+                        <div className="py-2.5 px-3 rounded-lg bg-emerald-500/8 border border-emerald-500/20 flex items-center gap-2 text-emerald-600 dark:text-emerald-400">
                           <CheckCircle className="w-4 h-4 shrink-0" />
-                          <span className="text-xs font-black uppercase tracking-wider">
-                            Aula Assistida • Bloco Concluído Hoje
+                          <span className="text-xs font-semibold">
+                            Aula assistida · Bloco concluído hoje
                           </span>
                         </div>
                       ) : block.activeTopic ? (
                         <>
-                          {/* Lista de Aulas com Nome + Abrir Videoaula + MM:SS (spd) */}
-                          <div className="space-y-1.5">
+                          {/* Lista de aulas planejadas com botão Abrir Videoaula */}
+                          <div className="space-y-2">
                             {block.plannedLessons.map((les, lIdx) => {
                               const origSec = Number(les.origSec) || parseDurationToSeconds(les.durStr) || 0;
                               const accelSec = Number(les.accelSec) || (origSec > 0 ? Math.round(origSec / block.spd) : 0);
@@ -509,55 +617,63 @@ export default function AbaHoje({ onGoToTab }) {
                                 accelSec > 0
                                   ? `${formatSecondsToClock(accelSec)}${block.spd > 1 ? ` (${block.spd}x)` : ''}`
                                   : les.durStr || '';
-                              const rawDirectUrl = block.activeTopic?.lessons?.[les.index ?? lIdx]?.caveiraUrl
-                                || block.subject?.caveiraModuleUrl
-                                || (block.subject?.caveiraCourseId ? `https://app.caveira.com/courses/${block.subject.caveiraCourseId}` : '');
-                              const cleanBase = rawDirectUrl ? String(rawDirectUrl).split('#')[0] : '';
-                              const directUrl = cleanBase
-                                ? (les.name
-                                    ? `${cleanBase}#qg_lesson=${encodeURIComponent(les.name)}${block.subject?.name ? `&qg_subject=${encodeURIComponent(block.subject.name)}` : ''}`
-                                    : cleanBase)
-                                : '';
+
+                              const lessonEntry = block.activeTopic?.lessons?.[les.index ?? lIdx];
+                              const indexedUrl = courseIndexUrlByTitle.get(normalizeLessonTitleKey(les.name)) || '';
+                              const rawDirectUrl =
+                                lessonEntry?.caveiraUrl ||
+                                lessonEntry?.url ||
+                                indexedUrl ||
+                                block.subject?.caveiraModuleUrl ||
+                                (block.subject?.caveiraCourseId ? `https://app.caveira.com/courses/${block.subject.caveiraCourseId}` : '') ||
+                                fallbackCaveiraCourseBaseUrl;
+
+                              const safeBaseUrl = getSafeExternalUrl(rawDirectUrl, 'https://app.caveira.com/courses');
+                              const cleanBase = safeBaseUrl.split('#')[0];
+                              const directUrl = les.name
+                                ? `${cleanBase}#qg_lesson=${encodeURIComponent(les.name)}${block.subject?.name ? `&qg_subject=${encodeURIComponent(block.subject.name)}` : ''}`
+                                : cleanBase;
 
                               return (
                                 <div
                                   key={lIdx}
-                                  className="flex items-center justify-between gap-3 text-sm leading-snug"
+                                  className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_auto_7.75rem] items-center gap-x-3 gap-y-1 text-sm leading-snug"
                                 >
-                                  <div className="flex items-center flex-wrap gap-2 flex-1 min-w-0">
-                                    <span className="font-semibold text-slate-800 dark:text-slate-100 break-words min-w-0">
-                                      • {les.name}
-                                    </span>
-                                    {directUrl && (
-                                      <a
-                                        href={directUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/15 hover:bg-sky-500/25 text-sky-600 dark:text-sky-400 border border-sky-500/30 text-[10px] font-black uppercase tracking-wider transition-colors shrink-0"
-                                        title={`Abrir "${les.name}" diretamente no Caveira`}
-                                      >
-                                        <PlayCircle className="w-3 h-3 shrink-0" />
-                                        <span>Abrir Videoaula</span>
-                                      </a>
+                                  <span
+                                    className="text-slate-700 dark:text-slate-200 break-words line-clamp-2 min-w-0"
+                                    title={les.name}
+                                  >
+                                    • {les.name}
+                                  </span>
+                                  <a
+                                    href={directUrl}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/12 hover:bg-sky-500/22 text-sky-600 dark:text-sky-400 border border-sky-500/30 text-[11px] font-semibold transition-colors shrink-0 whitespace-nowrap"
+                                    title={`Abrir "${les.name}" diretamente no Caveira`}
+                                  >
+                                    <PlayCircle className="w-3.5 h-3.5 shrink-0" />
+                                    <span>Abrir Videoaula</span>
+                                  </a>
+                                  <span className="col-span-2 sm:col-span-1 inline-flex items-center sm:justify-end">
+                                    {durationLabel && (
+                                      <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/12 dark:bg-amber-400/12 border border-amber-500/35 dark:border-amber-400/35 text-xs sm:text-[13px] font-mono font-bold text-amber-700 dark:text-amber-300 tabular-nums whitespace-nowrap">
+                                        <Clock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
+                                        <span>{durationLabel}</span>
+                                      </span>
                                     )}
-                                  </div>
-                                  {durationLabel && (
-                                    <span className="text-sm font-mono font-black text-amber-600 dark:text-amber-300 shrink-0 flex items-center gap-1 tabular-nums">
-                                      <Clock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-300" />
-                                      {durationLabel}
-                                    </span>
-                                  )}
+                                  </span>
                                 </div>
                               );
                             })}
                           </div>
 
-                          {/* 2 Botões: AULA ASSISTIDA + EXERCÍCIOS DA AULA */}
-                          <div className="grid grid-cols-2 gap-2 pt-1">
+                          {/* Ações primária e secundária */}
+                          <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-1">
                             <button
                               type="button"
                               onClick={() => openLessonModal(block, true)}
-                              className="h-9 px-3 rounded-lg text-xs font-black uppercase tracking-wide bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                              className="h-10 px-3.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 flex items-center justify-center gap-2 transition-colors cursor-pointer"
                             >
                               <PlayCircle className="w-4 h-4 shrink-0" />
                               <span className="truncate">Aula Assistida</span>
@@ -565,7 +681,7 @@ export default function AbaHoje({ onGoToTab }) {
                             <button
                               type="button"
                               onClick={() => openLessonModal(block, false)}
-                              className="h-9 px-3 rounded-lg text-xs font-black uppercase tracking-wide bg-slate-100 hover:bg-slate-200 text-slate-800 border border-slate-300 dark:bg-slate-850 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700 flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
+                              className="h-10 px-3.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200/80 text-slate-800 border border-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700 flex items-center justify-center gap-2 transition-colors cursor-pointer"
                             >
                               <Target className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
                               <span className="truncate">Exercícios da Aula</span>
@@ -573,8 +689,8 @@ export default function AbaHoje({ onGoToTab }) {
                           </div>
                         </>
                       ) : (
-                        <div className="py-2 text-center text-xs font-bold text-emerald-600 dark:text-emerald-400">
-                          100% desta disciplina já foi concluída!
+                        <div className="py-2 text-xs font-medium text-emerald-600 dark:text-emerald-400">
+                          Disciplina 100% concluída.
                         </div>
                       )}
                     </div>
@@ -586,58 +702,63 @@ export default function AbaHoje({ onGoToTab }) {
         </section>
 
         {/* COLUNA DIREITA: REVISÃO */}
-        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 space-y-3 flex flex-col">
-          <div className="flex items-center justify-between gap-2 pb-2 border-b border-slate-100 dark:border-slate-800">
-            <div className="flex items-center gap-2">
-              <BrainCircuit className="w-4 h-4 text-sky-500 dark:text-sky-400" />
-              <h2 className="text-sm font-black uppercase tracking-wider text-slate-800 dark:text-white">
-                Revisão
+        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 space-y-4 flex flex-col">
+          <div className="flex items-center justify-between gap-2 pb-3.5 border-b border-slate-100 dark:border-slate-800">
+            <div className="flex items-center gap-2.5 min-w-0">
+              <BrainCircuit className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
+              <h2 className="font-display text-base font-bold text-slate-900 dark:text-white truncate">
+                Fila de revisão
               </h2>
             </div>
 
-            {dueReviews.length > 1 && (
-              <div className="flex items-center gap-1">
+            {dueReviews.length > 1 ? (
+              <div className="flex items-center gap-1 shrink-0">
                 <button
                   type="button"
                   disabled={safeReviewIdx <= 0}
                   onClick={() => setReviewIdx((i) => Math.max(0, i - 1))}
-                  className="p-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-35 cursor-pointer"
+                  className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-35 flex items-center justify-center cursor-pointer"
                   aria-label="Questão anterior"
                 >
-                  <ChevronLeft className="w-3.5 h-3.5" />
+                  <ChevronLeft className="w-4 h-4" />
                 </button>
-                <span className="text-[11px] font-black tabular-nums px-1.5 text-slate-600 dark:text-slate-300">
+                <span className="text-xs font-mono font-semibold tabular-nums px-2 text-slate-600 dark:text-slate-300">
                   {safeReviewIdx + 1}/{dueReviews.length}
                 </span>
                 <button
                   type="button"
                   disabled={safeReviewIdx >= dueReviews.length - 1}
                   onClick={() => setReviewIdx((i) => Math.min(dueReviews.length - 1, i + 1))}
-                  className="p-1 rounded-md border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-35 cursor-pointer"
+                  className="w-8 h-8 rounded-lg border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800 disabled:opacity-35 flex items-center justify-center cursor-pointer"
                   aria-label="Próxima questão"
                 >
-                  <ChevronRight className="w-3.5 h-3.5" />
+                  <ChevronRight className="w-4 h-4" />
                 </button>
               </div>
+            ) : (
+              <span className={`text-xs font-medium ${dueReviews.length > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                {dueReviews.length > 0 ? '1 pendente' : 'Em dia'}
+              </span>
             )}
           </div>
 
-          {/* Alerta de Questões Pendentes */}
+          {/* Status de pendências */}
           {dueReviews.length > 0 ? (
-            <div className="px-3 py-2 rounded-lg bg-red-500/10 border border-red-500/30 flex items-center gap-2 text-xs font-black uppercase tracking-wide text-red-600 dark:text-red-400">
+            <div className="px-3.5 py-2.5 rounded-lg bg-red-500/10 border border-red-500/25 flex items-center gap-2 text-xs font-medium text-red-600 dark:text-red-400">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               <span>
-                Você tem {dueReviews.length} {dueReviews.length === 1 ? 'questão' : 'questões'} para revisar
+                Você tem <strong className="font-mono font-bold tabular-nums">{dueReviews.length}</strong>{' '}
+                {dueReviews.length === 1 ? 'item agendado' : 'itens agendados'} para revisar hoje.
               </span>
             </div>
           ) : (
-            <div className="px-3 py-2 rounded-lg bg-emerald-500/10 border border-emerald-500/25 flex items-center gap-2 text-xs font-black uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
+            <div className="px-3.5 py-2.5 rounded-lg bg-emerald-500/8 border border-emerald-500/20 flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-400">
               <CheckCircle className="w-4 h-4 shrink-0" />
-              <span>Nenhuma questão pendente para revisar hoje</span>
+              <span>Nenhuma revisão pendente para hoje.</span>
             </div>
           )}
 
-          {/* Questão de Revisão Inline (Raio-X Caveira ou Auditoria FSRS) */}
+          {/* Questão de Revisão Inline */}
           {activeReview ? (
             isCaveiraCard(activeReview) ? (
               <CaveiraReviewQuestionModal
@@ -648,63 +769,65 @@ export default function AbaHoje({ onGoToTab }) {
                 onCompleted={() => setReviewIdx(0)}
               />
             ) : (
-              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-850 p-4 space-y-3">
+              <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-850/60 p-4 space-y-3">
                 <div>
-                  <span className="text-[10px] font-black uppercase tracking-wider text-sky-600 dark:text-sky-400 block">
-                    Revisão Programada FSRS
+                  <span className="text-xs font-medium text-sky-600 dark:text-sky-400 block">
+                    Revisão programada FSRS
                   </span>
-                  <h3 className="text-sm font-black text-slate-800 dark:text-white mt-0.5">
-                    {activeReview.topicName || 'Revisão de Tópico'}
+                  <h3 className="text-base font-semibold text-slate-900 dark:text-white mt-0.5">
+                    {activeReview.topicName || 'Revisão de tópico'}
                   </h3>
                 </div>
                 <button
                   type="button"
                   onClick={() => setReviewModal && setReviewModal(activeReview)}
-                  className="w-full h-8 rounded-lg text-xs font-black uppercase tracking-wider bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 transition-colors cursor-pointer"
+                  className="w-full h-10 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 transition-colors cursor-pointer"
                 >
-                  Avaliar Retenção Agora
+                  Avaliar retenção agora
                 </button>
               </div>
             )
           ) : (
-            <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-850/40 p-5 text-center space-y-2">
-              <CheckCircle className="w-6 h-6 text-emerald-500 mx-auto" />
-              <p className="text-xs font-bold text-slate-600 dark:text-slate-300">
-                Sua fila de revisão FSRS está zerada.
+            <div className="my-auto py-8 px-4 text-center space-y-2">
+              <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto">
+                <CheckCircle className="w-5 h-5 text-emerald-500" />
+              </div>
+              <p className="text-sm font-semibold text-slate-800 dark:text-slate-100">
+                Fila de revisão zerada
               </p>
-              <p className="text-[11px] text-slate-500 dark:text-slate-400">
-                Novas questões do Raio-X Caveira marcadas para revisão aparecerão aqui automaticamente.
+              <p className="text-xs text-slate-500 dark:text-slate-400 max-w-xs mx-auto">
+                Novas questões do Raio-X Caveira e revisões de aulas concluídas aparecerão aqui automaticamente.
               </p>
             </div>
           )}
         </section>
       </div>
 
-      <div className="mt-4 flex flex-col xl:flex-row items-stretch gap-3">
+      {/* Consistência + Métricas de Questões */}
+      <div className="flex flex-col xl:flex-row items-stretch gap-5">
         <StudyConsistencyHeatmap />
 
-        <div className="flex-1 min-w-[240px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-3.5 sm:p-4 flex flex-col justify-between divide-y divide-slate-100 dark:divide-slate-800">
-          {/* Meta Diária de Questões Sincronizada com a Extensão */}
+        <div className="flex-1 min-w-[260px] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 flex flex-col justify-between divide-y divide-slate-100 dark:divide-slate-800">
           {(() => {
             const safeGoal = Math.max(5, Number(caveiraDailyGoal) || 50);
             const pct = Math.min(100, Math.round((caveiraStats.todayAnswered / safeGoal) * 100));
             const isGoalMet = caveiraStats.todayAnswered >= safeGoal;
             return (
-              <div className="pb-2.5 first:pt-0 space-y-1.5">
+              <div className="pb-3.5 first:pt-0 space-y-2">
                 <div className="flex items-center justify-between gap-2">
-                  <span className="text-[11px] font-extrabold tracking-wider uppercase text-sky-600 dark:text-sky-400 flex items-center gap-1">
-                    <Target className="w-3.5 h-3.5 shrink-0" />
-                    <span>Meta Diária (Hoje)</span>
+                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5">
+                    <Target className="w-3.5 h-3.5 text-sky-500 shrink-0" />
+                    <span>Meta diária de questões</span>
                   </span>
                   {isEditingQGoal ? (
-                    <div className="flex items-center gap-1">
+                    <div className="flex items-center gap-1.5">
                       <input
                         type="number"
                         min="5"
                         max="1000"
                         value={qGoalDraft}
                         onChange={(e) => setQGoalDraft(e.target.value)}
-                        className="w-14 h-6 px-1.5 rounded border border-sky-500 bg-slate-50 dark:bg-slate-950 text-xs font-black text-center text-slate-800 dark:text-white outline-none"
+                        className="w-16 h-7 px-2 rounded-md border border-sky-500 bg-slate-50 dark:bg-slate-950 text-xs font-mono font-semibold text-center text-slate-900 dark:text-white outline-none"
                       />
                       <button
                         type="button"
@@ -712,15 +835,15 @@ export default function AbaHoje({ onGoToTab }) {
                           if (setCaveiraDailyGoal) setCaveiraDailyGoal(qGoalDraft);
                           setIsEditingQGoal(false);
                         }}
-                        className="h-6 px-2 rounded bg-sky-600 hover:bg-sky-500 text-white text-[10px] font-black uppercase cursor-pointer"
+                        className="h-7 px-2.5 rounded-md bg-sky-600 hover:bg-sky-500 text-white text-xs font-semibold cursor-pointer"
                       >
-                        OK
+                        Salvar
                       </button>
                     </div>
                   ) : (
                     <div className="flex items-center gap-1.5">
-                      <span className={`text-xs font-black tabular-nums ${isGoalMet ? 'text-emerald-500' : 'text-slate-800 dark:text-white'}`}>
-                        {caveiraStats.todayAnswered} / {safeGoal} ({pct}%)
+                      <span className={`text-xs font-mono font-semibold tabular-nums ${isGoalMet ? 'text-emerald-600 dark:text-emerald-400' : 'text-slate-900 dark:text-white'}`}>
+                        {caveiraStats.todayAnswered}/{safeGoal} ({pct}%)
                       </span>
                       <button
                         type="button"
@@ -728,10 +851,11 @@ export default function AbaHoje({ onGoToTab }) {
                           setQGoalDraft(safeGoal);
                           setIsEditingQGoal(true);
                         }}
-                        className="text-[10px] font-bold text-slate-400 hover:text-sky-400 cursor-pointer px-1"
-                        title="Alterar meta diária de questões (sincroniza com a extensão)"
+                        className="w-7 h-7 rounded-md flex items-center justify-center text-slate-400 hover:text-sky-500 hover:bg-slate-100 dark:hover:bg-slate-850 transition-colors cursor-pointer"
+                        title="Alterar meta diária de questões"
+                        aria-label="Alterar meta diária de questões"
                       >
-                        ✏️
+                        <Pencil className="w-3.5 h-3.5" />
                       </button>
                     </div>
                   )}
@@ -739,7 +863,7 @@ export default function AbaHoje({ onGoToTab }) {
                 <div className="w-full h-1.5 rounded-full bg-slate-100 dark:bg-slate-850 overflow-hidden">
                   <div
                     className={`h-full rounded-full transition-all duration-300 ${
-                      isGoalMet ? 'bg-emerald-500' : 'bg-gradient-to-r from-sky-500 to-emerald-400'
+                      isGoalMet ? 'bg-emerald-500' : 'bg-sky-500'
                     }`}
                     style={{ width: `${pct}%` }}
                   />
@@ -748,47 +872,47 @@ export default function AbaHoje({ onGoToTab }) {
             );
           })()}
 
-          <div className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
-            <span className="text-[11px] font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
-              Questões Respondidas
+          <div className="flex items-center justify-between gap-3 py-2.5">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              Questões respondidas
             </span>
-            <span className="text-lg font-black text-slate-800 dark:text-white tabular-nums">
+            <span className="text-base font-mono font-bold text-slate-900 dark:text-white tabular-nums">
               {caveiraStats.total}
             </span>
           </div>
 
-          <div className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
-            <span className="text-[11px] font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
+          <div className="flex items-center justify-between gap-3 py-2.5">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
               Acertos
             </span>
-            <span className="text-lg font-black text-[#0891b2] dark:text-[#06b6d4] tabular-nums">
+            <span className="text-base font-mono font-bold text-emerald-600 dark:text-emerald-400 tabular-nums">
               {caveiraStats.hits}
             </span>
           </div>
 
-          <div className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
-            <span className="text-[11px] font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
+          <div className="flex items-center justify-between gap-3 py-2.5">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
               Erros
             </span>
-            <span className="text-lg font-black text-[#dc2626] dark:text-[#ef4444] tabular-nums">
+            <span className="text-base font-mono font-bold text-red-600 dark:text-red-400 tabular-nums">
               {caveiraStats.errors}
             </span>
           </div>
 
-          <div className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
-            <span className="text-[11px] font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
-              Tempo Total Gasto
+          <div className="flex items-center justify-between gap-3 py-2.5">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              Tempo total em questões
             </span>
-            <span className="text-base font-extrabold text-slate-800 dark:text-white tabular-nums">
+            <span className="text-sm font-mono font-semibold text-slate-800 dark:text-slate-100 tabular-nums">
               {formatDurationHMS(caveiraStats.totalSeconds)}
             </span>
           </div>
 
-          <div className="flex items-center justify-between gap-3 py-2 first:pt-0 last:pb-0">
-            <span className="text-[11px] font-extrabold tracking-wider uppercase text-slate-500 dark:text-slate-400">
-              Tempo Médio por Questão
+          <div className="flex items-center justify-between gap-3 pt-2.5">
+            <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+              Tempo médio por questão
             </span>
-            <span className="text-base font-extrabold text-slate-800 dark:text-white tabular-nums">
+            <span className="text-sm font-mono font-semibold text-slate-800 dark:text-slate-100 tabular-nums">
               {formatDurationHMS(caveiraStats.avgTimeSec)}
             </span>
           </div>

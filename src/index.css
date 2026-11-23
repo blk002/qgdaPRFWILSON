@@ -3,27 +3,28 @@
 @custom-variant dark (&:where(.dark, .dark *));
 
 @theme {
-  --font-sans: 'Inter', 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  --font-display: 'Inter', 'Roboto', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  
-  /* Paleta Aço Noturno (Dark Mode Original QG da PRF com Contraste em Camadas) */
-  --color-slate-950: #0B0D12; /* Canvas principal */
-  --color-slate-900: #13161F; /* Superfície de cards e sidebar */
-  --color-slate-850: #1B202C; /* Superfície aninhada / inputs / botões secundários */
-  --color-slate-800: #252C3D; /* Bordas hairline nítidas e divisores */
-  --color-slate-700: #343E54; /* Bordas hover e controles interativos */
-  --color-slate-600: #525D75;
-  --color-slate-500: #737E96;
-  --color-slate-400: #9CA6BC;
-  --color-slate-300: #D0D7E5;
+  --font-sans: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  --font-display: 'Saira', 'Plus Jakarta Sans', system-ui, sans-serif;
+  --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+
+  /* Paleta Aço Noturno PRF — Contraste em camadas limpas */
+  --color-slate-950: #090C11; /* Canvas principal */
+  --color-slate-900: #11151E; /* Superfície de cards e sidebar */
+  --color-slate-850: #171D29; /* Superfície secundária / controles */
+  --color-slate-800: #222A3B; /* Bordas hairline nítidas */
+  --color-slate-700: #313C52; /* Bordas hover e divisores ativos */
+  --color-slate-600: #4F5B73;
+  --color-slate-500: #717E96;
+  --color-slate-400: #99A4BA;
+  --color-slate-300: #CBD3E2;
   --color-slate-200: #E2E8F0;
   --color-slate-100: #F1F5F9;
   --color-slate-50: #F8FAFC;
 
   /* Paleta Tática PRF */
-  --color-tactical-blue: #13161F;
-  --color-tactical-slate: #1B202C;
-  --color-tactical-dark: #0B0D12;
+  --color-tactical-blue: #11151E;
+  --color-tactical-slate: #171D29;
+  --color-tactical-dark: #090C11;
 
   --color-blue-50: var(--theme-blue-50, #eff6ff);
   --color-blue-100: var(--theme-blue-100, #dbeafe);
@@ -37,69 +38,90 @@
   --color-blue-900: var(--theme-blue-900, #1e3a8a);
   --color-blue-950: var(--theme-blue-950, #172554);
 
-  /* Escala Tipográfica Elevada para Legibilidade Global (sem inflar espaçamentos) */
-  --text-xs: 0.875rem;
-  --text-xs--line-height: 1.25rem;
-  --text-sm: 0.96875rem;
+  /* Escala Tipográfica Limpa e Legível */
+  --text-xs: 0.8125rem;
+  --text-xs--line-height: 1.2rem;
+  --text-sm: 0.90625rem;
   --text-sm--line-height: 1.375rem;
-  --text-base: 1.0625rem;
+  --text-base: 1rem;
   --text-base--line-height: 1.55rem;
-  --text-lg: 1.25rem;
-  --text-lg--line-height: 1.75rem;
+  --text-lg: 1.1875rem;
+  --text-lg--line-height: 1.65rem;
   --text-xl: 1.375rem;
-  --text-xl--line-height: 1.85rem;
+  --text-xl--line-height: 1.8rem;
   --text-2xl: 1.625rem;
-  --text-2xl--line-height: 2.1rem;
+  --text-2xl--line-height: 2.05rem;
 }
 
 @layer base {
   html {
     font-size: 16px;
+    -webkit-tap-highlight-color: transparent;
   }
 
   body {
-    @apply transition-colors duration-300 font-sans antialiased;
-    font-family: 'Inter', 'Roboto', system-ui, -apple-system, sans-serif;
-    letter-spacing: 0.01em;
+    @apply transition-colors duration-200 font-sans antialiased text-slate-900 dark:text-slate-100 bg-slate-50 dark:bg-slate-950;
+    font-family: var(--font-sans);
+    letter-spacing: 0.005em;
   }
-  
-  h1, h2, h3, h4, h5, h6, .font-title {
-    font-family: 'Inter', 'Roboto', system-ui, -apple-system, sans-serif;
+
+  .dark body {
+    letter-spacing: 0.012em;
+  }
+
+  h1, h2, h3, .font-title, .font-display {
+    font-family: var(--font-display);
     font-weight: 700;
     letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+
+  h4, h5, h6 {
+    font-family: var(--font-sans);
+    font-weight: 600;
+  }
+
+  button:focus-visible,
+  a:focus-visible,
+  input:focus-visible,
+  select:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid #38bdf8;
+    outline-offset: 2px;
   }
 }
 
-/* Tactical Background Grid Pattern */
+/* Subtle Architectural Grid Pattern */
 .tactical-grid {
-  background-size: 28px 28px;
-  background-image: 
-    linear-gradient(to right, rgba(148, 163, 184, 0.04) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(148, 163, 184, 0.04) 1px, transparent 1px);
+  background-size: 32px 32px;
+  background-image:
+    linear-gradient(to right, rgba(15, 23, 42, 0.03) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(15, 23, 42, 0.03) 1px, transparent 1px);
 }
 
 .dark .tactical-grid {
-  background-size: 36px 36px;
-  background-image: 
-    linear-gradient(to right, rgba(255, 255, 255, 0.02) 1px, transparent 1px),
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.02) 1px, transparent 1px);
+  background-size: 40px 40px;
+  background-image:
+    linear-gradient(to right, rgba(255, 255, 255, 0.018) 1px, transparent 1px),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.018) 1px, transparent 1px);
 }
 
 .tabular-nums {
   font-variant-numeric: tabular-nums;
 }
 
-/* Surface Card Styles */
+/* Single-Elevation Surface Card */
 .glass-card {
-  @apply bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 shadow-xs dark:shadow-none transition-colors duration-200;
-}
-
-.dark .glass-card {
-  box-shadow: none;
+  @apply bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 transition-colors duration-150;
 }
 
 .glass-card-hover {
-  @apply hover:bg-white dark:hover:bg-slate-900 hover:border-slate-300 dark:hover:border-slate-700;
+  @apply hover:border-slate-300 dark:hover:border-slate-700;
+}
+
+/* Safe area helper for mobile bottom nav */
+.pb-safe {
+  padding-bottom: env(safe-area-inset-bottom, 0px);
 }
 
 /* Custom Tactical Scrollbar */
@@ -113,10 +135,10 @@
 }
 
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  @apply bg-slate-300/60 dark:bg-slate-800/70 rounded-full hover:bg-slate-400 dark:hover:bg-slate-700 transition-colors;
+  @apply bg-slate-300/70 dark:bg-slate-800 rounded-full hover:bg-slate-400 dark:hover:bg-slate-700 transition-colors;
 }
 
-/* Custom Horizontal Tactical Scrollbar (Barra de rolagem visível para os dias) */
+/* Custom Horizontal Scrollbar */
 .custom-scrollbar-x {
   scrollbar-width: thin;
   scrollbar-color: #94a3b8 #f1f5f9;
@@ -124,11 +146,11 @@
 
 :where(.dark, .dark *) .custom-scrollbar-x,
 .dark .custom-scrollbar-x {
-  scrollbar-color: #343E54 #0B0D12;
+  scrollbar-color: #313C52 #090C11;
 }
 
 .custom-scrollbar-x::-webkit-scrollbar {
-  height: 10px;
+  height: 8px;
 }
 
 .custom-scrollbar-x::-webkit-scrollbar-track {
@@ -139,8 +161,8 @@
 
 :where(.dark, .dark *) .custom-scrollbar-x::-webkit-scrollbar-track,
 .dark .custom-scrollbar-x::-webkit-scrollbar-track {
-  background: #0B0D12;
-  border: 1px solid #252C3D;
+  background: #090C11;
+  border: 1px solid #222A3B;
 }
 
 .custom-scrollbar-x::-webkit-scrollbar-thumb {
@@ -160,17 +182,16 @@
 
 :where(.dark, .dark *) .custom-scrollbar-x::-webkit-scrollbar-thumb,
 .dark .custom-scrollbar-x::-webkit-scrollbar-thumb {
-  background: #343E54;
-  border: 2px solid #0B0D12;
+  background: #313C52;
+  border: 2px solid #090C11;
 }
 
 :where(.dark, .dark *) .custom-scrollbar-x::-webkit-scrollbar-thumb:hover,
 .dark .custom-scrollbar-x::-webkit-scrollbar-thumb:hover {
   background: #38BDF8;
-  box-shadow: none;
 }
 
-/* Hidden scrollbars but maintaining functionality */
+/* Hidden scrollbars maintaining functionality */
 .no-scrollbar::-webkit-scrollbar {
   display: none;
 }
@@ -179,51 +200,59 @@
   scrollbar-width: none;
 }
 
-/* Custom Neon Accent Shadows */
+/* Subtle Semantic Glows (Restrained) */
 .glow-blue {
-  box-shadow: 0 0 20px var(--theme-blue-500-glow, rgba(59, 130, 246, 0.15));
+  box-shadow: 0 0 16px var(--theme-blue-500-glow, rgba(59, 130, 246, 0.12));
 }
 
 .glow-emerald {
-  box-shadow: 0 0 20px rgba(16, 185, 129, 0.15);
+  box-shadow: 0 0 16px rgba(16, 185, 129, 0.12);
 }
 
 .glow-purple {
-  box-shadow: 0 0 20px rgba(168, 85, 247, 0.15);
+  box-shadow: 0 0 16px rgba(168, 85, 247, 0.12);
 }
 
 /* Keyframes and Animations */
 @keyframes fadeIn {
-  from { opacity: 0; transform: translateY(8px); }
+  from { opacity: 0; transform: translateY(6px); }
   to { opacity: 1; transform: translateY(0); }
 }
 
 @keyframes pulse-glow {
-  0%, 100% { opacity: 0.15; }
-  50% { opacity: 0.35; }
+  0%, 100% { opacity: 0.12; }
+  50% { opacity: 0.28; }
 }
 
 .fade-in {
-  animation: fadeIn 0.3s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+  animation: fadeIn 0.22s cubic-bezier(0.16, 1, 0.3, 1) forwards;
 }
 
 .pulse-bg-glow {
   animation: pulse-glow 3s infinite ease-in-out;
 }
 
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
 /* Professional CSS Print Styles */
 @media print {
   html, body {
-    background: #000000 !important; /* Force dark mode look even when printing or keep white? The app is dark by default but printing usually fits white paper. Let's make it a clean white paper report for readability, or keep dark style. Standard print is white bg with dark text. Let's make a beautiful high-contrast printed report. */
     background-color: #ffffff !important;
     color: #0f172a !important;
     font-size: 12pt !important;
   }
-  
-  header, nav, button, .no-print, [role="tablist"], [role="navigation"] {
+
+  header, nav, aside, button, .no-print, [role="tablist"], [role="navigation"] {
     display: none !important;
   }
-  
+
   main {
     padding: 0 !important;
     margin: 0 !important;
@@ -262,16 +291,16 @@
   }
 }
 
-/* Eleva o piso de tamanhos arbitrários pequenos sem alterar padding/gap/margin */
+/* Legibilidade mínima para utilitários legados de telas ainda não migradas */
 .text-\[9px\] {
   font-size: 11px;
 }
 .text-\[10px\] {
-  font-size: 12px;
+  font-size: 11.5px;
 }
 .text-\[10\.5px\] {
-  font-size: 12.5px;
+  font-size: 12px;
 }
 .text-\[11px\] {
-  font-size: 13px;
+  font-size: 12.5px;
 }

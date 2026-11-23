@@ -1,6 +1,7 @@
 import React, { useState, useMemo, useEffect } from 'react';
 import { useStore, cleanAlternativeText } from '../store/useStore';
 import { findCourseVideoMatch } from '../utils/caveiraAnalytics';
+import { getSafeExternalUrl } from '../lib/safeUrl';
 import { BrainCircuit, CheckCircle2, XCircle, ArrowRight, Calendar, Save, Video } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -265,9 +266,9 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
                 {qData.attempts.slice(-4).map(a => a?.hit ? '✓' : '✗').join(' → ')} ({qData.attempts.length}x)
               </span>
             )}
-            {videoMatch && (
+            {videoMatch && getSafeExternalUrl(videoMatch.url) && (
               <a
-                href={videoMatch.url}
+                href={getSafeExternalUrl(videoMatch.url)}
                 target="_blank"
                 rel="noopener noreferrer"
                 onClick={() => {
