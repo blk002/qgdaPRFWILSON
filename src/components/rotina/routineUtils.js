@@ -193,16 +193,23 @@ export function normalizeRoutine(routine) {
       .sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
   });
 
-  const validLayouts = ['single', 'split_2', 'by_subject'];
-  const preferredLayout = validLayouts.includes(routine?.preferredLayout)
-    ? routine.preferredLayout
-    : 'single';
+  const preferredLayout = routine?.preferredLayout === 'by_subject' ? 'by_subject' : 'blocks';
+
+  const clampInt = (val, min, max, fallback) => {
+    if (val === undefined || val === null || val === '') return fallback;
+    const n = Number(val);
+    if (!Number.isFinite(n)) return fallback;
+    return Math.max(min, Math.min(max, Math.round(n)));
+  };
 
   return {
     days: { ...baseDays, ...normalizedDays },
     startHour: routine?.startHour === 0 ? 0 : 5,
     autoSyncLessons: routine?.autoSyncLessons !== false,
     preferredLayout,
+    blocksPerDay: clampInt(routine?.blocksPerDay, 1, 8, 1),
+    blockBreakMin: clampInt(routine?.blockBreakMin, 0, 120, 30),
+    subjectBreakMin: clampInt(routine?.subjectBreakMin, 0, 120, 15),
     syncedSignatures:
       routine?.syncedSignatures && typeof routine.syncedSignatures === 'object'
         ? { ...routine.syncedSignatures }

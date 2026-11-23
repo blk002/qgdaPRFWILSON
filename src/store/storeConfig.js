@@ -207,7 +207,10 @@ export const getCleanInitialState = () => ({
     },
     startHour: 5,
     autoSyncLessons: true,
-    preferredLayout: 'single',
+    preferredLayout: 'blocks',
+    blocksPerDay: 1,
+    blockBreakMin: 30,
+    subjectBreakMin: 15,
     syncedSignatures: {}
   },
 });

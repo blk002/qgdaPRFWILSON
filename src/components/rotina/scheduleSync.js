@@ -201,6 +201,7 @@ export function computeWeeklyLessonPlan({
       let blockOrigSec = 0;
       let blockAccelSec = 0;
       let lessonNames = [];
+      let lessonsDetailed = [];
 
       for (const topic of topics) {
         const remaining = Math.max(0, (Number(topic.total) || 0) - (Number(topic.completed) || 0));
@@ -219,7 +220,18 @@ export function computeWeeklyLessonPlan({
             blockCount = Math.min(remainingInTopic, Math.max(1, suggestion.count));
             blockOrigSec = suggestion.totalOrigSec;
             blockAccelSec = suggestion.totalAccelSec;
-            lessonNames = (suggestion.lessonsList || []).map((l) => l.name);
+            const list = suggestion.lessonsList || [];
+            lessonNames = list.map((l) => l.name);
+            lessonsDetailed = list.map((l) => ({
+              index: l.index,
+              name: l.name,
+              topicName: topic.name || '',
+              subjectId,
+              subjectName: subject.name || 'Matéria',
+              origSec: l.origSec,
+              accelSec: l.accelSec,
+              minutes: Math.max(MIN_BLOCK_DURATION, Math.round((l.accelSec || 0) / 60)),
+            }));
           } else {
             blockCount = 1;
             const lessonEntry = topic.lessons?.[currentCompleted];
@@ -227,7 +239,20 @@ export function computeWeeklyLessonPlan({
             const origSec = parseDurationToSeconds(durStr) || 3600;
             blockOrigSec = origSec;
             blockAccelSec = Math.round(origSec / spd);
-            lessonNames = [lessonEntry?.name || `${topic.name} - Aula ${currentCompleted + 1}`];
+            const lName = lessonEntry?.name || `${topic.name} - Aula ${currentCompleted + 1}`;
+            lessonNames = [lName];
+            lessonsDetailed = [
+              {
+                index: currentCompleted,
+                name: lName,
+                topicName: topic.name || '',
+                subjectId,
+                subjectName: subject.name || 'Matéria',
+                origSec: blockOrigSec,
+                accelSec: blockAccelSec,
+                minutes: Math.max(MIN_BLOCK_DURATION, Math.round(blockAccelSec / 60)),
+              },
+            ];
           }
           matched = true;
           break;
@@ -236,7 +261,7 @@ export function computeWeeklyLessonPlan({
         }
       }
 
-      // If subject has no remaining lessons, fall back to its goal or 60m review if keep_fixed with goal
+      // If subject has no remaining lessons, skip
       if (!matched) {
         return;
       }
@@ -257,6 +282,7 @@ export function computeWeeklyLessonPlan({
         accelSec: blockAccelSec,
         origSec: blockOrigSec,
         lessonNames,
+        lessons: lessonsDetailed,
       });
     });
 
@@ -342,6 +368,7 @@ function buildDayPlanRecord(entry, res) {
         ? `Aulas do dia (${totalLessonCount})`
         : 'Aulas do dia';
 
+  const lessons = items.flatMap((it) => it.lessons || []);
   const sigParts = items.map((it) => `${it.subjectId}:${it.minutes}:${it.lessonCount}`).join(',');
   const signature = `${totalMinutes}|${sigParts}`;
 
@@ -355,6 +382,7 @@ function buildDayPlanRecord(entry, res) {
     totalOrigSec,
     totalLessonCount,
     items,
+    lessons,
     summaryLabel,
     summaryNote,
     signature,
@@ -417,20 +445,21 @@ function pickSlotFromWindows(windows, durationMin, preferredAnchors = []) {
 export function placeStudySpecsInDay(occupiedBlocks, specs, options = {}) {
   const {
     preferredStartMin = null,
-    gapBetweenParts = 30,
+    gapBetweenParts = 15,
+    sequential = true,
   } = options;
 
+  const safeGap = Math.max(0, Math.min(120, Math.round(Number(gapBetweenParts) || 0)));
   const placed = [];
   const workingOccupied = [...(occupiedBlocks || [])];
 
-  // Preferred anchors when placing blocks on an open or busy day
+  // Preferred anchors for the first block (or spread mode when sequential=false)
   const isMultiple = specs.length > 1;
   const defaultAnchorsByIdx = (idx) => {
     if (preferredStartMin !== null && idx === 0) {
       return [preferredStartMin, 480, 1140, 840, 360];
     }
-    if (isMultiple) {
-      // For multiple blocks, naturally spread across morning/afternoon/evening when open
+    if (!sequential && isMultiple) {
       if (idx === 0) return [480, 1140, 840, 360];
       if (idx === 1) return [1140, 840, 600, 1020];
       return [1170, 960, 780, 660];
@@ -441,23 +470,33 @@ export function placeStudySpecsInDay(occupiedBlocks, specs, options = {}) {
   specs.forEach((spec, idx) => {
     const durationMin = Math.max(MIN_BLOCK_DURATION, Math.round(Number(spec.durationMin) || 60));
 
-    // Build candidate anchors: if we already placed a previous block and want spacing, prefer after it
+    // In sequential mode, always place block idx > 0 right after the previous block + exact break interval
     let anchors = defaultAnchorsByIdx(idx);
-    if (idx > 0 && placed.length > 0 && preferredStartMin !== null) {
+    let minAfterPrev = null;
+    if (idx > 0 && placed.length > 0 && (sequential || preferredStartMin !== null)) {
       const prevEnd = placed[placed.length - 1].endMin;
-      anchors = [prevEnd + gapBetweenParts, prevEnd, ...anchors];
+      minAfterPrev = prevEnd + safeGap;
+      anchors = safeGap > 0
+        ? [prevEnd + safeGap, prevEnd, ...anchors]
+        : [prevEnd, ...anchors];
     }
 
-    // Search progressively wider day bounds: [06:00-23:00] -> [05:00-24:00] -> [00:00-24:00]
+    // Search progressively wider day bounds; if sequential, first look for windows starting at/after prevEnd + safeGap
     let chosenStart = null;
-    for (const [minB, maxB] of [
-      [360, 1380],
-      [300, 1440],
-      [0, 1440],
-    ]) {
-      const windows = findFreeWindows(workingOccupied, minB, maxB);
-      chosenStart = pickSlotFromWindows(windows, durationMin, anchors);
-      if (chosenStart !== null) break;
+    if (minAfterPrev !== null && minAfterPrev + durationMin <= 1440) {
+      const afterWindows = findFreeWindows(workingOccupied, minAfterPrev, 1440);
+      chosenStart = pickSlotFromWindows(afterWindows, durationMin, [minAfterPrev]);
+    }
+    if (chosenStart === null) {
+      for (const [minB, maxB] of [
+        [360, 1380],
+        [300, 1440],
+        [0, 1440],
+      ]) {
+        const windows = findFreeWindows(workingOccupied, minB, maxB);
+        chosenStart = pickSlotFromWindows(windows, durationMin, anchors);
+        if (chosenStart !== null) break;
+      }
     }
 
     if (chosenStart !== null) {
@@ -546,13 +585,11 @@ export function splitDurationEvenly(totalMin, count) {
 
 /**
  * Builds synced study blocks for a single day according to `mode`:
- * - 'single': 1 unified block with totalMinutes
- * - 'split_2': 2 balanced blocks summing to totalMinutes
- * - 'split_3': 3 balanced blocks summing to totalMinutes
- * - 'by_subject': 1 block per subject from dayPlan.items
+ * - 'blocks' (or legacy 'single'): splits dayPlan.totalMinutes into `blocksPerDay` blocks (1..8) spaced by `breakMin`
+ * - 'by_subject': 1 block per subject from dayPlan.items spaced by `breakMin`
  * Keeps all non-study blocks (Trabalho, Treino, Outra, Sono) untouched.
  */
-export function buildSyncedStudyBlocksForDay(existingDayBlocks, dayPlan, mode = 'single', options = {}) {
+export function buildSyncedStudyBlocksForDay(existingDayBlocks, dayPlan, mode = 'blocks', options = {}) {
   const nonStudy = (existingDayBlocks || []).filter((b) => b.category !== 'study');
   if (!dayPlan || dayPlan.totalMinutes <= 0) {
     return nonStudy;
@@ -570,8 +607,10 @@ export function buildSyncedStudyBlocksForDay(existingDayBlocks, dayPlan, mode = 
         : null;
 
   let specs = [];
+  let gapMin = 0;
 
   if (mode === 'by_subject' && dayPlan.items.length > 0) {
+    gapMin = options.breakMin !== undefined ? Number(options.breakMin) : 15;
     specs = dayPlan.items.map((item) => ({
       durationMin: item.minutes,
       label: item.subjectName,
@@ -582,31 +621,37 @@ export function buildSyncedStudyBlocksForDay(existingDayBlocks, dayPlan, mode = 
       subjectId: item.subjectId,
       source: 'cronograma',
     }));
-  } else if ((mode === 'split_2' || mode === 'split_3') && dayPlan.totalMinutes >= 30) {
-    const count = mode === 'split_3' && dayPlan.totalMinutes >= 45 ? 3 : 2;
-    const durations = splitDurationEvenly(dayPlan.totalMinutes, count);
-    specs = durations.map((dur, idx) => ({
-      durationMin: dur,
-      label: `Aulas do dia · Parte ${idx + 1}/${durations.length}`,
-      note: dayPlan.summaryNote,
-      source: 'cronograma',
-      partIndex: idx + 1,
-      partTotal: durations.length,
-    }));
   } else {
-    specs = [
-      {
-        durationMin: dayPlan.totalMinutes,
-        label: dayPlan.summaryLabel || 'Aulas do dia',
+    const requestedCount = Math.max(1, Math.min(8, Math.round(Number(options.blocksPerDay) || 1)));
+    const durations =
+      requestedCount > 1 ? splitDurationEvenly(dayPlan.totalMinutes, requestedCount) : [dayPlan.totalMinutes];
+
+    if (durations.length > 1) {
+      gapMin = options.breakMin !== undefined ? Number(options.breakMin) : 30;
+      specs = durations.map((dur, idx) => ({
+        durationMin: dur,
+        label: `Aulas do dia · Parte ${idx + 1}/${durations.length}`,
         note: dayPlan.summaryNote,
         source: 'cronograma',
-      },
-    ];
+        partIndex: idx + 1,
+        partTotal: durations.length,
+      }));
+    } else {
+      specs = [
+        {
+          durationMin: dayPlan.totalMinutes,
+          label: dayPlan.summaryLabel || 'Aulas do dia',
+          note: dayPlan.summaryNote,
+          source: 'cronograma',
+        },
+      ];
+    }
   }
 
   return placeStudySpecsInDay(nonStudy, specs, {
     preferredStartMin,
-    gapBetweenParts: mode === 'by_subject' ? 15 : 30,
+    gapBetweenParts: gapMin,
+    sequential: true,
   });
 }
 

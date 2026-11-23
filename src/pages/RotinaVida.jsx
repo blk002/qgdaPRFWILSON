@@ -52,7 +52,7 @@ import {
   SplitBlockModal
 } from '../components/rotina/RoutineBlockModal';
 
-const HOUR_HEIGHT = 46; // px per 60 min (23px per 30-min slot)
+const HOUR_HEIGHT = 48; // px per 60 min (visão geral panorâmica da semana)
 const STEP_MIN = 30;
 const MOVE_SNAP_MIN = 15;
 const WEEK_TOTAL_MIN = 7 * 1440;
@@ -236,11 +236,17 @@ export default function RotinaVida() {
 
       // Caso 1: Dia ainda não sincronizado e sem blocos de estudo -> coloca automaticamente
       if (!prevSig && studyBlocks.length === 0) {
-        nextDays[key] = buildSyncedStudyBlocksForDay(
-          dayBlocks,
-          dayPlan,
-          routine.preferredLayout || 'single'
-        );
+        const layout = routine.preferredLayout || 'blocks';
+        const breakMin =
+          layout === 'by_subject'
+            ? routine.subjectBreakMin
+            : routine.blocksPerDay > 1
+              ? routine.blockBreakMin
+              : 0;
+        nextDays[key] = buildSyncedStudyBlocksForDay(dayBlocks, dayPlan, layout, {
+          blocksPerDay: routine.blocksPerDay,
+          breakMin,
+        });
         nextSignatures[key] = dayPlan.signature;
         changed = true;
         return;
@@ -253,7 +259,8 @@ export default function RotinaVida() {
         studyBlocks.length === 1 &&
         studyBlocks[0].source === 'cronograma'
       ) {
-        nextDays[key] = buildSyncedStudyBlocksForDay(dayBlocks, dayPlan, 'single', {
+        nextDays[key] = buildSyncedStudyBlocksForDay(dayBlocks, dayPlan, 'blocks', {
+          blocksPerDay: 1,
           preferredStartMin: studyBlocks[0].startMin,
         });
         nextSignatures[key] = dayPlan.signature;
@@ -275,6 +282,9 @@ export default function RotinaVida() {
     routine.autoSyncLessons,
     routine.days,
     routine.preferredLayout,
+    routine.blocksPerDay,
+    routine.blockBreakMin,
+    routine.subjectBreakMin,
     routine.syncedSignatures,
     weeklyLessonPlan,
     setLifeRoutine,
@@ -814,7 +824,7 @@ export default function RotinaVida() {
     toast.success(`Blocos de estudo de ${dayLabel} unidos em 1 bloco só.`);
   };
 
-  const handleSyncSingleDayLessons = (dayKey, mode = routine.preferredLayout || 'single') => {
+  const handleSyncSingleDayLessons = (dayKey, mode = routine.preferredLayout || 'blocks') => {
     const dayPlan = weeklyLessonPlan.byDay[dayKey];
     if (!dayPlan || dayPlan.totalMinutes <= 0) {
       toast.info('Não há aulas programadas no cronograma para este dia.');
@@ -822,11 +832,20 @@ export default function RotinaVida() {
     }
     setLifeRoutine((prev) => {
       const current = normalizeRoutine(prev);
+      const breakMin =
+        mode === 'by_subject'
+          ? current.subjectBreakMin
+          : current.blocksPerDay > 1
+            ? current.blockBreakMin
+            : 0;
       return {
         ...current,
         days: {
           ...current.days,
-          [dayKey]: buildSyncedStudyBlocksForDay(current.days[dayKey], dayPlan, mode),
+          [dayKey]: buildSyncedStudyBlocksForDay(current.days[dayKey], dayPlan, mode, {
+            blocksPerDay: current.blocksPerDay,
+            breakMin,
+          }),
         },
         syncedSignatures: {
           ...current.syncedSignatures,
@@ -838,39 +857,86 @@ export default function RotinaVida() {
     toast.success(`Aulas de ${dayLabel} (${formatMinutesCompact(dayPlan.totalMinutes)}) posicionadas na grade.`);
   };
 
-  const handleApplyWeekLessonsLayout = (mode) => {
+  const handleApplyWeekLessonsLayout = (
+    mode,
+    { blocksPerDay = null, breakMin = null, silent = false } = {}
+  ) => {
     if (weeklyLessonPlan.weeklyTotalMinutes <= 0) {
-      toast.info('Adicione matérias no Cronograma para distribuir as aulas automaticamente.');
+      if (!silent) {
+        toast.info('Adicione matérias no Cronograma para distribuir as aulas automaticamente.');
+      }
       return;
     }
+
+    const clampedBlocks =
+      blocksPerDay !== null
+        ? Math.max(1, Math.min(8, Math.round(Number(blocksPerDay) || 1)))
+        : null;
+    const clampedBreak =
+      breakMin !== null
+        ? Math.max(0, Math.min(120, Math.round(Number(breakMin) || 0)))
+        : null;
+
     setLifeRoutine((prev) => {
       const current = normalizeRoutine(prev);
+      const nextBlocksPerDay =
+        mode === 'blocks' && clampedBlocks !== null ? clampedBlocks : current.blocksPerDay;
+      const nextSubjectBreak =
+        mode === 'by_subject' && clampedBreak !== null ? clampedBreak : current.subjectBreakMin;
+      const nextBlockBreak =
+        mode === 'blocks' && clampedBreak !== null ? clampedBreak : current.blockBreakMin;
+      const activeBreak =
+        mode === 'by_subject'
+          ? nextSubjectBreak
+          : nextBlocksPerDay > 1
+            ? nextBlockBreak
+            : 0;
+
       const nextDays = { ...current.days };
       const nextSignatures = { ...current.syncedSignatures };
 
       WEEK_DAYS.forEach(({ key }) => {
         const dayPlan = weeklyLessonPlan.byDay[key];
         if (!dayPlan || dayPlan.totalMinutes <= 0) return;
-        nextDays[key] = buildSyncedStudyBlocksForDay(current.days[key], dayPlan, mode);
+        nextDays[key] = buildSyncedStudyBlocksForDay(current.days[key], dayPlan, mode, {
+          blocksPerDay: nextBlocksPerDay,
+          breakMin: activeBreak,
+        });
         nextSignatures[key] = dayPlan.signature;
       });
 
       return {
         ...current,
         preferredLayout: mode,
+        blocksPerDay: nextBlocksPerDay,
+        blockBreakMin: nextBlockBreak,
+        subjectBreakMin: nextSubjectBreak,
         days: nextDays,
         syncedSignatures: nextSignatures,
       };
     });
 
-    const modeLabels = {
-      single: '1 bloco por dia',
-      split_2: '2 blocos por dia',
-      by_subject: '1 bloco por matéria',
-    };
-    toast.success(
-      `Aulas da semana (${formatMinutesCompact(weeklyLessonPlan.weeklyTotalMinutes)}) organizadas em ${modeLabels[mode] || 'blocos'}.`
-    );
+    if (!silent) {
+      const effectiveBlocks = clampedBlocks !== null ? clampedBlocks : routine.blocksPerDay;
+      const effectiveBreak =
+        clampedBreak !== null
+          ? clampedBreak
+          : mode === 'by_subject'
+            ? routine.subjectBreakMin
+            : routine.blockBreakMin;
+
+      if (mode === 'by_subject') {
+        const suffix =
+          effectiveBreak > 0 ? ` com intervalo de ${effectiveBreak} min` : ' sem intervalo';
+        toast.success(`Aulas organizadas por matéria${suffix}.`);
+      } else if (effectiveBlocks === 1) {
+        toast.success('Aulas organizadas em 1 bloco por dia.');
+      } else {
+        const suffix =
+          effectiveBreak > 0 ? ` com intervalo de ${effectiveBreak} min` : ' sem intervalo';
+        toast.success(`Aulas divididas em ${effectiveBlocks} blocos por dia${suffix}.`);
+      }
+    }
   };
 
   const handleToggleAutoSync = () => {
@@ -1399,13 +1465,11 @@ export default function RotinaVida() {
                           const clippedStart = Math.max(visibleStartMin, block.startMin);
                           const clippedEnd = Math.min(visibleEndMin, effectiveEnd);
                           const topPx = ((clippedStart - visibleStartMin) / 60) * HOUR_HEIGHT;
-                          const heightPx = Math.max(
-                            21,
-                            ((clippedEnd - clippedStart) / 60) * HOUR_HEIGHT - 2
-                          );
+                          const rawHeightPx = ((clippedEnd - clippedStart) / 60) * HOUR_HEIGHT;
+                          const heightPx = Math.max(10, rawHeightPx - 2);
                           const durationMin = effectiveEnd - block.startMin;
                           const meta = getCategoryMeta(block.category);
-                          const isCompact = heightPx < 40;
+                          const isCompact = heightPx < 38;
 
                           return (
                             <div
@@ -1464,9 +1528,13 @@ export default function RotinaVida() {
                                 </button>
                               </div>
 
-                              <div className="h-full pl-3 pr-2 py-1 flex flex-col justify-between">
+                              <div
+                                className={`h-full pl-3 pr-2 flex flex-col ${
+                                  isCompact ? 'py-0.5 justify-center' : 'py-1 justify-between'
+                                }`}
+                              >
                                 {isCompact ? (
-                                  <div className="flex items-center justify-between gap-1 pr-3 text-[11px] leading-tight">
+                                  <div className="flex items-center justify-between gap-1 pr-4 text-[10.5px] leading-none">
                                     <span className="font-semibold truncate">{block.label}</span>
                                     <span className={`font-mono text-[9.5px] shrink-0 tabular-nums ${meta.subTextClass}`}>
                                       {minutesToTimeStr(block.startMin)}
@@ -1474,16 +1542,16 @@ export default function RotinaVida() {
                                   </div>
                                 ) : (
                                   <>
-                                    <div className="min-w-0 pr-3">
+                                    <div className="min-w-0 pr-5">
                                       <div className="text-[11px] font-bold leading-tight truncate">
                                         {block.label}
                                       </div>
                                       <div className={`text-[10px] font-mono tabular-nums mt-0.5 ${meta.subTextClass}`}>
                                         {minutesToTimeStr(block.startMin)}–{minutesToTimeStr(effectiveEnd)}
-                                        {heightPx >= 54 ? ` · ${formatMinutesCompact(durationMin)}` : ''}
+                                        {heightPx >= 52 ? ` · ${formatMinutesCompact(durationMin)}` : ''}
                                       </div>
                                     </div>
-                                    {block.note && heightPx >= 72 && (
+                                    {block.note && heightPx >= 64 && (
                                       <p className={`text-[10px] truncate ${meta.subTextClass}`}>
                                         {block.note}
                                       </p>
@@ -1510,7 +1578,7 @@ export default function RotinaVida() {
                           const meta = getCategoryMeta(dragState.category);
                           const topPx = ((dragState.startMin - visibleStartMin) / 60) * HOUR_HEIGHT;
                           const heightPx = Math.max(
-                            21,
+                            14,
                             ((dragState.endMin - dragState.startMin) / 60) * HOUR_HEIGHT - 2
                           );
                           return (
@@ -1538,7 +1606,7 @@ export default function RotinaVida() {
                           const meta = getCategoryMeta(dragState.block.category);
                           const topPx = ((dragState.startMin - visibleStartMin) / 60) * HOUR_HEIGHT;
                           const heightPx = Math.max(
-                            21,
+                            14,
                             ((dragState.endMin - dragState.startMin) / 60) * HOUR_HEIGHT - 2
                           );
                           const hasConflict = Boolean(dragState.hasConflict);
@@ -1864,33 +1932,197 @@ export default function RotinaVida() {
                 )}
 
                 {/* Modo de distribuição na semana */}
-                <div className="space-y-1.5">
-                  <span className="block text-[11px] font-medium text-slate-500 dark:text-slate-400">
-                    Organizar aulas na semana:
-                  </span>
-                  <div className="grid grid-cols-3 gap-1 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800">
-                    {[
-                      { id: 'single', label: '1 bloco' },
-                      { id: 'split_2', label: '2 blocos' },
-                      { id: 'by_subject', label: 'Matérias' },
-                    ].map((opt) => {
-                      const active = routine.preferredLayout === opt.id;
-                      return (
-                        <button
-                          key={opt.id}
-                          type="button"
-                          onClick={() => handleApplyWeekLessonsLayout(opt.id)}
-                          className={`h-7 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
-                            active
-                              ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 shadow-xs'
-                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
-                          }`}
-                        >
-                          {opt.label}
-                        </button>
-                      );
-                    })}
+                <div className="space-y-2.5">
+                  <div className="space-y-1.5">
+                    <span className="block text-[11px] font-medium text-slate-500 dark:text-slate-400">
+                      Organizar aulas na semana:
+                    </span>
+                    <div className="grid grid-cols-2 gap-1 p-0.5 rounded-lg bg-slate-100 dark:bg-slate-950 border border-slate-200/80 dark:border-slate-800">
+                      {[
+                        { id: 'blocks', label: 'Por blocos' },
+                        { id: 'by_subject', label: 'Matérias' },
+                      ].map((opt) => {
+                        const active = routine.preferredLayout === opt.id;
+                        return (
+                          <button
+                            key={opt.id}
+                            type="button"
+                            onClick={() => handleApplyWeekLessonsLayout(opt.id)}
+                            className={`h-7 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
+                              active
+                                ? 'bg-white dark:bg-slate-800 text-sky-700 dark:text-sky-300 shadow-xs'
+                                : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200'
+                            }`}
+                          >
+                            {opt.label}
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
+
+                  {/* Configuração: Quantos blocos quiser por dia */}
+                  {routine.preferredLayout === 'blocks' && (
+                    <div className="rounded-lg bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 p-2.5 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                          Blocos por dia
+                        </span>
+                        <span className="text-[11px] font-mono font-bold tabular-nums text-sky-700 dark:text-sky-300">
+                          {routine.blocksPerDay}{' '}
+                          {routine.blocksPerDay === 1 ? 'bloco' : 'blocos'}
+                        </span>
+                      </div>
+
+                      <div className="flex items-center gap-1.5">
+                        <div className="grid grid-cols-4 gap-1 flex-1">
+                          {[1, 2, 3, 4].map((count) => {
+                            const selected = routine.blocksPerDay === count;
+                            return (
+                              <button
+                                key={count}
+                                type="button"
+                                onClick={() =>
+                                  handleApplyWeekLessonsLayout('blocks', { blocksPerDay: count })
+                                }
+                                className={`h-6.5 rounded-md text-[11px] font-mono font-semibold tabular-nums transition-colors cursor-pointer ${
+                                  selected
+                                    ? 'bg-sky-600 text-white dark:bg-sky-500 dark:text-slate-950'
+                                    : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-sky-500/50 hover:text-sky-700 dark:hover:text-sky-300'
+                                }`}
+                              >
+                                {count}
+                              </button>
+                            );
+                          })}
+                        </div>
+                        <input
+                          type="number"
+                          aria-label="Quantidade personalizada de blocos por dia"
+                          min={1}
+                          max={8}
+                          value={routine.blocksPerDay}
+                          onChange={(e) => {
+                            const val = Math.max(
+                              1,
+                              Math.min(8, Math.round(Number(e.target.value) || 1))
+                            );
+                            handleApplyWeekLessonsLayout('blocks', {
+                              blocksPerDay: val,
+                              silent: true,
+                            });
+                          }}
+                          className="w-12 h-6.5 px-1.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-mono font-semibold tabular-nums text-center text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40 shrink-0"
+                        />
+                      </div>
+
+                      {/* Intervalo entre blocos quando dividido em 2+ blocos */}
+                      {routine.blocksPerDay > 1 && (
+                        <div className="pt-2 border-t border-slate-200/70 dark:border-slate-800 space-y-1.5">
+                          <div className="flex items-center justify-between gap-2">
+                            <span className="text-[10.5px] font-medium text-slate-600 dark:text-slate-300">
+                              Intervalo entre blocos
+                            </span>
+                            <span className="text-[10.5px] font-mono font-bold tabular-nums text-sky-700 dark:text-sky-300">
+                              {routine.blockBreakMin === 0
+                                ? 'Sem pausa'
+                                : `${routine.blockBreakMin} min`}
+                            </span>
+                          </div>
+                          <div className="grid grid-cols-5 gap-1">
+                            {[0, 10, 15, 30, 60].map((mins) => {
+                              const selected = routine.blockBreakMin === mins;
+                              return (
+                                <button
+                                  key={mins}
+                                  type="button"
+                                  onClick={() =>
+                                    handleApplyWeekLessonsLayout('blocks', { breakMin: mins })
+                                  }
+                                  className={`h-6 rounded-md text-[10px] font-mono font-semibold tabular-nums transition-colors cursor-pointer ${
+                                    selected
+                                      ? 'bg-sky-600 text-white dark:bg-sky-500 dark:text-slate-950'
+                                      : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-sky-500/50 hover:text-sky-700 dark:hover:text-sky-300'
+                                  }`}
+                                >
+                                  {mins === 0 ? 'Sem' : `${mins}m`}
+                                </button>
+                              );
+                            })}
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+
+                  {/* Configuração: Intervalo entre matérias */}
+                  {routine.preferredLayout === 'by_subject' && (
+                    <div className="rounded-lg bg-slate-50 dark:bg-slate-950/60 border border-slate-200/80 dark:border-slate-800 p-2.5 space-y-2">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-semibold text-slate-700 dark:text-slate-200">
+                          Intervalo entre matérias
+                        </span>
+                        <span className="text-[11px] font-mono font-bold tabular-nums text-sky-700 dark:text-sky-300">
+                          {routine.subjectBreakMin === 0
+                            ? 'Sem pausa'
+                            : `${routine.subjectBreakMin} min`}
+                        </span>
+                      </div>
+
+                      <div className="grid grid-cols-5 gap-1">
+                        {[0, 10, 15, 30, 60].map((mins) => {
+                          const selected = routine.subjectBreakMin === mins;
+                          return (
+                            <button
+                              key={mins}
+                              type="button"
+                              onClick={() =>
+                                handleApplyWeekLessonsLayout('by_subject', { breakMin: mins })
+                              }
+                              className={`h-6.5 rounded-md text-[10.5px] font-mono font-semibold tabular-nums transition-colors cursor-pointer ${
+                                selected
+                                  ? 'bg-sky-600 text-white dark:bg-sky-500 dark:text-slate-950'
+                                  : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-300 hover:border-sky-500/50 hover:text-sky-700 dark:hover:text-sky-300'
+                              }`}
+                            >
+                              {mins === 0 ? 'Sem' : `${mins}m`}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="flex items-center justify-between gap-2 pt-0.5">
+                        <label
+                          htmlFor="routine-break-input"
+                          className="text-[10.5px] text-slate-500 dark:text-slate-400"
+                        >
+                          Personalizado:
+                        </label>
+                        <div className="inline-flex items-center gap-1">
+                          <input
+                            id="routine-break-input"
+                            type="number"
+                            min={0}
+                            max={120}
+                            step={5}
+                            value={routine.subjectBreakMin}
+                            onChange={(e) => {
+                              const val = Math.max(
+                                0,
+                                Math.min(120, Math.round(Number(e.target.value) || 0))
+                              );
+                              handleApplyWeekLessonsLayout('by_subject', {
+                                breakMin: val,
+                                silent: true,
+                              });
+                            }}
+                            className="w-14 h-6 px-1.5 rounded-md bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-[11px] font-mono font-semibold tabular-nums text-right text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+                          />
+                          <span className="text-[10.5px] font-mono text-slate-400">min</span>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
 
                 {/* Toggle de sincronização automática */}
