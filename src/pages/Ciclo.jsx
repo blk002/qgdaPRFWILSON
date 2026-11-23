@@ -470,11 +470,10 @@ export default function Ciclo() {
           if (week === weekOffset) {
             const displayTotalLessons = subjectTotalLessons > 0 ? subjectTotalLessons : currentTotal;
             const startBase = subjectTotalLessons > 0 ? subjectCompletedBefore : currentCompleted;
-            const startNum = displayTotalLessons > 0 ? Math.min(displayTotalLessons, startBase + 1) : 1;
-            const endNum = displayTotalLessons > 0 ? Math.min(displayTotalLessons, startBase + blockCount) : startBase + blockCount;
-            const aulaBadgeText = blockCount > 1 && endNum > startNum
-              ? `Aulas ${startNum}–${endNum}/${displayTotalLessons}`
-              : `Aula ${startNum}/${displayTotalLessons}`;
+            const remainingLessons = Math.max(0, displayTotalLessons - startBase);
+            const aulaBadgeText = remainingLessons === 1
+              ? 'Falta 1 aula'
+              : `Faltam ${remainingLessons} aulas`;
 
             const enrichedLessons = plannedLessons.map((les, lIdx) => {
               const origSec = Number(les.origSec) || parseDurationToSeconds(les.durStr) || 0;
@@ -526,7 +525,8 @@ export default function Ciclo() {
               blockTotalOrigSec,
               blockTotalAccelSec,
               aulaBadgeText,
-              displayTotalLessons
+              displayTotalLessons,
+              remainingLessons
             });
           }
         });

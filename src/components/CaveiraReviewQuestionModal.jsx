@@ -2,7 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useStore, cleanAlternativeText } from '../store/useStore';
 import { findCourseVideoMatch } from '../utils/caveiraAnalytics';
 import { getSafeExternalUrl } from '../lib/safeUrl';
-import { BrainCircuit, CheckCircle2, XCircle, ArrowRight, Calendar, Save, Video } from 'lucide-react';
+import { BrainCircuit, CheckCircle2, XCircle, ArrowRight, ArrowUpRight, Calendar, Save, Video } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const KNOWN_CAVEIRA_ALTERNATIVES = {
@@ -274,11 +274,16 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
                 onClick={() => {
                   try { navigator.clipboard?.writeText(`${videoMatch.mmss} ${videoMatch.topicLabel}`); } catch (_) {}
                 }}
-                className="inline-flex items-center gap-1 text-[10px] font-black uppercase bg-sky-500/15 hover:bg-sky-500/25 text-sky-400 border border-sky-500/30 px-2.5 py-1 rounded-lg transition-colors"
+                className="group inline-flex items-center gap-1.5 text-[10px] font-black uppercase bg-sky-500/12 hover:bg-sky-500/20 text-sky-600 dark:text-sky-300 border border-sky-500/30 hover:border-sky-500/50 hover:shadow-xs active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 pl-1.5 pr-2 py-1 rounded-lg transition-all duration-200 cursor-pointer"
                 title={`Ir para ${videoMatch.lessonTitle} (${videoMatch.topicLabel || videoMatch.mmss})`}
               >
-                <Video className="w-3 h-3" />
-                <span>Rever na Aula ({videoMatch.mmss})</span>
+                <span className="w-4 h-4 rounded-full bg-sky-500/20 text-sky-600 dark:text-sky-300 group-hover:bg-sky-600 dark:group-hover:bg-sky-400 group-hover:text-white dark:group-hover:text-slate-950 group-hover:scale-110 flex items-center justify-center shrink-0 transition-all duration-200">
+                  <Video className="w-2.5 h-2.5" />
+                </span>
+                <span className="group-hover:translate-x-0.5 transition-transform duration-200">
+                  Rever na Aula ({videoMatch.mmss})
+                </span>
+                <ArrowUpRight className="w-3 h-3 opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />
               </a>
             )}
           </div>

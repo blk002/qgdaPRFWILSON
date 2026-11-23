@@ -177,7 +177,7 @@ export default function CalendarioSubjectRail({
                 {!isDone && (
                   <div className="flex items-center justify-between gap-2 text-[11px] text-slate-500 dark:text-slate-400">
                     <span className="truncate tabular-nums">
-                      {sub.remaining} {sub.remaining === 1 ? 'aula' : 'aulas'}
+                      {sub.remaining === 1 ? 'Falta 1 aula' : `Faltam ${sub.remaining} aulas`}
                       {currentSpeed > 1 ? ` · ${currentSpeed}x` : ''}
                       {currentGoal ? ` · ${currentGoal}` : ''}
                     </span>

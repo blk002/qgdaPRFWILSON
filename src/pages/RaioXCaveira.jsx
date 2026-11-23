@@ -175,7 +175,6 @@ export default function RaioXCaveira() {
     return typeof document !== 'undefined' && document.documentElement.getAttribute('data-qg-caveira-extension-installed') === 'true';
   });
   const [activeTab, setActiveTab] = useState('overview'); // 'overview' | 'diagnostics' | 'intelligence' | 'notebook'
-  const [diagnosticsSubView, setDiagnosticsSubView] = useState('topics'); // 'topics' | 'disciplines'
   const [inspectedDiscipline, setInspectedDiscipline] = useState(null);
   const [selectedBloco, setSelectedBloco] = useState('all'); // 'all' | 'Bloco I' | 'Bloco II' | 'Bloco III'
   const [selectedSubject, setSelectedSubject] = useState('all');
@@ -217,6 +216,18 @@ export default function RaioXCaveira() {
 
     return () => window.removeEventListener('message', handleMessage);
   }, []);
+
+  useEffect(() => {
+    if (!showInstallModal && !showImportModal) return undefined;
+    const onKeyDown = (e) => {
+      if (e.key === 'Escape') {
+        setShowInstallModal(false);
+        setShowImportModal(false);
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [showInstallModal, showImportModal]);
 
   // Enriquecimento automático de cada questão com Bloco PRF e Disciplina Padronizada
   const enrichedQuestions = useMemo(() => {
@@ -705,14 +716,13 @@ export default function RaioXCaveira() {
     }
   };
 
-  const handleNavigateTab = (tab, subView = null) => {
-    if (subView) setDiagnosticsSubView(subView);
+  const handleNavigateTab = (tab) => {
+    if (tab === 'diagnostics') setInspectedDiscipline(null);
     setActiveTab(tab);
   };
 
   const handleInspectDiscipline = (disciplineName) => {
     setInspectedDiscipline(disciplineName);
-    setDiagnosticsSubView('disciplines');
     setActiveTab('diagnostics');
   };
 
@@ -735,56 +745,57 @@ export default function RaioXCaveira() {
   const workspaceTabs = [
     {
       id: 'overview',
-      label: 'Visão Geral',
-      icon: <LayoutDashboard className="w-4 h-4" />,
-      badge: stats.total > 0 ? `${stats.grossRate}%` : null
+      label: 'Resumo',
+      icon: <LayoutDashboard className="w-3.5 h-3.5" />,
+      count: stats.total > 0 ? `${stats.grossRate}%` : null
     },
     {
       id: 'diagnostics',
-      label: 'Diagnóstico',
-      icon: <Target className="w-4 h-4" />,
-      badge: topicRankings.criticalCount > 0 ? `${topicRankings.criticalCount} crít.` : `${subjectGroups.length}`
+      label: 'Disciplinas & Assuntos',
+      icon: <Target className="w-3.5 h-3.5" />,
+      count: `${subjectGroups.length}`
     },
     {
       id: 'intelligence',
-      label: 'Inteligência & Lei Seca',
-      icon: <Scale className="w-4 h-4" />,
-      badge: legalRadarList.length + decorebaRows.length > 0 ? `${legalRadarList.length}` : null
+      label: 'Lei Seca & Retenção',
+      icon: <Scale className="w-3.5 h-3.5" />,
+      count: legalRadarList.length > 0 ? `${legalRadarList.length}` : null
     },
     {
       id: 'notebook',
-      label: 'Caderno Tático',
-      icon: <BookOpen className="w-4 h-4" />,
-      badge: `${filteredQuestions.length}`
+      label: 'Caderno',
+      icon: <BookOpen className="w-3.5 h-3.5" />,
+      count: `${filteredQuestions.length}`
     }
   ];
 
   return (
     <div className="fade-in w-full pb-12 font-sans space-y-5">
-      {/* CABEÇALHO DE COMANDO + NAVEGAÇÃO EM 4 WORKSPACES + RAIL DE BLOCOS */}
+      {/* CABEÇALHO LIMPO + NAVEGAÇÃO DIRETA + FILTRO DE BLOCO */}
       <header className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
-        {/* Linha 1: Identidade + Status Extensão + Ações */}
-        <div className="p-4 sm:p-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
-          <div className="flex items-start sm:items-center gap-3.5 min-w-0">
-            <div className="w-11 h-11 rounded-xl bg-red-500/10 border border-red-500/25 flex items-center justify-center shrink-0">
+        <div className="px-4 sm:px-6 py-4 flex flex-col lg:flex-row lg:items-center justify-between gap-3.5">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-10 h-10 rounded-xl bg-red-50 dark:bg-red-950/50 border border-red-200/80 dark:border-red-900/60 flex items-center justify-center shrink-0">
               <Skull className="w-5 h-5 text-red-600 dark:text-red-400" />
             </div>
             <div className="min-w-0">
-              <div className="flex items-center gap-2.5 flex-wrap">
-                <h1 className="font-display text-lg sm:text-xl font-bold text-slate-900 dark:text-white tracking-tight">
-                  Raio-X Projeto Caveira
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="font-display text-base sm:text-lg font-bold text-slate-900 dark:text-white tracking-tight">
+                  Raio-X Caveira
                 </h1>
-                <span className={`inline-flex items-center gap-1.5 text-xs font-semibold px-2 py-0.5 rounded-md border ${
-                  extensionDetected
-                    ? 'bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 border-emerald-500/25'
-                    : 'bg-amber-500/10 text-amber-700 dark:text-amber-400 border-amber-500/25'
-                }`}>
-                  <span className={`w-1.5 h-1.5 rounded-full ${extensionDetected ? 'bg-emerald-500 animate-pulse' : 'bg-amber-500'}`} />
-                  {extensionDetected ? 'Extensão ativa' : 'Extensão offline'}
+                <span className="text-slate-300 dark:text-slate-700">·</span>
+                <span
+                  className={`text-xs font-semibold ${
+                    extensionDetected
+                      ? 'text-emerald-600 dark:text-emerald-400'
+                      : 'text-amber-600 dark:text-amber-400'
+                  }`}
+                >
+                  {extensionDetected ? 'Extensão conectada' : 'Extensão desconectada'}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                Central de telemetria Cebraspe, diagnóstico de vulnerabilidades, lei seca e caderno tático de revisão.
+                Diagnóstico de questões Cebraspe, pontos fracos por assunto, lei seca e caderno de revisão.
               </p>
             </div>
           </div>
@@ -794,7 +805,7 @@ export default function RaioXCaveira() {
               <button
                 type="button"
                 onClick={handleRequestSync}
-                className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 <span>Sincronizar</span>
@@ -803,7 +814,7 @@ export default function RaioXCaveira() {
               <button
                 type="button"
                 onClick={() => setShowInstallModal(true)}
-                className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-500 text-white inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+                className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-red-600 hover:bg-red-500 text-white inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
               >
                 <Download className="w-3.5 h-3.5" />
                 <span>Ativar extensão</span>
@@ -813,11 +824,11 @@ export default function RaioXCaveira() {
             <button
               type="button"
               onClick={() => setShowImportModal(true)}
-              className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200/80 text-slate-800 border border-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700 inline-flex items-center gap-1.5 transition-colors cursor-pointer"
+              className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-white hover:bg-slate-50 text-slate-700 border border-slate-200 dark:bg-slate-900 dark:hover:bg-slate-800 dark:text-slate-200 dark:border-slate-700 inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
               title="Importar questões via JSON"
             >
               <Upload className="w-3.5 h-3.5" />
-              <span>Importar</span>
+              <span>Importar JSON</span>
             </button>
 
             {caveiraQuestions.length > 0 && (
@@ -825,12 +836,15 @@ export default function RaioXCaveira() {
                 type="button"
                 onClick={() => {
                   useStore.getState().setGlobalModal({
+                    type: 'confirm',
+                    variant: 'danger',
                     title: 'Limpar Histórico do Caveira?',
                     message: 'Esta ação removerá todas as questões sincronizadas do Raio-X Caveira e seus respectivos cartões FSRS.',
+                    confirmText: 'Limpar tudo',
                     onConfirm: () => clearCaveiraQuestions()
                   });
                 }}
-                className="h-9 w-9 rounded-lg border border-red-500/25 bg-red-500/8 hover:bg-red-600 text-red-600 dark:text-red-400 hover:text-white inline-flex items-center justify-center transition-colors cursor-pointer"
+                className="h-9 w-9 rounded-lg border border-slate-200 dark:border-slate-700 hover:border-red-300 dark:hover:border-red-800 hover:bg-red-50 dark:hover:bg-red-950/40 text-slate-500 hover:text-red-600 dark:hover:text-red-400 inline-flex items-center justify-center transition-colors cursor-pointer"
                 title="Limpar histórico do Caveira"
                 aria-label="Limpar histórico do Caveira"
               >
@@ -840,33 +854,31 @@ export default function RaioXCaveira() {
           </div>
         </div>
 
-        {/* Linha 2: Navegação de Workspaces + Seletor de Bloco Global */}
+        {/* Barra Integrada de Seções + Escopo de Bloco PRF */}
         {caveiraQuestions.length > 0 && (
-          <div className="px-4 sm:px-5 pt-2 pb-3 border-t border-slate-100 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-950/40 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
-            {/* Abas de Workspace */}
-            <nav aria-label="Seções do Raio-X Caveira" className="flex items-center gap-1 overflow-x-auto no-scrollbar">
+          <div className="px-4 sm:px-6 py-2.5 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/50 dark:bg-slate-950/35 flex flex-col xl:flex-row xl:items-center justify-between gap-3">
+            <nav
+              aria-label="Seções do Raio-X Caveira"
+              className="flex items-center gap-1 overflow-x-auto no-scrollbar"
+            >
               {workspaceTabs.map((tab) => {
                 const isActive = activeTab === tab.id;
                 return (
                   <button
                     key={tab.id}
                     type="button"
-                    onClick={() => setActiveTab(tab.id)}
-                    className={`h-9 px-3.5 rounded-xl text-xs font-semibold inline-flex items-center gap-2 transition-all cursor-pointer shrink-0 border ${
+                    onClick={() => handleNavigateTab(tab.id)}
+                    className={`h-8 px-3 rounded-lg text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer shrink-0 whitespace-nowrap ${
                       isActive
-                        ? 'bg-slate-900 text-white border-slate-900 dark:bg-sky-500 dark:text-slate-950 dark:border-sky-400 shadow-xs'
-                        : 'bg-transparent text-slate-600 dark:text-slate-300 border-transparent hover:bg-white dark:hover:bg-slate-900 hover:text-slate-900 dark:hover:text-white'
+                        ? 'bg-slate-900 text-white dark:bg-sky-500 dark:text-slate-950'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-200/60 dark:hover:bg-slate-800 hover:text-slate-900 dark:hover:text-white'
                     }`}
                   >
                     {tab.icon}
                     <span>{tab.label}</span>
-                    {tab.badge && (
-                      <span className={`font-mono text-[11px] px-1.5 py-0.5 rounded-md tabular-nums ${
-                        isActive
-                          ? 'bg-white/15 dark:bg-slate-950/20'
-                          : 'bg-slate-200/80 dark:bg-slate-800 text-slate-700 dark:text-slate-300'
-                      }`}>
-                        {tab.badge}
+                    {tab.count && (
+                      <span className="font-mono text-[11px] opacity-70 tabular-nums">
+                        ({tab.count})
                       </span>
                     )}
                   </button>
@@ -874,70 +886,72 @@ export default function RaioXCaveira() {
               })}
             </nav>
 
-            {/* Seletor de Bloco PRF */}
-            <div className="flex flex-wrap items-center gap-1.5">
-              <button
-                type="button"
-                onClick={() => {
-                  setSelectedBloco('all');
-                  setSelectedSubject('all');
-                  setSelectedTopic('all');
-                }}
-                className={`h-8 px-2.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer border inline-flex items-center gap-1 ${
-                  selectedBloco === 'all'
-                    ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white border-slate-300 dark:border-slate-600 shadow-xs'
-                    : 'bg-transparent text-slate-500 dark:text-slate-400 border-transparent hover:text-slate-900 dark:hover:text-white'
-                }`}
-              >
-                <span>Todos</span>
-                <span className="font-mono text-[11px] opacity-75">({enrichedQuestions.length})</span>
-              </button>
+            {/* Seletor Compacto de Bloco PRF */}
+            <div className="flex items-center gap-2 self-start xl:self-auto">
+              <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800/90 border border-slate-200/80 dark:border-slate-700/70">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setSelectedBloco('all');
+                    setSelectedSubject('all');
+                    setSelectedTopic('all');
+                  }}
+                  className={`h-7 px-2.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer whitespace-nowrap ${
+                    selectedBloco === 'all'
+                      ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                      : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                  }`}
+                >
+                  Todos
+                </button>
 
-              {blocoStats.map((b) => {
-                const isSelected = selectedBloco === b.blocoKey;
-                return (
-                  <button
-                    key={b.blocoKey}
-                    type="button"
-                    onClick={() => {
-                      setSelectedBloco(isSelected ? 'all' : b.blocoKey);
-                      setSelectedSubject('all');
-                      setSelectedTopic('all');
-                    }}
-                    className={`h-8 px-2.5 rounded-lg text-xs font-semibold transition-colors cursor-pointer border inline-flex items-center gap-1.5 ${
-                      isSelected
-                        ? b.activeClass
-                        : 'bg-white/70 dark:bg-slate-900/70 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-400 dark:hover:border-slate-600'
-                    }`}
-                    title={b.subtitle}
-                  >
-                    <span>{b.short}</span>
-                    <span className={`font-mono text-[11px] font-bold tabular-nums ${
-                      isSelected
-                        ? 'opacity-90'
-                        : b.total === 0
-                        ? 'text-slate-400'
-                        : b.grossRate >= 75
-                        ? 'text-emerald-600 dark:text-emerald-400'
-                        : b.grossRate >= 50
-                        ? 'text-amber-600 dark:text-amber-400'
-                        : 'text-red-600 dark:text-red-400'
-                    }`}>
-                      {b.total > 0 ? `${b.grossRate}%` : '0q'}
-                    </span>
-                  </button>
-                );
-              })}
+                {blocoStats.map((b) => {
+                  const isSelected = selectedBloco === b.blocoKey;
+                  const shortCode = b.blocoKey === 'Bloco I' ? 'B1' : b.blocoKey === 'Bloco II' ? 'B2' : 'B3';
+                  return (
+                    <button
+                      key={b.blocoKey}
+                      type="button"
+                      onClick={() => {
+                        setSelectedBloco(isSelected ? 'all' : b.blocoKey);
+                        setSelectedSubject('all');
+                        setSelectedTopic('all');
+                      }}
+                      title={b.subtitle}
+                      className={`h-7 px-2.5 rounded-md text-[11px] font-semibold transition-colors cursor-pointer inline-flex items-center gap-1 whitespace-nowrap ${
+                        isSelected
+                          ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-xs'
+                          : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                      }`}
+                    >
+                      <span>{shortCode}</span>
+                      {b.total > 0 && (
+                        <span
+                          className={`font-mono text-[10px] tabular-nums ${
+                            b.grossRate >= 75
+                              ? 'text-emerald-600 dark:text-emerald-400'
+                              : b.grossRate >= 50
+                                ? 'text-amber-600 dark:text-amber-400'
+                                : 'text-red-600 dark:text-red-400'
+                          }`}
+                        >
+                          {b.grossRate}%
+                        </span>
+                      )}
+                    </button>
+                  );
+                })}
+              </div>
 
               {hasActiveFilters && (
                 <button
                   type="button"
                   onClick={resetAllFilters}
-                  className="h-8 px-2 rounded-lg text-xs font-semibold text-amber-600 dark:text-amber-400 hover:bg-amber-500/10 inline-flex items-center gap-1 cursor-pointer"
+                  className="h-7 px-2 rounded-md text-[11px] font-semibold text-amber-600 dark:text-amber-400 hover:underline inline-flex items-center gap-1 cursor-pointer whitespace-nowrap"
                   title="Limpar todos os filtros ativos"
                 >
-                  <X className="w-3.5 h-3.5" />
-                  <span className="hidden sm:inline">Limpar</span>
+                  <X className="w-3 h-3" />
+                  <span>Limpar</span>
                 </button>
               )}
             </div>
@@ -1034,8 +1048,7 @@ export default function RaioXCaveira() {
 
             {activeTab === 'diagnostics' && (
               <RaioXDiagnostics
-                key={`${diagnosticsSubView}-${inspectedDiscipline || 'first'}`}
-                initialSubView={diagnosticsSubView}
+                key={inspectedDiscipline || 'ranking'}
                 initialDiscipline={inspectedDiscipline}
                 enrichedQuestions={enrichedQuestions}
                 subjectGroups={subjectGroups}
@@ -1104,8 +1117,12 @@ export default function RaioXCaveira() {
       {/* MODAL DE INSTALAÇÃO DA EXTENSÃO (LIGHT + DARK) */}
       <AnimatePresence>
         {showInstallModal && (
-          <div className="fixed inset-0 z-[150] bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div
+            onClick={() => setShowInstallModal(false)}
+            className="fixed inset-0 z-[150] bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4"
+          >
             <motion.div
+              onClick={(e) => e.stopPropagation()}
               initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.96, opacity: 0 }}
@@ -1198,8 +1215,12 @@ export default function RaioXCaveira() {
       {/* MODAL DE IMPORTAÇÃO JSON (LIGHT + DARK) */}
       <AnimatePresence>
         {showImportModal && (
-          <div className="fixed inset-0 z-[150] bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4">
+          <div
+            onClick={() => setShowImportModal(false)}
+            className="fixed inset-0 z-[150] bg-slate-950/75 backdrop-blur-xs flex items-center justify-center p-4"
+          >
             <motion.div
+              onClick={(e) => e.stopPropagation()}
               initial={{ scale: 0.96, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               exit={{ scale: 0.96, opacity: 0 }}

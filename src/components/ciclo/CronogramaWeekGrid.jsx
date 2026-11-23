@@ -156,6 +156,7 @@ export default function CronogramaWeekGrid({
                     plannedLessons,
                     aulaBadgeText,
                     displayTotalLessons,
+                    remainingLessons,
                     blockTotalAccelSec,
                     pastMinutes,
                     wasStudied,
@@ -240,7 +241,7 @@ export default function CronogramaWeekGrid({
                                 {isReplaced ? 'Subst.' : '2x'}
                               </span>
                             )}
-                            {displayTotalLessons > 0 && (
+                            {(remainingLessons ?? displayTotalLessons) > 0 && (
                               <span className="text-sky-600 dark:text-sky-400 font-bold">
                                 {aulaBadgeText}
                               </span>
@@ -261,18 +262,25 @@ export default function CronogramaWeekGrid({
                         </div>
                       ) : activeTopic ? (
                         <>
-                          <div className="space-y-1.5 pt-1 border-t border-slate-200/60 dark:border-slate-800/70">
+                          <div className="space-y-1 pt-1 border-t border-slate-200/60 dark:border-slate-800/70">
                             {plannedLessons.map((les, lIdx) => (
-                              <div key={lIdx} className="flex items-start justify-between gap-2 text-xs">
+                              <div key={lIdx} className="flex items-center justify-between gap-2 text-xs">
                                 <a
                                   href={les.directLesHref}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-slate-700 dark:text-slate-200 hover:text-sky-600 dark:hover:text-sky-400 font-medium leading-snug line-clamp-2 flex-1 min-w-0 inline-flex items-start gap-1"
-                                  title={`Abrir "${les.name}" no Caveira`}
+                                  className="group relative flex items-center gap-2 flex-1 min-w-0 -mx-1.5 px-1.5 py-1 rounded-lg border border-transparent hover:bg-sky-500/[0.09] dark:hover:bg-sky-400/[0.12] hover:border-sky-500/35 dark:hover:border-sky-400/35 hover:shadow-xs active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 transition-all duration-200 ease-out cursor-pointer"
+                                  title={`Assistir "${les.name}" diretamente no Caveira`}
                                 >
-                                  <PlayCircle className="w-3.5 h-3.5 text-sky-500 shrink-0 mt-0.5" />
-                                  <span>{les.name}</span>
+                                  <span className="w-5 h-5 rounded-full bg-sky-500/12 dark:bg-sky-400/12 text-sky-600 dark:text-sky-400 group-hover:bg-sky-600 dark:group-hover:bg-sky-400 group-hover:text-white dark:group-hover:text-slate-950 group-hover:scale-110 group-hover:shadow-sm group-hover:shadow-sky-500/30 flex items-center justify-center shrink-0 transition-all duration-200">
+                                    <PlayCircle className="w-3 h-3 shrink-0" />
+                                  </span>
+                                  <span className="text-slate-700 dark:text-slate-200 font-medium leading-snug line-clamp-2 flex-1 min-w-0 group-hover:text-sky-700 dark:group-hover:text-sky-300 group-hover:translate-x-0.5 transition-all duration-200">
+                                    {les.name}
+                                  </span>
+                                  <span className="inline-flex items-center justify-center w-5 h-5 rounded-md bg-sky-600/12 dark:bg-sky-400/15 text-sky-700 dark:text-sky-300 shrink-0 opacity-0 -translate-x-1.5 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0 transition-all duration-200">
+                                    <ArrowUpRight className="w-3 h-3 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                                  </span>
                                 </a>
                                 {les.durationLabel && (
                                   <span className="font-mono text-[11px] font-bold text-amber-700 dark:text-amber-300 shrink-0 tabular-nums">

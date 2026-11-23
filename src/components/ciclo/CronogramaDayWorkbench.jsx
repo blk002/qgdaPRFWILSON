@@ -13,7 +13,8 @@ import {
   ChevronRight,
   RotateCcw,
   Layers,
-  BookOpen
+  BookOpen,
+  ArrowUpRight
 } from 'lucide-react';
 import { formatSecondsToFriendly, formatMinutesToFriendly } from '../../lib/durationHelpers';
 
@@ -251,6 +252,7 @@ export default function CronogramaDayWorkbench({
                   plannedLessons,
                   aulaBadgeText,
                   displayTotalLessons,
+                  remainingLessons,
                   blockTotalAccelSec,
                   pastMinutes,
                   wasStudied,
@@ -338,7 +340,7 @@ export default function CronogramaDayWorkbench({
                             {isReplaced ? 'Subst.' : '2x'}
                           </span>
                         )}
-                        {!isSlotCompleted && activeTopic && displayTotalLessons > 0 && (
+                        {!isSlotCompleted && activeTopic && (remainingLessons ?? displayTotalLessons) > 0 && (
                           <span className="px-2 py-0.5 rounded-md bg-sky-500/12 text-sky-700 dark:text-sky-300 border border-sky-500/30 font-mono text-[11px] font-bold tabular-nums">
                             {aulaBadgeText}
                           </span>
@@ -373,41 +375,40 @@ export default function CronogramaDayWorkbench({
                       </div>
                     ) : activeTopic ? (
                       <>
-                        {/* Lista Alinhada de Aulas (Nome 2 linhas | Duração âmbar | Botão Abrir Videoaula alinhado) */}
+                        {/* Lista de Aulas com link direto no título */}
                         <div className="divide-y divide-slate-100 dark:divide-slate-800/70">
                           {plannedLessons.map((les, lIdx) => (
                             <div
                               key={lIdx}
-                              className="py-2 first:pt-0.5 last:pb-0.5 grid grid-cols-1 sm:grid-cols-[minmax(0,1fr)_auto_8.25rem] items-center gap-2 sm:gap-3"
+                              className="py-1.5 first:pt-0.5 last:pb-0.5 grid grid-cols-[minmax(0,1fr)_auto] items-center gap-x-3 gap-y-1 text-sm leading-snug"
                             >
-                              <span
-                                className="text-sm font-medium text-slate-800 dark:text-slate-100 leading-snug line-clamp-2 min-w-0"
-                                title={les.name}
+                              <a
+                                href={les.directLesHref}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="group relative flex items-center gap-2.5 min-w-0 -mx-2 px-2 py-1.5 rounded-lg border border-transparent hover:bg-sky-500/[0.09] dark:hover:bg-sky-400/[0.12] hover:border-sky-500/35 dark:hover:border-sky-400/35 hover:shadow-xs active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 transition-all duration-200 ease-out cursor-pointer"
+                                title={`Assistir "${les.name}" diretamente no Caveira`}
                               >
-                                {les.name}
-                              </span>
-
-                              <div className="flex items-center justify-between sm:contents gap-2">
-                                {les.durationLabel ? (
-                                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/12 border border-amber-500/30 font-mono text-xs font-extrabold text-amber-700 dark:text-amber-300 tabular-nums shrink-0 justify-self-end">
-                                    <Clock className="w-3 h-3 text-amber-500 shrink-0" />
-                                    {les.durationLabel}
-                                  </span>
-                                ) : (
-                                  <span />
-                                )}
-
-                                <a
-                                  href={les.directLesHref}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="h-7 w-full sm:w-[8.25rem] px-2.5 rounded-lg bg-sky-500/12 hover:bg-sky-600 text-sky-700 dark:text-sky-300 hover:text-white border border-sky-500/30 text-[11px] font-bold inline-flex items-center justify-center gap-1.5 transition-colors shrink-0 whitespace-nowrap"
-                                  title={`Abrir "${les.name}" diretamente no Caveira`}
-                                >
+                                <span className="w-6 h-6 rounded-full bg-sky-500/12 dark:bg-sky-400/12 text-sky-600 dark:text-sky-400 group-hover:bg-sky-600 dark:group-hover:bg-sky-400 group-hover:text-white dark:group-hover:text-slate-950 group-hover:scale-110 group-hover:shadow-sm group-hover:shadow-sky-500/30 flex items-center justify-center shrink-0 transition-all duration-200">
                                   <PlayCircle className="w-3.5 h-3.5 shrink-0" />
-                                  <span>Abrir Videoaula</span>
-                                </a>
-                              </div>
+                                </span>
+                                <span className="text-slate-800 dark:text-slate-100 font-medium break-words line-clamp-2 min-w-0 flex-1 group-hover:text-sky-700 dark:group-hover:text-sky-300 group-hover:translate-x-0.5 transition-all duration-200">
+                                  {les.name}
+                                </span>
+                                <span className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md bg-sky-600/12 dark:bg-sky-400/15 text-sky-700 dark:text-sky-300 text-[11px] font-bold whitespace-nowrap shrink-0 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0 transition-all duration-200">
+                                  <span>Assistir</span>
+                                  <ArrowUpRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                                </span>
+                              </a>
+
+                              {les.durationLabel ? (
+                                <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-md bg-amber-500/12 border border-amber-500/30 font-mono text-xs font-extrabold text-amber-700 dark:text-amber-300 tabular-nums shrink-0 justify-self-end whitespace-nowrap">
+                                  <Clock className="w-3 h-3 text-amber-500 shrink-0" />
+                                  {les.durationLabel}
+                                </span>
+                              ) : (
+                                <span />
+                              )}
                             </div>
                           ))}
                         </div>

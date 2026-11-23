@@ -22,7 +22,8 @@ import {
   ChevronRight,
   BrainCircuit,
   Zap,
-  Pencil
+  Pencil,
+  ArrowUpRight
 } from 'lucide-react';
 
 const SHORT_WEEKDAYS = ['DOM', 'SEG', 'TER', 'QUA', 'QUI', 'SEX', 'SÁB'];
@@ -534,11 +535,10 @@ export default function AbaHoje({ onGoToTab }) {
                 const accentBorderClass = getSubjectAccentBorderClass(block.subject?.color);
                 const displayTotalLessons = block.subjectTotalLessons > 0 ? block.subjectTotalLessons : block.currentTotal;
                 const startBase = block.subjectTotalLessons > 0 ? block.subjectCompletedBefore : block.currentCompleted;
-                const startNum = displayTotalLessons > 0 ? Math.min(displayTotalLessons, startBase + 1) : 1;
-                const endNum = displayTotalLessons > 0 ? Math.min(displayTotalLessons, startBase + block.blockCount) : (startBase + block.blockCount);
-                const aulaBadgeText = (block.blockCount > 1 && endNum > startNum)
-                  ? `Aulas ${startNum}–${endNum}/${displayTotalLessons}`
-                  : `Aula ${startNum}/${displayTotalLessons}`;
+                const remainingLessons = Math.max(0, displayTotalLessons - startBase);
+                const aulaBadgeText = remainingLessons === 1
+                  ? 'Falta 1 aula'
+                  : `Faltam ${remainingLessons} aulas`;
                 const totalTimeText = block.blockAccelSec > 0
                   ? formatSecondsToFriendly(block.blockAccelSec)
                   : '';
@@ -580,7 +580,7 @@ export default function AbaHoje({ onGoToTab }) {
                                 <span aria-hidden="true">·</span>
                               </>
                             )}
-                            {block.activeTopic && displayTotalLessons > 0 && (
+                            {block.activeTopic && remainingLessons > 0 && (
                               <span className="font-mono font-semibold text-sky-600 dark:text-sky-400">
                                 {aulaBadgeText}
                               </span>
@@ -608,8 +608,8 @@ export default function AbaHoje({ onGoToTab }) {
                         </div>
                       ) : block.activeTopic ? (
                         <>
-                          {/* Lista de aulas planejadas com botão Abrir Videoaula */}
-                          <div className="space-y-2">
+                          {/* Lista de aulas planejadas com link direto no título */}
+                          <div className="space-y-1">
                             {block.plannedLessons.map((les, lIdx) => {
                               const origSec = Number(les.origSec) || parseDurationToSeconds(les.durStr) || 0;
                               const accelSec = Number(les.accelSec) || (origSec > 0 ? Math.round(origSec / block.spd) : 0);
@@ -637,25 +637,27 @@ export default function AbaHoje({ onGoToTab }) {
                               return (
                                 <div
                                   key={lIdx}
-                                  className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_auto_7.75rem] items-center gap-x-3 gap-y-1 text-sm leading-snug"
+                                  className="grid grid-cols-[minmax(0,1fr)_auto] sm:grid-cols-[minmax(0,1fr)_7.75rem] items-center gap-x-3 gap-y-1 text-sm leading-snug"
                                 >
-                                  <span
-                                    className="text-slate-700 dark:text-slate-200 break-words line-clamp-2 min-w-0"
-                                    title={les.name}
-                                  >
-                                    • {les.name}
-                                  </span>
                                   <a
                                     href={directUrl}
                                     target="_blank"
                                     rel="noopener noreferrer"
-                                    className="inline-flex items-center justify-center gap-1 px-2 py-0.5 rounded-md bg-sky-500/12 hover:bg-sky-500/22 text-sky-600 dark:text-sky-400 border border-sky-500/30 text-[11px] font-semibold transition-colors shrink-0 whitespace-nowrap"
-                                    title={`Abrir "${les.name}" diretamente no Caveira`}
+                                    className="group relative flex items-center gap-2.5 min-w-0 -mx-2 px-2 py-1.5 rounded-lg border border-transparent hover:bg-sky-500/[0.09] dark:hover:bg-sky-400/[0.12] hover:border-sky-500/35 dark:hover:border-sky-400/35 hover:shadow-xs active:scale-[0.99] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 transition-all duration-200 ease-out cursor-pointer"
+                                    title={`Assistir "${les.name}" diretamente no Caveira`}
                                   >
-                                    <PlayCircle className="w-3.5 h-3.5 shrink-0" />
-                                    <span>Abrir Videoaula</span>
+                                    <span className="w-6 h-6 rounded-full bg-sky-500/12 dark:bg-sky-400/12 text-sky-600 dark:text-sky-400 group-hover:bg-sky-600 dark:group-hover:bg-sky-400 group-hover:text-white dark:group-hover:text-slate-950 group-hover:scale-110 group-hover:shadow-sm group-hover:shadow-sky-500/30 flex items-center justify-center shrink-0 transition-all duration-200">
+                                      <PlayCircle className="w-3.5 h-3.5 shrink-0" />
+                                    </span>
+                                    <span className="text-slate-700 dark:text-slate-200 font-medium break-words line-clamp-2 min-w-0 flex-1 group-hover:text-sky-700 dark:group-hover:text-sky-300 group-hover:translate-x-0.5 transition-all duration-200">
+                                      {les.name}
+                                    </span>
+                                    <span className="hidden sm:inline-flex items-center gap-0.5 px-2 py-0.5 rounded-md bg-sky-600/12 dark:bg-sky-400/15 text-sky-700 dark:text-sky-300 text-[11px] font-bold whitespace-nowrap shrink-0 opacity-0 -translate-x-2 group-hover:opacity-100 group-hover:translate-x-0 group-focus-visible:opacity-100 group-focus-visible:translate-x-0 transition-all duration-200">
+                                      <span>Assistir</span>
+                                      <ArrowUpRight className="w-3.5 h-3.5 transition-transform duration-200 group-hover:translate-x-0.5 group-hover:-translate-y-0.5" />
+                                    </span>
                                   </a>
-                                  <span className="col-span-2 sm:col-span-1 inline-flex items-center sm:justify-end">
+                                  <span className="inline-flex items-center justify-end">
                                     {durationLabel && (
                                       <span className="inline-flex items-center gap-1.5 px-2 py-0.5 rounded-md bg-amber-500/12 dark:bg-amber-400/12 border border-amber-500/35 dark:border-amber-400/35 text-xs sm:text-[13px] font-mono font-bold text-amber-700 dark:text-amber-300 tabular-nums whitespace-nowrap">
                                         <Clock className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 shrink-0" />
