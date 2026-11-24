@@ -13,9 +13,11 @@
     "deploy": "gh-pages -d dist --dotfiles --nojekyll",
     "build:extensao": "node scripts/build-extension.mjs",
     "zip:extensao": "node scripts/zip-extension.mjs",
+    "radar:discursiva": "node scripts/radar-discursiva.mjs",
     "test": "node extensao-src/tests/cases.js && node extensao-src/tests/bulk.js"
   },
   "dependencies": {
+    "@google/genai": "^3.6.1",
     "@supabase/supabase-js": "^2.103.3",
     "@tailwindcss/postcss": "^4.2.2",
     "@types/three": "^0.187.0",
@@ -46,7 +48,7 @@
     "eslint-plugin-react-refresh": "^0.5.2",
     "gh-pages": "^6.3.0",
     "globals": "^17.4.0",
-    "sharp": "^0.34.5",
+    "sharp": "^0.35.5",
     "vite": "^8.0.4"
   }
 }

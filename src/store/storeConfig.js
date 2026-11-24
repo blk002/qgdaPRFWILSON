@@ -214,6 +214,11 @@ export const getCleanInitialState = () => ({
     subjectBreakMin: 15,
     syncedSignatures: {}
   },
+  discursivaData: {
+    favorites: [],
+    mastered: [],
+    customRepertorios: []
+  },
 });
 
 // Fonte única de verdade das chaves persistidas (nuvem, backup local,
@@ -228,5 +233,5 @@ export const PERSISTED_KEYS = [
   'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate', 'pushEnabled', 'pushTime',
   'enableSounds', 'activeBoosts', 'dailyReviewStats', 'syntaxLevel',
   'activeTheme', 'unlockedThemes', 'dailyGoalMinutes', 'subjectGoals', 'subjectTimeGoal', 'pushSettings',
-  'cycleScheduleType', 'cycleWeekStart', 'cycleDayNames', 'cycleSlotCounts', 'cycleCarryoverOffset', 'lastCarryoverCheckDate', 'calendarOverrides', 'calendarOverrideCounts', 'futureScheduleRules', 'xpHistory', 'petData', 'caveiraQuestions', 'caveiraDailyGoal', 'caveiraFilterMemory', 'caveiraCourseIndexMap', 'lifeRoutine'
+  'cycleScheduleType', 'cycleWeekStart', 'cycleDayNames', 'cycleSlotCounts', 'cycleCarryoverOffset', 'lastCarryoverCheckDate', 'calendarOverrides', 'calendarOverrideCounts', 'futureScheduleRules', 'xpHistory', 'petData', 'caveiraQuestions', 'caveiraDailyGoal', 'caveiraFilterMemory', 'caveiraCourseIndexMap', 'lifeRoutine', 'discursivaData'
 ];

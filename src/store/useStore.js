@@ -218,6 +218,15 @@ const normalizeHydratedState = (raw, currentCaveira = []) => {
       },
     };
   }
+  if (!cleanData.discursivaData || typeof cleanData.discursivaData !== 'object') {
+    cleanData.discursivaData = defaults.discursivaData;
+  } else {
+    cleanData.discursivaData = {
+      favorites: Array.isArray(cleanData.discursivaData.favorites) ? cleanData.discursivaData.favorites : [],
+      mastered: Array.isArray(cleanData.discursivaData.mastered) ? cleanData.discursivaData.mastered : [],
+      customRepertorios: Array.isArray(cleanData.discursivaData.customRepertorios) ? cleanData.discursivaData.customRepertorios : []
+    };
+  }
 
   // Mescla caveiraQuestions preservando dados da nuvem e locais
   const incomingCaveira = Array.isArray(cleanData.caveiraQuestions) ? cleanData.caveiraQuestions : [];
@@ -1364,6 +1373,7 @@ export const useStore = create(
       setReviewStats: (reviewStats) => set((state) => ({ reviewStats: typeof reviewStats === 'function' ? reviewStats(state.reviewStats) : reviewStats })),
       setSimulados: (simulados) => set((state) => ({ simulados: typeof simulados === 'function' ? simulados(state.simulados) : simulados })),
       setLifeRoutine: (lifeRoutine) => set((state) => ({ lifeRoutine: typeof lifeRoutine === 'function' ? lifeRoutine(state.lifeRoutine) : lifeRoutine })),
+      setDiscursivaData: (discursivaData) => set((state) => ({ discursivaData: typeof discursivaData === 'function' ? discursivaData(state.discursivaData) : discursivaData })),
       setTafHistory: (tafHistory) => set((state) => ({ tafHistory: typeof tafHistory === 'function' ? tafHistory(state.tafHistory) : tafHistory })),
       setTafTrainingStatus: (tafTrainingStatus) => set({ tafTrainingStatus }),
       setGlobalModal: (globalModal) => set({ globalModal }),

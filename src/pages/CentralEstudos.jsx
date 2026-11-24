@@ -5,7 +5,7 @@ import CentralEstudosTutorialModal from '../components/CentralEstudosTutorialMod
 import AbaHoje from '../components/AbaHoje';
 import {
   Zap, Repeat, Calendar as CalendarIcon, CalendarClock,
-  Settings, Info, Skull, Clock, Target
+  Settings, Info, Skull, Clock, Target, FileText
 } from 'lucide-react';
 
 const Ciclo = React.lazy(() => import('./Ciclo'));
@@ -13,8 +13,9 @@ const RaioXCaveira = React.lazy(() => import('./RaioXCaveira'));
 const Calendario = React.lazy(() => import('./Calendario'));
 const Simulados = React.lazy(() => import('./Simulados'));
 const RotinaVida = React.lazy(() => import('./RotinaVida'));
+const AbaDiscursiva = React.lazy(() => import('../components/AbaDiscursiva'));
 
-const VALID_TABS = new Set(['hoje', 'cronograma', 'rotina', 'caveira', 'calendario', 'simulados']);
+const VALID_TABS = new Set(['hoje', 'cronograma', 'rotina', 'caveira', 'calendario', 'simulados', 'discursiva']);
 
 const TAB_CONFIG = [
   { id: 'hoje', label: 'Hoje', icon: Zap, tutorialStep: 1 },
@@ -22,7 +23,8 @@ const TAB_CONFIG = [
   { id: 'rotina', label: 'Rotina de Vida', icon: CalendarClock, tutorialStep: 2 },
   { id: 'caveira', label: 'Raio-X Caveira', icon: Skull, tutorialStep: 3 },
   { id: 'calendario', label: 'Calendário', icon: CalendarIcon, tutorialStep: 4 },
-  { id: 'simulados', label: 'Simulados', icon: Target, tutorialStep: 5 }
+  { id: 'simulados', label: 'Simulados', icon: Target, tutorialStep: 5 },
+  { id: 'discursiva', label: 'Discursiva', icon: FileText, tutorialStep: 6 }
 ];
 
 export default function CentralEstudos() {
@@ -215,6 +217,7 @@ export default function CentralEstudos() {
             {activeTab === 'caveira' && <RaioXCaveira />}
             {activeTab === 'calendario' && <Calendario />}
             {activeTab === 'simulados' && <Simulados />}
+            {activeTab === 'discursiva' && <AbaDiscursiva />}
           </Suspense>
         )}
       </div>

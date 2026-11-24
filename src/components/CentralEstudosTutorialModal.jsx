@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { createPortal } from 'react-dom';
 import {
   X, ChevronLeft, ChevronRight, Sparkles, BookOpen, Repeat,
-  BrainCircuit, Calendar, CheckCircle, ArrowRight, Target, Info, Zap, Skull
+  BrainCircuit, Calendar, CheckCircle, ArrowRight, Target, Info, Zap, Skull, FileText
 } from 'lucide-react';
 
 const TUTORIAL_STEPS = [
@@ -11,11 +11,11 @@ const TUTORIAL_STEPS = [
     tabId: null,
     badge: 'Visão Geral',
     title: 'Bem-vindo à Central de Estudos',
-    subtitle: 'Sua estação diária de execução com 5 abas integradas: Hoje, Cronograma, Raio-X Caveira, Calendário e Simulados.',
+    subtitle: 'Sua estação diária de execução com abas integradas: Hoje, Cronograma, Rotina, Raio-X Caveira, Calendário, Simulados e Discursiva.',
     icon: Sparkles,
     accentClass: 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30',
     description:
-      'A Central de Estudos reúne as 5 abas operacionais da sua preparação (Hoje, Cronograma, Raio-X Caveira, Calendário e Simulados), enquanto Revisões FSRS, Histórico, Edital, Treino TAF e Duelo CTB ficam acessíveis com um clique no menu lateral.',
+      'A Central de Estudos reúne suas abas operacionais da preparação (Hoje, Cronograma, Rotina de Vida, Raio-X Caveira, Calendário, Simulados e Discursiva), enquanto Revisões FSRS, Histórico, Edital, Treino TAF e Duelo CTB ficam acessíveis com um clique no menu lateral.',
     bullets: [
       'Acompanhe na faixa superior quantas aulas do edital você já concluiu e a data prevista de fechamento.',
       'Comece pela aba Hoje para executar imediatamente suas aulas do dia, revisões pendentes e conferir sua consistência.',
@@ -109,9 +109,26 @@ const TUTORIAL_STEPS = [
     proTip: 'Fique de olho nos mínimos eliminatórios da PRF: B1 ≥ 15, B2 ≥ 10, B3 ≥ 10 e Total Líquido ≥ 50 pts.'
   },
   {
+    id: 'discursiva',
+    tabId: 'discursiva',
+    badge: 'Passo 6 • Redação Cebraspe PRF',
+    title: 'Aba Discursiva — Banco de Repertórios PRF',
+    subtitle: 'Repertórios jurídicos, políticas públicas e frases-modelo no padrão Cebraspe.',
+    icon: FileText,
+    accentClass: 'bg-sky-500/15 text-sky-600 dark:text-sky-400 border-sky-500/30',
+    description:
+      'A aba Discursiva organiza repertórios objetivos pelos 5 eixos temáticos da PRF, com frases prontas para adaptar em cada aspecto do comando, esqueleto de 30 linhas, conectivos de precisão e a calculadora oficial ND = NC − 2 × (NE / TL).',
+    bullets: [
+      'Filtre por eixo da PRF (Segurança Viária, Segurança Pública, Direitos Humanos, Tecnologia e Meio Ambiente) ou busque por artigo/lei.',
+      'Marque repertórios como Favoritos ou Dominados e adicione seus próprios repertórios sincronizados na sua conta.',
+      'Use a aba Modelo Cebraspe & Calculadora para simular descontos por erro conforme o total de linhas escritas.'
+    ],
+    proTip: 'No Cebraspe, escrever entre 27 e 30 linhas reduz o peso de cada erro gramatical na fórmula oficial da banca.'
+  },
+  {
     id: 'revisoes',
     tabId: 'revisoes',
-    badge: 'Passo 6 • Desempenho & Edital',
+    badge: 'Passo 7 • Desempenho & Edital',
     title: 'Menu Lateral — Revisões FSRS, Histórico e Edital',
     subtitle: 'Acesse suas ferramentas de retenção e evolução na seção Desempenho da barra lateral.',
     icon: BrainCircuit,
