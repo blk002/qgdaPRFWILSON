@@ -339,7 +339,10 @@ ${newsBlock}`,
     }
   });
 
-  const rawText = (response.text || '[]').trim();
+  const rawText = (response.text || '[]')
+    .trim()
+    .replace(/^```(?:json)?\s*/i, '')
+    .replace(/\s*```$/i, '');
   const parsed = JSON.parse(rawText);
   if (!Array.isArray(parsed)) return [];
 
