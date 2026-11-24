@@ -185,6 +185,9 @@ export function normalizeRoutine(routine) {
           note: String(b.note || '').trim(),
         };
         if (b.source === 'cronograma') normalized.source = 'cronograma';
+        if (b.source === 'taf_app') normalized.source = 'taf_app';
+        if (b.dateIso) normalized.dateIso = String(b.dateIso);
+        if (b.isPlanned) normalized.isPlanned = true;
         if (b.subjectId) normalized.subjectId = String(b.subjectId);
         if (Number.isFinite(Number(b.partIndex))) normalized.partIndex = Number(b.partIndex);
         if (Number.isFinite(Number(b.partTotal))) normalized.partTotal = Number(b.partTotal);
@@ -450,3 +453,111 @@ export const ROUTINE_PRESETS = [
     },
   },
 ];
+
+function formatLocalIsoDate(date) {
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+}
+
+/**
+ * Merges workout blocks from the Android TAF app (`tafAppData.routineBlocks`) into
+ * the current week's Rotina de Vida days without overwriting manual study/work blocks.
+ */
+export function mergeTafAppRoutineBlocks(currentDays, tafRoutineBlocks, prevTafSignature = '') {
+  const incoming = Array.isArray(tafRoutineBlocks) ? tafRoutineBlocks : [];
+
+  const now = new Date();
+  const todayMidnight = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const mondayOffset = (todayMidnight.getDay() + 6) % 7;
+  const monday = new Date(todayMidnight);
+  monday.setDate(todayMidnight.getDate() - mondayOffset);
+  const sunday = new Date(monday);
+  sunday.setDate(monday.getDate() + 6);
+  const minIso = formatLocalIsoDate(monday);
+  const maxIso = formatLocalIsoDate(sunday);
+
+  const validDayKeys = new Set(WEEK_DAYS.map((d) => d.key));
+  const weekBlocks = incoming.filter((b) => {
+    if (!b || !b.id || !validDayKeys.has(b.dayKey)) return false;
+    if (!b.dateIso) return true;
+    return b.dateIso >= minIso && b.dateIso <= maxIso;
+  });
+
+  const nextSignature = weekBlocks
+    .map((b) => `${b.id}:${b.dayKey}:${b.startMin}:${b.endMin}:${b.label}:${b.note || ''}:${b.isPlanned ? 'P' : 'C'}`)
+    .sort()
+    .join('|');
+
+  const hasExistingTafBlocks = WEEK_DAYS.some(({ key }) =>
+    (currentDays?.[key] || []).some((b) => b.source === 'taf_app')
+  );
+
+  if (nextSignature === prevTafSignature && (weekBlocks.length > 0 || !hasExistingTafBlocks)) {
+    return { changed: false, nextDays: currentDays, nextSignature: prevTafSignature };
+  }
+
+  const nextDays = { ...currentDays };
+  const findFreeSlot = (dayList, preferredStart, duration) => {
+    const dur = Math.max(15, Math.min(240, duration));
+    const clampStart = Math.max(0, Math.min(1440 - dur, preferredStart));
+    if (!findOverlappingBlock(dayList, clampStart, clampStart + dur)) {
+      return { startMin: clampStart, endMin: clampStart + dur };
+    }
+    for (let s = clampStart + 15; s + dur <= 1440; s += 15) {
+      if (!findOverlappingBlock(dayList, s, s + dur)) {
+        return { startMin: s, endMin: s + dur };
+      }
+    }
+    for (let s = clampStart - 15; s >= 0; s -= 15) {
+      if (!findOverlappingBlock(dayList, s, s + dur)) {
+        return { startMin: s, endMin: s + dur };
+      }
+    }
+    return null;
+  };
+
+  WEEK_DAYS.forEach(({ key }) => {
+    const existingDay = nextDays[key] || [];
+    const existingManual = existingDay.filter((b) => b.source !== 'taf_app');
+    const prevTafById = new Map(
+      existingDay.filter((b) => b.source === 'taf_app').map((b) => [b.id, b])
+    );
+    const dayIncoming = weekBlocks.filter((b) => b.dayKey === key);
+
+    if (dayIncoming.length === 0) {
+      if (existingDay.length !== existingManual.length) {
+        nextDays[key] = existingManual;
+      }
+      return;
+    }
+
+    const placed = [...existingManual];
+
+    dayIncoming.forEach((raw) => {
+      const rawStart = Math.max(0, Math.min(1425, Math.round(Number(raw.startMin) || 0)));
+      const rawEnd = Math.max(rawStart + 15, Math.min(1440, Math.round(Number(raw.endMin) || rawStart + 30)));
+      const dur = Math.max(15, Math.min(240, rawEnd - rawStart));
+      const prevMatch = prevTafById.get(String(raw.id));
+      const preferredStart = prevMatch ? prevMatch.startMin : rawStart;
+      const slot = findFreeSlot(placed, preferredStart, dur);
+      if (!slot) return;
+      placed.push({
+        id: String(raw.id),
+        category: 'training',
+        label: String(raw.label || 'Treino TAF').trim(),
+        startMin: slot.startMin,
+        endMin: slot.endMin,
+        note: String(raw.note || '').trim(),
+        source: 'taf_app',
+        dateIso: raw.dateIso ? String(raw.dateIso) : undefined,
+        ...(raw.isPlanned ? { isPlanned: true } : {}),
+      });
+    });
+
+    nextDays[key] = placed.sort((a, b) => a.startMin - b.startMin || a.endMin - b.endMin);
+  });
+
+  return { changed: true, nextDays, nextSignature };
+}

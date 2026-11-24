@@ -313,6 +313,40 @@ const mergeCloudAndLocalData = (remoteRaw, localState, localKeyTimestamps = {}, 
     const rTs = remoteKeyTs?.[key]
       ? new Date(remoteKeyTs[key]).getTime()
       : (remoteUpdatedAt ? new Date(remoteUpdatedAt).getTime() : 0);
+
+    if (key === 'tafAppData') {
+      if (remoteVal && typeof remoteVal === 'object' && !(lTs > rTs && localKeyTimestamps?.tafAppData)) {
+        merged[key] = remoteVal;
+      } else {
+        merged[key] = localVal;
+      }
+      return;
+    }
+
+    if (key === 'tafTrainingStatus') {
+      const rDate = remoteVal?.lastDoneDate || null;
+      const lDate = localVal?.lastDoneDate || null;
+      const maxDate = [rDate, lDate].filter(Boolean).sort().pop() || null;
+      merged[key] = { ...(remoteVal || {}), ...(localVal || {}), lastDoneDate: maxDate };
+      return;
+    }
+
+    if (key === 'tafHistory') {
+      const deletedIds = new Set([
+        ...(Array.isArray(remoteRaw?.tafAppData?.deletedTafIds) ? remoteRaw.tafAppData.deletedTafIds : []),
+        ...(Array.isArray(localState?.tafAppData?.deletedTafIds) ? localState.tafAppData.deletedTafIds : []),
+      ]);
+      const byId = new Map();
+      (Array.isArray(remoteVal) ? remoteVal : []).forEach((s) => {
+        if (s && s.id != null && !deletedIds.has(s.id)) byId.set(s.id, s);
+      });
+      (Array.isArray(localVal) ? localVal : []).forEach((s) => {
+        if (s && s.id != null && !deletedIds.has(s.id)) byId.set(s.id, s);
+      });
+      merged[key] = Array.from(byId.values()).sort((a, b) => Number(a.id) - Number(b.id));
+      return;
+    }
+
     const baseTs = lastSyncedAt ? new Date(lastSyncedAt).getTime() : 0;
 
     // Nunca sobrescreve dado remoto com uma chave que não foi modificada localmente (lTs === 0)

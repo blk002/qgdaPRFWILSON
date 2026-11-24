@@ -38,7 +38,8 @@ import {
   clampDragInterval,
   findOverlappingBlock,
   computeWeeklyStats,
-  findCurrentOrNextBlock
+  findCurrentOrNextBlock,
+  mergeTafAppRoutineBlocks
 } from '../components/rotina/routineUtils';
 import {
   computeWeeklyLessonPlan,
@@ -176,6 +177,9 @@ export default function RotinaVida() {
     subjectTimeGoal,
     currentDayIndex,
     getLocalDateStr,
+    tafAppData,
+    loadFromCloud,
+    isSyncing,
   } = useStore();
 
   const routine = useMemo(() => normalizeRoutine(lifeRoutine), [lifeRoutine]);
@@ -289,6 +293,31 @@ export default function RotinaVida() {
     weeklyLessonPlan,
     setLifeRoutine,
   ]);
+
+  // Sincroniza automaticamente os blocos de treino enviados pelo App Android TAF (tafAppData.routineBlocks)
+  useEffect(() => {
+    if (!tafAppData) return;
+    const blocks = Array.isArray(tafAppData?.routineBlocks) ? tafAppData.routineBlocks : [];
+
+    const result = mergeTafAppRoutineBlocks(
+      routine.days,
+      blocks,
+      routine.syncedSignatures?._tafApp || ''
+    );
+    if (!result.changed) return;
+
+    setLifeRoutine((prev) => {
+      const current = normalizeRoutine(prev);
+      return {
+        ...current,
+        days: result.nextDays,
+        syncedSignatures: {
+          ...current.syncedSignatures,
+          _tafApp: result.nextSignature,
+        },
+      };
+    });
+  }, [tafAppData, routine.days, routine.syncedSignatures, setLifeRoutine]);
 
   const [activeBrush, setActiveBrush] = useState('study');
   const [viewMode, setViewMode] = useState('grid'); // 'grid' | 'list'
@@ -761,6 +790,9 @@ export default function RotinaVida() {
       }
       targetDays.forEach((dKey) => {
         const isOriginal = Boolean(id && dKey === originalDayKey);
+        const existingBlock = isOriginal
+          ? (nextDays[dKey] || []).find((b) => b.id === id)
+          : null;
         const blockObj = {
           id: isOriginal ? id : createBlockId(),
           category,
@@ -769,6 +801,8 @@ export default function RotinaVida() {
           endMin,
           note,
           ...(source ? { source } : {}),
+          ...(existingBlock?.dateIso ? { dateIso: existingBlock.dateIso } : {}),
+          ...(existingBlock?.isPlanned ? { isPlanned: true } : {}),
           ...(subjectId ? { subjectId } : {}),
           ...(partIndex ? { partIndex, partTotal } : {}),
         };
@@ -1477,6 +1511,8 @@ export default function RotinaVida() {
                               data-routine-block="true"
                               onPointerDown={(e) => handleBlockPointerDown(day.key, block, e)}
                               className={`group/blk absolute left-1 right-1 z-10 rounded-lg border shadow-[0_1px_2px_rgba(15,23,42,0.05)] overflow-hidden transition-shadow ${meta.blockClass} ${
+                                block.source === 'taf_app' && block.isPlanned ? 'border-dashed' : ''
+                              } ${
                                 isBeingMovedAway
                                   ? 'opacity-30 border-dashed'
                                   : 'cursor-grab active:cursor-grabbing hover:shadow-sm'
@@ -1485,7 +1521,13 @@ export default function RotinaVida() {
                                 top: `${topPx + 1}px`,
                                 height: `${heightPx}px`,
                               }}
-                              title={`${block.label} (${minutesToTimeStr(block.startMin)}–${minutesToTimeStr(effectiveEnd)})${block.note ? ` · ${block.note}` : ''}`}
+                              title={`${block.label} (${minutesToTimeStr(block.startMin)}–${minutesToTimeStr(effectiveEnd)})${
+                                block.source === 'taf_app'
+                                  ? block.isPlanned
+                                    ? ' (Planejado · App TAF)'
+                                    : ' (Concluído · App TAF)'
+                                  : ''
+                              }${block.note ? ` · ${block.note}` : ''}`}
                             >
                               {/* Indicador vertical interno elegante */}
                               <span
@@ -2148,6 +2190,75 @@ export default function RotinaVida() {
                     />
                   </button>
                 </label>
+              </section>
+            );
+          })()}
+
+          {/* Card 0.5: Treinos TAF (App Android) */}
+          {(() => {
+            const tafBlocks = WEEK_DAYS.flatMap(({ key }) =>
+              (routine.days[key] || []).filter((b) => b.source === 'taf_app')
+            );
+            const tafTotalMin = tafBlocks.reduce(
+              (acc, b) => acc + Math.max(0, (Number(b.endMin) || 0) - (Number(b.startMin) || 0)),
+              0
+            );
+            const tafDoneCount = tafBlocks.filter((b) => !b.isPlanned).length;
+            const tafPlannedCount = tafBlocks.filter((b) => b.isPlanned).length;
+
+            const handleManualTafSync = async () => {
+              await loadFromCloud();
+              const latest = useStore.getState();
+              const latestBlocks = latest.tafAppData?.routineBlocks || [];
+              setLifeRoutine((prev) => {
+                const current = normalizeRoutine(prev);
+                const res = mergeTafAppRoutineBlocks(current.days, latestBlocks, '');
+                if (!res.changed) return current;
+                return {
+                  ...current,
+                  days: res.nextDays,
+                  syncedSignatures: {
+                    ...current.syncedSignatures,
+                    _tafApp: res.nextSignature,
+                  },
+                };
+              });
+              if (latestBlocks.length > 0) {
+                toast.success(`Treinos TAF sincronizados (${latestBlocks.length} blocos).`);
+              } else {
+                toast.info('Nenhum treino TAF na nuvem ainda. Sincronize no App Android.');
+              }
+            };
+
+            return (
+              <section className="rounded-xl bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 p-4 space-y-2.5">
+                <div className="flex items-center justify-between gap-2">
+                  <div className="flex items-center gap-1.5 min-w-0">
+                    <Dumbbell className="w-4 h-4 text-emerald-500 shrink-0" />
+                    <h3 className="font-display text-sm font-bold text-slate-900 dark:text-white truncate">
+                      Treinos TAF (App)
+                    </h3>
+                  </div>
+                  <span className="text-[11px] font-mono font-semibold tabular-nums text-emerald-600 dark:text-emerald-400 shrink-0">
+                    {tafTotalMin > 0 ? `${formatMinutesCompact(tafTotalMin)}/sem` : 'Pronto'}
+                  </span>
+                </div>
+
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-relaxed">
+                  {tafBlocks.length > 0
+                    ? `${tafDoneCount} concluído(s) · ${tafPlannedCount} planejado(s) nesta semana`
+                    : 'Conecte sua conta no App Android TAF para ver seus treinos aqui.'}
+                </p>
+
+                <button
+                  type="button"
+                  disabled={isSyncing}
+                  onClick={handleManualTafSync}
+                  className="w-full h-7.5 px-2.5 rounded-lg text-[11px] font-semibold bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-200 dark:border-emerald-800/80 text-emerald-700 dark:text-emerald-300 hover:bg-emerald-100 dark:hover:bg-emerald-950/80 inline-flex items-center justify-center gap-1.5 transition-colors cursor-pointer disabled:opacity-50"
+                >
+                  <RefreshCw className={`w-3 h-3 ${isSyncing ? 'animate-spin' : ''}`} />
+                  <span>{isSyncing ? 'Sincronizando...' : 'Sincronizar treinos'}</span>
+                </button>
               </section>
             );
           })()}

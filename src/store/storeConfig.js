@@ -122,6 +122,7 @@ export const getCleanInitialState = () => ({
   simulados: [],
   tafHistory: [],
   tafTrainingStatus: { lastDoneDate: null },
+  tafAppData: null,
   studyHistory: {},
   isDarkMode: true,
   activeTab: 'carreira',
@@ -227,7 +228,7 @@ export const getCleanInitialState = () => ({
 export const PERSISTED_KEYS = [
   'subjects', 'cycle', 'currentDayIndex', 'completedToday', 'completedTodayDate', 'slotProgressToday', 'targetExamDate',
   'coins', 'userStats', 'streakData', 'weeklySprint', 'reviews',
-  'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus',
+  'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus', 'tafAppData',
   'isDarkMode', 'activeTab',
   'seasonalData', 'weeklyMissions', 'studyHistory',
   'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate', 'pushEnabled', 'pushTime',
