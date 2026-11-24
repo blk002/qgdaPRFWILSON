@@ -31,7 +31,7 @@ jobs:
 
       - name: Executar Radar Oficial (Agência Brasil, Câmara e Senado -> Fila Supabase)
         env:
-          SUPABASE_URL: ${{ secrets.SUPABASE_URL }}
+          SUPABASE_URL: ${{ secrets.SUPABASE_URL || secrets.VITE_SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
           RADAR_LOOKBACK_DAYS: '3'

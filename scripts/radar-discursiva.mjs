@@ -259,7 +259,7 @@ async function fetchOfficialNews() {
 }
 
 async function synthesizeRepertoriosWithGemini(candidates) {
-  const apiKey = process.env.GEMINI_API_KEY;
+  const apiKey = String(process.env.GEMINI_API_KEY || '').trim().replace(/^['"]|['"]$/g, '');
   if (!apiKey) {
     throw new Error('GEMINI_API_KEY não configurada no ambiente.');
   }
@@ -388,6 +388,25 @@ ${newsBlock}`,
   return drafts;
 }
 
+function normalizeSupabaseUrl(rawUrl) {
+  const cleaned = String(rawUrl || '').trim().replace(/^['"]|['"]$/g, '');
+  if (!cleaned) return '';
+
+  // Se o usuário colou a URL do painel do Supabase (ex.: https://supabase.com/dashboard/project/<ref>/...)
+  const dashboardMatch = cleaned.match(/supabase\.com\/dashboard\/project\/([a-z0-9-]+)/i);
+  if (dashboardMatch && dashboardMatch[1]) {
+    return `https://${dashboardMatch[1]}.supabase.co`;
+  }
+
+  try {
+    const withProto = /^https?:\/\//i.test(cleaned) ? cleaned : `https://${cleaned}`;
+    const parsed = new URL(withProto);
+    return parsed.origin;
+  } catch {
+    return cleaned.replace(/\/+(rest|auth|storage|realtime)\/v1\/?.*$/i, '').replace(/\/+$/, '');
+  }
+}
+
 async function main() {
   console.log(`[Radar Discursiva PRF] Iniciando varredura dos últimos ${LOOKBACK_DAYS} dias...`);
 
@@ -403,8 +422,12 @@ async function main() {
   let newCandidates = candidates;
 
   if (!DRY_RUN) {
-    const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
-    const serviceRoleKey = process.env.SUPABASE_SERVICE_ROLE_KEY;
+    const rawSupabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+    const supabaseUrl = normalizeSupabaseUrl(rawSupabaseUrl);
+    const serviceRoleKey = String(process.env.SUPABASE_SERVICE_ROLE_KEY || '')
+      .trim()
+      .replace(/^['"]|['"]$/g, '');
+
     if (!supabaseUrl || !serviceRoleKey) {
       throw new Error('Defina SUPABASE_URL e SUPABASE_SERVICE_ROLE_KEY nas secrets para gravar no Supabase.');
     }
