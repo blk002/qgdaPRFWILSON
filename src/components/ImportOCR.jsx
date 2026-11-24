@@ -371,49 +371,62 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
   // ===== RENDER =====
 
   return createPortal(
-    <div className="fixed inset-0 z-[9999] flex items-center justify-center p-4" onClick={onClose}>
-      <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+    <div
+      className="fixed inset-0 z-[9999] bg-slate-950/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4 fade-in font-sans"
+      onClick={onClose}
+    >
       <div
-        className="relative bg-slate-900 border border-slate-800 rounded-2xl shadow-2xl w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="import-ocr-title"
+        className="relative bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-[0_24px_64px_-16px_rgba(15,23,42,0.35)] dark:shadow-[0_24px_64px_-16px_rgba(0,0,0,0.75)] ring-1 ring-slate-950/5 dark:ring-white/[0.04] w-full max-w-2xl max-h-[90vh] overflow-hidden flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-800 bg-gradient-to-r from-slate-900 to-slate-800">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-cyan-500 flex items-center justify-center shadow-lg shadow-emerald-500/20">
-              <Camera className="w-5 h-5 text-white" />
+        <div className="flex items-start justify-between gap-3 px-5 py-4 border-b border-slate-100 dark:border-slate-800/90 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-emerald-500/10 dark:bg-emerald-400/10 ring-1 ring-emerald-500/20 flex items-center justify-center text-emerald-600 dark:text-emerald-400 shrink-0">
+              <Camera className="w-4 h-4" />
             </div>
-            <div>
-              <h3 className="text-lg font-black text-white tracking-tight">Importar Aulas</h3>
-              <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-                {step === 'upload' && 'Passo 1 — Fonte de Dados'}
-                {step === 'processing' && 'Processando...'}
+            <div className="min-w-0">
+              <h3 id="import-ocr-title" className="font-display text-base font-bold text-slate-900 dark:text-white tracking-tight leading-snug">
+                Importar aulas por imagem
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {step === 'upload' && 'Passo 1 — Fonte de dados e captura'}
+                {step === 'processing' && 'Analisando imagem...'}
                 {step === 'review' && `Passo 2 — Revisão (${selectedCount} selecionada${selectedCount !== 1 ? 's' : ''})`}
               </p>
             </div>
           </div>
-          <button onClick={onClose} className="text-slate-400 hover:text-white transition-colors p-1">
-            <X className="w-5 h-5" />
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fechar janela"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
+          >
+            <X className="w-4 h-4" />
           </button>
         </div>
 
-        <div className="flex-1 overflow-y-auto p-6 custom-scrollbar">
+        <div className="flex-1 overflow-y-auto p-5 custom-scrollbar">
 
           {/* ===== STEP: UPLOAD ===== */}
           {step === 'upload' && (
             <div className="space-y-4">
 
               {/* API Key */}
-              <div className="bg-slate-900/50 border border-slate-700 rounded-xl p-4">
+              <div className="bg-slate-50/80 dark:bg-slate-950/55 border border-slate-200/80 dark:border-slate-800/90 rounded-xl p-4">
                 <div className="flex items-center justify-between mb-2">
-                  <label className="flex items-center gap-1.5 text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                    <Key className="w-3 h-3 text-blue-400" />
+                  <label className="flex items-center gap-1.5 text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    <Key className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
                     Gemini API Key (Google AI Studio)
                   </label>
                   {!editingKey && (
                     <button
+                      type="button"
                       onClick={() => setEditingKey(true)}
-                      className="text-[10px] font-bold text-slate-500 hover:text-blue-400 transition-colors uppercase tracking-widest"
+                      className="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline transition-colors cursor-pointer"
                     >
                       Trocar
                     </button>
@@ -429,31 +442,33 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
                         onChange={(e) => setApiKey(e.target.value)}
                         onPaste={(e) => e.stopPropagation()}
                         placeholder="AIza..."
-                        className="w-full bg-slate-950 border border-slate-700 rounded-xl px-4 py-3 font-mono text-sm text-white focus:border-blue-500 outline-none pr-10"
+                        className="w-full h-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 font-mono text-xs text-slate-900 dark:text-white focus:border-sky-500 outline-none pr-10"
                       />
                       <button
+                        type="button"
                         onClick={() => setShowKey(v => !v)}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-500 hover:text-white"
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-slate-700 dark:hover:text-white cursor-pointer"
                       >
                         {showKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                       </button>
                     </div>
                     <button
+                      type="button"
                       onClick={() => {
                         if (!apiKey.trim()) { toast.error('Digite uma chave válida.'); return; }
                         localStorage.setItem(LS_KEY, apiKey.trim());
                         setEditingKey(false);
                         toast.success('Chave salva!');
                       }}
-                      className="px-4 py-3 bg-blue-600 hover:bg-blue-500 text-white font-bold text-xs rounded-xl transition-all"
+                      className="h-10 px-4 bg-sky-600 hover:bg-sky-700 text-white font-semibold text-xs rounded-xl transition-colors cursor-pointer"
                     >
                       Salvar
                     </button>
                   </div>
                 ) : (
-                  <div className="flex items-center gap-2 px-4 py-3 bg-emerald-900/20 border border-emerald-800/40 rounded-xl">
-                    <div className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />
-                    <span className="text-xs font-mono text-emerald-300">
+                  <div className="flex items-center gap-2 px-3.5 py-2.5 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-800/50 rounded-xl">
+                    <div className="w-2 h-2 rounded-full bg-emerald-500 shrink-0" />
+                    <span className="text-xs font-mono text-emerald-800 dark:text-emerald-300">
                       {apiKey.slice(0, 8)}{'•'.repeat(20)}{apiKey.slice(-4)}
                     </span>
                   </div>
@@ -461,29 +476,39 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
               </div>
 
               {/* Disciplina */}
-              <div className="bg-slate-900/50 border border-slate-800 rounded-xl p-4">
-                <label className="block text-[10px] font-black text-slate-400 uppercase tracking-widest mb-3">
-                  Disciplina de Destino
+              <div className="bg-slate-50/80 dark:bg-slate-950/55 border border-slate-200/80 dark:border-slate-800/90 rounded-xl p-4">
+                <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-2.5">
+                  Disciplina de destino
                 </label>
                 <div className="flex gap-2 mb-3">
                   <button
+                    type="button"
                     onClick={() => setCreateNew(false)}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${!createNew ? 'bg-blue-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400'}`}
+                    className={`flex-1 h-9 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                      !createNew
+                        ? 'bg-sky-600 text-white shadow-xs'
+                        : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
                   >
                     Existente
                   </button>
                   <button
+                    type="button"
                     onClick={() => setCreateNew(true)}
-                    className={`flex-1 py-2 rounded-lg text-xs font-bold transition-all ${createNew ? 'bg-emerald-600 text-white shadow-lg' : 'bg-slate-800 text-slate-400'}`}
+                    className={`flex-1 h-9 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                      createNew
+                        ? 'bg-emerald-600 text-white shadow-xs'
+                        : 'bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
+                    }`}
                   >
-                    + Nova Disciplina
+                    + Nova disciplina
                   </button>
                 </div>
                 {!createNew ? (
                   <select
                     value={selectedSubjectId}
                     onChange={(e) => setSelectedSubjectId(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-blue-500 outline-none transition-all"
+                    className="w-full h-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 font-medium text-xs text-slate-900 dark:text-white focus:border-sky-500 outline-none transition-colors cursor-pointer"
                   >
                     <option value="">— Selecione uma disciplina —</option>
                     {Object.values(subjects || {}).map(sub => (
@@ -496,8 +521,8 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
                     value={newSubjectName}
                     onChange={(e) => setNewSubjectName(e.target.value.toUpperCase())}
                     onPaste={(e) => e.stopPropagation()}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-emerald-500 outline-none"
-                    placeholder="NOME DA DISCIPLINA..."
+                    className="w-full h-10 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-xl px-3.5 font-semibold text-xs text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-500 focus:border-emerald-500 outline-none"
+                    placeholder="Nome da disciplina..."
                   />
                 )}
               </div>
@@ -508,12 +533,12 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
                 onDragOver={handleDragOver}
                 onDragLeave={handleDragLeave}
                 onClick={() => fileInputRef.current?.click()}
-                className={`relative border-2 border-dashed rounded-xl p-8 text-center cursor-pointer transition-all ${
+                className={`relative border-2 border-dashed rounded-xl p-7 text-center cursor-pointer transition-all ${
                   isDragging
-                    ? 'border-emerald-500 bg-emerald-500/10 scale-[1.02]'
+                    ? 'border-emerald-500 bg-emerald-500/10'
                     : imagePreview
-                    ? 'border-blue-500/50 bg-blue-500/5'
-                    : 'border-slate-700 hover:border-slate-500 bg-slate-900/30'
+                    ? 'border-sky-500/50 bg-sky-500/5'
+                    : 'border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 bg-slate-50/60 dark:bg-slate-950/40'
                 }`}
               >
                 <input
@@ -525,32 +550,30 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
                 />
                 {imagePreview ? (
                   <div className="space-y-3">
-                    <img src={imagePreview} alt="Preview" className="max-h-64 mx-auto rounded-lg shadow-lg border border-slate-700" />
-                    <p className="text-xs text-slate-400 font-medium">Clique para trocar a imagem</p>
+                    <img src={imagePreview} alt="Preview" className="max-h-60 mx-auto rounded-lg shadow-sm border border-slate-200 dark:border-slate-700" />
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Clique para trocar a imagem</p>
                   </div>
                 ) : (
                   <div className="space-y-3">
-                    <div className="w-16 h-16 mx-auto rounded-2xl bg-slate-800 flex items-center justify-center">
-                      <UploadCloud className="w-8 h-8 text-slate-500" />
+                    <div className="w-12 h-12 mx-auto rounded-xl bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+                      <UploadCloud className="w-6 h-6 text-slate-400 dark:text-slate-500" />
                     </div>
                     <div>
-                      <p className="text-sm font-bold text-slate-300">Arraste uma screenshot aqui</p>
-                      <p className="text-xs text-slate-500 mt-1">
-                        ou cole <kbd className="px-1 py-0.5 bg-slate-800 rounded text-[10px] text-slate-400 font-mono">Ctrl+V</kbd> ou clique para selecionar
+                      <p className="text-sm font-semibold text-slate-800 dark:text-slate-200">Arraste uma screenshot aqui</p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        ou cole <kbd className="px-1.5 py-0.5 bg-slate-200/80 dark:bg-slate-800 rounded text-[10px] text-slate-700 dark:text-slate-300 font-mono">Ctrl+V</kbd> ou clique para selecionar
                       </p>
                     </div>
-                    <p className="text-[10px] text-slate-600 uppercase tracking-widest font-bold">PNG, JPG, WEBP</p>
+                    <p className="text-[11px] text-slate-400 dark:text-slate-500 font-medium">PNG, JPG ou WEBP</p>
                   </div>
                 )}
               </div>
 
               {/* Dica */}
-              <div className="flex items-start gap-3 bg-blue-900/20 border border-blue-800/30 rounded-xl p-3">
-                <AlertTriangle className="w-4 h-4 text-blue-400 flex-shrink-0 mt-0.5" />
-                <p className="text-[11px] text-blue-300/80 font-medium leading-relaxed">
-                  Powered by <strong>Gemini 1.5 Flash</strong> — processamento inteligente de imagens e aulas.
-                  Obtenha sua chave gratuita (sem precisar de cartão de crédito) no <strong>Google AI Studio</strong>.
-                  A chave fica salva <strong>só no seu navegador</strong>.
+              <div className="flex items-start gap-2.5 bg-sky-50/70 dark:bg-sky-950/25 border border-sky-200/80 dark:border-sky-900/50 rounded-xl p-3.5">
+                <AlertTriangle className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+                <p className="text-xs text-sky-950 dark:text-sky-200/90 leading-relaxed">
+                  Processamento inteligente de imagens e aulas com <strong>Gemini Vision</strong>. Obtenha sua chave gratuita no <strong>Google AI Studio</strong>; ela fica salva apenas no seu navegador.
                 </p>
               </div>
             </div>
@@ -558,24 +581,15 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
 
           {/* ===== STEP: PROCESSING ===== */}
           {step === 'processing' && (
-            <div className="flex flex-col items-center justify-center py-16 space-y-6">
-              <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-2xl shadow-blue-500/30 animate-pulse">
-                <Loader2 className="w-10 h-10 text-white animate-spin" />
+            <div className="flex flex-col items-center justify-center py-14 space-y-4">
+              <div className="w-14 h-14 rounded-2xl bg-sky-500/10 dark:bg-sky-400/10 ring-1 ring-sky-500/20 flex items-center justify-center text-sky-600 dark:text-sky-400">
+                <Loader2 className="w-7 h-7 animate-spin" />
               </div>
-              <div className="text-center space-y-2">
-                <p className="text-sm font-bold text-white">{ocrStatus}</p>
-                <p className="text-[10px] text-slate-500 uppercase tracking-widest font-bold">
-                  Gemini 1.5 Flash — leva apenas 2-3 segundos
+              <div className="text-center space-y-1">
+                <p className="text-sm font-semibold text-slate-900 dark:text-white">{ocrStatus}</p>
+                <p className="text-xs text-slate-500 dark:text-slate-400">
+                  Extraindo títulos e durações — leva apenas alguns segundos.
                 </p>
-              </div>
-              <div className="flex gap-1.5">
-                {[0,1,2].map(i => (
-                  <div
-                    key={i}
-                    className="w-2 h-2 rounded-full bg-blue-400 animate-bounce"
-                    style={{ animationDelay: `${i * 0.15}s` }}
-                  />
-                ))}
               </div>
             </div>
           )}
@@ -585,24 +599,26 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
             <div className="space-y-4">
               <div className="flex items-center justify-between">
                 <button
+                  type="button"
                   onClick={toggleAll}
-                  className="flex items-center gap-2 text-xs font-bold text-slate-400 hover:text-white transition-colors"
+                  className="flex items-center gap-2 text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white transition-colors cursor-pointer"
                 >
-                  {allSelected ? <CheckSquare className="w-4 h-4 text-emerald-500" /> : <Square className="w-4 h-4" />}
-                  {allSelected ? 'Desmarcar Todas' : 'Selecionar Todas'}
+                  {allSelected ? <CheckSquare className="w-4 h-4 text-emerald-600 dark:text-emerald-400" /> : <Square className="w-4 h-4 text-slate-400" />}
+                  {allSelected ? 'Desmarcar todas' : 'Selecionar todas'}
                 </button>
                 <button
+                  type="button"
                   onClick={() => { setStep('upload'); setExtractedLessons([]); }}
-                  className="flex items-center gap-1 text-xs font-bold text-slate-500 hover:text-amber-400 transition-colors"
+                  className="flex items-center gap-1.5 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-amber-600 dark:hover:text-amber-400 transition-colors cursor-pointer"
                 >
-                  <RefreshCw className="w-3 h-3" /> Reprocessar
+                  <RefreshCw className="w-3.5 h-3.5" /> Reprocessar
                 </button>
               </div>
 
               <div className="space-y-2">
-                <div className="grid grid-cols-[28px_1fr_80px_28px] gap-2 px-3 py-2 text-[9px] font-black text-slate-500 uppercase tracking-widest">
+                <div className="grid grid-cols-[28px_1fr_84px_28px] gap-2 px-3 py-1.5 text-[11px] font-semibold text-slate-500 dark:text-slate-400">
                   <span></span>
-                  <span>Nome da Aula</span>
+                  <span>Nome da aula</span>
                   <span className="text-center">Duração</span>
                   <span></span>
                 </div>
@@ -610,16 +626,16 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
                 {extractedLessons.map((lesson) => (
                   <div
                     key={lesson.id}
-                    className={`grid grid-cols-[28px_1fr_80px_28px] gap-2 items-center px-3 py-2.5 rounded-xl border transition-all ${
+                    className={`grid grid-cols-[28px_1fr_84px_28px] gap-2 items-center px-3 py-2 rounded-xl border transition-all ${
                       lesson.selected
-                        ? 'bg-slate-800/60 border-slate-700 hover:border-emerald-600/50'
-                        : 'bg-slate-900/30 border-slate-800/50 opacity-50'
+                        ? 'bg-slate-50/80 dark:bg-slate-950/55 border-slate-200 dark:border-slate-700/80'
+                        : 'bg-slate-50/30 dark:bg-slate-900/30 border-slate-200/50 dark:border-slate-800/50 opacity-50'
                     }`}
                   >
-                    <button onClick={() => toggleLesson(lesson.id)} className="flex items-center justify-center">
+                    <button type="button" onClick={() => toggleLesson(lesson.id)} className="flex items-center justify-center cursor-pointer">
                       {lesson.selected
-                        ? <CheckSquare className="w-4 h-4 text-emerald-500" />
-                        : <Square className="w-4 h-4 text-slate-600" />}
+                        ? <CheckSquare className="w-4 h-4 text-emerald-600 dark:text-emerald-400" />
+                        : <Square className="w-4 h-4 text-slate-400 dark:text-slate-600" />}
                     </button>
 
                     <input
@@ -627,7 +643,7 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
                       value={lesson.name}
                       onChange={(e) => updateLessonName(lesson.id, e.target.value)}
                       onPaste={(e) => e.stopPropagation()}
-                      className="bg-transparent border-none outline-none text-xs font-bold text-white placeholder:text-slate-600 w-full"
+                      className="bg-transparent border-none outline-none text-xs font-semibold text-slate-900 dark:text-white placeholder:text-slate-400 dark:placeholder:text-slate-600 w-full"
                       placeholder="Nome da aula..."
                     />
 
@@ -636,13 +652,14 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
                       value={lesson.duration}
                       onChange={(e) => updateLessonDuration(lesson.id, e.target.value)}
                       onPaste={(e) => e.stopPropagation()}
-                      className="bg-slate-900/80 border border-slate-700 rounded-lg px-2 py-1 text-xs font-mono font-bold text-emerald-400 text-center outline-none focus:border-emerald-500 w-full"
+                      className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-xs font-mono tabular-nums font-semibold text-emerald-600 dark:text-emerald-400 text-center outline-none focus:border-emerald-500 w-full"
                       placeholder="00:00"
                     />
 
                     <button
+                      type="button"
                       onClick={() => removeLesson(lesson.id)}
-                      className="flex items-center justify-center text-slate-600 hover:text-red-500 transition-colors"
+                      className="flex items-center justify-center text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
                     >
                       <Trash2 className="w-3.5 h-3.5" />
                     </button>
@@ -650,8 +667,8 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
                 ))}
 
                 {extractedLessons.length === 0 && (
-                  <div className="text-center py-8">
-                    <p className="text-sm text-slate-500 font-bold">Nenhuma aula encontrada.</p>
+                  <div className="text-center py-8 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl">
+                    <p className="text-xs text-slate-500 dark:text-slate-400 font-medium">Nenhuma aula encontrada.</p>
                   </div>
                 )}
               </div>
@@ -660,41 +677,53 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
         </div>
 
         {/* Footer */}
-        <div className="px-6 py-4 border-t border-slate-800 bg-slate-900">
+        <div className="px-5 py-3.5 border-t border-slate-100 dark:border-slate-800/90 bg-slate-50/60 dark:bg-slate-950/40 shrink-0">
           {step === 'upload' && (
-            <button
-              onClick={processImage}
-              disabled={!imageFile}
-              className={`w-full py-3.5 rounded-xl font-black text-sm uppercase tracking-widest transition-all transform active:scale-95 flex items-center justify-center gap-2 ${
-                imageFile
-                  ? 'bg-gradient-to-r from-blue-600 to-cyan-600 hover:from-blue-500 hover:to-cyan-500 text-white shadow-lg shadow-blue-600/20'
-                  : 'bg-slate-800 text-slate-500 cursor-not-allowed'
-              }`}
-            >
-              <Camera className="w-4 h-4" />
-              Processar com Gemini Vision
-            </button>
+            <div className="flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={onClose}
+                className="h-10 px-4 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={processImage}
+                disabled={!imageFile}
+                className={`h-10 px-5 rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-2 ${
+                  imageFile
+                    ? 'bg-sky-600 hover:bg-sky-700 text-white shadow-xs cursor-pointer'
+                    : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
+                }`}
+              >
+                <Camera className="w-4 h-4" />
+                Processar imagem
+              </button>
+            </div>
           )}
 
           {step === 'review' && (
-            <div className="flex gap-3">
+            <div className="flex items-center justify-end gap-2.5">
               <button
+                type="button"
                 onClick={() => { setStep('upload'); setExtractedLessons([]); }}
-                className="flex-1 py-3 rounded-xl font-bold text-xs text-slate-400 bg-slate-800 hover:bg-slate-700 transition-all uppercase tracking-wider"
+                className="h-10 px-4 rounded-xl font-semibold text-xs text-slate-600 dark:text-slate-300 bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
               >
                 Voltar
               </button>
               <button
+                type="button"
                 onClick={handleConfirm}
                 disabled={selectedCount === 0}
-                className={`flex-[2] py-3 rounded-xl font-black text-sm uppercase tracking-widest transition-all transform active:scale-95 flex items-center justify-center gap-2 ${
+                className={`h-10 px-5 rounded-xl font-semibold text-xs transition-colors flex items-center justify-center gap-2 ${
                   selectedCount > 0
-                    ? 'bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white shadow-lg shadow-emerald-600/20'
-                    : 'bg-slate-800 text-slate-500 cursor-not-allowed'
+                    ? 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-xs cursor-pointer'
+                    : 'bg-slate-200 dark:bg-slate-800 text-slate-400 dark:text-slate-500 cursor-not-allowed'
                 }`}
               >
                 <Check className="w-4 h-4" />
-                Importar {selectedCount} Aula{selectedCount !== 1 ? 's' : ''}
+                Importar {selectedCount} aula{selectedCount !== 1 ? 's' : ''}
               </button>
             </div>
           )}

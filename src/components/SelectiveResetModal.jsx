@@ -137,7 +137,7 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
       desc: 'Desmarca todas as aulas concluídas e blocos finalizados hoje, MANTENDO suas matérias, assuntos e aulas cadastradas.',
       badge: `${watchedCount} aula${watchedCount !== 1 ? 's' : ''} assistida${watchedCount !== 1 ? 's' : ''}`,
       icon: CheckCircle2,
-      iconColor: 'text-sky-400',
+      iconColor: 'text-sky-600 dark:text-sky-400',
       iconBg: 'bg-sky-500/10 border-sky-500/20'
     },
     {
@@ -146,7 +146,7 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
       desc: 'Remove todas as matérias colocadas no ciclo semanal, regras futuras e edições do calendário, MANTENDO suas disciplinas cadastradas.',
       badge: calendarBadge,
       icon: CalendarX,
-      iconColor: 'text-indigo-400',
+      iconColor: 'text-indigo-600 dark:text-indigo-400',
       iconBg: 'bg-indigo-500/10 border-indigo-500/20'
     },
     {
@@ -155,7 +155,7 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
       desc: 'Apaga todas as questões sincronizadas da extensão, métricas e radar de lei seca.',
       badge: `${caveiraCount} questão${caveiraCount !== 1 ? 'ões' : ''}`,
       icon: Skull,
-      iconColor: 'text-purple-400',
+      iconColor: 'text-purple-600 dark:text-purple-400',
       iconBg: 'bg-purple-500/10 border-purple-500/20'
     },
     {
@@ -164,7 +164,7 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
       desc: 'Zera todos os cards de revisão agendados, estabilidade e histórico de repetições.',
       badge: `${reviewsCount} card${reviewsCount !== 1 ? 's' : ''}`,
       icon: Brain,
-      iconColor: 'text-emerald-400',
+      iconColor: 'text-emerald-600 dark:text-emerald-400',
       iconBg: 'bg-emerald-500/10 border-emerald-500/20'
     },
     {
@@ -173,7 +173,7 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
       desc: 'Zera o recorde (High Score), assertivas já vistas e estatísticas de erros/acertos do CTB.',
       badge: dueloScore > 0 ? `Recorde: ${dueloScore} pts` : 'Sem partidas',
       icon: Target,
-      iconColor: 'text-cyan-400',
+      iconColor: 'text-cyan-600 dark:text-cyan-400',
       iconBg: 'bg-cyan-500/10 border-cyan-500/20'
     },
     {
@@ -182,7 +182,7 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
       desc: 'Zera XP acumulado, patentes militares, histórico semanal, streaks e missões.',
       badge: `${xpCount.toLocaleString()} XP acumulado`,
       icon: Trophy,
-      iconColor: 'text-amber-400',
+      iconColor: 'text-amber-600 dark:text-amber-400',
       iconBg: 'bg-amber-500/10 border-amber-500/20'
     },
     {
@@ -191,7 +191,7 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
       desc: 'Restaura o K9 ao nível 1 com atributos iniciais, limpando inventário de comidas e roupinhas.',
       badge: `Nível ${petLevel}`,
       icon: Dog,
-      iconColor: 'text-orange-400',
+      iconColor: 'text-orange-600 dark:text-orange-400',
       iconBg: 'bg-orange-500/10 border-orange-500/20'
     },
     {
@@ -200,87 +200,94 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
       desc: 'Restaura saldo para 250 moedas, remove temas extras e avatares desbloqueados.',
       badge: `${coins} moedas`,
       icon: Coins,
-      iconColor: 'text-yellow-400',
-      iconBg: 'bg-yellow-500/10 border-yellow-500/20'
+      iconColor: 'text-amber-600 dark:text-yellow-400',
+      iconBg: 'bg-amber-500/10 border-amber-500/20'
     },
     {
       key: 'subjects',
-      title: 'APAGAR TODAS as Disciplinas Cadastradas',
+      title: 'Apagar todas as disciplinas cadastradas',
       desc: 'CUIDADO: Exclui permanentemente todas as matérias, assuntos e aulas da aba "Minhas Disciplinas" (além de ciclo e calendário). Para zerar apenas aulas ou calendário sem perder matérias, use as 2 primeiras opções.',
-      badge: `DESTRUTIVO • ${subjectsCount} matéria${subjectsCount !== 1 ? 's' : ''}`,
+      badge: `Destrutivo · ${subjectsCount} matéria${subjectsCount !== 1 ? 's' : ''}`,
       icon: BookOpen,
-      iconColor: 'text-red-400',
-      iconBg: 'bg-red-500/10 border-red-500/30'
+      iconColor: 'text-red-600 dark:text-red-400',
+      iconBg: 'bg-red-500/10 border-red-500/25'
     }
   ];
 
   return createPortal(
-    <div className="fixed inset-0 bg-slate-950/90 backdrop-blur-md flex items-center justify-center z-[150] p-3 sm:p-6 overflow-y-auto fade-in">
-      <div className="bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full border border-red-900/60 relative overflow-hidden flex flex-col h-[90vh] max-h-[90vh] my-auto">
-        
-        {/* Barra de Perigo no Topo */}
-        <div className="absolute top-0 left-0 w-full h-1.5 bg-gradient-to-r from-red-600 via-amber-500 to-red-600 z-10"></div>
-
+    <div
+      className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-[150] p-3 sm:p-5 overflow-y-auto fade-in font-sans"
+      onClick={() => { if (!isExecuting) onClose(); }}
+    >
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-labelledby="selective-reset-title"
+        onClick={(e) => e.stopPropagation()}
+        className="bg-white dark:bg-slate-900 rounded-2xl shadow-[0_24px_64px_-16px_rgba(15,23,42,0.35)] dark:shadow-[0_24px_64px_-16px_rgba(0,0,0,0.75)] ring-1 ring-slate-950/5 dark:ring-white/[0.04] max-w-2xl w-full border border-slate-200/90 dark:border-slate-800 relative overflow-hidden flex flex-col max-h-[90vh] my-auto"
+      >
         {/* Cabeçalho */}
-        <div className="flex items-center justify-between p-6 pb-4 border-b border-slate-800 shrink-0 bg-gradient-to-r from-slate-900 via-[#1e1424] to-slate-900">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-red-950/80 border border-red-700/60 flex items-center justify-center shadow-lg shadow-red-900/30">
-              <ShieldAlert className="w-5 h-5 text-red-400" />
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/90 flex items-start justify-between gap-3 shrink-0">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-red-500/10 dark:bg-red-400/10 ring-1 ring-red-500/20 flex items-center justify-center text-red-600 dark:text-red-400 shrink-0">
+              <ShieldAlert className="w-4 h-4" />
             </div>
-            <div>
-              <h3 className="text-lg font-black text-white uppercase tracking-tight flex items-center gap-2">
-                Central de Reset de Dados
+            <div className="min-w-0">
+              <h3 id="selective-reset-title" className="font-display text-base font-bold text-slate-900 dark:text-white tracking-tight leading-snug">
+                Central de reset de dados
               </h3>
-              <p className="text-[10px] font-bold text-slate-400 uppercase tracking-widest">
-                Gerenciamento seletivo e purga do sistema
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                Escolha exatamente quais módulos deseja zerar ou limpar no sistema.
               </p>
             </div>
           </div>
           <button
+            type="button"
             onClick={onClose}
             disabled={isExecuting}
-            className="text-slate-400 hover:text-white transition-colors p-1 rounded-lg hover:bg-slate-800"
+            aria-label="Fechar janela"
+            className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer disabled:opacity-40 shrink-0"
           >
-            <X className="w-5 h-5" />
+            <X className="w-4 h-4" />
           </button>
         </div>
 
         {/* Corpo com Rolagem */}
-        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-6 space-y-4">
+        <div className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-5 space-y-4">
           {!confirmStep ? (
             <>
               {/* Opção Master: APAGAR TUDO */}
               <div
                 onClick={() => toggleAll(!selected.all)}
-                className={`p-4 rounded-xl border-2 transition-all cursor-pointer relative overflow-hidden ${
+                className={`p-4 rounded-xl border transition-all cursor-pointer ${
                   selected.all
-                    ? 'bg-red-950/40 border-red-500 shadow-[0_0_20px_rgba(239,68,68,0.25)] ring-1 ring-red-400'
-                    : 'bg-slate-900/60 border-slate-800 hover:border-red-900/60'
+                    ? 'bg-red-50/90 dark:bg-red-950/35 border-red-400 dark:border-red-500/80 ring-1 ring-red-500/25'
+                    : 'bg-slate-50/80 dark:bg-slate-950/55 border-slate-200/80 dark:border-slate-800/90 hover:border-red-300 dark:hover:border-red-900/70'
                 }`}
               >
                 <div className="flex items-start gap-3">
                   <button
                     type="button"
                     onClick={(e) => { e.stopPropagation(); toggleAll(!selected.all); }}
-                    className="mt-0.5 shrink-0"
+                    className="mt-0.5 shrink-0 cursor-pointer"
                   >
                     {selected.all ? (
-                      <CheckSquare className="w-5 h-5 text-red-400" />
+                      <CheckSquare className="w-5 h-5 text-red-600 dark:text-red-400" />
                     ) : (
-                      <Square className="w-5 h-5 text-slate-600" />
+                      <Square className="w-5 h-5 text-slate-400 dark:text-slate-600" />
                     )}
                   </button>
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
-                      <span className="text-xs font-black text-red-400 uppercase tracking-wider flex items-center gap-1.5">
-                        <AlertTriangle className="w-4 h-4 text-red-500" />
-                        Opção: Apagar Tudo (Reset Total do Sistema)
+                      <span className="text-xs font-bold text-red-700 dark:text-red-400 flex items-center gap-1.5">
+                        <AlertTriangle className="w-4 h-4 text-red-600 dark:text-red-500 shrink-0" />
+                        Apagar tudo (reset total do sistema)
                       </span>
-                      <span className="text-[9px] font-black uppercase px-2 py-0.5 rounded bg-red-900/60 text-red-200 border border-red-700/60">
-                        Destrutivo Absoluto
+                      <span className="text-[11px] font-semibold px-2 py-0.5 rounded-md bg-red-100 dark:bg-red-950/70 text-red-700 dark:text-red-300 border border-red-200 dark:border-red-800/70">
+                        Destrutivo
                       </span>
                     </div>
-                    <p className="text-xs text-slate-400 leading-relaxed">
+                    <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
                       Zera o sistema inteiro para o estado limpo de fábrica: apaga disciplinas, questões do Caveira, revisões FSRS, dados do Duelo CTB, carreira, mascote K9 e moedas.
                     </p>
                   </div>
@@ -288,31 +295,31 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
               </div>
 
               {/* Barra de Seleção Rápida */}
-              <div className="flex items-center justify-between pt-2 pb-1 border-b border-slate-800">
-                <span className="text-[11px] font-black text-slate-400 uppercase tracking-wider">
-                  Selecione uma ou mais opções:
+              <div className="flex items-center justify-between pt-1 pb-1.5 border-b border-slate-100 dark:border-slate-800/90">
+                <span className="text-xs font-semibold text-slate-600 dark:text-slate-400">
+                  Selecione uma ou mais opções
                 </span>
                 <div className="flex items-center gap-2">
                   <button
                     type="button"
                     onClick={() => toggleAll(true)}
-                    className="text-[10px] font-bold text-slate-400 hover:text-white uppercase transition-colors"
+                    className="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline transition-colors cursor-pointer"
                   >
-                    Marcar Todas
+                    Marcar todas
                   </button>
-                  <span className="text-slate-600 text-xs">•</span>
+                  <span className="text-slate-300 dark:text-slate-700 text-xs">·</span>
                   <button
                     type="button"
                     onClick={() => toggleAll(false)}
-                    className="text-[10px] font-bold text-slate-400 hover:text-white uppercase transition-colors"
+                    className="text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-800 dark:hover:text-slate-200 transition-colors cursor-pointer"
                   >
                     Desmarcar
                   </button>
                 </div>
               </div>
 
-              {/* Lista das 7 Opções Granulares */}
-              <div className="space-y-2.5">
+              {/* Lista das Opções Granulares */}
+              <div className="space-y-2">
                 {resetOptions.map((opt) => {
                   const isChecked = selected[opt.key];
                   const Icon = opt.icon;
@@ -322,19 +329,19 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
                       onClick={() => toggleItem(opt.key)}
                       className={`p-3.5 rounded-xl border transition-all cursor-pointer flex items-start gap-3 ${
                         isChecked
-                          ? 'bg-slate-900 border-red-500/70 shadow-sm shadow-red-950'
-                          : 'bg-slate-900/40 border-slate-800 hover:border-slate-700'
+                          ? 'bg-red-50/50 dark:bg-red-950/20 border-red-300 dark:border-red-500/60'
+                          : 'bg-white dark:bg-slate-900/50 border-slate-200/80 dark:border-slate-800/90 hover:border-slate-300 dark:hover:border-slate-700'
                       }`}
                     >
                       <button
                         type="button"
                         onClick={(e) => { e.stopPropagation(); toggleItem(opt.key); }}
-                        className="mt-0.5 shrink-0"
+                        className="mt-0.5 shrink-0 cursor-pointer"
                       >
                         {isChecked ? (
-                          <CheckSquare className="w-5 h-5 text-red-400" />
+                          <CheckSquare className="w-4 h-4 text-red-600 dark:text-red-400" />
                         ) : (
-                          <Square className="w-5 h-5 text-slate-600" />
+                          <Square className="w-4 h-4 text-slate-400 dark:text-slate-600" />
                         )}
                       </button>
 
@@ -344,14 +351,14 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
 
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-2 mb-1 flex-wrap">
-                          <span className="text-xs font-black text-slate-200">
+                          <span className="text-xs font-semibold text-slate-900 dark:text-slate-100">
                             {opt.title}
                           </span>
-                          <span className="text-[10px] font-mono font-bold text-slate-400 bg-slate-800/80 px-2 py-0.5 rounded border border-slate-700/60">
+                          <span className="text-[11px] font-mono tabular-nums font-medium text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800/80 px-2 py-0.5 rounded-md border border-slate-200/80 dark:border-slate-700/60">
                             {opt.badge}
                           </span>
                         </div>
-                        <p className="text-[11px] text-slate-400 leading-snug">
+                        <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
                           {opt.desc}
                         </p>
                       </div>
@@ -362,36 +369,36 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
             </>
           ) : (
             /* Tela de Confirmação de Segurança */
-            <div className="space-y-5 py-2">
-              <div className="bg-red-950/40 border border-red-800/60 rounded-xl p-5 text-center space-y-3">
-                <div className="w-14 h-14 rounded-full bg-red-900/40 border border-red-600/50 flex items-center justify-center mx-auto text-red-400">
-                  <AlertTriangle className="w-7 h-7" />
+            <div className="space-y-4 py-1">
+              <div className="bg-red-50/80 dark:bg-red-950/30 border border-red-200/90 dark:border-red-900/60 rounded-xl p-5 text-center space-y-2.5">
+                <div className="w-12 h-12 rounded-xl bg-red-500/10 dark:bg-red-400/10 ring-1 ring-red-500/20 flex items-center justify-center mx-auto text-red-600 dark:text-red-400">
+                  <AlertTriangle className="w-6 h-6" />
                 </div>
-                <h4 className="text-base font-black text-white uppercase tracking-tight">
-                  Confirmação de Segurança
+                <h4 className="font-display text-base font-bold text-slate-900 dark:text-white tracking-tight">
+                  Confirmação de segurança
                 </h4>
-                <p className="text-xs text-red-200/90 leading-relaxed max-w-md mx-auto">
-                  Você está prestes a apagar permanentemente os dados selecionados. Esta ação <strong>NÃO PODERÁ SER DESFEITA</strong> e será sincronizada com a nuvem.
+                <p className="text-xs text-red-800 dark:text-red-200/90 leading-relaxed max-w-md mx-auto">
+                  Você está prestes a apagar permanentemente os dados selecionados. Esta ação <strong>não poderá ser desfeita</strong> e será sincronizada com a nuvem.
                 </p>
               </div>
 
               {/* Resumo do que será apagado */}
-              <div className="bg-slate-900/80 border border-slate-800 rounded-xl p-4 space-y-2">
-                <span className="text-[10px] font-black uppercase tracking-widest text-slate-400 block">
-                  Itens selecionados para exclusão:
+              <div className="bg-slate-50/80 dark:bg-slate-950/55 border border-slate-200/80 dark:border-slate-800/90 rounded-xl p-4 space-y-2.5">
+                <span className="text-xs font-semibold text-slate-600 dark:text-slate-400 block">
+                  Itens selecionados para exclusão
                 </span>
-                <ul className="space-y-1.5">
+                <ul className="space-y-2">
                   {selected.all ? (
-                    <li className="text-xs font-black text-red-400 flex items-center gap-2">
-                      <Trash2 className="w-3.5 h-3.5" />
-                      SISTEMA COMPLETO (TODOS OS DADOS E HISTÓRICOS)
+                    <li className="text-xs font-semibold text-red-600 dark:text-red-400 flex items-center gap-2">
+                      <Trash2 className="w-3.5 h-3.5 shrink-0" />
+                      Sistema completo (todos os dados e históricos)
                     </li>
                   ) : (
                     resetOptions.filter(o => selected[o.key]).map(o => (
-                      <li key={o.key} className="text-xs font-bold text-slate-200 flex items-center gap-2">
-                        <Trash2 className="w-3.5 h-3.5 text-red-400 shrink-0" />
+                      <li key={o.key} className="text-xs font-medium text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                        <Trash2 className="w-3.5 h-3.5 text-red-500 dark:text-red-400 shrink-0" />
                         <span>{o.title}</span>
-                        <span className="text-[10px] text-slate-500 font-normal">({o.badge})</span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 font-normal">({o.badge})</span>
                       </li>
                     ))
                   )}
@@ -400,29 +407,29 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
 
               {selected.all && (
                 <div className="space-y-2">
-                  <label className="text-[11px] font-bold text-slate-300 block">
-                    Digite a palavra <span className="font-mono text-red-400 font-black">RESET</span> abaixo para autorizar:
+                  <label className="text-xs font-medium text-slate-700 dark:text-slate-300 block">
+                    Digite a palavra <span className="font-mono text-red-600 dark:text-red-400 font-bold">RESET</span> abaixo para autorizar:
                   </label>
                   <input
                     type="text"
                     value={confirmText}
                     onChange={(e) => setConfirmText(e.target.value.toUpperCase())}
-                    placeholder="DIGITE RESET"
-                    className="w-full bg-slate-950 border border-red-800 focus:border-red-500 rounded-xl px-4 py-3 font-mono font-black text-sm text-center text-red-400 outline-none uppercase tracking-widest"
+                    placeholder="Digite RESET"
+                    className="w-full bg-slate-50 dark:bg-slate-950 border border-red-300 dark:border-red-800 focus:border-red-500 rounded-xl px-4 py-2.5 font-mono font-bold text-sm text-center text-red-600 dark:text-red-400 outline-none uppercase tracking-widest"
                   />
                 </div>
               )}
 
               {!selected.all && selected.subjects && (
-                <label className="flex items-start gap-3 p-3.5 rounded-xl bg-red-950/50 border border-red-700/70 cursor-pointer">
+                <label className="flex items-start gap-3 p-3.5 rounded-xl bg-red-50/80 dark:bg-red-950/35 border border-red-200 dark:border-red-800/70 cursor-pointer">
                   <input
                     type="checkbox"
                     checked={confirmSubjectsDelete}
                     onChange={(e) => setConfirmSubjectsDelete(e.target.checked)}
-                    className="mt-0.5 w-4 h-4 accent-red-500 shrink-0"
+                    className="mt-0.5 w-4 h-4 accent-red-600 shrink-0"
                   />
-                  <span className="text-xs text-red-200 leading-snug">
-                    <strong>Confirmo que quero apagar todas as {subjectsCount} matérias cadastradas</strong> em &quot;Minhas Disciplinas&quot;. (Se queria zerar apenas aulas assistidas ou calendário, clique em <em>Voltar à Seleção</em> e desmarque a última opção.)
+                  <span className="text-xs text-red-800 dark:text-red-200 leading-relaxed">
+                    <strong>Confirmo que quero apagar todas as {subjectsCount} matérias cadastradas</strong> em &quot;Minhas Disciplinas&quot;. (Se queria zerar apenas aulas assistidas ou calendário, clique em <em>Voltar à seleção</em> e desmarque a última opção.)
                   </span>
                 </label>
               )}
@@ -431,13 +438,13 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
         </div>
 
         {/* Rodapé Fixo com Ações */}
-        <div className="p-6 pt-3 border-t border-slate-800 bg-slate-900 shrink-0 flex flex-col gap-2.5">
+        <div className="px-5 py-3.5 border-t border-slate-100 dark:border-slate-800/90 bg-slate-50/60 dark:bg-slate-950/40 shrink-0">
           {!confirmStep ? (
-            <div className="flex gap-3">
+            <div className="flex items-center justify-end gap-2.5">
               <button
                 type="button"
                 onClick={onClose}
-                className="flex-1 py-3 text-slate-400 hover:text-white font-bold text-xs uppercase tracking-wider transition-colors border border-slate-800 rounded-xl hover:bg-slate-900"
+                className="h-10 px-4 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
               >
                 Cancelar
               </button>
@@ -445,21 +452,21 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
                 type="button"
                 onClick={handleStartConfirmation}
                 disabled={selectedCount === 0}
-                className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-red-600/30 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                className="h-10 px-5 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs rounded-xl transition-colors shadow-xs disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
               >
                 <Trash2 className="w-4 h-4" />
                 Continuar ({selectedCount} selecionado{selectedCount !== 1 ? 's' : ''})
               </button>
             </div>
           ) : (
-            <div className="flex gap-3">
+            <div className="flex items-center justify-end gap-2.5">
               <button
                 type="button"
                 onClick={() => setConfirmStep(false)}
                 disabled={isExecuting}
-                className="flex-1 py-3 text-slate-400 hover:text-white font-bold text-xs uppercase tracking-wider transition-colors border border-slate-800 rounded-xl hover:bg-slate-900"
+                className="h-10 px-4 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer disabled:opacity-40"
               >
-                Voltar à Seleção
+                Voltar à seleção
               </button>
               <button
                 type="button"
@@ -469,17 +476,17 @@ export default function SelectiveResetModal({ isOpen, onClose }) {
                   (selected.all && confirmText.trim().toUpperCase() !== 'RESET') ||
                   (!selected.all && selected.subjects && !confirmSubjectsDelete)
                 }
-                className="flex-1 py-3 bg-red-600 hover:bg-red-500 text-white font-black text-xs uppercase tracking-wider rounded-xl transition-all shadow-lg shadow-red-600/30 disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
+                className="h-10 px-5 bg-red-600 hover:bg-red-700 text-white font-semibold text-xs rounded-xl transition-colors shadow-xs disabled:opacity-40 disabled:cursor-not-allowed flex items-center justify-center gap-2 cursor-pointer"
               >
                 {isExecuting ? (
                   <>
                     <Loader2 className="w-4 h-4 animate-spin" />
-                    Purificando Dados...
+                    Limpando dados...
                   </>
                 ) : (
                   <>
                     <Trash2 className="w-4 h-4" />
-                    Confirmar e Apagar
+                    Confirmar e apagar
                   </>
                 )}
               </button>

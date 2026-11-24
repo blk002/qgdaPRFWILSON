@@ -98,23 +98,25 @@ export default function SimuladoFormModal({ isOpen, editingSimulado, onClose, on
 
   return createPortal(
     <div
-      className="fixed inset-0 bg-black/65 backdrop-blur-xs flex items-center justify-center z-[999] p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-[999] p-3 sm:p-4 fade-in font-sans"
       onClick={onClose}
     >
       <form
+        role="dialog"
+        aria-modal="true"
         onSubmit={handleFormSubmit}
         onClick={(e) => e.stopPropagation()}
-        className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl shadow-2xl max-w-2xl w-full overflow-hidden flex flex-col max-h-[92vh]"
+        className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl shadow-[0_24px_64px_-16px_rgba(15,23,42,0.35)] dark:shadow-[0_24px_64px_-16px_rgba(0,0,0,0.75)] ring-1 ring-slate-950/5 dark:ring-white/[0.04] max-w-2xl w-full overflow-hidden flex flex-col max-h-[92vh]"
       >
         {/* Cabeçalho */}
-        <div className="px-5 py-4 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="w-8 h-8 rounded-lg bg-sky-50 dark:bg-sky-950/50 border border-sky-200/80 dark:border-sky-900/60 flex items-center justify-center text-sky-600 dark:text-sky-400 shrink-0">
+        <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/90 flex items-center justify-between gap-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-sky-500/10 dark:bg-sky-400/10 ring-1 ring-sky-500/20 flex items-center justify-center text-sky-600 dark:text-sky-400 shrink-0">
               <Target className="w-4 h-4" />
             </div>
             <div className="min-w-0">
-              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100 leading-tight">
-                {editingSimulado ? 'Editar Simulado' : 'Registrar Simulado PRF'}
+              <h3 className="font-display text-base font-bold text-slate-900 dark:text-white tracking-tight leading-snug">
+                {editingSimulado ? 'Editar simulado' : 'Registrar simulado PRF'}
               </h3>
               <p className="text-xs text-slate-500 dark:text-slate-400">
                 Padrão Cebraspe · 120 questões · 1 errada anula 1 certa

@@ -1324,401 +1324,710 @@ export default function Config({
           </section>
         </div>
       )}
-      {/* Modal de Edição de Disciplina (Estilo Compacto Centralizado) */}
+      {/* Modal de Edição de Disciplina */}
       {editingSubjectId && draftSubject && createPortal((
-        <div className="fixed inset-0 bg-slate-900/90 backdrop-blur-sm flex items-center justify-center z-[120] p-3 sm:p-6 overflow-y-auto fade-in">
-          <div className="bg-slate-900 rounded-2xl shadow-2xl max-w-2xl w-full border border-slate-800 relative overflow-hidden flex flex-col h-[90vh] max-h-[90vh] my-auto">
-            
-            {/* Barra de Progresso Topo */}
-            <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-blue-500 via-teal-400 to-blue-500 opacity-80 z-10"></div>
-
+        <div
+          className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-[120] p-3 sm:p-5 overflow-y-auto fade-in font-sans"
+          onClick={() => {
+            setEditingSubjectId(null);
+            setDraftSubject(null);
+          }}
+        >
+          <div
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="edit-subject-modal-title"
+            onClick={(e) => e.stopPropagation()}
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-[0_24px_64px_-16px_rgba(15,23,42,0.35)] dark:shadow-[0_24px_64px_-16px_rgba(0,0,0,0.75)] ring-1 ring-slate-950/5 dark:ring-white/[0.04] max-w-2xl w-full border border-slate-200/90 dark:border-slate-800 relative overflow-hidden flex flex-col h-[90vh] max-h-[90vh] my-auto"
+          >
             {/* Cabeçalho Fixo */}
-            <div className="flex justify-between items-start p-6 pb-4 border-b border-slate-800 shrink-0">
-              <div>
-                <h3 className="text-[22px] font-black text-white uppercase tracking-tight leading-none mb-1">
-                  Configurar Disciplina
-                </h3>
-                <p className="text-[10px] font-black text-slate-500 uppercase tracking-widest">
-                  ID: {draftSubject.id}
-                </p>
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/90 flex items-start justify-between gap-3 shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-9 h-9 rounded-xl bg-sky-500/10 dark:bg-sky-400/10 ring-1 ring-sky-500/20 flex items-center justify-center text-sky-600 dark:text-sky-400 shrink-0">
+                  <BookOpen className="w-4 h-4" />
+                </div>
+                <div className="min-w-0">
+                  <h3 id="edit-subject-modal-title" className="font-display text-base font-bold text-slate-900 dark:text-white tracking-tight leading-snug">
+                    Configurar disciplina
+                  </h3>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 font-mono">
+                    ID: {draftSubject.id}
+                  </p>
+                </div>
               </div>
-              <button 
+              <button
+                type="button"
                 onClick={() => {
                   setEditingSubjectId(null);
                   setDraftSubject(null);
                 }}
-                className="text-slate-400 hover:text-white transition-colors p-1 cursor-pointer"
+                aria-label="Fechar janela"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
               >
-                <X className="w-5 h-5" />
+                <X className="w-4 h-4" />
               </button>
             </div>
 
             {/* Corpo com rolagem independente */}
-            <div ref={modalBodyRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-6 space-y-6">
+            <div ref={modalBodyRef} className="flex-1 min-h-0 overflow-y-auto custom-scrollbar p-5 space-y-5">
               {/* Dados Básicos */}
-              <div className="grid grid-cols-2 gap-4">
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Nome Operacional</label>
-                <input 
-                  type="text" 
-                  value={draftSubject.name}
-                  onChange={(e) => setDraftSubject(prev => ({ ...prev, name: e.target.value.toUpperCase() }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all placeholder:text-slate-600"
-                  placeholder="EX: PORTUGUÊS..."
-                />
-              </div>
-              <div>
-                <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">Alocação de Bloco</label>
-                <select 
-                  value={draftSubject.block}
-                  onChange={(e) => setDraftSubject(prev => ({ ...prev, block: e.target.value }))}
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl px-4 py-3 font-bold text-sm text-white focus:border-blue-500 focus:ring-1 focus:ring-blue-500 outline-none transition-all appearance-none cursor-pointer"
-                >
-                  <option value="B1">Bloco I (Básicas)</option>
-                  <option value="B2">Bloco II (Trânsito)</option>
-                  <option value="B3">Bloco III (Direito)</option>
-                </select>
-              </div>
-            </div>
-
-            {/* Cores */}
-            <div className="mb-6">
-              <div className="flex items-center justify-between mb-2.5">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest">
-                  Identidade Visual ({availableColors?.length || 18} Cores Disponíveis)
-                </label>
-                {draftSubject.color && (
-                  <span className={`text-[10px] font-black px-2 py-0.5 rounded shadow-xs ${draftSubject.color}`}>
-                    Cor Selecionada
-                  </span>
-                )}
-              </div>
-              <div className="grid grid-cols-6 sm:grid-cols-9 gap-2.5 p-3 bg-slate-900/60 rounded-xl border border-slate-800">
-                {availableColors.map(c => {
-                  const isSelected = draftSubject.color === c.color;
-                  const isDarkText = c.color.includes('text-slate-950') || c.color.includes('text-slate-900');
-                  return (
-                    <button
-                      key={c.id}
-                      type="button"
-                      onClick={() => setDraftSubject(prev => ({ ...prev, color: c.color }))}
-                      title={c.label}
-                      className={`h-9 rounded-lg transition-all relative flex items-center justify-center cursor-pointer ${
-                        isSelected 
-                          ? 'ring-2 ring-white ring-offset-2 ring-offset-slate-900 shadow-lg scale-105 z-10' 
-                          : 'hover:scale-105 opacity-85 hover:opacity-100'
-                      }`}
-                    >
-                      <div className={`w-full h-full rounded-lg ${c.color.split(' ')[0]} flex items-center justify-center shadow-xs`}>
-                        {isSelected && (
-                          <Check className={`w-4 h-4 stroke-[3] ${isDarkText ? 'text-slate-950' : 'text-white'}`} />
-                        )}
-                      </div>
-                    </button>
-                  );
-                })}
-              </div>
-            </div>
-
-            {/* Velocidade de Vídeo-Aula (Aceleração Padrão) */}
-            <div className="mb-6 bg-slate-900/60 border border-slate-800 p-4 rounded-xl">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                  <FastForward className="w-3.5 h-3.5 text-blue-400" /> Velocidade de Reprodução Padrão (Aceleração)
-                </label>
-                <span className="text-xs font-black text-blue-400 bg-blue-950/80 border border-blue-800 px-2 py-0.5 rounded">
-                  {draftSubject.speed || 1}x
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
-                Defina em qual velocidade você assiste as videoaulas desta matéria. O sistema recalcula os tempos reais de estudo.
-              </p>
-              <div className="flex gap-2 mb-3">
-                {[1, 1.25, 1.5, 1.75, 2].map(s => {
-                  const isSel = (draftSubject.speed || 1) === s;
-                  return (
-                    <button
-                      key={s}
-                      type="button"
-                      onClick={() => setDraftSubject(prev => ({ ...prev, speed: s }))}
-                      className={`flex-1 py-1.5 rounded-lg text-xs font-black transition-all ${
-                        isSel
-                          ? 'bg-blue-600 text-white shadow-lg shadow-blue-500/30 ring-2 ring-blue-400'
-                          : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-white hover:border-slate-700'
-                      }`}
-                    >
-                      {s}x
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Comparativo de Tempo da Matéria */}
-              {(() => {
-                const stats = getSubjectVideoStats(draftSubject);
-                return (
-                  <div className="grid grid-cols-3 gap-2 bg-slate-950 p-2.5 rounded-lg border border-slate-800/80 text-center">
-                    <div>
-                      <span className="text-[8px] font-black text-slate-500 uppercase block">Sem Aceleração</span>
-                      <span className="text-xs font-black text-slate-300">{stats.totalFriendly}</span>
-                    </div>
-                    <div>
-                      <span className="text-[8px] font-black text-blue-400 uppercase block">Com Aceleração ({(draftSubject.speed || 1)}x)</span>
-                      <span className="text-xs font-black text-blue-400">{stats.acceleratedFriendly}</span>
-                    </div>
-                    <div>
-                      <span className="text-[8px] font-black text-emerald-400 uppercase block">Tempo Economizado</span>
-                      <span className="text-xs font-black text-emerald-400">
-                        {stats.savedSeconds > 0 ? `-${stats.savedFriendly} (${stats.percentSaved}%)` : '0m'}
-                      </span>
-                    </div>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Meta de Tempo por Bloco de Estudo no Ciclo */}
-            <div className="mb-6 bg-slate-900/60 border border-slate-800 p-4 rounded-xl">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                  <Target className="w-3.5 h-3.5 text-emerald-400" /> Meta de Tempo por Bloco no Ciclo (Distribuição Automática)
-                </label>
-                <span className="text-xs font-black text-emerald-400 bg-emerald-950/80 border border-emerald-800 px-2 py-0.5 rounded">
-                  {draftSubject.timeGoalMinutes > 0 ? formatMinutesToFriendly(draftSubject.timeGoalMinutes) : (Number(draftSubject.lessonsPerBlock) > 0 ? `${draftSubject.lessonsPerBlock} aulas fixas` : 'Sem meta (1 aula)')}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
-                Defina quanto tempo você quer estudar desta matéria em cada bloco do seu cronograma (ex: 1h30). O sistema agrupará as videoaulas calculando o tempo acelerado até completar a meta.
-              </p>
-              
-              {/* Presets Rápidos */}
-              <div className="grid grid-cols-5 gap-2 mb-3">
-                {[
-                  { label: '1 Aula', val: 0 },
-                  { label: '45m', val: 45 },
-                  { label: '1h', val: 60 },
-                  { label: '1h 30m', val: 90 },
-                  { label: '2h', val: 120 }
-                ].map(preset => {
-                  const isSel = !(Number(draftSubject.lessonsPerBlock) > 0) && (draftSubject.timeGoalMinutes || 0) === preset.val;
-                  return (
-                    <button
-                      key={preset.val}
-                      type="button"
-                      onClick={() => setDraftSubject(prev => ({ ...prev, timeGoalMinutes: preset.val, lessonsPerBlock: 0 }))}
-                      className={`py-1.5 rounded-lg text-xs font-black transition-all ${
-                        isSel
-                          ? 'bg-emerald-600 text-white shadow-lg shadow-emerald-500/30 ring-2 ring-emerald-400'
-                          : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-white hover:border-slate-700'
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  );
-                })}
-              </div>
-
-              {/* Input customizado de minutos */}
-              <div className="flex items-center justify-between bg-slate-950 p-2.5 rounded-lg border border-slate-800 text-xs">
-                <span className="text-slate-400 font-bold">Tempo personalizado (em minutos):</span>
-                <div className="flex items-center gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Nome da disciplina
+                  </label>
                   <input
-                    type="number"
-                    min="0"
-                    max="360"
-                    step="5"
-                    value={draftSubject.timeGoalMinutes || 0}
-                    onChange={(e) => {
-                      const val = Math.max(0, parseInt(e.target.value) || 0);
-                      setDraftSubject(prev => ({ ...prev, timeGoalMinutes: val, lessonsPerBlock: val > 0 ? 0 : (prev.lessonsPerBlock || 0) }));
-                    }}
-                    className="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-center font-black text-emerald-400 outline-none focus:border-emerald-500"
+                    type="text"
+                    value={draftSubject.name}
+                    onChange={(e) => setDraftSubject(prev => ({ ...prev, name: e.target.value.toUpperCase() }))}
+                    className="w-full h-10 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 font-semibold text-sm text-slate-900 dark:text-white focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none transition-all placeholder:text-slate-400 dark:placeholder:text-slate-600"
+                    placeholder="Ex.: PORTUGUÊS..."
                   />
-                  <span className="text-slate-500 font-bold">min</span>
+                </div>
+                <div>
+                  <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                    Alocação de bloco
+                  </label>
+                  <select
+                    value={draftSubject.block}
+                    onChange={(e) => setDraftSubject(prev => ({ ...prev, block: e.target.value }))}
+                    className="w-full h-10 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 font-semibold text-sm text-slate-900 dark:text-white focus:border-sky-500 focus:ring-1 focus:ring-sky-500 outline-none transition-all cursor-pointer"
+                  >
+                    <option value="B1">Bloco I (Básicas)</option>
+                    <option value="B2">Bloco II (Trânsito)</option>
+                    <option value="B3">Bloco III (Direito)</option>
+                  </select>
                 </div>
               </div>
 
-              {/* Quantidade fixa de aulas por bloco */}
-              <div className={`mt-2 flex flex-col gap-2 bg-slate-950 p-2.5 rounded-lg border text-xs ${Number(draftSubject.lessonsPerBlock) > 0 ? 'border-emerald-500' : 'border-slate-800'}`}>
-                <div className="flex items-center justify-between">
-                  <span className="text-slate-400 font-bold">Ou: quantidade fixa de aulas por bloco:</span>
+              {/* Cores */}
+              <div>
+                <div className="flex items-center justify-between mb-2">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Cor da disciplina ({availableColors?.length || 18} opções)
+                  </label>
+                  {draftSubject.color && (
+                    <span className={`text-[11px] font-semibold px-2 py-0.5 rounded-md ${draftSubject.color}`}>
+                      Cor selecionada
+                    </span>
+                  )}
+                </div>
+                <div className="grid grid-cols-6 sm:grid-cols-9 gap-2 p-3 bg-slate-50/80 dark:bg-slate-950/55 rounded-xl border border-slate-200/80 dark:border-slate-800/90">
+                  {availableColors.map(c => {
+                    const isSelected = draftSubject.color === c.color;
+                    const isDarkText = c.color.includes('text-slate-950') || c.color.includes('text-slate-900');
+                    return (
+                      <button
+                        key={c.id}
+                        type="button"
+                        onClick={() => setDraftSubject(prev => ({ ...prev, color: c.color }))}
+                        title={c.label}
+                        className={`h-9 rounded-lg transition-all relative flex items-center justify-center cursor-pointer ${
+                          isSelected
+                            ? 'ring-2 ring-slate-900 dark:ring-white ring-offset-2 ring-offset-white dark:ring-offset-slate-900 shadow-sm scale-105 z-10'
+                            : 'hover:scale-105 opacity-85 hover:opacity-100'
+                        }`}
+                      >
+                        <div className={`w-full h-full rounded-lg ${c.color.split(' ')[0]} flex items-center justify-center`}>
+                          {isSelected && (
+                            <Check className={`w-4 h-4 stroke-[3] ${isDarkText ? 'text-slate-950' : 'text-white'}`} />
+                          )}
+                        </div>
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              {/* Velocidade de Vídeo-Aula */}
+              <div className="bg-slate-50/80 dark:bg-slate-950/55 border border-slate-200/80 dark:border-slate-800/90 p-4 rounded-xl">
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <FastForward className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+                    Velocidade de reprodução padrão
+                  </label>
+                  <span className="text-xs font-semibold tabular-nums text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/70 border border-sky-200 dark:border-sky-800/80 px-2 py-0.5 rounded-md">
+                    {draftSubject.speed || 1}x
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
+                  Defina em qual velocidade você assiste às videoaulas desta matéria. O sistema recalcula os tempos reais de estudo.
+                </p>
+                <div className="flex gap-2 mb-3">
+                  {[1, 1.25, 1.5, 1.75, 2].map(s => {
+                    const isSel = (draftSubject.speed || 1) === s;
+                    return (
+                      <button
+                        key={s}
+                        type="button"
+                        onClick={() => setDraftSubject(prev => ({ ...prev, speed: s }))}
+                        className={`flex-1 h-9 rounded-lg text-xs font-semibold tabular-nums transition-colors cursor-pointer ${
+                          isSel
+                            ? 'bg-sky-600 text-white shadow-xs'
+                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        {s}x
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Comparativo de Tempo da Matéria */}
+                {(() => {
+                  const stats = getSubjectVideoStats(draftSubject);
+                  return (
+                    <div className="grid grid-cols-3 gap-2 bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200/80 dark:border-slate-800 text-center">
+                      <div>
+                        <span className="text-[11px] font-medium text-slate-500 dark:text-slate-400 block">Sem aceleração</span>
+                        <span className="text-xs font-bold tabular-nums text-slate-800 dark:text-slate-200">{stats.totalFriendly}</span>
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-medium text-sky-600 dark:text-sky-400 block">Em {(draftSubject.speed || 1)}x</span>
+                        <span className="text-xs font-bold tabular-nums text-sky-600 dark:text-sky-400">{stats.acceleratedFriendly}</span>
+                      </div>
+                      <div>
+                        <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 block">Economia</span>
+                        <span className="text-xs font-bold tabular-nums text-emerald-600 dark:text-emerald-400">
+                          {stats.savedSeconds > 0 ? `-${stats.savedFriendly} (${stats.percentSaved}%)` : '0m'}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Meta de Tempo por Bloco de Estudo no Ciclo */}
+              <div className="bg-slate-50/80 dark:bg-slate-950/55 border border-slate-200/80 dark:border-slate-800/90 p-4 rounded-xl">
+                <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <Target className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" />
+                    Meta por bloco no ciclo
+                  </label>
+                  <span className="text-xs font-semibold tabular-nums text-emerald-700 dark:text-emerald-400 bg-emerald-50 dark:bg-emerald-950/70 border border-emerald-200 dark:border-emerald-800/80 px-2 py-0.5 rounded-md">
+                    {draftSubject.timeGoalMinutes > 0 ? formatMinutesToFriendly(draftSubject.timeGoalMinutes) : (Number(draftSubject.lessonsPerBlock) > 0 ? `${draftSubject.lessonsPerBlock} aulas fixas` : 'Sem meta (1 aula)')}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
+                  Defina quanto tempo deseja estudar desta matéria em cada bloco do cronograma (ex.: 1h30). O sistema agrupará as videoaulas no tempo acelerado até completar a meta.
+                </p>
+
+                {/* Presets Rápidos */}
+                <div className="grid grid-cols-5 gap-2 mb-3">
+                  {[
+                    { label: '1 aula', val: 0 },
+                    { label: '45m', val: 45 },
+                    { label: '1h', val: 60 },
+                    { label: '1h 30m', val: 90 },
+                    { label: '2h', val: 120 }
+                  ].map(preset => {
+                    const isSel = !(Number(draftSubject.lessonsPerBlock) > 0) && (draftSubject.timeGoalMinutes || 0) === preset.val;
+                    return (
+                      <button
+                        key={preset.val}
+                        type="button"
+                        onClick={() => setDraftSubject(prev => ({ ...prev, timeGoalMinutes: preset.val, lessonsPerBlock: 0 }))}
+                        className={`h-9 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                          isSel
+                            ? 'bg-emerald-600 text-white shadow-xs'
+                            : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        {preset.label}
+                      </button>
+                    );
+                  })}
+                </div>
+
+                {/* Input customizado de minutos */}
+                <div className="flex items-center justify-between bg-white dark:bg-slate-900 p-2.5 rounded-lg border border-slate-200/80 dark:border-slate-800 text-xs">
+                  <span className="text-slate-600 dark:text-slate-400 font-medium">Tempo personalizado (em minutos):</span>
                   <div className="flex items-center gap-2">
                     <input
                       type="number"
                       min="0"
-                      max="50"
-                      placeholder="0"
-                      value={Number(draftSubject.lessonsPerBlock) > 0 ? draftSubject.lessonsPerBlock : ''}
+                      max="360"
+                      step="5"
+                      value={draftSubject.timeGoalMinutes || 0}
                       onChange={(e) => {
-                        const val = Math.min(50, Math.max(0, parseInt(e.target.value) || 0));
-                        setDraftSubject(prev => ({ ...prev, lessonsPerBlock: val, timeGoalMinutes: val > 0 ? 0 : (prev.timeGoalMinutes || 0) }));
+                        const val = Math.max(0, parseInt(e.target.value) || 0);
+                        setDraftSubject(prev => ({ ...prev, timeGoalMinutes: val, lessonsPerBlock: val > 0 ? 0 : (prev.lessonsPerBlock || 0) }));
                       }}
-                      className="w-16 bg-slate-900 border border-slate-700 rounded px-2 py-1 text-center font-black text-emerald-400 outline-none focus:border-emerald-500"
+                      className="w-16 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-center font-mono tabular-nums font-bold text-emerald-600 dark:text-emerald-400 outline-none focus:border-emerald-500"
                     />
-                    <span className="text-slate-500 font-bold">aulas</span>
+                    <span className="text-slate-500 font-medium">min</span>
                   </div>
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {[2, 3, 4, 5, 6, 8, 10].map(n => (
-                    <button
-                      key={n}
-                      type="button"
-                      onClick={() => setDraftSubject(prev => ({ ...prev, lessonsPerBlock: n, timeGoalMinutes: 0 }))}
-                      className={`px-2.5 py-1 rounded-lg text-[11px] font-black transition-all ${
-                        Number(draftSubject.lessonsPerBlock) === n
-                          ? 'bg-emerald-600 text-white ring-2 ring-emerald-400'
-                          : 'bg-slate-950 text-slate-400 border border-slate-800 hover:text-white hover:border-slate-700'
-                      }`}
-                    >
-                      {n} aulas
-                    </button>
-                  ))}
-                </div>
-                {Number(draftSubject.lessonsPerBlock) > 0 && (
-                  <p className="text-[11px] text-emerald-300 font-medium">
-                    Cada bloco terá exatamente <strong>{draftSubject.lessonsPerBlock} {Number(draftSubject.lessonsPerBlock) === 1 ? 'aula' : 'aulas'}</strong> (a meta de tempo fica desativada).
-                  </p>
-                )}
-              </div>
 
-              {/* Preview de quantas aulas cabem */}
-              {draftSubject.timeGoalMinutes > 0 && (() => {
-                const firstTopic = (draftSubject.topics || []).find(t => (t.lessons && t.lessons.length > 0) || t.total > 0);
-                const spd = draftSubject.speed || 1;
-                const sample = firstTopic
-                  ? calculateLessonsForGoal(firstTopic.lessons || [], 0, spd, draftSubject.timeGoalMinutes, firstTopic.total)
-                  : null;
-                return (
-                  <div className="mt-3 p-2.5 bg-emerald-950/30 border border-emerald-900/50 rounded-lg text-[11px] text-emerald-300 font-medium flex items-center gap-2">
-                    <Clock className="w-4 h-4 text-emerald-400 shrink-0" />
-                    <span>
-                      Com a meta de <strong>{formatMinutesToFriendly(draftSubject.timeGoalMinutes)}</strong> a <strong>{spd}x</strong>, 
-                      cada bloco agrupará <strong>~{sample?.count || 2} aulas</strong> no cronograma.
-                    </span>
-                  </div>
-                );
-              })()}
-            </div>
-
-            {/* Transição ao Concluir Edital / Aulas */}
-            <div className="mb-6 bg-slate-900/60 border border-slate-800 p-4 rounded-xl">
-              <div className="flex items-center justify-between mb-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase tracking-widest flex items-center gap-1.5">
-                  <RotateCcw className="w-3.5 h-3.5 text-blue-400" /> Transição ao Concluir Conteúdo (O Que Fazer com a Vaga?)
-                </label>
-                <span className="text-[10px] font-black text-blue-400 bg-blue-950/80 border border-blue-800 px-2 py-0.5 rounded uppercase">
-                  {draftSubject.onCompleteAction === 'replace' ? 'Substituir' : draftSubject.onCompleteAction === 'double_remaining' ? 'Dobrar no Dia' : 'Encerrar ao Fim'}
-                </span>
-              </div>
-              <p className="text-[11px] text-slate-400 mb-3 leading-relaxed">
-                Quando todas as aulas desta matéria forem concluídas, o que o cronograma e o calendário devem fazer com os blocos vagos?
-              </p>
-
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-3">
-                {/* Opção 1: Dobrar */}
-                <button
-                  type="button"
-                  onClick={() => setDraftSubject(prev => ({ ...prev, onCompleteAction: 'double_remaining' }))}
-                  className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
-                    draftSubject.onCompleteAction === 'double_remaining'
-                      ? 'bg-blue-950/50 border-blue-500 ring-2 ring-blue-500/30'
-                      : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
-                  }`}
-                >
+                {/* Quantidade fixa de aulas por bloco */}
+                <div className={`mt-2 flex flex-col gap-2 bg-white dark:bg-slate-900 p-2.5 rounded-lg border text-xs ${Number(draftSubject.lessonsPerBlock) > 0 ? 'border-emerald-400 dark:border-emerald-500' : 'border-slate-200/80 dark:border-slate-800'}`}>
                   <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-white flex items-center gap-1.5">
-                      <Zap className="w-3.5 h-3.5 text-yellow-400 fill-yellow-400" /> Dobrar Matéria do Dia
-                    </span>
-                    {draftSubject.onCompleteAction === 'double_remaining' && (
-                      <Check className="w-3.5 h-3.5 text-blue-400 stroke-[3]" />
-                    )}
+                    <span className="text-slate-600 dark:text-slate-400 font-medium">Ou: quantidade fixa de aulas por bloco:</span>
+                    <div className="flex items-center gap-2">
+                      <input
+                        type="number"
+                        min="0"
+                        max="50"
+                        placeholder="0"
+                        value={Number(draftSubject.lessonsPerBlock) > 0 ? draftSubject.lessonsPerBlock : ''}
+                        onChange={(e) => {
+                          const val = Math.min(50, Math.max(0, parseInt(e.target.value) || 0));
+                          setDraftSubject(prev => ({ ...prev, lessonsPerBlock: val, timeGoalMinutes: val > 0 ? 0 : (prev.timeGoalMinutes || 0) }));
+                        }}
+                        className="w-16 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-center font-mono tabular-nums font-bold text-emerald-600 dark:text-emerald-400 outline-none focus:border-emerald-500"
+                      />
+                      <span className="text-slate-500 font-medium">aulas</span>
+                    </div>
                   </div>
-                  <p className="text-[10px] text-slate-400 leading-tight">
-                    A vaga é absorvida pela outra matéria pendente do mesmo dia (ex: 2 aulas de Física no dia).
-                  </p>
-                </button>
-
-                {/* Opção 2: Substituir */}
-                <button
-                  type="button"
-                  onClick={() => setDraftSubject(prev => ({ ...prev, onCompleteAction: 'replace' }))}
-                  className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
-                    draftSubject.onCompleteAction === 'replace'
-                      ? 'bg-blue-950/50 border-blue-500 ring-2 ring-blue-500/30'
-                      : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-white flex items-center gap-1.5">
-                      <Shuffle className="w-3.5 h-3.5 text-emerald-400" /> Nova Disciplina
-                    </span>
-                    {draftSubject.onCompleteAction === 'replace' && (
-                      <Check className="w-3.5 h-3.5 text-blue-400 stroke-[3]" />
-                    )}
+                  <div className="flex flex-wrap gap-1.5">
+                    {[2, 3, 4, 5, 6, 8, 10].map(n => (
+                      <button
+                        key={n}
+                        type="button"
+                        onClick={() => setDraftSubject(prev => ({ ...prev, lessonsPerBlock: n, timeGoalMinutes: 0 }))}
+                        className={`px-2.5 py-1 rounded-lg text-xs font-semibold transition-colors cursor-pointer ${
+                          Number(draftSubject.lessonsPerBlock) === n
+                            ? 'bg-emerald-600 text-white'
+                            : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border border-slate-200 dark:border-slate-800 hover:text-slate-900 dark:hover:text-white'
+                        }`}
+                      >
+                        {n} aulas
+                      </button>
+                    ))}
                   </div>
-                  <p className="text-[10px] text-slate-400 leading-tight">
-                    Uma matéria cadastrada entrará no lugar desta assim que suas aulas acabarem.
-                  </p>
-                </button>
-
-                {/* Opção 3: Encerrar ao Concluir */}
-                <button
-                  type="button"
-                  onClick={() => setDraftSubject(prev => ({ ...prev, onCompleteAction: 'keep_fixed' }))}
-                  className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
-                    (draftSubject.onCompleteAction !== 'replace' && draftSubject.onCompleteAction !== 'double_remaining')
-                      ? 'bg-blue-950/50 border-blue-500 ring-2 ring-blue-500/30'
-                      : 'bg-slate-950/60 border-slate-800 hover:border-slate-700'
-                  }`}
-                >
-                  <div className="flex items-center justify-between">
-                    <span className="text-xs font-black text-white flex items-center gap-1.5">
-                      <Clock className="w-3.5 h-3.5 text-purple-400" /> Encerrar ao Fim
-                    </span>
-                    {(draftSubject.onCompleteAction !== 'replace' && draftSubject.onCompleteAction !== 'double_remaining') && (
-                      <Check className="w-3.5 h-3.5 text-blue-400 stroke-[3]" />
-                    )}
-                  </div>
-                  <p className="text-[10px] text-slate-400 leading-tight">
-                    Assim que a última aula for concluída, a matéria encerra e libera o horário nos dias seguintes.
-                  </p>
-                </button>
-              </div>
-
-              {/* Se escolher substituir por outra matéria, exibe o seletor */}
-              {draftSubject.onCompleteAction === 'replace' && (
-                <div className="bg-slate-950 p-3 rounded-lg border border-slate-800 mt-2">
-                  <label className="block text-[10px] font-black text-slate-400 uppercase mb-2">
-                    Qual disciplina deve entrar nesta vaga quando concluir?
-                  </label>
-                  <select
-                    value={draftSubject.replacementSubjectId || ''}
-                    onChange={(e) => setDraftSubject(prev => ({ ...prev, replacementSubjectId: e.target.value }))}
-                    className="w-full bg-slate-900 border border-slate-700 rounded-lg p-2 text-xs font-bold text-white outline-none focus:border-blue-500 cursor-pointer"
-                  >
-                    <option value="">-- Selecione uma matéria substituta --</option>
-                    {Object.values(subjects || {})
-                      .filter(s => s.id !== draftSubject.id)
-                      .map(s => (
-                        <option key={s.id} value={s.id}>
-                          {s.name} ({s.topics?.reduce((acc, t) => acc + (t.total || 0), 0) || 0} aulas cadastradas)
-                        </option>
-                      ))}
-                  </select>
-                  {(!draftSubject.replacementSubjectId || !subjects[draftSubject.replacementSubjectId]) && (
-                    <p className="text-[10px] text-amber-400 mt-1.5 flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3" /> Selecione uma disciplina acima para assumir a vaga automaticamente.
+                  {Number(draftSubject.lessonsPerBlock) > 0 && (
+                    <p className="text-xs text-emerald-700 dark:text-emerald-300">
+                      Cada bloco terá exatamente <strong>{draftSubject.lessonsPerBlock} {Number(draftSubject.lessonsPerBlock) === 1 ? 'aula' : 'aulas'}</strong> (a meta de tempo fica desativada).
                     </p>
                   )}
                 </div>
-              )}
-            </div>
 
-            {/* Assuntos */}
-            <div>
-              <div className="flex justify-between items-end mb-3 border-b border-slate-800 pb-2">
-                <label className="text-[10px] font-black text-slate-400 uppercase">Conteúdo Programático (Assuntos)</label>
-                <button 
+                {/* Preview de quantas aulas cabem */}
+                {draftSubject.timeGoalMinutes > 0 && (() => {
+                  const firstTopic = (draftSubject.topics || []).find(t => (t.lessons && t.lessons.length > 0) || t.total > 0);
+                  const spd = draftSubject.speed || 1;
+                  const sample = firstTopic
+                    ? calculateLessonsForGoal(firstTopic.lessons || [], 0, spd, draftSubject.timeGoalMinutes, firstTopic.total)
+                    : null;
+                  return (
+                    <div className="mt-3 p-2.5 bg-emerald-50/80 dark:bg-emerald-950/30 border border-emerald-200 dark:border-emerald-900/50 rounded-lg text-xs text-emerald-800 dark:text-emerald-300 flex items-center gap-2">
+                      <Clock className="w-4 h-4 text-emerald-600 dark:text-emerald-400 shrink-0" />
+                      <span>
+                        Com a meta de <strong>{formatMinutesToFriendly(draftSubject.timeGoalMinutes)}</strong> a <strong>{spd}x</strong>, cada bloco agrupará <strong>~{sample?.count || 2} aulas</strong> no cronograma.
+                      </span>
+                    </div>
+                  );
+                })()}
+              </div>
+
+              {/* Transição ao Concluir Edital / Aulas */}
+              <div className="bg-slate-50/80 dark:bg-slate-950/55 border border-slate-200/80 dark:border-slate-800/90 p-4 rounded-xl">
+                <div className="flex items-center justify-between gap-2 mb-1.5 flex-wrap">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                    <RotateCcw className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400" />
+                    Transição ao concluir conteúdo
+                  </label>
+                  <span className="text-[11px] font-semibold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/70 border border-sky-200 dark:border-sky-800/80 px-2 py-0.5 rounded-md">
+                    {draftSubject.onCompleteAction === 'replace' ? 'Substituir' : draftSubject.onCompleteAction === 'double_remaining' ? 'Dobrar no dia' : 'Encerrar ao fim'}
+                  </span>
+                </div>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mb-3 leading-relaxed">
+                  Quando todas as aulas desta matéria forem concluídas, o que o cronograma e o calendário devem fazer com os blocos vagos?
+                </p>
+
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5 mb-2">
+                  {/* Opção 1: Dobrar */}
+                  <button
+                    type="button"
+                    onClick={() => setDraftSubject(prev => ({ ...prev, onCompleteAction: 'double_remaining' }))}
+                    className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
+                      draftSubject.onCompleteAction === 'double_remaining'
+                        ? 'bg-sky-50/90 dark:bg-sky-950/40 border-sky-400 dark:border-sky-500 ring-1 ring-sky-500/25'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Zap className="w-3.5 h-3.5 text-amber-500 fill-amber-500" /> Dobrar no dia
+                      </span>
+                      {draftSubject.onCompleteAction === 'double_remaining' && (
+                        <Check className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 stroke-[3]" />
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                      A vaga é absorvida pela outra matéria pendente do mesmo dia.
+                    </p>
+                  </button>
+
+                  {/* Opção 2: Substituir */}
+                  <button
+                    type="button"
+                    onClick={() => setDraftSubject(prev => ({ ...prev, onCompleteAction: 'replace' }))}
+                    className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
+                      draftSubject.onCompleteAction === 'replace'
+                        ? 'bg-sky-50/90 dark:bg-sky-950/40 border-sky-400 dark:border-sky-500 ring-1 ring-sky-500/25'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Shuffle className="w-3.5 h-3.5 text-emerald-600 dark:text-emerald-400" /> Nova disciplina
+                      </span>
+                      {draftSubject.onCompleteAction === 'replace' && (
+                        <Check className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 stroke-[3]" />
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                      Outra matéria cadastrada entra no lugar desta quando acabar.
+                    </p>
+                  </button>
+
+                  {/* Opção 3: Encerrar ao Concluir */}
+                  <button
+                    type="button"
+                    onClick={() => setDraftSubject(prev => ({ ...prev, onCompleteAction: 'keep_fixed' }))}
+                    className={`p-3 rounded-xl border text-left transition-all flex flex-col gap-1 cursor-pointer ${
+                      (draftSubject.onCompleteAction !== 'replace' && draftSubject.onCompleteAction !== 'double_remaining')
+                        ? 'bg-sky-50/90 dark:bg-sky-950/40 border-sky-400 dark:border-sky-500 ring-1 ring-sky-500/25'
+                        : 'bg-white dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center justify-between">
+                      <span className="text-xs font-semibold text-slate-900 dark:text-white flex items-center gap-1.5">
+                        <Clock className="w-3.5 h-3.5 text-violet-600 dark:text-violet-400" /> Encerrar ao fim
+                      </span>
+                      {(draftSubject.onCompleteAction !== 'replace' && draftSubject.onCompleteAction !== 'double_remaining') && (
+                        <Check className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 stroke-[3]" />
+                      )}
+                    </div>
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                      Ao concluir a última aula, a matéria encerra e libera o horário.
+                    </p>
+                  </button>
+                </div>
+
+                {/* Se escolher substituir por outra matéria */}
+                {draftSubject.onCompleteAction === 'replace' && (
+                  <div className="bg-white dark:bg-slate-900 p-3 rounded-lg border border-slate-200/80 dark:border-slate-800 mt-2.5">
+                    <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1.5">
+                      Qual disciplina deve entrar nesta vaga quando concluir?
+                    </label>
+                    <select
+                      value={draftSubject.replacementSubjectId || ''}
+                      onChange={(e) => setDraftSubject(prev => ({ ...prev, replacementSubjectId: e.target.value }))}
+                      className="w-full h-9 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 text-xs font-medium text-slate-900 dark:text-white outline-none focus:border-sky-500 cursor-pointer"
+                    >
+                      <option value="">-- Selecione uma matéria substituta --</option>
+                      {Object.values(subjects || {})
+                        .filter(s => s.id !== draftSubject.id)
+                        .map(s => (
+                          <option key={s.id} value={s.id}>
+                            {s.name} ({s.topics?.reduce((acc, t) => acc + (t.total || 0), 0) || 0} aulas cadastradas)
+                          </option>
+                        ))}
+                    </select>
+                    {(!draftSubject.replacementSubjectId || !subjects[draftSubject.replacementSubjectId]) && (
+                      <p className="text-[11px] text-amber-600 dark:text-amber-400 mt-1.5 flex items-center gap-1">
+                        <AlertTriangle className="w-3.5 h-3.5 shrink-0" /> Selecione uma disciplina acima para assumir a vaga automaticamente.
+                      </p>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Assuntos */}
+              <div>
+                <div className="flex justify-between items-center mb-3 border-b border-slate-100 dark:border-slate-800/90 pb-2">
+                  <label className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                    Conteúdo programático (assuntos)
+                  </label>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraftSubject(prev => {
+                        const newTopics = [...(prev.topics || [])];
+                        newTopics.push({ id: 't' + Date.now(), name: 'NOVO ASSUNTO', total: 0, completed: 0, lessons: [] });
+                        return { ...prev, topics: newTopics };
+                      });
+                      setTimeout(() => {
+                        if (modalBodyRef.current) {
+                          modalBodyRef.current.scrollTo({ top: modalBodyRef.current.scrollHeight, behavior: 'smooth' });
+                        }
+                      }, 60);
+                    }}
+                    className="flex items-center gap-1 text-xs font-semibold text-sky-700 dark:text-sky-300 bg-sky-50 dark:bg-sky-950/60 border border-sky-200 dark:border-sky-800/60 px-2.5 py-1 rounded-lg hover:bg-sky-100 dark:hover:bg-sky-900/50 transition-colors cursor-pointer"
+                  >
+                    <Plus className="w-3.5 h-3.5" /> Novo assunto
+                  </button>
+                </div>
+
+                <div className="space-y-3">
+                  {(() => {
+                    const topicsList = draftSubject.topics || [];
+                    const moveTopic = (from, to) => {
+                      if (from < 0 || to < 0 || from >= topicsList.length || to >= topicsList.length) return;
+                      setDraftSubject(prev => {
+                        const newTopics = [...(prev.topics || [])];
+                        const [moved] = newTopics.splice(from, 1);
+                        newTopics.splice(to, 0, moved);
+                        return { ...prev, topics: newTopics };
+                      });
+                    };
+
+                    return topicsList.map((topic, idx) => {
+                      const isFirstTopic = idx === 0;
+                      const isLastTopic = idx === topicsList.length - 1;
+
+                      return (
+                        <div key={topic.id} className="bg-slate-50/80 dark:bg-slate-950/55 border border-slate-200/80 dark:border-slate-800/90 rounded-xl p-3">
+                          {/* Linha do nome do assunto + Controles de posição */}
+                          <div className="flex gap-2 items-center mb-2">
+                            <div className="flex items-center gap-0.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-0.5 shrink-0">
+                              <button
+                                type="button"
+                                onClick={() => moveTopic(idx, 0)}
+                                disabled={isFirstTopic}
+                                className="p-1 text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors disabled:opacity-25 disabled:cursor-not-allowed cursor-pointer"
+                                title="Mover para o topo"
+                              >
+                                <ChevronsUp className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveTopic(idx, idx - 1)}
+                                disabled={isFirstTopic}
+                                className="p-1 text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors disabled:opacity-25 disabled:cursor-not-allowed cursor-pointer"
+                                title="Mover 1 posição para cima"
+                              >
+                                <ChevronUp className="w-3.5 h-3.5" />
+                              </button>
+                              <span className="text-[11px] font-semibold text-slate-500 dark:text-slate-400 px-1 font-mono tabular-nums select-none">
+                                #{idx + 1}
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => moveTopic(idx, idx + 1)}
+                                disabled={isLastTopic}
+                                className="p-1 text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors disabled:opacity-25 disabled:cursor-not-allowed cursor-pointer"
+                                title="Mover 1 posição para baixo"
+                              >
+                                <ChevronDown className="w-3.5 h-3.5" />
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => moveTopic(idx, topicsList.length - 1)}
+                                disabled={isLastTopic}
+                                className="p-1 text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 rounded transition-colors disabled:opacity-25 disabled:cursor-not-allowed cursor-pointer"
+                                title="Mover para o fim"
+                              >
+                                <ChevronsDown className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            <input
+                              type="text"
+                              value={topic.name}
+                              onChange={(e) => setDraftSubject(prev => {
+                                const newTopics = [...prev.topics];
+                                newTopics[idx] = { ...newTopics[idx], name: e.target.value };
+                                return { ...prev, topics: newTopics };
+                              })}
+                              className="flex-1 bg-transparent border-b border-slate-200 dark:border-slate-700 pb-1 font-semibold text-xs text-slate-900 dark:text-white outline-none focus:border-sky-500 transition-colors min-w-0"
+                              placeholder="Nome do assunto..."
+                            />
+                            {/* Botão escanear aulas */}
+                            <button
+                              type="button"
+                              onClick={() => setScannerTopicIdx(idx)}
+                              title="Adicionar aulas por imagem"
+                              className="flex items-center gap-1 text-[11px] font-semibold text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/60 border border-violet-200 dark:border-violet-800/60 px-2 py-1 rounded-lg hover:bg-violet-100 dark:hover:bg-violet-900/50 transition-colors shrink-0 cursor-pointer"
+                            >
+                              <ScanLine className="w-3 h-3" /> Scan
+                            </button>
+                            <button
+                              type="button"
+                              onClick={() => setDraftSubject(prev => ({
+                                ...prev,
+                                topics: prev.topics.filter((_, i) => i !== idx)
+                              }))}
+                              className="p-1 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors cursor-pointer"
+                              title="Excluir assunto"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+
+                          {/* Lista de aulas internas */}
+                          {(topic.lessons && topic.lessons.length > 0) ? (
+                            <div className="space-y-1 mt-2">
+                              <p className="text-[11px] font-medium text-slate-500 dark:text-slate-400 mb-1.5 flex items-center gap-1">
+                                <BookOpen className="w-3 h-3" /> {topic.lessons.length} aula{topic.lessons.length !== 1 ? 's' : ''} cadastrada{topic.lessons.length !== 1 ? 's' : ''}
+                              </p>
+                              {topic.lessons.map((lesson, lIdx) => {
+                                const isFirst = lIdx === 0;
+                                const isLast = lIdx === topic.lessons.length - 1;
+                                const moveLesson = (from, to) => setDraftSubject(prev => {
+                                  const newTopics = [...prev.topics];
+                                  const newLessons = [...(newTopics[idx].lessons || [])];
+                                  const [moved] = newLessons.splice(from, 1);
+                                  newLessons.splice(to, 0, moved);
+                                  newTopics[idx] = { ...newTopics[idx], lessons: newLessons };
+                                  return { ...prev, topics: newTopics };
+                                });
+                                const insertAfter = (afterIdx) => setDraftSubject(prev => {
+                                  const newTopics = [...prev.topics];
+                                  const newLessons = [...(newTopics[idx].lessons || [])];
+                                  newLessons.splice(afterIdx + 1, 0, { name: 'NOVA AULA', duration: '00:00' });
+                                  newTopics[idx] = { ...newTopics[idx], lessons: newLessons, total: newLessons.length };
+                                  return { ...prev, topics: newTopics };
+                                });
+                                return (
+                                  <div key={lIdx}>
+                                    <div className="flex items-center gap-1.5 bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-lg px-2 py-1.5">
+                                      <div className="flex flex-col gap-0.5 shrink-0">
+                                        <button
+                                          type="button"
+                                          onClick={() => moveLesson(lIdx, lIdx - 1)}
+                                          disabled={isFirst}
+                                          className="p-0.5 text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition-colors disabled:opacity-25 disabled:cursor-not-allowed cursor-pointer"
+                                          title="Mover para cima"
+                                        >
+                                          <ChevronUp className="w-3 h-3" />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() => moveLesson(lIdx, lIdx + 1)}
+                                          disabled={isLast}
+                                          className="p-0.5 text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition-colors disabled:opacity-25 disabled:cursor-not-allowed cursor-pointer"
+                                          title="Mover para baixo"
+                                        >
+                                          <ChevronDown className="w-3 h-3" />
+                                        </button>
+                                      </div>
+                                      <span className="text-[11px] font-mono tabular-nums text-slate-400 dark:text-slate-500 shrink-0 w-5 text-right">{lIdx + 1}.</span>
+                                      <input
+                                        type="text"
+                                        value={lesson.name}
+                                        onPaste={(e) => e.stopPropagation()}
+                                        onChange={(e) => setDraftSubject(prev => {
+                                          const newTopics = [...prev.topics];
+                                          const newLessons = [...(newTopics[idx].lessons || [])];
+                                          newLessons[lIdx] = { ...newLessons[lIdx], name: e.target.value };
+                                          newTopics[idx] = { ...newTopics[idx], lessons: newLessons, total: newLessons.length };
+                                          return { ...prev, topics: newTopics };
+                                        })}
+                                        className="flex-1 bg-transparent text-xs font-medium text-slate-900 dark:text-slate-200 outline-none border-b border-transparent focus:border-sky-500 pb-0.5 transition-colors min-w-0"
+                                      />
+                                      <div className="flex items-center gap-1 shrink-0">
+                                        <input
+                                          type="text"
+                                          value={lesson.duration || '00:00'}
+                                          onPaste={(e) => e.stopPropagation()}
+                                          onChange={(e) => setDraftSubject(prev => {
+                                            const newTopics = [...prev.topics];
+                                            const newLessons = [...(newTopics[idx].lessons || [])];
+                                            newLessons[lIdx] = { ...newLessons[lIdx], duration: e.target.value };
+                                            newTopics[idx] = { ...newTopics[idx], lessons: newLessons };
+                                            return { ...prev, topics: newTopics };
+                                          })}
+                                          className="w-13 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-md px-1 py-0.5 text-center text-[11px] font-mono tabular-nums font-semibold text-emerald-600 dark:text-emerald-400 outline-none focus:border-emerald-500"
+                                        />
+                                        {draftSubject.speed && draftSubject.speed > 1 && lesson.duration && lesson.duration !== '00:00' && (
+                                          <span
+                                            className="text-[10px] font-mono tabular-nums font-semibold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/70 px-1.5 py-0.5 rounded-md border border-sky-200 dark:border-sky-900"
+                                            title={`Com aceleração de ${draftSubject.speed}x`}
+                                          >
+                                            {formatSecondsToClock(Math.round(parseDurationToSeconds(lesson.duration) / draftSubject.speed))}
+                                          </span>
+                                        )}
+                                      </div>
+                                      <button
+                                        type="button"
+                                        onClick={() => setDraftSubject(prev => {
+                                          const newTopics = [...prev.topics];
+                                          const newLessons = (newTopics[idx].lessons || []).filter((_, i) => i !== lIdx);
+                                          const newTotal = newLessons.length;
+                                          newTopics[idx] = {
+                                            ...newTopics[idx],
+                                            lessons: newLessons,
+                                            total: newTotal,
+                                            completed: Math.min(newTopics[idx].completed || 0, newTotal)
+                                          };
+                                          return { ...prev, topics: newTopics };
+                                        })}
+                                        className="p-0.5 text-slate-400 hover:text-red-600 dark:hover:text-red-400 transition-colors shrink-0 cursor-pointer"
+                                        title="Remover aula"
+                                      >
+                                        <Trash2 className="w-3.5 h-3.5" />
+                                      </button>
+                                    </div>
+                                    {/* Inserir aula abaixo deste item */}
+                                    <button
+                                      type="button"
+                                      onClick={() => insertAfter(lIdx)}
+                                      className="w-full flex items-center justify-center gap-1 text-[10px] font-medium text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 py-0.5 rounded transition-colors group mt-0.5 cursor-pointer"
+                                      title="Inserir aula aqui"
+                                    >
+                                      <div className="flex-1 h-px bg-slate-200/80 dark:bg-slate-800 group-hover:bg-sky-300 dark:group-hover:bg-sky-800/70 transition-colors" />
+                                      <Plus className="w-2.5 h-2.5" />
+                                      <span>inserir aqui</span>
+                                      <div className="flex-1 h-px bg-slate-200/80 dark:bg-slate-800 group-hover:bg-sky-300 dark:group-hover:bg-sky-800/70 transition-colors" />
+                                    </button>
+                                  </div>
+                                );
+                              })}
+                              {/* Adicionar aula manual */}
+                              <button
+                                type="button"
+                                onClick={() => setDraftSubject(prev => {
+                                  const newTopics = [...prev.topics];
+                                  const newLessons = [...(newTopics[idx].lessons || []), { name: 'NOVA AULA', duration: '00:00' }];
+                                  newTopics[idx] = { ...newTopics[idx], lessons: newLessons, total: newLessons.length };
+                                  return { ...prev, topics: newTopics };
+                                })}
+                                className="flex items-center gap-1 text-xs font-semibold text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white px-2 py-1 rounded transition-colors mt-1 cursor-pointer"
+                              >
+                                <Plus className="w-3.5 h-3.5" /> Adicionar aula manualmente
+                              </button>
+                            </div>
+                          ) : (
+                            <div className="flex items-center justify-between mt-2">
+                              <p className="text-xs text-slate-500 dark:text-slate-400">Nenhuma aula. Use Scan ou informe a quantidade manual.</p>
+                              <div className="flex items-center gap-1.5">
+                                <span className="text-xs text-slate-500 dark:text-slate-400 font-medium">Qtd manual:</span>
+                                <input
+                                  type="number"
+                                  value={topic.total || 0}
+                                  min={0}
+                                  onChange={(e) => setDraftSubject(prev => {
+                                    const newTopics = [...prev.topics];
+                                    const newTotal = Math.max(0, parseInt(e.target.value) || 0);
+                                    newTopics[idx] = {
+                                      ...newTopics[idx],
+                                      total: newTotal,
+                                      completed: Math.min(newTopics[idx].completed || 0, newTotal)
+                                    };
+                                    return { ...prev, topics: newTopics };
+                                  })}
+                                  className="w-14 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg px-2 py-1 text-center text-xs font-mono tabular-nums font-semibold text-slate-900 dark:text-white outline-none focus:border-sky-500"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
+                  {(draftSubject.topics || []).length === 0 && (
+                    <div className="text-center py-6 border border-dashed border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-950/40">
+                      <p className="text-xs text-slate-500 dark:text-slate-400">Nenhum assunto cadastrado. Clique abaixo para adicionar.</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Botão Adicionar Assunto no Final */}
+                <button
+                  type="button"
                   onClick={() => {
                     setDraftSubject(prev => {
                       const newTopics = [...(prev.topics || [])];
@@ -1731,299 +2040,28 @@ export default function Config({
                       }
                     }, 60);
                   }}
-                  className="flex items-center gap-1 text-[9px] font-black text-blue-500 bg-blue-900/30 px-2 py-1 rounded tracking-widest uppercase hover:text-white hover:bg-blue-600 transition-colors cursor-pointer"
+                  className="w-full mt-3.5 h-10 bg-sky-50/70 dark:bg-sky-950/30 hover:bg-sky-100/80 dark:hover:bg-sky-950/50 border border-dashed border-sky-300 dark:border-sky-800 text-sky-700 dark:text-sky-300 rounded-xl font-semibold text-xs flex items-center justify-center gap-1.5 transition-colors cursor-pointer"
                 >
-                  <Plus className="w-3 h-3"/> Add Assunto
+                  <Plus className="w-4 h-4" />
+                  <span>Adicionar assunto</span>
                 </button>
               </div>
-              
-              <div className="space-y-3">
-                {(() => {
-                  const topicsList = draftSubject.topics || [];
-                  const moveTopic = (from, to) => {
-                    if (from < 0 || to < 0 || from >= topicsList.length || to >= topicsList.length) return;
-                    setDraftSubject(prev => {
-                      const newTopics = [...(prev.topics || [])];
-                      const [moved] = newTopics.splice(from, 1);
-                      newTopics.splice(to, 0, moved);
-                      return { ...prev, topics: newTopics };
-                    });
-                  };
-
-                  return topicsList.map((topic, idx) => {
-                    const isFirstTopic = idx === 0;
-                    const isLastTopic = idx === topicsList.length - 1;
-
-                    return (
-                      <div key={topic.id} className="bg-slate-900/60 border border-slate-800 rounded-xl p-3">
-                        {/* Linha do nome do assunto + Controles de posição */}
-                        <div className="flex gap-2 items-center mb-2">
-                          {/* Controles de ordenação de assunto */}
-                          <div className="flex items-center gap-0.5 bg-slate-950/80 border border-slate-800 rounded-lg p-0.5 shrink-0">
-                            <button
-                              type="button"
-                              onClick={() => moveTopic(idx, 0)}
-                              disabled={isFirstTopic}
-                              className="p-1 text-slate-500 hover:text-blue-400 hover:bg-slate-800 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
-                              title="Mover para o Topo (Primeiro assunto)"
-                            >
-                              <ChevronsUp className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => moveTopic(idx, idx - 1)}
-                              disabled={isFirstTopic}
-                              className="p-1 text-slate-500 hover:text-blue-400 hover:bg-slate-800 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
-                              title="Mover 1 posição para cima"
-                            >
-                              <ChevronUp className="w-3.5 h-3.5" />
-                            </button>
-                            <span className="text-[10px] font-black text-slate-400 px-1 font-mono select-none">
-                              #{idx + 1}
-                            </span>
-                            <button
-                              type="button"
-                              onClick={() => moveTopic(idx, idx + 1)}
-                              disabled={isLastTopic}
-                              className="p-1 text-slate-500 hover:text-blue-400 hover:bg-slate-800 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
-                              title="Mover 1 posição para baixo"
-                            >
-                              <ChevronDown className="w-3.5 h-3.5" />
-                            </button>
-                            <button
-                              type="button"
-                              onClick={() => moveTopic(idx, topicsList.length - 1)}
-                              disabled={isLastTopic}
-                              className="p-1 text-slate-500 hover:text-blue-400 hover:bg-slate-800 rounded transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
-                              title="Mover para o Fim (Último assunto)"
-                            >
-                              <ChevronsDown className="w-3.5 h-3.5" />
-                            </button>
-                          </div>
-
-                          <input 
-                            type="text" 
-                            value={topic.name}
-                            onChange={(e) => setDraftSubject(prev => {
-                              const newTopics = [...prev.topics];
-                              newTopics[idx] = { ...newTopics[idx], name: e.target.value };
-                              return { ...prev, topics: newTopics };
-                            })}
-                            className="flex-1 bg-transparent border-b border-slate-700 pb-1 font-bold text-xs text-white outline-none focus:border-blue-500 transition-colors"
-                            placeholder="Nome do Assunto..."
-                          />
-                          {/* Botão escanear aulas */}
-                          <button
-                            onClick={() => setScannerTopicIdx(idx)}
-                            title="Adicionar aulas via Vision AI"
-                            className="flex items-center gap-1 text-[9px] font-black text-violet-400 bg-violet-900/30 px-2 py-1 rounded tracking-widest uppercase hover:text-white hover:bg-violet-600 transition-colors shrink-0 cursor-pointer"
-                          >
-                            <ScanLine className="w-3 h-3"/> Scan
-                          </button>
-                          <button 
-                            onClick={() => setDraftSubject(prev => ({
-                              ...prev,
-                              topics: prev.topics.filter((_, i) => i !== idx)
-                            }))}
-                            className="p-1 text-slate-600 hover:text-red-500 transition-colors cursor-pointer"
-                            title="Excluir assunto"
-                          >
-                            <Trash2 className="w-3.5 h-3.5"/>
-                          </button>
-                        </div>
-
-                    {/* Lista de aulas internas */}
-                    {(topic.lessons && topic.lessons.length > 0) ? (
-                      <div className="space-y-1 mt-2">
-                        <p className="text-[9px] font-black text-slate-500 uppercase tracking-widest mb-1 flex items-center gap-1">
-                          <BookOpen className="w-3 h-3" /> {topic.lessons.length} aula{topic.lessons.length !== 1 ? 's' : ''} cadastrada{topic.lessons.length !== 1 ? 's' : ''}
-                        </p>
-                        {topic.lessons.map((lesson, lIdx) => {
-                          const isFirst = lIdx === 0;
-                          const isLast = lIdx === topic.lessons.length - 1;
-                          const moveLesson = (from, to) => setDraftSubject(prev => {
-                            const newTopics = [...prev.topics];
-                            const newLessons = [...(newTopics[idx].lessons || [])];
-                            const [moved] = newLessons.splice(from, 1);
-                            newLessons.splice(to, 0, moved);
-                            newTopics[idx] = { ...newTopics[idx], lessons: newLessons };
-                            return { ...prev, topics: newTopics };
-                          });
-                          const insertAfter = (afterIdx) => setDraftSubject(prev => {
-                            const newTopics = [...prev.topics];
-                            const newLessons = [...(newTopics[idx].lessons || [])];
-                            newLessons.splice(afterIdx + 1, 0, { name: 'NOVA AULA', duration: '00:00' });
-                            newTopics[idx] = { ...newTopics[idx], lessons: newLessons, total: newLessons.length };
-                            return { ...prev, topics: newTopics };
-                          });
-                          return (
-                            <div key={lIdx}>
-                              <div className="flex items-center gap-1.5 bg-slate-950/60 border border-slate-800 rounded-lg px-2 py-1.5">
-                                {/* Controles de ordem */}
-                                <div className="flex flex-col gap-0.5 shrink-0">
-                                  <button
-                                    onClick={() => moveLesson(lIdx, lIdx - 1)}
-                                    disabled={isFirst}
-                                    className="p-0.5 text-slate-600 hover:text-blue-400 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
-                                    title="Mover para cima"
-                                  >
-                                    <ChevronUp className="w-3 h-3" />
-                                  </button>
-                                  <button
-                                    onClick={() => moveLesson(lIdx, lIdx + 1)}
-                                    disabled={isLast}
-                                    className="p-0.5 text-slate-600 hover:text-blue-400 transition-colors disabled:opacity-20 disabled:cursor-not-allowed"
-                                    title="Mover para baixo"
-                                  >
-                                    <ChevronDown className="w-3 h-3" />
-                                  </button>
-                                </div>
-                                <span className="text-[9px] font-bold text-slate-600 shrink-0 w-4 text-right">{lIdx + 1}.</span>
-                                <input
-                                  type="text"
-                                  value={lesson.name}
-                                  onPaste={(e) => e.stopPropagation()}
-                                  onChange={(e) => setDraftSubject(prev => {
-                                    const newTopics = [...prev.topics];
-                                    const newLessons = [...(newTopics[idx].lessons || [])];
-                                    newLessons[lIdx] = { ...newLessons[lIdx], name: e.target.value };
-                                    newTopics[idx] = { ...newTopics[idx], lessons: newLessons, total: newLessons.length };
-                                    return { ...prev, topics: newTopics };
-                                  })}
-                                  className="flex-1 bg-transparent text-[11px] font-bold text-slate-200 outline-none border-b border-transparent focus:border-violet-500 pb-0.5 transition-colors min-w-0"
-                                />
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <input
-                                    type="text"
-                                    value={lesson.duration || '00:00'}
-                                    onPaste={(e) => e.stopPropagation()}
-                                    onChange={(e) => setDraftSubject(prev => {
-                                      const newTopics = [...prev.topics];
-                                      const newLessons = [...(newTopics[idx].lessons || [])];
-                                      newLessons[lIdx] = { ...newLessons[lIdx], duration: e.target.value };
-                                      newTopics[idx] = { ...newTopics[idx], lessons: newLessons };
-                                      return { ...prev, topics: newTopics };
-                                    })}
-                                    className="w-12 bg-slate-900 border border-slate-700 rounded px-1 py-0.5 text-center text-[10px] font-mono text-emerald-400 outline-none"
-                                  />
-                                  {draftSubject.speed && draftSubject.speed > 1 && lesson.duration && lesson.duration !== '00:00' && (
-                                    <span 
-                                      className="text-[9px] font-mono font-bold text-blue-400 bg-blue-950/80 px-1 py-0.5 rounded border border-blue-900"
-                                      title={`Com aceleração de ${draftSubject.speed}x`}
-                                    >
-                                      ⚡{formatSecondsToClock(Math.round(parseDurationToSeconds(lesson.duration) / draftSubject.speed))}
-                                    </span>
-                                  )}
-                                </div>
-                                <button
-                                  onClick={() => setDraftSubject(prev => {
-                                    const newTopics = [...prev.topics];
-                                    const newLessons = (newTopics[idx].lessons || []).filter((_, i) => i !== lIdx);
-                                    const newTotal = newLessons.length;
-                                    newTopics[idx] = {
-                                      ...newTopics[idx],
-                                      lessons: newLessons,
-                                      total: newTotal,
-                                      completed: Math.min(newTopics[idx].completed || 0, newTotal)
-                                    };
-                                    return { ...prev, topics: newTopics };
-                                  })}
-                                  className="p-0.5 text-slate-600 hover:text-red-400 transition-colors shrink-0"
-                                  title="Remover aula"
-                                >
-                                  <Trash2 className="w-3 h-3" />
-                                </button>
-                              </div>
-                              {/* Inserir aula abaixo deste item */}
-                              <button
-                                onClick={() => insertAfter(lIdx)}
-                                className="w-full flex items-center justify-center gap-1 text-[8px] font-black text-slate-700 hover:text-violet-400 hover:bg-violet-900/10 py-0.5 rounded transition-all group mt-0.5"
-                                title="Inserir aula aqui"
-                              >
-                                <div className="flex-1 h-px bg-slate-800 group-hover:bg-violet-800/50 transition-colors" />
-                                <Plus className="w-2.5 h-2.5" />
-                                <span className="uppercase tracking-widest">inserir aqui</span>
-                                <div className="flex-1 h-px bg-slate-800 group-hover:bg-violet-800/50 transition-colors" />
-                              </button>
-                            </div>
-                          );
-                        })}
-                        {/* Adicionar aula manual */}
-                        <button
-                          onClick={() => setDraftSubject(prev => {
-                            const newTopics = [...prev.topics];
-                            const newLessons = [...(newTopics[idx].lessons || []), { name: 'NOVA AULA', duration: '00:00' }];
-                            newTopics[idx] = { ...newTopics[idx], lessons: newLessons, total: newLessons.length };
-                            return { ...prev, topics: newTopics };
-                          })}
-                          className="flex items-center gap-1 text-[9px] font-black text-slate-500 hover:text-white px-2 py-1 rounded transition-colors mt-1"
-                        >
-                          <Plus className="w-3 h-3" /> Adicionar aula manualmente
-                        </button>
-                      </div>
-                    ) : (
-                      <div className="flex items-center justify-between mt-2">
-                        <p className="text-[10px] text-slate-600 italic">Nenhuma aula. Use o botão Scan ou adicione manualmente.</p>
-                        <div className="flex items-center gap-1">
-                          <span className="text-[9px] text-slate-500 uppercase font-black">Qtd manual:</span>
-                          <input 
-                            type="number" 
-                            value={topic.total || 0}
-                            min={0}
-                            onChange={(e) => setDraftSubject(prev => {
-                              const newTopics = [...prev.topics];
-                              const newTotal = Math.max(0, parseInt(e.target.value) || 0);
-                              newTopics[idx] = {
-                                ...newTopics[idx],
-                                total: newTotal,
-                                completed: Math.min(newTopics[idx].completed || 0, newTotal)
-                              };
-                              return { ...prev, topics: newTopics };
-                            })}
-                            className="w-12 bg-slate-950 border border-slate-800 rounded px-1 py-1 text-center text-xs font-black text-white"
-                          />
-                        </div>
-                      </div>
-                    )}
-                  </div>
-                    );
-                  });
-                })()}
-                {(draftSubject.topics || []).length === 0 && (
-                  <div className="text-center py-6 border border-dashed border-slate-800 rounded-xl bg-slate-900/50">
-                    <p className="text-[11px] font-bold text-slate-500 italic">Nenhum assunto cadastrado. Clique no botão abaixo para adicionar.</p>
-                  </div>
-                )}
-              </div>
-
-              {/* Botão Adicionar Assunto no Final da Lista de Aulas/Tópicos */}
-              <button
-                type="button"
-                onClick={() => {
-                  setDraftSubject(prev => {
-                    const newTopics = [...(prev.topics || [])];
-                    newTopics.push({ id: 't' + Date.now(), name: 'NOVO ASSUNTO', total: 0, completed: 0, lessons: [] });
-                    return { ...prev, topics: newTopics };
-                  });
-                  setTimeout(() => {
-                    if (modalBodyRef.current) {
-                      modalBodyRef.current.scrollTo({ top: modalBodyRef.current.scrollHeight, behavior: 'smooth' });
-                    }
-                  }, 60);
-                }}
-                className="w-full mt-4 py-3.5 bg-blue-600/15 hover:bg-blue-600/25 border-2 border-dashed border-blue-500/40 hover:border-blue-400 text-blue-400 hover:text-white rounded-xl font-black text-xs uppercase tracking-widest flex items-center justify-center gap-2 transition-all shadow-sm cursor-pointer group"
-              >
-                <Plus className="w-4 h-4 text-blue-400 group-hover:scale-110 transition-transform" />
-                <span>+ Adicionar Assunto</span>
-              </button>
-            </div>
-
-            {/* Fim do Conteúdo Rolável */}
             </div>
 
             {/* Ações Fixas no Rodapé */}
-            <div className="p-6 pt-3 border-t border-slate-800 bg-slate-900 shrink-0 flex flex-col gap-2.5">
-              <button 
+            <div className="px-5 py-3.5 border-t border-slate-100 dark:border-slate-800/90 bg-slate-50/60 dark:bg-slate-950/40 shrink-0 flex items-center justify-end gap-2.5">
+              <button
+                type="button"
+                onClick={() => {
+                  setEditingSubjectId(null);
+                  setDraftSubject(null);
+                }}
+                className="h-10 px-4 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
                 onClick={() => {
                   if (!draftSubject.name || draftSubject.name.trim() === "") {
                     toast.error("Por favor, defina um nome para a disciplina.");
@@ -2037,18 +2075,10 @@ export default function Config({
                   setDraftSubject(null);
                   toast.success("Disciplina salva com sucesso!");
                 }}
-                className="w-full py-3.5 bg-[#1d4ed8] hover:bg-blue-600 outline-none focus:ring-4 focus:ring-blue-500/50 text-white font-black rounded-xl shadow-[0_0_20px_rgba(29,78,216,0.3)] transition-all transform active:scale-[0.99] flex items-center justify-center uppercase tracking-widest text-sm cursor-pointer"
+                className="h-10 px-5 bg-sky-600 hover:bg-sky-700 text-white font-semibold rounded-xl shadow-xs transition-colors flex items-center justify-center gap-1.5 text-xs cursor-pointer"
               >
-                Salvar Configurações
-              </button>
-              <button 
-                onClick={() => {
-                  setEditingSubjectId(null);
-                  setDraftSubject(null);
-                }}
-                className="w-full py-2 text-slate-400 font-bold hover:text-white transition-colors uppercase text-[10px] tracking-widest cursor-pointer"
-              >
-                Cancelar Edição
+                <Check className="w-4 h-4" />
+                Salvar configurações
               </button>
             </div>
           </div>

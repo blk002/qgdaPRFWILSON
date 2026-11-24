@@ -1,11 +1,11 @@
-import React, { useMemo } from 'react';
+import React, { useMemo, useState } from 'react';
 import { Link, NavLink, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   Library, Award, BrainCircuit, BarChart2, BookOpen, Dumbbell, Crosshair,
   Dog, Store, Settings, Shield, RefreshCw, PanelLeftClose, PanelLeftOpen,
-  Coins, Sun, Moon, LogOut, LayoutGrid, X
+  Coins, Sun, Moon, LogOut, LayoutGrid, X, ChevronDown, Target, Sparkles
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import RankBadge from '../RankBadge';
@@ -37,30 +37,70 @@ export default function AppNavigation({
     [reviews, todayStr]
   );
 
+  const [openGroups, setOpenGroups] = useState(() => {
+    try {
+      const saved = localStorage.getItem('qg_sidebar_groups_v1');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (parsed && typeof parsed === 'object') return parsed;
+      }
+    } catch {
+      // Ignora erro de localStorage
+    }
+    return { desempenho: false, extras: false };
+  });
+
+  const toggleGroup = (groupKey) => {
+    setOpenGroups((prev) => {
+      const next = { ...prev, [groupKey]: !prev[groupKey] };
+      try {
+        localStorage.setItem('qg_sidebar_groups_v1', JSON.stringify(next));
+      } catch {
+        // Ignora erro de localStorage
+      }
+      return next;
+    });
+  };
+
   const navGroups = useMemo(
     () => [
       {
+        key: 'estudo',
         title: 'Estudo',
+        collapsible: false,
         items: [{ id: '/estudos', label: 'Central de Estudos', icon: Library }],
       },
       {
+        key: 'desempenho',
         title: 'Desempenho',
+        icon: Target,
+        collapsible: true,
+        badgeCount: dueReviewsCount,
         items: [
-          { id: '/carreira', label: 'Carreira', icon: Award },
           { id: '/revisoes', label: 'Revisões', icon: BrainCircuit, count: dueReviewsCount },
-          { id: '/estatisticas', label: 'Histórico', icon: BarChart2 },
           { id: '/edital', label: 'Edital', icon: BookOpen },
+          { id: '/estatisticas', label: 'Histórico', icon: BarChart2 },
           { id: '/taf', label: 'Treino TAF', icon: Dumbbell },
           { id: '/duelo', label: 'Duelo CTB', icon: Crosshair },
         ],
       },
       {
-        title: 'Sistema',
+        key: 'extras',
+        title: 'Carreira & Extras',
+        icon: Sparkles,
+        collapsible: true,
+        badgeCount: 0,
         items: [
+          { id: '/carreira', label: 'Carreira', icon: Award },
           { id: '/pet', label: 'Mascote K9', icon: Dog },
           { id: '/loja', label: 'Loja', icon: Store },
-          { id: '/config', label: 'Ajustes', icon: Settings },
         ],
+      },
+      {
+        key: 'sistema',
+        title: 'Sistema',
+        collapsible: false,
+        items: [{ id: '/config', label: 'Ajustes', icon: Settings }],
       },
     ],
     [dueReviewsCount]
@@ -201,61 +241,143 @@ export default function AppNavigation({
         {/* Navegação Vertical */}
         <nav
           className={`flex-1 overflow-y-auto custom-scrollbar py-3 ${
-            isSidebarCollapsed ? 'px-2 space-y-1.5' : 'px-3 space-y-4'
+            isSidebarCollapsed ? 'px-2 space-y-1.5' : 'px-3 space-y-3'
           }`}
         >
-          {navGroups.map((group, gIdx) => (
-            <div key={group.title}>
-              {!isSidebarCollapsed ? (
+          {navGroups.map((group, gIdx) => {
+            const isCollapsible = Boolean(group.collapsible);
+            const isGroupOpen = !isCollapsible || Boolean(openGroups[group.key]);
+            const hasActiveChild = group.items.some((item) => location.pathname.startsWith(item.id));
+            const GroupIcon = group.icon;
+
+            const renderNavItem = (tab, nested = false) => (
+              <NavLink
+                key={tab.id}
+                to={tab.id}
+                title={tab.label}
+                className={({ isActive }) =>
+                  `relative flex items-center ${
+                    isSidebarCollapsed
+                      ? 'justify-center h-10 px-2'
+                      : nested
+                        ? 'justify-between h-8.5 px-2.5'
+                        : 'justify-between h-9 px-2.5'
+                  } rounded-lg transition-colors duration-150 ${
+                    nested && !isSidebarCollapsed ? 'text-[13px]' : 'text-sm'
+                  } font-medium cursor-pointer ${
+                    isActive
+                      ? 'bg-slate-900 text-white dark:bg-slate-850 dark:text-white'
+                      : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-850/60 hover:text-slate-900 dark:hover:text-slate-100'
+                  }`
+                }
+              >
+                {({ isActive }) => (
+                  <>
+                    {isActive && (
+                      <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r bg-sky-400" />
+                    )}
+                    <div className={`flex items-center min-w-0 ${isSidebarCollapsed ? 'justify-center' : 'gap-2.5'}`}>
+                      <tab.icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-sky-400' : 'opacity-80'}`} />
+                      {!isSidebarCollapsed && <span className="truncate whitespace-nowrap">{tab.label}</span>}
+                    </div>
+                    {tab.count > 0 && (
+                      <span
+                        className={
+                          isSidebarCollapsed
+                            ? 'absolute top-1 right-1 bg-red-500 text-white text-[10px] min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full font-mono font-bold leading-none'
+                            : 'bg-red-500/15 text-red-600 dark:text-red-400 text-xs min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-md font-mono font-semibold tabular-nums shrink-0'
+                        }
+                      >
+                        {tab.count}
+                      </span>
+                    )}
+                  </>
+                )}
+              </NavLink>
+            );
+
+            if (isSidebarCollapsed) {
+              return (
+                <div key={group.key}>
+                  {gIdx > 0 && <div className="h-px bg-slate-200/70 dark:bg-slate-800 mx-2 my-2" />}
+                  <div className="space-y-0.5">
+                    {group.items.map((tab) => renderNavItem(tab, false))}
+                  </div>
+                </div>
+              );
+            }
+
+            if (isCollapsible) {
+              return (
+                <div key={group.key}>
+                  <button
+                    type="button"
+                    onClick={() => toggleGroup(group.key)}
+                    aria-expanded={isGroupOpen}
+                    className={`w-full flex items-center justify-between gap-2 h-9 px-2.5 rounded-lg text-sm font-medium transition-colors cursor-pointer ${
+                      hasActiveChild && !isGroupOpen
+                        ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400'
+                        : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-850/60 hover:text-slate-900 dark:hover:text-slate-100'
+                    }`}
+                  >
+                    <div className="flex items-center gap-2.5 min-w-0">
+                      {GroupIcon && (
+                        <GroupIcon
+                          className={`w-4 h-4 shrink-0 ${
+                            hasActiveChild ? 'text-sky-500 dark:text-sky-400' : 'opacity-80'
+                          }`}
+                        />
+                      )}
+                      <span className="truncate whitespace-nowrap">{group.title}</span>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      {!isGroupOpen && group.badgeCount > 0 && (
+                        <span className="bg-red-500/15 text-red-600 dark:text-red-400 text-[11px] min-w-[18px] h-4.5 px-1.5 flex items-center justify-center rounded-md font-mono font-semibold tabular-nums">
+                          {group.badgeCount}
+                        </span>
+                      )}
+                      <ChevronDown
+                        className={`w-3.5 h-3.5 text-slate-400 transition-transform duration-200 ${
+                          isGroupOpen ? 'rotate-180' : ''
+                        }`}
+                      />
+                    </div>
+                  </button>
+
+                  <AnimatePresence initial={false}>
+                    {isGroupOpen && (
+                      <motion.div
+                        key={`${group.key}-items`}
+                        initial={{ height: 0, opacity: 0 }}
+                        animate={{ height: 'auto', opacity: 1 }}
+                        exit={{ height: 0, opacity: 0 }}
+                        transition={{ duration: 0.18, ease: 'easeInOut' }}
+                        className="overflow-hidden"
+                      >
+                        <div className="mt-1 ml-3.5 pl-2.5 border-l border-slate-200/80 dark:border-slate-800 space-y-0.5">
+                          {group.items.map((tab) => renderNavItem(tab, true))}
+                        </div>
+                      </motion.div>
+                    )}
+                  </AnimatePresence>
+                </div>
+              );
+            }
+
+            return (
+              <div
+                key={group.key}
+                className={group.key === 'sistema' ? 'pt-2 border-t border-slate-200/70 dark:border-slate-800/80' : ''}
+              >
                 <div className="text-[11px] font-semibold text-slate-400 dark:text-slate-500 px-2.5 mb-1.5">
                   {group.title}
                 </div>
-              ) : (
-                gIdx > 0 && <div className="h-px bg-slate-200/70 dark:bg-slate-800 mx-2 my-2" />
-              )}
-              <div className="space-y-0.5">
-                {group.items.map((tab) => (
-                  <NavLink
-                    key={tab.id}
-                    to={tab.id}
-                    title={tab.label}
-                    className={({ isActive }) =>
-                      `relative flex items-center ${
-                        isSidebarCollapsed ? 'justify-center h-10 px-2' : 'justify-between h-9 px-2.5'
-                      } rounded-lg transition-colors duration-150 text-sm font-medium cursor-pointer ${
-                        isActive
-                          ? 'bg-slate-900 text-white dark:bg-slate-850 dark:text-white'
-                          : 'text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-850/60 hover:text-slate-900 dark:hover:text-slate-100'
-                      }`
-                    }
-                  >
-                    {({ isActive }) => (
-                      <>
-                        {isActive && (
-                          <span className="absolute left-0 top-2 bottom-2 w-0.5 rounded-r bg-sky-400" />
-                        )}
-                        <div className={`flex items-center min-w-0 ${isSidebarCollapsed ? 'justify-center' : 'gap-2.5'}`}>
-                          <tab.icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-sky-400' : 'opacity-80'}`} />
-                          {!isSidebarCollapsed && <span className="truncate whitespace-nowrap">{tab.label}</span>}
-                        </div>
-                        {tab.count > 0 && (
-                          <span
-                            className={
-                              isSidebarCollapsed
-                                ? 'absolute top-1 right-1 bg-red-500 text-white text-[10px] min-w-[16px] h-4 px-1 flex items-center justify-center rounded-full font-mono font-bold leading-none'
-                                : 'bg-red-500/15 text-red-600 dark:text-red-400 text-xs min-w-[20px] h-5 px-1.5 flex items-center justify-center rounded-md font-mono font-semibold tabular-nums shrink-0'
-                            }
-                          >
-                            {tab.count}
-                          </span>
-                        )}
-                      </>
-                    )}
-                  </NavLink>
-                ))}
+                <div className="space-y-0.5">
+                  {group.items.map((tab) => renderNavItem(tab, false))}
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </nav>
 
         {/* Rodapé da Sidebar */}

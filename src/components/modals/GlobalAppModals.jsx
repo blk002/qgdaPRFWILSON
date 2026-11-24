@@ -101,15 +101,30 @@ export default function GlobalAppModals({
           )
         : reviewModal &&
           createPortal(
-            <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center z-[110] p-4 fade-in font-sans">
-              <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800">
-                <div className="flex items-start justify-between gap-3 mb-4">
-                  <div>
-                    <h3 className="font-display text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                      <BrainCircuit className="text-sky-500 w-5 h-5" />
-                      <span>Avaliar retenção</span>
-                    </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">{reviewModal.topicName}</p>
+            <div
+              className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-[110] p-3 sm:p-4 fade-in font-sans"
+              onClick={() => {
+                setReviewModal(null);
+                setReviewInputs({ total: 10, correct: 0 });
+              }}
+            >
+              <div
+                role="dialog"
+                aria-modal="true"
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white dark:bg-slate-900 rounded-2xl shadow-[0_24px_64px_-16px_rgba(15,23,42,0.35)] dark:shadow-[0_24px_64px_-16px_rgba(0,0,0,0.75)] ring-1 ring-slate-950/5 dark:ring-white/[0.04] max-w-md w-full border border-slate-200/90 dark:border-slate-800 overflow-hidden flex flex-col max-h-[92vh]"
+              >
+                <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/90 flex items-start justify-between gap-3 shrink-0">
+                  <div className="flex items-center gap-3 min-w-0">
+                    <div className="w-9 h-9 rounded-xl bg-sky-500/10 dark:bg-sky-400/10 ring-1 ring-sky-500/20 dark:ring-sky-400/20 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                      <BrainCircuit className="w-4 h-4" />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-display text-base font-bold text-slate-900 dark:text-white tracking-tight leading-snug">
+                        Avaliar retenção
+                      </h3>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">{reviewModal.topicName}</p>
+                    </div>
                   </div>
                   <button
                     type="button"
@@ -118,13 +133,13 @@ export default function GlobalAppModals({
                       setReviewInputs({ total: 10, correct: 0 });
                     }}
                     aria-label="Fechar"
-                    className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-850 cursor-pointer"
+                    className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
                   >
                     <X className="w-4 h-4" />
                   </button>
                 </div>
 
-                <div className="space-y-4 mb-5">
+                <div className="p-5 overflow-y-auto custom-scrollbar space-y-4">
                   <div className="grid grid-cols-2 gap-3">
                     <div className="space-y-1.5">
                       <label className="text-xs font-medium text-slate-600 dark:text-slate-400 block">
@@ -230,14 +245,14 @@ export default function GlobalAppModals({
                   )}
                 </div>
 
-                <div className="flex items-center justify-end gap-2">
+                <div className="px-5 py-3.5 border-t border-slate-100 dark:border-slate-800/90 bg-slate-50/60 dark:bg-slate-950/40 flex items-center justify-end gap-2 shrink-0">
                   <button
                     type="button"
                     onClick={() => {
                       setReviewModal(null);
                       setReviewInputs({ total: 10, correct: 0 });
                     }}
-                    className="h-9 px-4 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-850 transition-colors cursor-pointer"
+                    className="h-9 px-4 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                   >
                     Cancelar
                   </button>
@@ -249,7 +264,7 @@ export default function GlobalAppModals({
                       setReviewModal(null);
                       setReviewInputs({ total: 10, correct: 0 });
                     }}
-                    className="h-9 px-4 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 transition-colors disabled:opacity-50 cursor-pointer"
+                    className="h-9 px-4 rounded-xl text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 transition-colors disabled:opacity-50 cursor-pointer"
                   >
                     Salvar revisão
                   </button>
@@ -264,30 +279,43 @@ export default function GlobalAppModals({
         !classConfirmModal.skipPrePrompt &&
         dismissedPrePromptModalRef !== classConfirmModal &&
         createPortal(
-          <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center z-[120] p-4 fade-in font-sans">
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800 relative max-h-[92vh] overflow-y-auto">
-              <div className="flex items-start justify-between gap-3 mb-3">
-                <div>
-                  <h3 className="font-display text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                    <Crosshair className="w-5 h-5 text-sky-500" />
-                    <span>Praticar questões antes?</span>
-                  </h3>
-                  {subjects?.[classConfirmModal.subjectId]?.name && (
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                      {subjects[classConfirmModal.subjectId].name}
-                    </p>
-                  )}
+          <div
+            className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-[120] p-3 sm:p-4 fade-in font-sans"
+            onClick={() => setClassConfirmModal(null)}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-slate-900 rounded-2xl shadow-[0_24px_64px_-16px_rgba(15,23,42,0.35)] dark:shadow-[0_24px_64px_-16px_rgba(0,0,0,0.75)] ring-1 ring-slate-950/5 dark:ring-white/[0.04] max-w-md w-full border border-slate-200/90 dark:border-slate-800 relative max-h-[92vh] overflow-hidden flex flex-col"
+            >
+              <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/90 flex items-start justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-sky-500/10 dark:bg-sky-400/10 ring-1 ring-sky-500/20 dark:ring-sky-400/20 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                    <Crosshair className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-display text-base font-bold text-slate-900 dark:text-white tracking-tight leading-snug">
+                      Praticar questões antes?
+                    </h3>
+                    {subjects?.[classConfirmModal.subjectId]?.name && (
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 truncate">
+                        {subjects[classConfirmModal.subjectId].name}
+                      </p>
+                    )}
+                  </div>
                 </div>
                 <button
                   type="button"
                   onClick={() => setClassConfirmModal(null)}
                   aria-label="Fechar"
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-850 cursor-pointer"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
 
+              <div className="p-5 overflow-y-auto custom-scrollbar flex-1">
               <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
                 Conteúdo:{' '}
                 <strong className="font-semibold text-slate-900 dark:text-white">
@@ -394,7 +422,9 @@ export default function GlobalAppModals({
                 </div>
               </div>
 
-              <div className="flex flex-col gap-2">
+              </div>
+
+              <div className="px-5 py-3.5 border-t border-slate-100 dark:border-slate-800/90 bg-slate-50/60 dark:bg-slate-950/40 flex flex-col gap-2 shrink-0">
                 <button
                   type="button"
                   onClick={() => {
@@ -411,7 +441,7 @@ export default function GlobalAppModals({
                     );
                     setClassConfirmModal(null);
                   }}
-                  className="w-full h-10 px-4 bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  className="w-full h-10 px-4 bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer"
                 >
                   <Skull className="w-4 h-4" />
                   <span>
@@ -425,7 +455,7 @@ export default function GlobalAppModals({
                 <button
                   type="button"
                   onClick={() => setDismissedPrePromptModalRef(classConfirmModal)}
-                  className="w-full h-10 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-lg text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
+                  className="w-full h-10 px-4 bg-emerald-600 hover:bg-emerald-700 text-white rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-1.5 cursor-pointer"
                 >
                   <Check className="w-4 h-4" />
                   <span>Continuar para confirmar aula</span>
@@ -434,7 +464,7 @@ export default function GlobalAppModals({
                 <button
                   type="button"
                   onClick={() => setClassConfirmModal(null)}
-                  className="w-full h-9 px-4 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-lg text-xs font-medium transition-colors cursor-pointer"
+                  className="w-full h-9 px-4 text-slate-500 hover:text-slate-700 dark:text-slate-400 dark:hover:text-slate-200 rounded-xl text-xs font-medium transition-colors cursor-pointer"
                 >
                   Cancelar
                 </button>
@@ -499,59 +529,78 @@ export default function GlobalAppModals({
       {/* 3. Modal de Substituição de Matéria no Ciclo */}
       {replaceSubjectModal &&
         createPortal(
-          <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center z-[110] p-4 fade-in font-sans">
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-md w-full p-6 border border-slate-200 dark:border-slate-800">
-              <div className="flex items-center justify-between gap-2 mb-4">
-                <h3 className="font-display text-lg font-bold text-slate-900 dark:text-white flex items-center gap-2">
-                  <Repeat className="text-sky-500 w-5 h-5" />
-                  <span>Trocar disciplina</span>
-                </h3>
+          <div
+            className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-[110] p-3 sm:p-4 fade-in font-sans"
+            onClick={() => setReplaceSubjectModal(null)}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-slate-900 rounded-2xl shadow-[0_24px_64px_-16px_rgba(15,23,42,0.35)] dark:shadow-[0_24px_64px_-16px_rgba(0,0,0,0.75)] ring-1 ring-slate-950/5 dark:ring-white/[0.04] max-w-md w-full border border-slate-200/90 dark:border-slate-800 overflow-hidden flex flex-col max-h-[90vh]"
+            >
+              <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/90 flex items-center justify-between gap-3 shrink-0">
+                <div className="flex items-center gap-3 min-w-0">
+                  <div className="w-9 h-9 rounded-xl bg-sky-500/10 dark:bg-sky-400/10 ring-1 ring-sky-500/20 dark:ring-sky-400/20 text-sky-600 dark:text-sky-400 flex items-center justify-center shrink-0">
+                    <Repeat className="w-4 h-4" />
+                  </div>
+                  <div className="min-w-0">
+                    <h3 className="font-display text-base font-bold text-slate-900 dark:text-white tracking-tight leading-snug">
+                      Trocar disciplina
+                    </h3>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                      Escolha a nova matéria para este bloco
+                    </p>
+                  </div>
+                </div>
                 <button
                   type="button"
                   onClick={() => setReplaceSubjectModal(null)}
                   aria-label="Fechar"
-                  className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-white hover:bg-slate-100 dark:hover:bg-slate-850 cursor-pointer"
+                  className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
                 >
                   <X className="w-4 h-4" />
                 </button>
               </div>
-              <div className="grid grid-cols-2 gap-2.5 max-h-[60vh] overflow-y-auto pr-1 custom-scrollbar">
-                {Object.values(subjects || {}).map((sub) => (
-                  <button
-                    key={sub.id}
-                    type="button"
-                    onClick={() => {
-                      handleReplaceSubject(
-                        replaceSubjectModal.dayIndex,
-                        replaceSubjectModal.slotIndex,
-                        replaceSubjectModal.oldSubjectId,
-                        sub.id
-                      );
-                      setReplaceSubjectModal(null);
-                    }}
-                    className={`p-3 rounded-lg border text-left transition-colors cursor-pointer ${
-                      sub.id === replaceSubjectModal.oldSubjectId
-                        ? 'border-sky-500 bg-sky-50 dark:bg-sky-500/10'
-                        : 'border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${sub.color?.split(' ')[0] || 'bg-sky-500'}`} />
-                      <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
-                        {sub.name}
-                      </span>
-                    </div>
-                    <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
-                      {sub.id === replaceSubjectModal.oldSubjectId ? 'Atual' : 'Selecionar'}
-                    </p>
-                  </button>
-                ))}
+              <div className="p-5 overflow-y-auto custom-scrollbar flex-1">
+                <div className="grid grid-cols-2 gap-2.5">
+                  {Object.values(subjects || {}).map((sub) => (
+                    <button
+                      key={sub.id}
+                      type="button"
+                      onClick={() => {
+                        handleReplaceSubject(
+                          replaceSubjectModal.dayIndex,
+                          replaceSubjectModal.slotIndex,
+                          replaceSubjectModal.oldSubjectId,
+                          sub.id
+                        );
+                        setReplaceSubjectModal(null);
+                      }}
+                      className={`p-3 rounded-xl border text-left transition-colors cursor-pointer ${
+                        sub.id === replaceSubjectModal.oldSubjectId
+                          ? 'border-sky-500 bg-sky-50/80 dark:bg-sky-500/10'
+                          : 'border-slate-200/90 dark:border-slate-800 bg-slate-50/50 dark:bg-slate-950/40 hover:border-slate-300 dark:hover:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center gap-2 min-w-0">
+                        <span className={`w-2.5 h-2.5 rounded-full shrink-0 ${sub.color?.split(' ')[0] || 'bg-sky-500'}`} />
+                        <span className="text-xs font-semibold text-slate-800 dark:text-slate-100 truncate">
+                          {sub.name}
+                        </span>
+                      </div>
+                      <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-1">
+                        {sub.id === replaceSubjectModal.oldSubjectId ? 'Atual' : 'Selecionar'}
+                      </p>
+                    </button>
+                  ))}
+                </div>
               </div>
-              <div className="mt-4 flex justify-end">
+              <div className="px-5 py-3.5 border-t border-slate-100 dark:border-slate-800/90 bg-slate-50/60 dark:bg-slate-950/40 flex justify-end shrink-0">
                 <button
                   type="button"
                   onClick={() => setReplaceSubjectModal(null)}
-                  className="h-9 px-4 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-850 transition-colors cursor-pointer"
+                  className="h-9 px-4 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                 >
                   Manter atual
                 </button>
@@ -564,16 +613,24 @@ export default function GlobalAppModals({
       {/* 4. Modal Global de Alertas e Confirmações */}
       {globalModal &&
         createPortal(
-          <div className="fixed inset-0 bg-slate-950/75 backdrop-blur-xs flex items-center justify-center z-[120] p-4 fade-in font-sans">
-            <div className="bg-white dark:bg-slate-900 rounded-xl shadow-2xl max-w-sm w-full p-6 border border-slate-200 dark:border-slate-800">
-              <div className="flex items-start gap-3.5 mb-4">
+          <div
+            className="fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-[120] p-3 sm:p-4 fade-in font-sans"
+            onClick={() => setGlobalModal(null)}
+          >
+            <div
+              role="dialog"
+              aria-modal="true"
+              onClick={(e) => e.stopPropagation()}
+              className="bg-white dark:bg-slate-900 rounded-2xl shadow-[0_24px_64px_-16px_rgba(15,23,42,0.35)] dark:shadow-[0_24px_64px_-16px_rgba(0,0,0,0.75)] ring-1 ring-slate-950/5 dark:ring-white/[0.04] max-w-sm w-full border border-slate-200/90 dark:border-slate-800 overflow-hidden"
+            >
+              <div className="p-5 flex items-start gap-3.5">
                 <div
-                  className={`w-10 h-10 rounded-lg shrink-0 flex items-center justify-center ${
+                  className={`w-10 h-10 rounded-xl shrink-0 flex items-center justify-center ring-1 ${
                     globalModal.onConfirm
-                      ? 'bg-red-500/10 text-red-600 dark:text-red-400'
+                      ? 'bg-red-500/10 ring-red-500/20 text-red-600 dark:text-red-400'
                       : globalModal.isAlert
-                      ? 'bg-sky-500/10 text-sky-600 dark:text-sky-400'
-                      : 'bg-emerald-500/10 text-emerald-600 dark:text-emerald-400'
+                      ? 'bg-sky-500/10 ring-sky-500/20 text-sky-600 dark:text-sky-400'
+                      : 'bg-emerald-500/10 ring-emerald-500/20 text-emerald-600 dark:text-emerald-400'
                   }`}
                 >
                   {globalModal.onConfirm ? (
@@ -584,7 +641,7 @@ export default function GlobalAppModals({
                     <Check className="w-5 h-5" />
                   )}
                 </div>
-                <div className="min-w-0">
+                <div className="min-w-0 flex-1">
                   <h3 className="font-display text-base font-bold text-slate-900 dark:text-white leading-snug">
                     {globalModal.title}
                   </h3>
@@ -594,13 +651,13 @@ export default function GlobalAppModals({
                 </div>
               </div>
 
-              <div className="flex items-center justify-end gap-2 pt-2">
+              <div className="px-5 py-3.5 border-t border-slate-100 dark:border-slate-800/90 bg-slate-50/60 dark:bg-slate-950/40 flex items-center justify-end gap-2">
                 {globalModal.onConfirm ? (
                   <>
                     <button
                       type="button"
                       onClick={() => setGlobalModal(null)}
-                      className="h-9 px-4 rounded-lg text-xs font-medium text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-850 transition-colors cursor-pointer"
+                      className="h-9 px-4 rounded-xl text-xs font-medium text-slate-600 dark:text-slate-300 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors cursor-pointer"
                     >
                       Cancelar
                     </button>
@@ -610,7 +667,7 @@ export default function GlobalAppModals({
                         globalModal.onConfirm();
                         setGlobalModal(null);
                       }}
-                      className="h-9 px-4 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                      className="h-9 px-4 bg-red-600 hover:bg-red-700 text-white text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                     >
                       Confirmar
                     </button>
@@ -619,7 +676,7 @@ export default function GlobalAppModals({
                   <button
                     type="button"
                     onClick={() => setGlobalModal(null)}
-                    className="h-9 px-4 bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 text-xs font-semibold rounded-lg transition-colors cursor-pointer"
+                    className="h-9 px-4 bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 text-xs font-semibold rounded-xl transition-colors cursor-pointer"
                   >
                     Entendi
                   </button>
@@ -634,12 +691,19 @@ export default function GlobalAppModals({
       <AnimatePresence>
         {promotionModal &&
           createPortal(
-            <div className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/85 backdrop-blur-sm">
+            <div
+              className="fixed inset-0 z-[200] flex items-center justify-center p-4 bg-slate-950/75 backdrop-blur-sm"
+              onClick={() => setPromotionModal(null)}
+            >
               <motion.div
-                initial={{ scale: 0.9, opacity: 0 }}
+                role="dialog"
+                aria-modal="true"
+                initial={{ scale: 0.94, opacity: 0 }}
                 animate={{ scale: 1, opacity: 1 }}
-                exit={{ scale: 0.95, opacity: 0 }}
-                className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl p-7 max-w-sm w-full text-center shadow-2xl"
+                exit={{ scale: 0.96, opacity: 0 }}
+                transition={{ duration: 0.18 }}
+                onClick={(e) => e.stopPropagation()}
+                className="bg-white dark:bg-slate-900 border border-slate-200/90 dark:border-slate-800 rounded-2xl p-7 max-w-sm w-full text-center shadow-[0_24px_64px_-16px_rgba(15,23,42,0.35)] dark:shadow-[0_24px_64px_-16px_rgba(0,0,0,0.75)] ring-1 ring-slate-950/5 dark:ring-white/[0.04]"
               >
                 <div className="mb-5 flex justify-center">
                   <RankBadge level={promotionModal.level || 1} size={104} />
@@ -656,7 +720,7 @@ export default function GlobalAppModals({
                 <button
                   type="button"
                   onClick={() => setPromotionModal(null)}
-                  className="w-full h-10 bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 font-semibold rounded-lg text-sm transition-colors cursor-pointer"
+                  className="w-full h-10 bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 font-semibold rounded-xl text-sm transition-colors cursor-pointer"
                 >
                   Continuar
                 </button>

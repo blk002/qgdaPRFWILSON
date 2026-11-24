@@ -645,8 +645,17 @@ export default function TreinoTAF() {
 
       {/* Modal de registro/edição de simulado */}
       {showModal && createPortal(
-        <div className={`${isDarkMode ? 'dark' : ''} fixed inset-0 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center z-[999] p-4 fade-in`}>
+        <div
+          className={`${isDarkMode ? 'dark' : ''} fixed inset-0 bg-slate-950/70 backdrop-blur-sm flex items-center justify-center z-[999] p-3 sm:p-4 fade-in font-sans`}
+          onClick={() => {
+            setShowModal(false);
+            setEditingTaf(null);
+          }}
+        >
           <form
+            role="dialog"
+            aria-modal="true"
+            onClick={(e) => e.stopPropagation()}
             onSubmit={(e) => {
               e.preventDefault();
               const dataVal = e.target.data.value;
@@ -693,11 +702,11 @@ export default function TreinoTAF() {
               setShowModal(false);
               setEditingTaf(null);
             }}
-            className="bg-white dark:bg-slate-900 rounded-xl shadow-xl max-w-lg w-full border border-slate-200 dark:border-slate-800 flex flex-col overflow-hidden z-[1000]"
+            className="bg-white dark:bg-slate-900 rounded-2xl shadow-[0_24px_64px_-16px_rgba(15,23,42,0.35)] dark:shadow-[0_24px_64px_-16px_rgba(0,0,0,0.75)] ring-1 ring-slate-950/5 dark:ring-white/[0.04] max-w-lg w-full border border-slate-200/90 dark:border-slate-800 flex flex-col overflow-hidden z-[1000]"
           >
-            <div className="px-6 py-4 border-b border-slate-100 dark:border-slate-800 flex items-start justify-between gap-4">
+            <div className="px-5 py-4 border-b border-slate-100 dark:border-slate-800/90 flex items-start justify-between gap-3">
               <div>
-                <h3 className="font-display text-base font-bold text-slate-900 dark:text-white">
+                <h3 className="font-display text-base font-bold text-slate-900 dark:text-white tracking-tight leading-snug">
                   {editingTaf ? 'Editar simulado TAF' : 'Registrar simulado TAF'}
                 </h3>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
@@ -710,7 +719,8 @@ export default function TreinoTAF() {
                   setShowModal(false);
                   setEditingTaf(null);
                 }}
-                className="p-1 rounded-lg text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                aria-label="Fechar janela"
+                className="w-8 h-8 rounded-lg flex items-center justify-center text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer shrink-0"
               >
                 <X className="w-4 h-4" />
               </button>
@@ -820,20 +830,20 @@ export default function TreinoTAF() {
               </div>
             </div>
 
-            <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex items-center justify-end gap-2.5">
+            <div className="px-5 py-3.5 border-t border-slate-100 dark:border-slate-800/90 bg-slate-50/60 dark:bg-slate-950/40 flex items-center justify-end gap-2.5">
               <button
                 type="button"
                 onClick={() => {
                   setShowModal(false);
                   setEditingTaf(null);
                 }}
-                className="h-9 px-4 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-800 transition-colors cursor-pointer"
+                className="h-9 px-4 rounded-xl text-xs font-semibold text-slate-600 dark:text-slate-300 hover:text-slate-900 dark:hover:text-white bg-white dark:bg-slate-900 hover:bg-slate-100 dark:hover:bg-slate-800 border border-slate-200 dark:border-slate-700 transition-colors cursor-pointer"
               >
                 Cancelar
               </button>
               <button
                 type="submit"
-                className="h-9 px-4 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 transition-colors cursor-pointer"
+                className="h-9 px-4 rounded-xl text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white shadow-xs transition-colors cursor-pointer"
               >
                 {editingTaf ? 'Salvar alterações' : 'Salvar simulado'}
               </button>
