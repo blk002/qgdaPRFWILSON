@@ -286,7 +286,7 @@ export default function App() {
 
       {/* ÁREA DE CONTEÚDO PRINCIPAL */}
       <div className={`flex-1 min-w-0 w-full transition-all duration-200 ${isSidebarCollapsed ? 'md:pl-16' : 'md:pl-60'}`}>
-        <main className="w-full max-w-[1440px] mx-auto px-4 sm:px-6 lg:px-8 py-4 sm:py-6 pb-24 md:pb-12">
+        <main className="w-full max-w-[1640px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-4 sm:py-6 pb-24 md:pb-12">
           <SyncStatusBanner />
 
           <AnimatePresence mode="wait">

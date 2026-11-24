@@ -453,7 +453,25 @@ export default function Login() {
             </button>
           </form>
 
-          <div className="mt-5 pt-5 border-t border-slate-800/80 text-center">
+          <div className="mt-5 pt-5 border-t border-slate-800/80 text-center space-y-3">
+            {import.meta.env.DEV && (
+              <button
+                type="button"
+                disabled={loading}
+                onClick={async () => {
+                  setLoading(true);
+                  try {
+                    await useStore.getState().signInLocalTest();
+                    toast.success('Modo teste local ativado no preview.');
+                  } finally {
+                    setLoading(false);
+                  }
+                }}
+                className="w-full h-10 rounded-xl border border-slate-700 bg-slate-950 hover:bg-slate-800 text-slate-200 text-xs font-semibold transition-colors cursor-pointer disabled:opacity-50"
+              >
+                Entrar no modo teste local (Preview)
+              </button>
+            )}
             <button
               type="button"
               onClick={() => { setIsSignUp(!isSignUp); setFeedback(null); }}
@@ -461,7 +479,7 @@ export default function Login() {
             >
               {isSignUp ? 'Já possui conta? Entrar agora' : 'Ainda não tem conta? Criar cadastro'}
             </button>
-            <p className="text-xs text-slate-500 mt-3 leading-relaxed">
+            <p className="text-xs text-slate-500 leading-relaxed">
               Ao criar uma conta, confirme o link de ativação enviado ao seu e-mail (verifique também o Spam).
             </p>
           </div>

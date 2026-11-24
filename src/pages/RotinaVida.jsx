@@ -1268,60 +1268,68 @@ export default function RotinaVida() {
                     return (
                       <div
                         key={day.key}
-                        className={`group/colhead relative px-2.5 pt-2.5 pb-2 border-r last:border-r-0 border-slate-200/80 dark:border-slate-800 ${
+                        className={`group/colhead relative flex flex-col justify-between px-2.5 pt-2.5 pb-2 border-r last:border-r-0 border-slate-200/80 dark:border-slate-800 ${
                           isToday ? 'bg-sky-500/[0.06] dark:bg-sky-400/[0.07]' : ''
                         }`}
                       >
-                        <div className="flex items-center justify-between gap-1">
-                          <div className="flex items-center gap-1.5 min-w-0">
-                            <span
-                              className={`text-xs font-bold tracking-tight truncate ${
-                                isToday
-                                  ? 'text-sky-700 dark:text-sky-300'
-                                  : 'text-slate-800 dark:text-slate-100'
-                              }`}
-                            >
-                              {day.label}
+                        <div className={`flex items-center gap-1 min-w-0 h-5 ${hasLessonGap ? 'pr-5' : ''}`}>
+                          <span
+                            className={`text-xs font-bold tracking-tight truncate ${
+                              isToday
+                                ? 'text-sky-700 dark:text-sky-300'
+                                : 'text-slate-800 dark:text-slate-100'
+                            }`}
+                          >
+                            {day.label}
+                          </span>
+                          {isToday && (
+                            <span className="text-[10px] font-semibold text-sky-600 dark:text-sky-400 whitespace-nowrap shrink-0">
+                              · Hoje
                             </span>
-                            {isToday && (
-                              <span className="text-[10px] font-semibold text-sky-600 dark:text-sky-400">
-                                · Hoje
-                              </span>
-                            )}
-                          </div>
-                          <div className="flex items-center gap-0.5 shrink-0">
-                            {dayStudyCount >= 2 && (
-                              <button
-                                type="button"
-                                onClick={() => handleMergeDayStudy(day.key)}
-                                title="Unir blocos de estudo em 1 bloco só"
-                                className="opacity-0 group-hover/colhead:opacity-100 focus-visible:opacity-100 p-1 rounded text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition-opacity cursor-pointer"
-                              >
-                                <Combine className="w-3 h-3" />
-                              </button>
-                            )}
-                            {hasLessonGap && (
-                              <button
-                                type="button"
-                                onClick={() => handleSyncSingleDayLessons(day.key)}
-                                title={`Sincronizar ${formatMinutesCompact(dayPlan.totalMinutes)} de aulas do cronograma`}
-                                className="p-1 rounded text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 transition-colors cursor-pointer"
-                              >
-                                <RefreshCw className="w-3 h-3" />
-                              </button>
-                            )}
-                            <button
-                              type="button"
-                              onClick={() => setCopyModal({ isOpen: true, sourceDayKey: day.key })}
-                              title={`Replicar ${day.label} para outros dias`}
-                              className="opacity-0 group-hover/colhead:opacity-100 focus-visible:opacity-100 p-1 rounded text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition-opacity cursor-pointer"
-                            >
-                              <Copy className="w-3 h-3" />
-                            </button>
-                          </div>
+                          )}
                         </div>
 
-                        <div className="mt-1 flex items-center justify-between gap-1 text-[10px] font-mono tabular-nums text-slate-500 dark:text-slate-400">
+                        {/* Ações rápidas flutuantes no canto superior direito (não comprimem o título do dia) */}
+                        <div
+                          className={`absolute top-1.5 right-1.5 z-10 flex items-center gap-0.5 rounded-md transition-opacity ${
+                            hasLessonGap
+                              ? 'opacity-100 bg-white/85 dark:bg-slate-900/85 group-hover/colhead:bg-white dark:group-hover/colhead:bg-slate-900 group-hover/colhead:shadow-xs group-hover/colhead:ring-1 group-hover/colhead:ring-slate-200/80 dark:group-hover/colhead:ring-slate-700/80'
+                              : 'opacity-0 pointer-events-none group-hover/colhead:opacity-100 group-hover/colhead:pointer-events-auto focus-within:opacity-100 focus-within:pointer-events-auto bg-white/95 dark:bg-slate-900/95 shadow-xs ring-1 ring-slate-200/80 dark:ring-slate-700/80'
+                          }`}
+                        >
+                          {dayStudyCount >= 2 && (
+                            <button
+                              type="button"
+                              onClick={() => handleMergeDayStudy(day.key)}
+                              title="Unir blocos de estudo em 1 bloco só"
+                              className="hidden group-hover/colhead:inline-flex focus-visible:inline-flex p-1 rounded text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition-colors cursor-pointer"
+                            >
+                              <Combine className="w-3 h-3" />
+                            </button>
+                          )}
+                          {hasLessonGap && (
+                            <button
+                              type="button"
+                              onClick={() => handleSyncSingleDayLessons(day.key)}
+                              title={`Sincronizar ${formatMinutesCompact(dayPlan.totalMinutes)} de aulas do cronograma`}
+                              className="p-1 rounded text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 transition-colors cursor-pointer"
+                            >
+                              <RefreshCw className="w-3 h-3" />
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => setCopyModal({ isOpen: true, sourceDayKey: day.key })}
+                            title={`Replicar ${day.label} para outros dias`}
+                            className={`${
+                              hasLessonGap ? 'hidden group-hover/colhead:inline-flex focus-visible:inline-flex' : 'inline-flex'
+                            } p-1 rounded text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 transition-colors cursor-pointer`}
+                          >
+                            <Copy className="w-3 h-3" />
+                          </button>
+                        </div>
+
+                        <div className="mt-1 flex items-center justify-between gap-1 text-[10px] font-mono tabular-nums text-slate-500 dark:text-slate-400 whitespace-nowrap">
                           <span
                             className={ds.study > 0 ? 'font-semibold text-sky-700 dark:text-sky-300 truncate' : 'truncate'}
                             title={
@@ -1571,14 +1579,16 @@ export default function RotinaVida() {
                               </div>
 
                               <div
-                                className={`h-full pl-3 pr-2 flex flex-col ${
-                                  isCompact ? 'py-0.5 justify-center' : 'py-1 justify-between'
+                                className={`h-full pl-3 flex flex-col ${
+                                  isCompact ? 'pr-1.5 py-0.5 justify-center' : 'pr-2 py-1 justify-between'
                                 }`}
                               >
                                 {isCompact ? (
-                                  <div className="flex items-center justify-between gap-1 pr-4 text-[10.5px] leading-none">
+                                  <div className="flex items-center justify-between gap-1.5 text-[10.5px] leading-none">
                                     <span className="font-semibold truncate">{block.label}</span>
-                                    <span className={`font-mono text-[9.5px] shrink-0 tabular-nums ${meta.subTextClass}`}>
+                                    <span
+                                      className={`ml-auto text-right font-mono text-[9.5px] shrink-0 tabular-nums transition-opacity group-hover/blk:opacity-0 ${meta.subTextClass}`}
+                                    >
                                       {minutesToTimeStr(block.startMin)}
                                     </span>
                                   </div>
