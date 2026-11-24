@@ -51,13 +51,6 @@ export default function App() {
 
   const [promotionModal, setPromotionModal] = useState(null);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(() => {
-    try {
-      return localStorage.getItem('qg_sidebar_collapsed') === 'true';
-    } catch {
-      return false;
-    }
-  });
   const lastPatenteId = useRef(null);
   const location = useLocation();
   const { setTriggerConfetti, ConfettiCanvas } = useConfetti();
@@ -67,16 +60,6 @@ export default function App() {
     manualLessonIndexMap,
     saveManualLessonIndex,
   } = useExtensionBridge();
-
-  const toggleSidebarCollapsed = () => {
-    setIsSidebarCollapsed((prev) => {
-      const next = !prev;
-      try {
-        localStorage.setItem('qg_sidebar_collapsed', String(next));
-      } catch {}
-      return next;
-    });
-  };
 
   useEffect(() => {
     window.scrollTo({ top: 0, left: 0, behavior: 'auto' });
@@ -268,7 +251,7 @@ export default function App() {
 
   return (
     <div
-      className={`min-h-screen transition-colors duration-200 relative overflow-x-hidden flex flex-col md:flex-row ${
+      className={`min-h-screen transition-colors duration-200 relative overflow-x-clip flex flex-col ${
         isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
       }`}
     >
@@ -278,14 +261,12 @@ export default function App() {
       <TacticalCountdownBanner />
 
       <AppNavigation
-        isSidebarCollapsed={isSidebarCollapsed}
-        toggleSidebarCollapsed={toggleSidebarCollapsed}
         isMobileMenuOpen={isMobileMenuOpen}
         setIsMobileMenuOpen={setIsMobileMenuOpen}
       />
 
       {/* ÁREA DE CONTEÚDO PRINCIPAL */}
-      <div className={`flex-1 min-w-0 w-full transition-all duration-200 ${isSidebarCollapsed ? 'md:pl-16' : 'md:pl-60'}`}>
+      <div className="flex-1 min-w-0 w-full">
         <main className="w-full max-w-[1640px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-4 sm:py-6 pb-24 md:pb-12">
           <SyncStatusBanner />
 

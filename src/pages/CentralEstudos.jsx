@@ -103,8 +103,8 @@ export default function CentralEstudos() {
           </h1>
         </div>
 
-        {/* Progresso do Edital integrado */}
-        <div className="order-3 lg:order-2 w-full lg:w-auto lg:flex-1 min-w-0 pt-3 lg:pt-0 border-t lg:border-t-0 lg:border-x border-slate-200/80 dark:border-slate-800 lg:px-5 space-y-1.5">
+        {/* Progresso do Edital (apenas mobile; no desktop fica no menu superior) */}
+        <div className="md:hidden order-3 w-full min-w-0 pt-3 border-t border-slate-200/80 dark:border-slate-800 space-y-1.5">
           <div className="flex items-center justify-between gap-3 text-xs">
             <div className="flex items-center gap-2 min-w-0 text-slate-500 dark:text-slate-400">
               <span className="font-semibold text-slate-700 dark:text-slate-200 shrink-0">
