@@ -53,6 +53,7 @@ export default function Ciclo() {
     getThermometer,
     completedToday: rawCompletedToday,
     completedTodayDate,
+    slotProgressToday: rawSlotProgressToday = {},
     todayKey,
     setCompletedToday,
     cycle,
@@ -151,6 +152,17 @@ export default function Ciclo() {
     () => (completedTodayDate === getLocalDateStr() ? (rawCompletedToday || []) : []),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [completedTodayDate, rawCompletedToday, getLocalDateStr, todayKey]
+  );
+
+  const slotProgressToday = useMemo(
+    () =>
+      completedTodayDate === getLocalDateStr() &&
+      rawSlotProgressToday &&
+      typeof rawSlotProgressToday === 'object'
+        ? rawSlotProgressToday
+        : {},
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [completedTodayDate, rawSlotProgressToday, getLocalDateStr, todayKey]
   );
 
   const allPendingReviews = getPendingReviews();
@@ -408,6 +420,17 @@ export default function Ciclo() {
           const priorSubjectIncrement = simulatedIncrements[subjectId] || 0;
           const subjectCompletedBefore = subjectCompletedBase + priorSubjectIncrement;
 
+          const slotProgress = isToday ? slotProgressToday?.[slotIndex] : null;
+          const isValidSlotProgress =
+            isToday &&
+            !isSlotCompleted &&
+            slotProgress &&
+            (!slotProgress.subjectId || slotProgress.subjectId === subjectId) &&
+            Number(slotProgress.target) > 0;
+          const watchedInSlotToday = isValidSlotProgress ? Math.max(0, Number(slotProgress.watched) || 0) : 0;
+          const targetLessonsInSlot = isValidSlotProgress ? Math.max(1, Number(slotProgress.target) || 1) : 0;
+          const remainingInSlotToday = targetLessonsInSlot > 0 ? Math.max(1, targetLessonsInSlot - watchedInSlotToday) : 0;
+
           if (!isSlotCompleted) {
             let tempIncrement = priorSubjectIncrement;
             let found = false;
@@ -420,8 +443,13 @@ export default function Ciclo() {
                 currentTotal = t.total;
                 spd = Number(subject.speed) || 1;
                 const customSlotLessons = !isDoubled && !isReplaced ? Math.floor(Number(daySlotCounts?.[slotIndex]) || 0) : 0;
-                const lessonsN = customSlotLessons > 0 ? customSlotLessons : Math.floor(Number(subject.lessonsPerBlock) || 0);
-                goalMin = customSlotLessons > 0 ? 0 : (Number(subject.timeGoalMinutes || subjectTimeGoal?.[subjectId]) || 0);
+                const baseLessonsN = customSlotLessons > 0 ? customSlotLessons : Math.floor(Number(subject.lessonsPerBlock) || 0);
+                const lessonsN = remainingInSlotToday > 0 ? remainingInSlotToday : baseLessonsN;
+                goalMin = remainingInSlotToday > 0
+                  ? 0
+                  : customSlotLessons > 0
+                    ? 0
+                    : (Number(subject.timeGoalMinutes || subjectTimeGoal?.[subjectId]) || 0);
 
                 if (goalMin > 0 || lessonsN > 0) {
                   const remainingInTopic = t.total - currentCompleted;
@@ -519,6 +547,8 @@ export default function Ciclo() {
               currentCompleted,
               currentTotal,
               blockCount,
+              watchedInSlotToday,
+              slotTargetCount: targetLessonsInSlot > 0 ? targetLessonsInSlot : blockCount,
               plannedLessons: enrichedLessons,
               goalMin,
               spd,
@@ -563,6 +593,7 @@ export default function Ciclo() {
     cycleCarryoverOffset,
     currentDayIndex,
     completedToday,
+    slotProgressToday,
     calendarOverrides,
     calendarOverrideCounts,
     futureScheduleRules,
@@ -647,7 +678,18 @@ export default function Ciclo() {
 
   const handleOpenSlotModal = (slot, skipPrePrompt) => {
     if (!slot?.activeTopic || !setClassConfirmModal) return;
-    const { activeTopic, currentCompleted, plannedLessons, activeLessonName, activeLessonDuration, blockCount, goalMin, subjectId, slotIndex } = slot;
+    const {
+      activeTopic,
+      currentCompleted,
+      plannedLessons,
+      activeLessonName,
+      activeLessonDuration,
+      blockCount,
+      slotTargetCount,
+      goalMin,
+      subjectId,
+      slotIndex
+    } = slot;
     const remainingLessons = (activeTopic.lessons || []).slice(currentCompleted, activeTopic.total);
     const blockLessonNames = plannedLessons.map((pl) => pl?.name).filter(Boolean);
 
@@ -661,6 +703,7 @@ export default function Ciclo() {
       lessonDuration: activeLessonDuration,
       allLessonsDurations: remainingLessons.map((l) => l?.duration || '60:00'),
       suggestedClasses: blockCount,
+      plannedBlockCount: slotTargetCount || plannedLessons.length || blockCount || 1,
       timeGoalMinutes: goalMin || null,
       skipPrePrompt
     });

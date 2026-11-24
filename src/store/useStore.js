@@ -145,6 +145,9 @@ const normalizeHydratedState = (raw, currentCaveira = []) => {
 
   if (cleanData.completedTodayDate === undefined) cleanData.completedTodayDate = null;
   if (!Array.isArray(cleanData.completedToday)) cleanData.completedToday = [];
+  if (!cleanData.slotProgressToday || typeof cleanData.slotProgressToday !== 'object' || Array.isArray(cleanData.slotProgressToday)) {
+    cleanData.slotProgressToday = {};
+  }
   if (!cleanData.studyHistory) cleanData.studyHistory = {};
   if (!cleanData.unlockedAvatars || cleanData.unlockedAvatars.length === 0) {
     cleanData.unlockedAvatars = [...defaults.unlockedAvatars];
@@ -1377,9 +1380,12 @@ export const useStore = create(
         const today = state.getLocalDateStr();
         // Se a data guardada não é hoje, o valor anterior é de outro dia e nunca deve ser considerado.
         const base = state.completedTodayDate === today ? (state.completedToday || []) : [];
+        const nextCompleted = typeof completedToday === 'function' ? completedToday(base) : completedToday;
+        const baseProgress = state.completedTodayDate === today ? (state.slotProgressToday || {}) : {};
         return {
-          completedToday: typeof completedToday === 'function' ? completedToday(base) : completedToday,
-          completedTodayDate: today
+          completedToday: nextCompleted,
+          completedTodayDate: today,
+          slotProgressToday: Array.isArray(nextCompleted) && nextCompleted.length === 0 ? {} : baseProgress
         };
       }),
       resetCycleCarryover: () => set({ cycleCarryoverOffset: 0, lastCarryoverCheckDate: get().getLocalDateStr() }),
@@ -1393,6 +1399,7 @@ export const useStore = create(
         if (state.completedTodayDate !== today) {
           patch.completedToday = [];
           patch.completedTodayDate = today;
+          patch.slotProgressToday = {};
         }
 
         // Carryover automático no modo semanal: se um dia programado não foi estudado, empurra a grade para frente.
@@ -2667,7 +2674,7 @@ export const useStore = create(
         get().registerStudyActivity(targetDateStr);
       },
 
-      watchClass: (subjectId, slotIndex, amountWatched = 1, speed = null, studyDateStr = null) => {
+      watchClass: (subjectId, slotIndex, amountWatched = 1, speed = null, studyDateStr = null, plannedBlockCount = null) => {
         const { subjects, getActiveTopic, addXP, setUserStats, setWeeklySprint, setCoins, setCompletedToday, getLocalDateStr, getStartOfWeek, getTodayDate } = get();
         const activeTopic = getActiveTopic(subjectId);
         if (!activeTopic) return;
@@ -2765,7 +2772,45 @@ export const useStore = create(
           get().registerStudyActivity(targetDateStr);
         }
         if (!isRetroactive && slotIndex !== null && slotIndex !== undefined) {
-          setCompletedToday(prev => !prev.includes(slotIndex) ? [...prev, slotIndex] : prev);
+          const hasMoreLessonsInSubject = topics.some(
+            (t) => (Number(t.completed) || 0) < (Number(t.total) || 0)
+          );
+          const curState = get();
+          const baseProgress = curState.completedTodayDate === todayStr && curState.slotProgressToday
+            ? curState.slotProgressToday
+            : {};
+          const existing = baseProgress[slotIndex];
+          const isMatchingExisting = existing && (!existing.subjectId || existing.subjectId === subjectId);
+          const watchedStep = actualWatched > 0 ? actualWatched : Math.max(1, Math.floor(Number(amountWatched) || 1));
+          const targetCount = isMatchingExisting && Number(existing.target) > 0
+            ? Math.floor(Number(existing.target))
+            : Number(plannedBlockCount) > 0
+              ? Math.floor(Number(plannedBlockCount))
+              : watchedStep;
+          const newWatched = (isMatchingExisting ? Math.max(0, Number(existing.watched) || 0) : 0) + watchedStep;
+          const isBlockFullyCompleted = newWatched >= targetCount || !hasMoreLessonsInSubject;
+
+          if (isBlockFullyCompleted) {
+            setCompletedToday(prev => !prev.includes(slotIndex) ? [...prev, slotIndex] : prev);
+            set((s) => {
+              const nextProgress = { ...(s.completedTodayDate === todayStr ? (s.slotProgressToday || {}) : {}) };
+              delete nextProgress[slotIndex];
+              return { slotProgressToday: nextProgress, completedTodayDate: todayStr };
+            });
+          } else {
+            set((s) => {
+              const nextProgress = {
+                ...(s.completedTodayDate === todayStr ? (s.slotProgressToday || {}) : {}),
+                [slotIndex]: { watched: newWatched, target: targetCount, subjectId }
+              };
+              const baseCompleted = s.completedTodayDate === todayStr ? (s.completedToday || []) : [];
+              return {
+                completedToday: baseCompleted,
+                completedTodayDate: todayStr,
+                slotProgressToday: nextProgress
+              };
+            });
+          }
         }
         get().boostPetWithStudy('class');
       },
@@ -2874,6 +2919,7 @@ export const useStore = create(
           changes.cycleDayNames = [];
           changes.completedToday = [];
           changes.completedTodayDate = null;
+          changes.slotProgressToday = {};
           changes.subjectGoals = {};
           changes.subjectTimeGoal = {};
           changes.calendarOverrides = {};
@@ -2904,6 +2950,7 @@ export const useStore = create(
           changes.subjects = resetSubjects;
           changes.completedToday = [];
           changes.completedTodayDate = null;
+          changes.slotProgressToday = {};
           changes.cycleCarryoverOffset = 0;
           changes.lastCarryoverCheckDate = get().getLocalDateStr();
           summary.push('Aulas Assistidas');
@@ -2918,6 +2965,7 @@ export const useStore = create(
           changes.cycleDayNames = [];
           changes.completedToday = [];
           changes.completedTodayDate = null;
+          changes.slotProgressToday = {};
           changes.calendarOverrides = {};
           changes.calendarOverrideCounts = {};
           changes.futureScheduleRules = [];

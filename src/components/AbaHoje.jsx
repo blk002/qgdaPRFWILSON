@@ -75,6 +75,7 @@ export default function AbaHoje({ onGoToTab }) {
     currentDayIndex = 0,
     completedToday: rawCompletedToday = [],
     completedTodayDate = null,
+    slotProgressToday: rawSlotProgressToday = {},
     todayKey,
     calendarOverrides = {},
     calendarOverrideCounts = {},
@@ -146,6 +147,28 @@ export default function AbaHoje({ onGoToTab }) {
     });
   };
 
+  const clearCheckedLessonsForSlot = (subjectId, slotIndex) => {
+    const prefix = `${subjectId}:${slotIndex}:`;
+    setCheckedLessonsMap((prev) => {
+      let changed = false;
+      const next = {};
+      Object.keys(prev).forEach((k) => {
+        if (k.startsWith(prefix)) {
+          changed = true;
+        } else {
+          next[k] = prev[k];
+        }
+      });
+      if (!changed) return prev;
+      try {
+        localStorage.setItem(`qg_checked_lessons_${todayDateStr || 'today'}`, JSON.stringify(next));
+      } catch {
+        // Ignora erro de quota do localStorage
+      }
+      return next;
+    });
+  };
+
   const caveiraStats = useMemo(() => {
     const list = Array.isArray(caveiraQuestions) ? caveiraQuestions.filter(Boolean) : [];
     const total = list.length;
@@ -183,6 +206,16 @@ export default function AbaHoje({ onGoToTab }) {
   const completedToday = useMemo(
     () => (completedTodayDate === todayDateStr ? rawCompletedToday || [] : []),
     [completedTodayDate, todayDateStr, rawCompletedToday]
+  );
+
+  const slotProgressToday = useMemo(
+    () =>
+      completedTodayDate === todayDateStr &&
+      rawSlotProgressToday &&
+      typeof rawSlotProgressToday === 'object'
+        ? rawSlotProgressToday
+        : {},
+    [completedTodayDate, todayDateStr, rawSlotProgressToday]
   );
 
   // Resolve os blocos programados para hoje respeitando overrides, carryover e regras v2
@@ -325,6 +358,16 @@ export default function AbaHoje({ onGoToTab }) {
         const priorSubjectIncrement = simulatedIncrements[subjectId] || 0;
         const subjectCompletedBefore = subjectCompletedBase + priorSubjectIncrement;
 
+        const slotProgress = slotProgressToday?.[slotIndex];
+        const isValidSlotProgress =
+          !isSlotCompleted &&
+          slotProgress &&
+          (!slotProgress.subjectId || slotProgress.subjectId === subjectId) &&
+          Number(slotProgress.target) > 0;
+        const watchedInSlotToday = isValidSlotProgress ? Math.max(0, Number(slotProgress.watched) || 0) : 0;
+        const targetLessonsInSlot = isValidSlotProgress ? Math.max(1, Number(slotProgress.target) || 1) : 0;
+        const remainingInSlotToday = targetLessonsInSlot > 0 ? Math.max(1, targetLessonsInSlot - watchedInSlotToday) : 0;
+
         if (!isSlotCompleted) {
           let tempIncrement = priorSubjectIncrement;
           const topics = subjectTopics;
@@ -337,8 +380,13 @@ export default function AbaHoje({ onGoToTab }) {
               currentTotal = Number(t.total) || 0;
 
               const customSlotLessons = !isDoubled && !isReplaced ? Math.floor(Number(daySlotCounts?.[slotIndex]) || 0) : 0;
-              const lessonsN = customSlotLessons > 0 ? customSlotLessons : Math.floor(Number(subject.lessonsPerBlock) || 0);
-              goalMin = customSlotLessons > 0 ? 0 : Number(subject.timeGoalMinutes || subjectTimeGoal?.[subjectId]) || 0;
+              const baseLessonsN = customSlotLessons > 0 ? customSlotLessons : Math.floor(Number(subject.lessonsPerBlock) || 0);
+              const lessonsN = remainingInSlotToday > 0 ? remainingInSlotToday : baseLessonsN;
+              goalMin = remainingInSlotToday > 0
+                ? 0
+                : customSlotLessons > 0
+                  ? 0
+                  : Number(subject.timeGoalMinutes || subjectTimeGoal?.[subjectId]) || 0;
 
               if (goalMin > 0 || lessonsN > 0) {
                 const remainingInTopic = currentTotal - currentCompleted;
@@ -381,6 +429,8 @@ export default function AbaHoje({ onGoToTab }) {
           }
         }
 
+        const slotTargetCount = targetLessonsInSlot > 0 ? targetLessonsInSlot : blockCount;
+
         return {
           slotIndex,
           subjectId,
@@ -394,6 +444,8 @@ export default function AbaHoje({ onGoToTab }) {
           subjectCompletedBefore,
           subjectTotalLessons,
           blockCount,
+          watchedInSlotToday,
+          slotTargetCount,
           blockOrigSec,
           blockAccelSec,
           plannedLessons,
@@ -402,7 +454,7 @@ export default function AbaHoje({ onGoToTab }) {
         };
       })
       .filter(Boolean);
-  }, [todaySchedule, subjects, completedToday, subjectTimeGoal]);
+  }, [todaySchedule, subjects, completedToday, slotProgressToday, subjectTimeGoal]);
 
   // Fila de revisões pendentes para hoje (Caveira primeiro para embutir inline na coluna direita)
   const dueReviews = useMemo(() => {
@@ -493,7 +545,16 @@ export default function AbaHoje({ onGoToTab }) {
 
   const openLessonModal = (block, skipPrePrompt) => {
     if (!block?.activeTopic || !setClassConfirmModal) return;
-    const { activeTopic, currentCompleted, plannedLessons, blockCount, goalMin, subjectId, slotIndex } = block;
+    const {
+      activeTopic,
+      currentCompleted,
+      plannedLessons,
+      blockCount,
+      slotTargetCount,
+      goalMin,
+      subjectId,
+      slotIndex
+    } = block;
     const remainingLessons = (activeTopic.lessons || []).slice(currentCompleted, activeTopic.total);
     const checkedInBlock = (plannedLessons || []).filter((les, lIdx) =>
       Boolean(checkedLessonsMap[getLessonCheckKey(block, les, lIdx)])
@@ -513,8 +574,10 @@ export default function AbaHoje({ onGoToTab }) {
       lessonDuration: firstDur,
       allLessonsDurations: remainingLessons.map((l) => l?.duration || '60:00'),
       suggestedClasses: checkedInBlock.length > 0 ? checkedInBlock.length : blockCount,
+      plannedBlockCount: slotTargetCount || (plannedLessons || []).length || blockCount || 1,
       timeGoalMinutes: goalMin || null,
-      skipPrePrompt
+      skipPrePrompt,
+      onConfirmed: () => clearCheckedLessonsForSlot(subjectId, slotIndex)
     });
   };
 
@@ -656,6 +719,14 @@ export default function AbaHoje({ onGoToTab }) {
                               <>
                                 <span className="font-medium text-slate-600 dark:text-slate-300">
                                   {block.isReplaced ? 'Substituída' : 'Dobrada 2x'}
+                                </span>
+                                <span aria-hidden="true">·</span>
+                              </>
+                            )}
+                            {block.watchedInSlotToday > 0 && block.slotTargetCount > 1 && (
+                              <>
+                                <span className="font-mono font-semibold text-emerald-600 dark:text-emerald-400">
+                                  {block.watchedInSlotToday}/{block.slotTargetCount} hoje
                                 </span>
                                 <span aria-hidden="true">·</span>
                               </>

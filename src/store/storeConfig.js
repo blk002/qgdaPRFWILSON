@@ -110,6 +110,7 @@ export const getCleanInitialState = () => ({
   currentDayIndex: 0,
   completedToday: [],
   completedTodayDate: null,
+  slotProgressToday: {},
   targetExamDate: '2026-08-15',
   coins: 250,
   userStats: { xp: 0, medals: [], totalStudyMinutes: 0, avatar: '/assets/gamification/avatar_male.png' },
@@ -219,7 +220,7 @@ export const getCleanInitialState = () => ({
 // export/import e gatilho de auto-save). Mantê-la única evita divergências
 // como a do export de backup, que silenciosamente perdia dados.
 export const PERSISTED_KEYS = [
-  'subjects', 'cycle', 'currentDayIndex', 'completedToday', 'completedTodayDate', 'targetExamDate',
+  'subjects', 'cycle', 'currentDayIndex', 'completedToday', 'completedTodayDate', 'slotProgressToday', 'targetExamDate',
   'coins', 'userStats', 'streakData', 'weeklySprint', 'reviews',
   'reviewStats', 'simulados', 'tafHistory', 'tafTrainingStatus',
   'isDarkMode', 'activeTab',

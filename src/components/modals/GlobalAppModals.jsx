@@ -481,7 +481,17 @@ export default function GlobalAppModals({
         }}
         onClose={() => setClassConfirmModal(null)}
         onConfirm={(amount, speed, studyDate) => {
-          watchClass(classConfirmModal.subjectId, classConfirmModal.slotIndex, amount, speed, studyDate);
+          watchClass(
+            classConfirmModal.subjectId,
+            classConfirmModal.slotIndex,
+            amount,
+            speed,
+            studyDate,
+            classConfirmModal.plannedBlockCount ?? null
+          );
+          if (typeof classConfirmModal.onConfirmed === 'function') {
+            classConfirmModal.onConfirmed();
+          }
           setClassConfirmModal(null);
         }}
       />
