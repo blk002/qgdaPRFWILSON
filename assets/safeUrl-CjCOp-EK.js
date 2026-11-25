@@ -1,1 +1,0 @@
-function e(e,t=``){let n=typeof e==`string`?e.trim():``;if(!n)return t;try{let e=new URL(n);return e.protocol===`https:`||e.protocol===`http:`?e.href:t}catch{return t}}export{e as t};
