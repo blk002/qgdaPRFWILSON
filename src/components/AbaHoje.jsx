@@ -522,7 +522,10 @@ export default function AbaHoje({ onGoToTab }) {
     <div className="fade-in w-full pb-6 space-y-5">
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
         {/* COLUNA ESQUERDA: TEORIA */}
-        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 flex flex-col">
+        <section
+          data-tour="hoje-teoria"
+          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 flex flex-col"
+        >
           <div className="flex flex-wrap items-center justify-between gap-2.5 pb-3.5 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2.5 min-w-0">
               <BookOpen className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
@@ -852,7 +855,10 @@ export default function AbaHoje({ onGoToTab }) {
         </section>
 
         {/* COLUNA DIREITA: REVISÃO */}
-        <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 space-y-4 flex flex-col">
+        <section
+          data-tour="hoje-revisoes"
+          className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-xl p-4 sm:p-5 space-y-4 flex flex-col"
+        >
           <div className="flex items-center justify-between gap-2 pb-3.5 border-b border-slate-100 dark:border-slate-800">
             <div className="flex items-center gap-2.5 min-w-0">
               <BrainCircuit className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />

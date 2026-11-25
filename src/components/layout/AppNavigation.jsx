@@ -4,11 +4,12 @@ import { AnimatePresence, motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   Library, Award, BrainCircuit, BarChart2, BookOpen, Dumbbell, Crosshair,
-  Dog, Store, Settings, Shield, RefreshCw, Clock,
+  Dog, Store, Settings, Shield, RefreshCw, Clock, HelpCircle,
   Coins, Sun, Moon, LogOut, LayoutGrid, X, ChevronDown, Target, Sparkles
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import RankBadge from '../RankBadge';
+import { startInteractiveTour } from '../../lib/interactiveTour';
 import { APP_VERSION } from '../../version';
 
 const MOBILE_SECONDARY_IDS = new Set(['/estatisticas', '/taf', '/duelo', '/pet', '/loja', '/config']);
@@ -204,6 +205,7 @@ export default function AppNavigation({
                     <NavLink
                       key={tab.id}
                       to={tab.id}
+                      data-tour={tab.id === '/estudos' ? 'nav-estudos' : undefined}
                       onClick={() => setOpenDropdown(null)}
                       className={({ isActive }) =>
                         `relative h-9 px-3 rounded-lg flex items-center gap-2 text-sm font-medium whitespace-nowrap transition-colors duration-150 cursor-pointer ${
@@ -232,6 +234,7 @@ export default function AppNavigation({
                   <div key={group.key} className="relative">
                     <button
                       type="button"
+                      data-tour={`nav-${group.key}`}
                       onClick={() => setOpenDropdown((prev) => (prev === group.key ? null : group.key))}
                       aria-expanded={isDropdownOpen}
                       aria-haspopup="menu"
@@ -319,6 +322,7 @@ export default function AppNavigation({
           {/* Progresso do Edital integrado no menu superior */}
           <Link
             to="/edital"
+            data-tour="nav-edital-progress"
             onClick={() => setOpenDropdown(null)}
             title={`Edital: ${completionPct}% · ${completedLessons}/${totalLessons} aulas · ${subjectsList.length} ${subjectsList.length === 1 ? 'disciplina' : 'disciplinas'}${estimatedDate?.short ? ` · Previsão: ${estimatedDate.short}` : ''}`}
             className="hidden md:flex flex-col justify-center ml-auto flex-1 min-w-0 max-w-[225px] h-9 px-3 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-850/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors gap-1 overflow-hidden"
@@ -359,10 +363,11 @@ export default function AppNavigation({
             </div>
           </Link>
 
-          {/* Direita: Patente, Moedas, Atualização, Tema, Sair e Ajustes */}
+          {/* Direita: Patente, Moedas, Tutorial, Atualização, Tema, Sair e Ajustes */}
           <div className="flex items-center gap-1.5 shrink-0">
             <Link
               to="/carreira"
+              data-tour="nav-rank-coins"
               onClick={() => setOpenDropdown(null)}
               title={`${currentPatente.name} · ${(userStats?.xp || 0).toLocaleString()} XP · ${coins} moedas`}
               className="h-9 px-2.5 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-850/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors flex items-center gap-2.5"
@@ -385,6 +390,19 @@ export default function AppNavigation({
                 <span className="font-mono font-semibold text-xs tabular-nums">{coins}</span>
               </div>
             </Link>
+
+            <button
+              type="button"
+              onClick={() => {
+                setOpenDropdown(null);
+                startInteractiveTour();
+              }}
+              title="Iniciar tutorial interativo passo a passo"
+              aria-label="Iniciar tutorial interativo"
+              className="w-9 h-9 rounded-lg flex items-center justify-center text-slate-500 dark:text-slate-400 hover:text-sky-600 dark:hover:text-sky-400 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            >
+              <HelpCircle className="w-4 h-4" />
+            </button>
 
             <button
               type="button"
@@ -419,6 +437,7 @@ export default function AppNavigation({
 
             <NavLink
               to="/config"
+              data-tour="nav-ajustes"
               onClick={() => setOpenDropdown(null)}
               className={({ isActive }) =>
                 `h-9 px-3 rounded-lg flex items-center gap-2 text-sm font-medium whitespace-nowrap transition-colors duration-150 cursor-pointer ${
@@ -481,6 +500,7 @@ export default function AppNavigation({
             <NavLink
               key={tab.id}
               to={tab.id}
+              data-tour={`mobile-${tab.id.replace('/', '')}`}
               onClick={() => setIsMobileMenuOpen(false)}
               className={({ isActive }) =>
                 `relative flex flex-col items-center justify-center h-full gap-1 transition-colors ${
@@ -589,7 +609,18 @@ export default function AppNavigation({
                   ))}
               </div>
 
-              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+              <div className="pt-3 border-t border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2 flex-wrap">
+                <button
+                  type="button"
+                  onClick={() => {
+                    setIsMobileMenuOpen(false);
+                    startInteractiveTour();
+                  }}
+                  className="h-10 px-3 rounded-lg text-xs font-semibold text-sky-600 dark:text-sky-400 hover:bg-sky-500/10 inline-flex items-center gap-1.5 cursor-pointer"
+                >
+                  <HelpCircle className="w-4 h-4" />
+                  <span>Tutorial</span>
+                </button>
                 <button
                   type="button"
                   onClick={handleForceCacheRefresh}

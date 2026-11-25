@@ -1,11 +1,11 @@
-import React, { useState, useMemo, Suspense } from 'react';
+import React, { useMemo, Suspense } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { useStore } from '../store/useStore';
-import CentralEstudosTutorialModal from '../components/CentralEstudosTutorialModal';
+import { startInteractiveTour } from '../lib/interactiveTour';
 import AbaHoje from '../components/AbaHoje';
 import {
   Zap, Repeat, Calendar as CalendarIcon, CalendarClock,
-  Settings, Info, Skull, Clock, Target, FileText
+  Settings, HelpCircle, Skull, Clock, Target, FileText
 } from 'lucide-react';
 
 const Ciclo = React.lazy(() => import('./Ciclo'));
@@ -32,8 +32,6 @@ export default function CentralEstudos() {
   const [searchParams, setSearchParams] = useSearchParams();
   const rawTab = searchParams.get('tab');
   const activeTab = VALID_TABS.has(rawTab) ? rawTab : 'hoje';
-
-  const [tutorialModalState, setTutorialModalState] = useState({ isOpen: false, step: 0 });
 
   const {
     subjects = {},
@@ -62,35 +60,8 @@ export default function CentralEstudos() {
   const examDateConfigured = Boolean(targetExamDate && targetExamDate !== '2026-08-15');
   const currentTabMeta = TAB_CONFIG.find(t => t.id === activeTab) || TAB_CONFIG[0];
 
-  const handleOpenTutorial = (step = 0) => {
-    setTutorialModalState({ isOpen: true, step });
-  };
-
-  const handleCloseTutorial = () => {
-    setTutorialModalState(prev => ({ ...prev, isOpen: false }));
-  };
-
   const handleTabChange = (tabId) => {
     setSearchParams({ tab: tabId });
-  };
-
-  const handleTutorialGoToTab = (tabId) => {
-    handleCloseTutorial();
-    if (tabId === 'revisoes') {
-      navigate('/revisoes');
-      return;
-    }
-    if (tabId === 'historico') {
-      navigate('/estatisticas');
-      return;
-    }
-    if (tabId === 'edital') {
-      navigate('/edital');
-      return;
-    }
-    if (VALID_TABS.has(tabId)) {
-      setSearchParams({ tab: tabId });
-    }
   };
 
   return (
@@ -153,14 +124,15 @@ export default function CentralEstudos() {
         <div className="order-2 lg:order-3 flex items-center gap-2 shrink-0">
           <button
             type="button"
-            onClick={() => handleOpenTutorial(currentTabMeta.tutorialStep)}
+            onClick={() => startInteractiveTour()}
             className="h-9 px-3 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-850 inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0"
           >
-            <Info className="w-4 h-4" />
-            <span>Ajuda</span>
+            <HelpCircle className="w-4 h-4" />
+            <span>Tutorial</span>
           </button>
           <button
             type="button"
+            data-tour="central-ajustar-edital"
             onClick={() => navigate('/config')}
             className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0"
           >
@@ -171,7 +143,10 @@ export default function CentralEstudos() {
       </div>
 
       {/* Abas Horizontais Limpas */}
-      <div className="border-b border-slate-200 dark:border-slate-800 overflow-x-auto no-scrollbar">
+      <div
+        data-tour="central-tabs"
+        className="border-b border-slate-200 dark:border-slate-800 overflow-x-auto no-scrollbar"
+      >
         <div className="flex items-center gap-1 sm:gap-2 min-w-max">
           {TAB_CONFIG.map((tabItem) => {
             const TabIcon = tabItem.icon;
@@ -180,6 +155,7 @@ export default function CentralEstudos() {
               <button
                 key={tabItem.id}
                 type="button"
+                data-tour={`tab-${tabItem.id}`}
                 onClick={() => handleTabChange(tabItem.id)}
                 className={`flex items-center gap-2 px-3.5 pb-2.5 pt-1 border-b-2 text-sm font-semibold transition-colors cursor-pointer whitespace-nowrap shrink-0 ${
                   isActive
@@ -221,14 +197,6 @@ export default function CentralEstudos() {
           </Suspense>
         )}
       </div>
-
-      {/* Modal de Tutorial Interativo */}
-      <CentralEstudosTutorialModal
-        isOpen={tutorialModalState.isOpen}
-        initialStep={tutorialModalState.step}
-        onClose={handleCloseTutorial}
-        onGoToTab={handleTutorialGoToTab}
-      />
     </div>
   );
 }

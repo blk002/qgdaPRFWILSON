@@ -15,6 +15,7 @@ import TacticalCountdownBanner from './components/TacticalCountdownBanner';
 import AppNavigation from './components/layout/AppNavigation';
 import SyncStatusBanner from './components/layout/SyncStatusBanner';
 import GlobalAppModals from './components/modals/GlobalAppModals';
+import InteractiveSpotlightTour from './components/InteractiveSpotlightTour';
 import { useConfetti } from './hooks/useConfetti';
 import { useExtensionBridge } from './hooks/useExtensionBridge';
 import { PATENTES } from './hooks/useGamification';
@@ -323,6 +324,8 @@ export default function App() {
         promotionModal={promotionModal}
         setPromotionModal={setPromotionModal}
       />
+
+      <InteractiveSpotlightTour />
     </div>
   );
 }
