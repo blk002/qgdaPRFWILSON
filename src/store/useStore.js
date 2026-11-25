@@ -4396,8 +4396,10 @@ export const useStore = create(
                   curHasSpecificVideo && curCourseId && incomingCourseId && curCourseId !== incomingCourseId
                 );
                 if (!belongsToAnotherCourse) {
-                  const incHasSpecificVideo = Boolean(les.url && String(les.url).includes('course_video_id='));
-                  const resolvedUrl = (!curHasSpecificVideo || incHasSpecificVideo) ? (les.url || cur.caveiraUrl) : cur.caveiraUrl;
+                  const incHasVerifiedVideo = Boolean(les.verifiedVideoUrl && les.url && String(les.url).includes('course_video_id='));
+                  const resolvedUrl = (!curHasSpecificVideo || incHasVerifiedVideo || (les.url && curHasSpecificVideo))
+                    ? (les.url || cur.caveiraUrl)
+                    : cur.caveiraUrl;
                   bestTopic.lessons[bestIdx] = {
                     ...cur,
                     ...(resolvedUrl ? { caveiraUrl: resolvedUrl } : {}),

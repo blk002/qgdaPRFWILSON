@@ -71,10 +71,29 @@ export function extractLessonPartTag(txt) {
   return '';
 }
 
+const stemPtToken = (w) => {
+  if (!w || w.length < 5) return w;
+  if (/(?:oes|aes|aos)$/.test(w)) return `${w.slice(0, -3)}ao`;
+  if (w.endsWith('s') && !/(?:ss|us|is)$/.test(w)) return w.slice(0, -1);
+  return w;
+};
+
+export function canonicalizeLessonPhrase(txt) {
+  const stripped = stripLessonLeadingPrefix(txt)
+    .replace(/\b0+(\d+)\b/g, '$1')
+    .trim();
+  if (!stripped) return '';
+  return stripped
+    .split(' ')
+    .filter(Boolean)
+    .map(stemPtToken)
+    .join(' ');
+}
+
 const tokenizeLessonTitle = (txt) =>
   String(txt || '')
     .split(' ')
-    .map((w) => (/^\d+$/.test(w) ? String(Number(w)) : w))
+    .map((w) => (/^\d+$/.test(w) ? String(Number(w)) : stemPtToken(w)))
     .filter((w) => w.length >= 3 || /^\d+$/.test(w));
 
 export function scoreLessonTitleMatch(existingName, incomingTitle) {
@@ -88,8 +107,8 @@ export function scoreLessonTitleMatch(existingName, incomingTitle) {
 
   if (en === normTitle) return 100;
 
-  const es = stripLessonLeadingPrefix(existingName);
-  const strippedTitle = stripLessonLeadingPrefix(incomingTitle);
+  const es = canonicalizeLessonPhrase(existingName);
+  const strippedTitle = canonicalizeLessonPhrase(incomingTitle);
   if (strippedTitle && es && es === strippedTitle) return 95;
 
   const subMatch =
@@ -268,11 +287,6 @@ export function resolveCaveiraLessonHref({
 
   const safeBaseUrl = getSafeExternalUrl(chosenUrl, 'https://app.caveira.com/courses');
   const cleanBase = safeBaseUrl.split('#')[0];
-
-  // If we already have an exact video URL, do not append #qg_lesson= so the extension won't hijack it
-  if (extractVideoIdFromUrl(cleanBase)) {
-    return cleanBase;
-  }
 
   if (!lessonName) {
     return cleanBase;

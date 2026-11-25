@@ -1078,7 +1078,7 @@ ${EXTRA_SHADOW_CSS}`;
     }
     function isCourseCatalogPage() {
       try {
-        return /\/courses\/\d+/i.test(window.location.pathname);
+        return /\/courses(?:\/|$)/i.test(window.location.pathname);
       } catch (_) {
         return false;
       }
@@ -2060,14 +2060,19 @@ ${EXTRA_SHADOW_CSS}`;
       const lessons = [];
       const seenLessonKeys = /* @__PURE__ */ new Set();
       if (isCoursePlaygroundPage()) {
-        const currentTitle = extractCourseLessonTitle() || currentCourseIndexStatus?.lessonTitle || (document.querySelector("h1, h2, .text-h6")?.innerText || "").trim();
+        const currentTitle = extractPlayingVideoTitleFromHeader() || extractCourseLessonTitle() || currentCourseIndexStatus?.lessonTitle || "";
         const curVidMatch = window.location.search.match(/course_video_id=(\d+)/i);
-        if (currentTitle && currentTitle.length >= 3) {
+        const sidebarMatchesCurrent = currentTitle && lessonLinks.some((el) => {
+          const txt = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+          return txt && txt.length <= 220 && scoreCaveiraLessonCandidate(txt, currentTitle) >= 75;
+        });
+        if (currentTitle && currentTitle.length >= 3 && sidebarMatchesCurrent) {
           const curVid = curVidMatch?.[1] || "";
           const kCur = curVid ? `vid:${curVid}` : normalizeCourseIndexKey(currentTitle);
           seenLessonKeys.add(kCur);
           lessons.push({
             id: curVid || null,
+            verifiedVideoUrl: Boolean(curVid),
             title: currentTitle,
             durationMin: 0,
             completed: detectCurrentPlaygroundLessonCompleted(),
@@ -2118,8 +2123,8 @@ ${EXTRA_SHADOW_CSS}`;
         const completed = Boolean(
           el.querySelector('.q-checkbox[aria-checked="true"], input[type="checkbox"]:checked') || Array.from(el.querySelectorAll(".material-icons, i")).some((i) => /check_circle|task_alt|done/i.test(i.textContent || ""))
         );
-        const url = href ? href.startsWith("http") ? href : `${window.location.origin}${href.startsWith("/") ? "" : "/"}${href}` : isCoursePlaygroundPage() ? window.location.href : defaultModuleUrl;
-        lessons.push({ id: videoId || null, title, durationMin, completed, url });
+        const url = href ? href.startsWith("http") ? href : `${window.location.origin}${href.startsWith("/") ? "" : "/"}${href}` : defaultModuleUrl;
+        lessons.push({ id: videoId || null, verifiedVideoUrl: Boolean(videoId), title, durationMin, completed, url });
       });
       const apiMatchesCourse = !courseId || !apiCourseCatalogCache?.courseId || String(apiCourseCatalogCache.courseId) === String(courseId);
       const apiMods = apiMatchesCourse && Array.isArray(apiCourseCatalogCache?.modules) ? apiCourseCatalogCache.modules : [];
@@ -2181,6 +2186,18 @@ ${EXTRA_SHADOW_CSS}`;
       const mEndRom = stripped.match(/\b(viii|vii|vi|iv|v|iii|ii|i)$/);
       return mEndRom && romanMap[mEndRom[1]] ? romanMap[mEndRom[1]] : "";
     }
+    function stemPtToken(w) {
+      if (!w || w.length < 5) return w;
+      if (/(?:oes|aes|aos)$/.test(w)) return `${w.slice(0, -3)}ao`;
+      if (w.endsWith("s") && !/(?:ss|us|is)$/.test(w)) return w.slice(0, -1);
+      return w;
+    }
+    function canonicalizeLessonText(txt) {
+      const cleaned = String(txt || "").replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, " ").replace(/\b(?:assistir|conclu[íi]da|play_arrow|play_circle|ondemand_video|smart_display|check_circle|check_box|done)\b/gi, " ");
+      const norm = normalizeCourseIndexKey(cleaned).replace(/^\s*(?:aula|bloco|parte|m[oó]dulo)\s*\d+\s*[-–—:|.]*\s*/i, "").replace(/^\s*\d{1,3}\s*[-–—:|.]+\s*/, "").replace(/\b0+(\d+)\b/g, "$1").trim();
+      if (!norm) return "";
+      return norm.split(" ").filter(Boolean).map(stemPtToken).join(" ");
+    }
     function scoreCaveiraLessonCandidate(candidateText, targetLesson) {
       const cleanCand = normalizeCourseIndexKey(candidateText || "");
       const cleanTarget = normalizeCourseIndexKey(targetLesson || "");
@@ -2189,30 +2206,36 @@ ${EXTRA_SHADOW_CSS}`;
       const partTgt = extractLessonPartNum(targetLesson);
       if (partCand !== partTgt) return 0;
       if (cleanCand === cleanTarget) return 100;
-      const stripPref = (s) => s.replace(/^\s*(?:aula|bloco|parte|m[oó]dulo)\s*\d+\s*[-–—:|.]*\s*/i, "").replace(/^\s*\d{1,3}\s*[-–—:|.]+\s*/, "").trim();
-      const sc = stripPref(cleanCand);
-      const st = stripPref(cleanTarget);
-      if (sc && st && sc === st) return 90;
-      if (st && sc.includes(st) || sc && st.includes(sc)) {
-        return 75;
+      const canonCand = canonicalizeLessonText(candidateText);
+      const canonTarget = canonicalizeLessonText(targetLesson);
+      if (canonCand && canonTarget && canonCand === canonTarget) return 95;
+      if (canonTarget && canonCand.includes(canonTarget) || canonCand && canonTarget.includes(canonCand)) {
+        return 80;
       }
-      const tok = (s) => s.split(" ").map((w) => /^\d+$/.test(w) ? String(Number(w)) : w).filter((w) => w.length >= 3 || /^\d+$/.test(w));
-      const tTgt = tok(st || cleanTarget);
-      const tCand = new Set(tok(sc || cleanCand));
+      const tok = (s) => s.split(" ").filter((w) => w.length >= 3 || /^\d+$/.test(w));
+      const tTgt = tok(canonTarget || cleanTarget);
+      const tCand = new Set(tok(canonCand || cleanCand));
       if (tTgt.length === 0 || tCand.size === 0) return 0;
       const hits = tTgt.filter((w) => tCand.has(w)).length;
       const ratio = hits / Math.max(tTgt.length, tCand.size);
-      return ratio >= 0.65 ? Math.round(ratio * 70) : 0;
+      return ratio >= 0.65 ? Math.round(ratio * 75) : 0;
+    }
+    function extractPlayingVideoTitleFromHeader() {
+      try {
+        const headerCandidates = Array.from(document.querySelectorAll("header, .q-toolbar, .q-header, h1, h2, .text-subtitle1, .text-h6")).filter((el) => !el.closest("#qg-caveira-shadow-host, #qg-caveira-hud") && isElementVisible(el));
+        for (const el of headerCandidates) {
+          const txt = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+          if (txt.includes("|") && txt.length <= 220) {
+            const right = txt.split("|").slice(1).join("|").trim();
+            if (right.length >= 4) return right;
+          }
+        }
+      } catch (_) {
+      }
+      return "";
     }
     function autoOpenTargetLessonFromHash() {
       if (!isCourseCatalogPage()) return;
-      if (/course_video_id=\d+/i.test(window.location.search || "")) {
-        try {
-          sessionStorage.removeItem("qg_target_lesson_pending");
-        } catch (_) {
-        }
-        return;
-      }
       let targetLesson = "";
       let targetSubject = "";
       let targetTopic = "";
@@ -2321,53 +2344,15 @@ ${EXTRA_SHADOW_CSS}`;
           return;
         }
         if (isCoursePlaygroundPage()) {
-          const curPlayTitle = extractCourseLessonTitle() || currentCourseIndexStatus?.lessonTitle || "";
-          if (scoreCaveiraLessonCandidate(curPlayTitle, targetLesson) >= 70) {
+          const curPlayTitle = extractPlayingVideoTitleFromHeader() || extractCourseLessonTitle() || currentCourseIndexStatus?.lessonTitle || "";
+          if (curPlayTitle && scoreCaveiraLessonCandidate(curPlayTitle, targetLesson) >= 75) {
             clearTargetPending();
             return;
           }
         }
-        const currentCourseId = currentCourseIdMatch[1];
-        const apiSameCourse = !apiCourseCatalogCache?.courseId || String(apiCourseCatalogCache.courseId) === String(currentCourseId);
-        const apiMods = apiSameCourse && Array.isArray(apiCourseCatalogCache?.modules) ? apiCourseCatalogCache.modules : [];
-        let bestApiLesson = null;
-        let bestApiScore = 0;
-        apiMods.forEach((m) => {
-          (m?.lessons || []).forEach((l) => {
-            if (!l?.title || !l?.url || !String(l.url).includes("course_video_id=")) return;
-            const sc = scoreCaveiraLessonCandidate(l.title, targetLesson);
-            if (sc > bestApiScore) {
-              bestApiScore = sc;
-              bestApiLesson = l;
-            }
-          });
-        });
-        if (bestApiLesson && bestApiScore >= 70) {
-          const currentNoHash = window.location.href.split("#")[0];
-          let seekSec = 0;
-          try {
-            seekSec = Math.max(0, Number(new URLSearchParams(window.location.search || "").get("t")) || 0);
-          } catch (_) {
-          }
-          let targetUrl = bestApiLesson.url;
-          if (seekSec > 0) {
-            try {
-              const u = new URL(targetUrl);
-              u.searchParams.set("t", String(seekSec));
-              targetUrl = u.toString();
-            } catch (_) {
-              targetUrl = `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}t=${seekSec}`;
-            }
-          }
-          clearTargetPending();
-          if (targetUrl !== currentNoHash) {
-            window.location.href = targetUrl;
-          }
-          return;
-        }
         const candidateEls = Array.from(
           document.querySelectorAll('a[href*="course_video_id"], [data-course-video-id], .q-item, [class*="lesson"], [class*="video"]')
-        ).filter((el) => !el.closest("#qg-caveira-shadow-host, #qg-caveira-hud") && isElementVisible(el));
+        ).filter((el) => !el.closest("#qg-caveira-shadow-host, #qg-caveira-hud, header, .q-header, .q-toolbar") && isElementVisible(el));
         let bestDomEl = null;
         let bestDomScore = 0;
         candidateEls.forEach((el) => {
@@ -2379,7 +2364,7 @@ ${EXTRA_SHADOW_CSS}`;
             bestDomEl = el;
           }
         });
-        if (bestDomEl && bestDomScore >= 70) {
+        if (bestDomEl && bestDomScore >= 75) {
           let seekSec = 0;
           try {
             seekSec = Math.max(0, Number(new URLSearchParams(window.location.search || "").get("t")) || 0);
@@ -2407,6 +2392,55 @@ ${EXTRA_SHADOW_CSS}`;
           } catch (_) {
           }
           return;
+        }
+        if (isCoursePlaygroundPage() && attempts <= 4) {
+          const showListBtn = Array.from(document.querySelectorAll("button, .q-btn, span, div")).find((el) => !el.closest("#qg-caveira-shadow-host, #qg-caveira-hud") && isElementVisible(el) && /mostrar\s+lista/i.test(el.innerText || el.textContent || ""));
+          if (showListBtn) {
+            try {
+              showListBtn.click();
+            } catch (_) {
+            }
+          }
+        }
+        const currentCourseId = currentCourseIdMatch[1];
+        const apiSameCourse = !apiCourseCatalogCache?.courseId || String(apiCourseCatalogCache.courseId) === String(currentCourseId);
+        if ((!isCoursePlaygroundPage() || attempts >= 8) && apiSameCourse) {
+          const apiMods = Array.isArray(apiCourseCatalogCache?.modules) ? apiCourseCatalogCache.modules : [];
+          let bestApiLesson = null;
+          let bestApiScore = 0;
+          apiMods.forEach((m) => {
+            (m?.lessons || []).forEach((l) => {
+              if (!l?.title || !l?.url || !l?.verifiedVideoUrl || !String(l.url).includes("course_video_id=")) return;
+              const sc = scoreCaveiraLessonCandidate(l.title, targetLesson);
+              if (sc > bestApiScore) {
+                bestApiScore = sc;
+                bestApiLesson = l;
+              }
+            });
+          });
+          if (bestApiLesson && bestApiScore >= 75) {
+            const currentNoHash = window.location.href.split("#")[0];
+            let seekSec = 0;
+            try {
+              seekSec = Math.max(0, Number(new URLSearchParams(window.location.search || "").get("t")) || 0);
+            } catch (_) {
+            }
+            let targetUrl = bestApiLesson.url;
+            if (seekSec > 0) {
+              try {
+                const u = new URL(targetUrl);
+                u.searchParams.set("t", String(seekSec));
+                targetUrl = u.toString();
+              } catch (_) {
+                targetUrl = `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}t=${seekSec}`;
+              }
+            }
+            clearTargetPending();
+            if (targetUrl !== currentNoHash) {
+              window.location.href = targetUrl;
+            }
+            return;
+          }
         }
         const expansionHeaders = Array.from(document.querySelectorAll(".q-expansion-item")).filter((el) => !el.closest("#qg-caveira-shadow-host, #qg-caveira-hud") && isElementVisible(el));
         expansionHeaders.forEach((expEl) => {

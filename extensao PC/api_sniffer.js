@@ -321,26 +321,42 @@
           (!Array.isArray(root) ? root.course_id || root.course?.id || (Array.isArray(root.modules) || Array.isArray(root.course_modules) ? root.id : "") : "") || courseIdMatch?.[1] || ""
         );
         const courseName = String((!Array.isArray(root) ? root.course?.name || root.course?.title || root.name || root.title : "") || "Curso Caveira").trim();
+        const currentUrlVideoId = (() => {
+          try {
+            return new URLSearchParams(window.location.search || "").get("course_video_id") || "";
+          } catch (_) {
+            return "";
+          }
+        })();
         const parsedModules = modulesArr.map((mod) => {
           const modName = String(mod?.name || mod?.title || "").trim();
           if (!modName) return null;
           const modId = mod?.id ? String(mod.id) : modIdFromUrl;
           const moduleUrl = courseId && modId && modId !== "0" ? `${window.location.origin}/courses/${courseId}/modules/${modId}/playground` : courseId ? `${window.location.origin}/courses/${courseId}` : "";
+          const rawItems = [
+            ...mod.videos || mod.course_videos || mod.lessons || mod.contents || mod.items || mod.course_module_videos || [],
+            ...(mod.topics || mod.submodules || []).flatMap((tp) => tp?.videos || tp?.course_videos || tp?.lessons || tp?.contents || [])
+          ].filter((v) => v && typeof v === "object");
+          const idMatchesCurrentUrl = Boolean(
+            currentUrlVideoId && rawItems.some((v) => String(v.id || "") === currentUrlVideoId && String(v.video_id || "") !== currentUrlVideoId)
+          );
           const rawLessons = [];
           const seenVids = /* @__PURE__ */ new Set();
           const pushLesson = (v) => {
             if (!v || typeof v !== "object") return;
-            const vid = String(v.course_video_id || v.video_id || v.id || "");
+            const verifiedVid = v.course_video_id ? String(v.course_video_id) : idMatchesCurrentUrl && v.id ? String(v.id) : "";
             const title = String(v.title || v.name || v.label || "").trim();
             if (!title) return;
-            const dedup = vid ? `id:${vid}` : `t:${title.toLowerCase()}`;
+            const dedup = verifiedVid ? `id:${verifiedVid}` : `t:${title.toLowerCase()}`;
             if (seenVids.has(dedup)) return;
             seenVids.add(dedup);
-            const urlPath = courseId && vid ? `${window.location.origin}/courses/${courseId}/modules/${modId || "0"}/playground?course_video_id=${vid}` : moduleUrl;
+            const hasVerifiedUrl = Boolean(courseId && verifiedVid);
+            const urlPath = hasVerifiedUrl ? `${window.location.origin}/courses/${courseId}/modules/${modId || "0"}/playground?course_video_id=${verifiedVid}` : moduleUrl;
             const rawDesc = typeof v.description === "string" ? v.description.trim() : "";
             const hasTimestampIndex = /\[\d{1,2}:\d{2}(?::\d{2})?\]/.test(rawDesc);
             rawLessons.push({
-              id: vid || null,
+              id: verifiedVid || null,
+              verifiedVideoUrl: hasVerifiedUrl,
               title,
               durationMin: normalizeDurationMin(v.duration || v.duration_seconds || v.duration_minutes || v.time || v.length),
               completed: Boolean(v.completed || v.is_completed || v.watched || v.concluded || v.finished),
@@ -348,10 +364,7 @@
               ...hasTimestampIndex ? { rawIndexText: rawDesc.slice(0, 4e3) } : {}
             });
           };
-          (mod.videos || mod.course_videos || mod.lessons || mod.contents || mod.items || mod.course_module_videos || []).forEach(pushLesson);
-          (mod.topics || mod.submodules || []).forEach((tp) => {
-            (tp?.videos || tp?.course_videos || tp?.lessons || tp?.contents || []).forEach(pushLesson);
-          });
+          rawItems.forEach(pushLesson);
           if (rawLessons.length === 0 && !/\/courses\/\d+/i.test(urlStr)) return null;
           return { id: modId || null, name: modName, moduleUrl, lessons: rawLessons };
         }).filter(Boolean);
