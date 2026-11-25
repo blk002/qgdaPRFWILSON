@@ -9,7 +9,7 @@ import {
   calculateLessonsForGoal
 } from '../lib/durationHelpers';
 import { getSubjectTextColorClass, getSubjectAccentBorderClass } from '../lib/subjectColors';
-import { getSafeExternalUrl } from '../lib/safeUrl';
+import { resolveCaveiraLessonHref } from '../lib/caveiraLessonLinks';
 import {
   BookOpen,
   AlertTriangle,
@@ -49,19 +49,6 @@ const isSubjectFullyDone = (sub) => {
   const topics = sub?.topics || [];
   if (topics.length === 0 || !topics.some((t) => (Number(t.total) || 0) > 0)) return false;
   return topics.every((t) => (Number(t.completed) || 0) >= (Number(t.total) || 0));
-};
-
-const normalizeLessonTitleKey = (str) =>
-  String(str || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-
-const extractCourseIdFromUrl = (url) => {
-  const match = String(url || '').match(/\/courses\/(\d+)/i);
-  return match ? match[1] : '';
 };
 
 export default function AbaHoje({ onGoToTab }) {
@@ -493,56 +480,6 @@ export default function AbaHoje({ onGoToTab }) {
     [theoryBlocks]
   );
 
-  // Mapa de URLs das aulas capturadas + fallback inteligente de curso no Caveira
-  const { courseIndexUrlByTitle, fallbackCaveiraCourseBaseUrl } = useMemo(() => {
-    const byTitle = new Map();
-    let inferredCourseId = '';
-
-    Object.values(caveiraCourseIndexMap || {}).forEach((entry) => {
-      if (!entry || !entry.url) return;
-      const key = normalizeLessonTitleKey(entry.title || entry.lessonTitle || '');
-      if (key && !byTitle.has(key)) {
-        byTitle.set(key, entry.url);
-      }
-      if (!inferredCourseId) {
-        inferredCourseId = extractCourseIdFromUrl(entry.url);
-      }
-    });
-
-    if (!inferredCourseId) {
-      for (const sub of Object.values(subjects || {})) {
-        if (!sub) continue;
-        if (sub.caveiraCourseId) {
-          inferredCourseId = String(sub.caveiraCourseId);
-          break;
-        }
-        const fromMod = extractCourseIdFromUrl(sub.caveiraModuleUrl);
-        if (fromMod) {
-          inferredCourseId = fromMod;
-          break;
-        }
-        for (const tp of sub.topics || []) {
-          for (const ls of tp?.lessons || []) {
-            const fromLes = extractCourseIdFromUrl(ls?.caveiraUrl || ls?.url);
-            if (fromLes) {
-              inferredCourseId = fromLes;
-              break;
-            }
-          }
-          if (inferredCourseId) break;
-        }
-        if (inferredCourseId) break;
-      }
-    }
-
-    return {
-      courseIndexUrlByTitle: byTitle,
-      fallbackCaveiraCourseBaseUrl: inferredCourseId
-        ? `https://app.caveira.com/courses/${inferredCourseId}`
-        : 'https://app.caveira.com/courses'
-    };
-  }, [caveiraCourseIndexMap, subjects]);
-
   const openLessonModal = (block, skipPrePrompt) => {
     if (!block?.activeTopic || !setClassConfirmModal) return;
     const {
@@ -785,20 +722,13 @@ export default function AbaHoje({ onGoToTab }) {
                               const clockLabel = accelSec > 0 ? formatSecondsToClock(accelSec) : les.durStr || '';
 
                               const lessonEntry = block.activeTopic?.lessons?.[les.index ?? lIdx];
-                              const indexedUrl = courseIndexUrlByTitle.get(normalizeLessonTitleKey(les.name)) || '';
-                              const rawDirectUrl =
-                                lessonEntry?.caveiraUrl ||
-                                lessonEntry?.url ||
-                                indexedUrl ||
-                                block.subject?.caveiraModuleUrl ||
-                                (block.subject?.caveiraCourseId ? `https://app.caveira.com/courses/${block.subject.caveiraCourseId}` : '') ||
-                                fallbackCaveiraCourseBaseUrl;
-
-                              const safeBaseUrl = getSafeExternalUrl(rawDirectUrl, 'https://app.caveira.com/courses');
-                              const cleanBase = safeBaseUrl.split('#')[0];
-                              const directUrl = les.name
-                                ? `${cleanBase}#qg_lesson=${encodeURIComponent(les.name)}${block.subject?.name ? `&qg_subject=${encodeURIComponent(block.subject.name)}` : ''}`
-                                : cleanBase;
+                              const directUrl = resolveCaveiraLessonHref({
+                                lessonEntry,
+                                lessonName: les.name,
+                                topic: block.activeTopic,
+                                subject: block.subject,
+                                caveiraCourseIndexMap,
+                              });
 
                               return (
                                 <div

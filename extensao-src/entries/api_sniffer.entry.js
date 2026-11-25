@@ -371,7 +371,7 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       const courseId = String(
         (!Array.isArray(root) ? (root.course_id || root.course?.id || (Array.isArray(root.modules) || Array.isArray(root.course_modules) ? root.id : '')) : '') ||
         courseIdMatch?.[1] ||
-        '12'
+        ''
       );
       const courseName = String((!Array.isArray(root) ? (root.course?.name || root.course?.title || root.name || root.title) : '') || 'Curso Caveira').trim();
       const parsedModules = modulesArr.map((mod) => {

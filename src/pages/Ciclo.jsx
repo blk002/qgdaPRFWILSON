@@ -28,20 +28,7 @@ import {
   calculateLessonsForGoal
 } from '../lib/durationHelpers';
 import { getSubjectTextColorClass, getSubjectAccentBorderClass } from '../lib/subjectColors';
-import { getSafeExternalUrl } from '../lib/safeUrl';
-
-const normalizeLessonTitleKey = (str) =>
-  String(str || '')
-    .normalize('NFD')
-    .replace(/[\u0300-\u036f]/g, '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .trim();
-
-const extractCourseIdFromUrl = (url) => {
-  const match = String(url || '').match(/\/courses\/(\d+)/i);
-  return match ? match[1] : '';
-};
+import { resolveCaveiraLessonHref } from '../lib/caveiraLessonLinks';
 
 const MAX_WEEK_OFFSET = 26;
 
@@ -96,56 +83,6 @@ export default function Ciclo() {
   const [selectedSubjectId, setSelectedSubjectId] = useState(null);
   const [selectedTopic, setSelectedTopic] = useState(null);
   const [noteContent, setNoteContent] = useState('');
-
-  // URL fallback index para abrir videoaulas diretamente no Caveira
-  const { courseIndexUrlByTitle, fallbackCaveiraCourseBaseUrl } = useMemo(() => {
-    const byTitle = new Map();
-    let inferredCourseId = '';
-
-    Object.values(caveiraCourseIndexMap || {}).forEach((entry) => {
-      if (!entry || !entry.url) return;
-      const key = normalizeLessonTitleKey(entry.title || entry.lessonTitle || '');
-      if (key && !byTitle.has(key)) {
-        byTitle.set(key, entry.url);
-      }
-      if (!inferredCourseId) {
-        inferredCourseId = extractCourseIdFromUrl(entry.url);
-      }
-    });
-
-    if (!inferredCourseId) {
-      for (const sub of Object.values(subjects || {})) {
-        if (!sub) continue;
-        if (sub.caveiraCourseId) {
-          inferredCourseId = String(sub.caveiraCourseId);
-          break;
-        }
-        const fromMod = extractCourseIdFromUrl(sub.caveiraModuleUrl);
-        if (fromMod) {
-          inferredCourseId = fromMod;
-          break;
-        }
-        for (const tp of sub.topics || []) {
-          for (const ls of tp?.lessons || []) {
-            const fromLes = extractCourseIdFromUrl(ls?.caveiraUrl || ls?.url);
-            if (fromLes) {
-              inferredCourseId = fromLes;
-              break;
-            }
-          }
-          if (inferredCourseId) break;
-        }
-        if (inferredCourseId) break;
-      }
-    }
-
-    return {
-      courseIndexUrlByTitle: byTitle,
-      fallbackCaveiraCourseBaseUrl: inferredCourseId
-        ? `https://app.caveira.com/courses/${inferredCourseId}`
-        : 'https://app.caveira.com/courses'
-    };
-  }, [caveiraCourseIndexMap, subjects]);
 
   // Blocos concluídos só valem se foram marcados hoje
   const completedToday = useMemo(
@@ -511,18 +448,13 @@ export default function Ciclo() {
                 : les.durStr || '';
 
               const lessonEntry = activeTopic?.lessons?.[les.index ?? lIdx];
-              const indexedUrl = courseIndexUrlByTitle.get(normalizeLessonTitleKey(les.name)) || '';
-              const rawLesHref = lessonEntry?.caveiraUrl
-                || lessonEntry?.url
-                || indexedUrl
-                || subject?.caveiraModuleUrl
-                || (subject?.caveiraCourseId ? `https://app.caveira.com/courses/${subject.caveiraCourseId}` : '')
-                || fallbackCaveiraCourseBaseUrl;
-              const safeBaseUrl = getSafeExternalUrl(rawLesHref, 'https://app.caveira.com/courses');
-              const cleanBase = safeBaseUrl.split('#')[0];
-              const directLesHref = les.name
-                ? `${cleanBase}#qg_lesson=${encodeURIComponent(les.name)}${subject?.name ? `&qg_subject=${encodeURIComponent(subject.name)}` : ''}`
-                : cleanBase;
+              const directLesHref = resolveCaveiraLessonHref({
+                lessonEntry,
+                lessonName: les.name,
+                topic: activeTopic,
+                subject,
+                caveiraCourseIndexMap,
+              });
 
               return {
                 ...les,
@@ -601,8 +533,7 @@ export default function Ciclo() {
     studyHistory,
     weekOffset,
     todayKey,
-    courseIndexUrlByTitle,
-    fallbackCaveiraCourseBaseUrl
+    caveiraCourseIndexMap
   ]);
 
   // Garante que o dia selecionado exista na semana atual

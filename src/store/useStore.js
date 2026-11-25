@@ -5,6 +5,7 @@ import { PATENTES, MEDALHAS } from '../hooks/useGamification';
 import { PET_FOODS, PET_LEVELS } from '../data/petConstants';
 import { parseDurationToSeconds, calculateLessonsForGoal } from '../lib/durationHelpers';
 import { normalizeCourseLookupKey } from '../lib/courseIndexParser';
+import { extractCourseIdFromUrl, scoreLessonTitleMatch } from '../lib/caveiraLessonLinks';
 import {
   LOCAL_TEST_ACCOUNT,
   createLocalTestSession,
@@ -4008,17 +4009,24 @@ export const useStore = create(
           const topics = Array.isArray(rawEntry.topics) && rawEntry.topics.length > 0
             ? rawEntry.topics
             : parseTimestampTopics(rawText);
+          const url = rawEntry.url || prev[key]?.url || '';
+          const courseId = String(rawEntry.courseId || extractCourseIdFromUrl(url) || prev[key]?.courseId || '');
+          const courseName = String(rawEntry.courseName || prev[key]?.courseName || '');
+          const scopedKey = (courseId && !String(key).includes('::')) ? `${courseId}::${key}` : key;
+          const prevScoped = prev[scopedKey] || prev[key];
           const candidate = {
-            url: rawEntry.url || prev[key]?.url || '',
-            title: rawEntry.lessonTitle || rawEntry.title || prev[key]?.title || key,
-            subject: rawEntry.subject || prev[key]?.subject || '',
-            moduleName: rawEntry.moduleName || prev[key]?.moduleName || '',
-            topics: topics.length > 0 ? topics : (prev[key]?.topics || []),
-            subtopics: Array.isArray(rawEntry.subtopics) ? rawEntry.subtopics : (prev[key]?.subtopics || []),
+            url: url || prevScoped?.url || '',
+            courseId,
+            courseName,
+            title: rawEntry.lessonTitle || rawEntry.title || prevScoped?.title || key,
+            subject: rawEntry.subject || prevScoped?.subject || '',
+            moduleName: rawEntry.moduleName || prevScoped?.moduleName || '',
+            topics: topics.length > 0 ? topics : (prevScoped?.topics || []),
+            subtopics: Array.isArray(rawEntry.subtopics) ? rawEntry.subtopics : (prevScoped?.subtopics || []),
             updatedAt: rawEntry.updatedAt || Date.now()
           };
-          if (JSON.stringify(prev[key]) !== JSON.stringify(candidate)) {
-            next[key] = candidate;
+          if (JSON.stringify(prev[scopedKey]) !== JSON.stringify(candidate)) {
+            next[scopedKey] = candidate;
             changed = true;
           }
         };
@@ -4026,7 +4034,9 @@ export const useStore = create(
         if (entryOrMap.byLesson && typeof entryOrMap.byLesson === 'object') {
           Object.entries(entryOrMap.byLesson).forEach(([k, val]) => upsertEntry(k, val));
           if (entryOrMap.latest && entryOrMap.latest.lessonTitle) {
-            upsertEntry(normalizeCourseLookupKey(entryOrMap.latest.lessonTitle), entryOrMap.latest);
+            const latestKey = normalizeCourseLookupKey(entryOrMap.latest.lessonTitle);
+            const latestCid = String(entryOrMap.latest.courseId || extractCourseIdFromUrl(entryOrMap.latest.url) || '');
+            upsertEntry(latestCid ? `${latestCid}::${latestKey}` : latestKey, entryOrMap.latest);
           }
         } else {
           Object.entries(entryOrMap).forEach(([k, val]) => upsertEntry(k, val));
@@ -4250,61 +4260,17 @@ export const useStore = create(
           return false;
         };
 
-        const stripLessonPrefix = (txt) => normalizeCourseLookupKey(
-          String(txt || '')
-            .replace(/^\s*(?:aula|bloco|parte|cap[ií]tulo|m[oó]dulo)\s*\d+\s*[-–—:|.]*\s*/i, '')
-            .replace(/^\s*\d{1,3}\s*[-–—:|.]+\s*/, '')
-            .trim()
-        );
+        const incomingCourseId = String(catalog.courseId || '');
+        const incomingCourseName = String(catalog.courseName || '').trim();
 
-        const extractPartTag = (txt) => {
-          const clean = normalizeCourseLookupKey(txt);
-          if (!clean) return '';
-          const mNum = clean.match(/\b(?:parte|pt|bloco|aula)\s*0*(\d{1,2})\b/);
-          if (mNum) return String(Number(mNum[1]));
-          const mRom = clean.match(/\b(?:parte|pt|bloco|aula)?\s*(i{1,3}|iv|v|vi{0,3})\b$/);
-          if (mRom) {
-            const romanMap = { i: '1', ii: '2', iii: '3', iv: '4', v: '5', vi: '6', vii: '7', viii: '8' };
-            if (romanMap[mRom[1]]) return romanMap[mRom[1]];
-          }
-          const mEnd = clean.match(/\b0*(\d{1,2})$/);
-          return mEnd ? String(Number(mEnd[1])) : '';
-        };
-
-        const tokenizeLesson = (txt) => String(txt || '')
-          .split(' ')
-          .map(w => (/^\d+$/.test(w) ? String(Number(w)) : w))
-          .filter(w => w.length >= 3 || /^\d+$/.test(w));
-
-        const scoreLessonMatch = (existingName, incomingTitle) => {
-          const en = normalizeCourseLookupKey(existingName || '');
-          const normTitle = normalizeCourseLookupKey(incomingTitle || '');
-          if (!en || !normTitle) return 0;
-
-          const partA = extractPartTag(existingName);
-          const partB = extractPartTag(incomingTitle);
-          if (partA && partB && partA !== partB) return 0;
-
-          if (en === normTitle) return 100;
-          const es = stripLessonPrefix(existingName);
-          const strippedTitle = stripLessonPrefix(incomingTitle);
-          if (strippedTitle && es && es === strippedTitle) return 95;
-
-          const subMatch = (strippedTitle && es && (
-            (strippedTitle.length >= 6 && es.includes(strippedTitle)) ||
-            (es.length >= 6 && strippedTitle.includes(es))
-          )) || (normTitle.length >= 6 && en.includes(normTitle)) || (en.length >= 6 && normTitle.includes(en));
-          if (subMatch && (!partA || !partB || partA === partB)) return 80;
-
-          const lesTokens = tokenizeLesson(strippedTitle || normTitle);
-          const exTokensList = tokenizeLesson(es || en);
-          if (lesTokens.length >= 2 && exTokensList.length >= 2) {
-            const exSet = new Set(exTokensList);
-            const overlap = lesTokens.filter(t => exSet.has(t)).length;
-            const ratio = overlap / Math.max(lesTokens.length, exTokensList.length);
-            if (ratio >= 0.6) return Math.round(ratio * 75);
-          }
-          return 0;
+        const isSpecificNameMatch = (a, b) => {
+          const na = normalizeCourseLookupKey(a);
+          const nb = normalizeCourseLookupKey(b);
+          if (!na || !nb) return false;
+          if (na === nb) return true;
+          if (na.length >= 6 && nb.length >= 6 && (nb.includes(na) || na.includes(nb))) return true;
+          const toks = na.split(' ').filter(w => w.length > 3);
+          return toks.length >= 2 && toks.every(t => nb.includes(t));
         };
 
         const parseMinToClock = (minVal) => {
@@ -4325,12 +4291,41 @@ export const useStore = create(
           if (modLessons.length === 0 && !mod.moduleUrl) return;
 
           const firstBracket = modLessons[0]?.title?.match(/^\s*[[(]([^\]()]{3,40})[\])]/)?.[1] || '';
-          const candidatesToMatch = [mod.name, catalog.courseName, firstBracket].filter(Boolean);
+          const candidatesToMatch = [mod.name, incomingCourseName, firstBracket].filter(Boolean);
+
+          // Escolhe a disciplina mais específica sem sobrescrever disciplinas presas a outro curso
           let targetEntry = null;
-          for (const candidateName of candidatesToMatch) {
-            targetEntry = Object.entries(nextSubjects).find(([, sub]) => normModuleMatch(sub?.name, candidateName));
-            if (targetEntry) break;
-          }
+          let bestSubjectScore = 0;
+          Object.entries(nextSubjects).forEach(([id, sub]) => {
+            if (!sub) return;
+            const subCourseId = String(sub.caveiraCourseId || extractCourseIdFromUrl(sub.caveiraModuleUrl) || '');
+            const topicMatchesCourseId = (sub.topics || []).some(
+              (t) => incomingCourseId && String(t?.caveiraCourseId || extractCourseIdFromUrl(t?.caveiraModuleUrl) || '') === incomingCourseId
+            );
+            const topicMatchesCourseName = incomingCourseName && (sub.topics || []).some(
+              (t) => isSpecificNameMatch(t?.name, incomingCourseName) || isSpecificNameMatch(t?.caveiraCourseName, incomingCourseName)
+            );
+            const subMatchesCourseName = incomingCourseName && (
+              isSpecificNameMatch(sub.name, incomingCourseName) || isSpecificNameMatch(sub.caveiraCourseName, incomingCourseName)
+            );
+
+            if (incomingCourseId && subCourseId && subCourseId !== incomingCourseId && !topicMatchesCourseId && !topicMatchesCourseName) {
+              return;
+            }
+
+            let score = 0;
+            if (incomingCourseId && subCourseId === incomingCourseId) score += 120;
+            if (topicMatchesCourseId) score += 100;
+            if (subMatchesCourseName) score += 90;
+            if (topicMatchesCourseName) score += 70;
+            if (candidatesToMatch.some((c) => isSpecificNameMatch(sub.name, c))) score += 60;
+            if (candidatesToMatch.some((c) => normModuleMatch(sub.name, c))) score += 40;
+
+            if (score > bestSubjectScore) {
+              bestSubjectScore = score;
+              targetEntry = [id, sub];
+            }
+          });
           if (!targetEntry) return;
 
           const [subId, subObj] = targetEntry;
@@ -4344,6 +4339,9 @@ export const useStore = create(
             topics.push({
               id: `top_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
               name: mod.name,
+              ...(incomingCourseId ? { caveiraCourseId: incomingCourseId } : {}),
+              ...(incomingCourseName ? { caveiraCourseName: incomingCourseName } : {}),
+              ...(mod.moduleUrl ? { caveiraModuleUrl: mod.moduleUrl } : {}),
               completed: modLessons.filter(l => l.completed).length,
               total: modLessons.length,
               lessons: modLessons.map(l => ({
@@ -4351,11 +4349,19 @@ export const useStore = create(
                 duration: parseMinToClock(l.durationMin),
                 completed: Boolean(l.completed),
                 ...(l.url ? { caveiraUrl: l.url } : {}),
-                ...(l.id ? { caveiraVideoId: l.id } : {})
+                ...(l.id ? { caveiraVideoId: l.id } : {}),
+                ...(incomingCourseId ? { caveiraCourseId: incomingCourseId } : {}),
+                ...(incomingCourseName ? { caveiraCourseName: incomingCourseName } : {})
               }))
             });
             addedLessons += modLessons.length;
           } else if (modLessons.length > 0) {
+            const topicMatchingCourse = topics.find(
+              (t) =>
+                (incomingCourseId && String(t?.caveiraCourseId || extractCourseIdFromUrl(t?.caveiraModuleUrl) || '') === incomingCourseId) ||
+                (incomingCourseName && (isSpecificNameMatch(t?.name, incomingCourseName) || isSpecificNameMatch(t?.caveiraCourseName, incomingCourseName)))
+            );
+
             modLessons.forEach((les) => {
               if (!les || !les.title) return;
               let bestTopic = null;
@@ -4363,51 +4369,85 @@ export const useStore = create(
               let bestScore = 0;
 
               for (const topic of topics) {
+                const topicCid = String(topic?.caveiraCourseId || extractCourseIdFromUrl(topic?.caveiraModuleUrl) || '');
+                if (incomingCourseId && topicCid && topicCid !== incomingCourseId) continue;
+
+                const isCoursePreferredTopic = Boolean(
+                  topicMatchingCourse && topic.id === topicMatchingCourse.id
+                );
+
                 (topic.lessons || []).forEach((existing, idx) => {
-                  const sc = scoreLessonMatch(existing?.name || '', les.title);
-                  if (sc > bestScore) {
-                    bestScore = sc;
+                  const baseSc = scoreLessonTitleMatch(existing?.name || '', les.title);
+                  if (baseSc <= 0) return;
+                  const effectiveSc = baseSc + (isCoursePreferredTopic ? 15 : 0);
+                  if (effectiveSc > bestScore) {
+                    bestScore = effectiveSc;
                     bestTopic = topic;
                     bestIdx = idx;
                   }
                 });
               }
 
-              if (bestScore >= 50 && bestTopic && bestIdx >= 0) {
+              if (bestScore >= 65 && bestTopic && bestIdx >= 0) {
                 const cur = bestTopic.lessons[bestIdx];
                 const curHasSpecificVideo = Boolean(cur?.caveiraUrl && String(cur.caveiraUrl).includes('course_video_id='));
-                const incHasSpecificVideo = Boolean(les.url && String(les.url).includes('course_video_id='));
-                const resolvedUrl = (!curHasSpecificVideo || incHasSpecificVideo) ? (les.url || cur.caveiraUrl) : cur.caveiraUrl;
-                bestTopic.lessons[bestIdx] = {
-                  ...cur,
-                  ...(resolvedUrl ? { caveiraUrl: resolvedUrl } : {}),
-                  ...(les.id ? { caveiraVideoId: les.id } : {}),
-                  ...(les.durationMin > 0 && !cur.duration ? { duration: parseMinToClock(les.durationMin) } : {})
-                };
-                updatedLessons++;
-              } else {
-                const matchingTopic = topics.find(t => normModuleMatch(t?.name, mod.name)) || topics[0];
-                matchingTopic.lessons = Array.isArray(matchingTopic.lessons) ? matchingTopic.lessons : [];
-                matchingTopic.lessons.push({
-                  name: les.title,
-                  duration: parseMinToClock(les.durationMin),
-                  completed: Boolean(les.completed),
-                  ...(les.url ? { caveiraUrl: les.url } : {}),
-                  ...(les.id ? { caveiraVideoId: les.id } : {})
-                });
-                matchingTopic.total = Math.max(Number(matchingTopic.total) || 0, matchingTopic.lessons.length);
-                if (les.completed) {
-                  matchingTopic.completed = Math.min(matchingTopic.total, (Number(matchingTopic.completed) || 0) + 1);
+                const curCourseId = String(cur?.caveiraCourseId || extractCourseIdFromUrl(cur?.caveiraUrl) || '');
+                const belongsToAnotherCourse = Boolean(
+                  curHasSpecificVideo && curCourseId && incomingCourseId && curCourseId !== incomingCourseId
+                );
+                if (!belongsToAnotherCourse) {
+                  const incHasSpecificVideo = Boolean(les.url && String(les.url).includes('course_video_id='));
+                  const resolvedUrl = (!curHasSpecificVideo || incHasSpecificVideo) ? (les.url || cur.caveiraUrl) : cur.caveiraUrl;
+                  bestTopic.lessons[bestIdx] = {
+                    ...cur,
+                    ...(resolvedUrl ? { caveiraUrl: resolvedUrl } : {}),
+                    ...(les.id ? { caveiraVideoId: les.id } : {}),
+                    ...(incomingCourseId ? { caveiraCourseId: incomingCourseId } : {}),
+                    ...(incomingCourseName ? { caveiraCourseName: incomingCourseName } : {}),
+                    ...(les.durationMin > 0 && !cur.duration ? { duration: parseMinToClock(les.durationMin) } : {})
+                  };
+                  updatedLessons++;
                 }
-                addedLessons++;
+              } else {
+                const matchingTopic =
+                  topicMatchingCourse ||
+                  topics.find(t => isSpecificNameMatch(t?.name, mod.name)) ||
+                  (String(subObj.caveiraCourseId || '') === incomingCourseId ? topics[0] : null);
+                const matchingTopicCid = String(matchingTopic?.caveiraCourseId || extractCourseIdFromUrl(matchingTopic?.caveiraModuleUrl) || '');
+                const canAppendToTopic = Boolean(
+                  matchingTopic &&
+                  (!matchingTopicCid || !incomingCourseId || matchingTopicCid === incomingCourseId) &&
+                  (matchingTopicCid === incomingCourseId || String(subObj.caveiraCourseId || '') === incomingCourseId || isSpecificNameMatch(matchingTopic.name, incomingCourseName))
+                );
+                if (canAppendToTopic) {
+                  matchingTopic.lessons = Array.isArray(matchingTopic.lessons) ? matchingTopic.lessons : [];
+                  matchingTopic.lessons.push({
+                    name: les.title,
+                    duration: parseMinToClock(les.durationMin),
+                    completed: Boolean(les.completed),
+                    ...(les.url ? { caveiraUrl: les.url } : {}),
+                    ...(les.id ? { caveiraVideoId: les.id } : {}),
+                    ...(incomingCourseId ? { caveiraCourseId: incomingCourseId } : {}),
+                    ...(incomingCourseName ? { caveiraCourseName: incomingCourseName } : {})
+                  });
+                  matchingTopic.total = Math.max(Number(matchingTopic.total) || 0, matchingTopic.lessons.length);
+                  if (les.completed) {
+                    matchingTopic.completed = Math.min(matchingTopic.total, (Number(matchingTopic.completed) || 0) + 1);
+                  }
+                  addedLessons++;
+                }
               }
             });
           }
 
+          const existingSubCourseId = String(subObj.caveiraCourseId || extractCourseIdFromUrl(subObj.caveiraModuleUrl) || '');
+          const canUpdateSubjectBinding = !existingSubCourseId || !incomingCourseId || existingSubCourseId === incomingCourseId;
+
           nextSubjects[subId] = {
             ...subObj,
-            ...(catalog.courseId ? { caveiraCourseId: catalog.courseId } : {}),
-            ...(mod.moduleUrl ? { caveiraModuleUrl: mod.moduleUrl } : {}),
+            ...(canUpdateSubjectBinding && incomingCourseId ? { caveiraCourseId: incomingCourseId } : {}),
+            ...(canUpdateSubjectBinding && incomingCourseName ? { caveiraCourseName: incomingCourseName } : {}),
+            ...(canUpdateSubjectBinding && mod.moduleUrl ? { caveiraModuleUrl: mod.moduleUrl } : {}),
             topics
           };
         });

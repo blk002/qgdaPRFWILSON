@@ -648,12 +648,17 @@ import {
 
     if (msg.type === 'API_COURSE_CATALOG' && msg.payload && Array.isArray(msg.payload.modules)) {
       appendSnifferTelemetryEvent('API_COURSE_CATALOG', { modules: msg.payload.modules.length });
+      const incomingCid = String(msg.payload.courseId || '');
+      const prevCid = String(apiCourseCatalogCache?.courseId || '');
+      const sameCourse = !incomingCid || !prevCid || incomingCid === prevCid;
       const mergedMap = new Map();
-      (Array.isArray(apiCourseCatalogCache?.modules) ? apiCourseCatalogCache.modules : []).forEach((m) => {
-        if (!m || !m.name) return;
-        const k = m.id ? `id:${m.id}` : `nm:${normalizeCourseIndexKey(m.name)}`;
-        mergedMap.set(k, m);
-      });
+      if (sameCourse) {
+        (Array.isArray(apiCourseCatalogCache?.modules) ? apiCourseCatalogCache.modules : []).forEach((m) => {
+          if (!m || !m.name) return;
+          const k = m.id ? `id:${m.id}` : `nm:${normalizeCourseIndexKey(m.name)}`;
+          mergedMap.set(k, m);
+        });
+      }
       msg.payload.modules.forEach((m) => {
         if (!m || !m.name) return;
         const k = m.id ? `id:${m.id}` : `nm:${normalizeCourseIndexKey(m.name)}`;
@@ -682,22 +687,30 @@ import {
         });
       });
       apiCourseCatalogCache = {
-        courseId: msg.payload.courseId || apiCourseCatalogCache?.courseId || '',
-        courseName: msg.payload.courseName || apiCourseCatalogCache?.courseName || 'Curso Caveira',
+        courseId: incomingCid || (sameCourse ? prevCid : ''),
+        courseName: msg.payload.courseName || (sameCourse ? apiCourseCatalogCache?.courseName : '') || 'Curso Caveira',
         modules: Array.from(mergedMap.values()),
       };
       // Aproveita descrições da API com timestamps ([00:00:00]) para enriquecer cache do Índice de Aulas
       try {
         const indexLessons = [];
+        const resolvedCid = apiCourseCatalogCache.courseId || (window.location.pathname.match(/\/courses\/(\d+)/i)?.[1] || '');
+        const resolvedCName = apiCourseCatalogCache.courseName || '';
         msg.payload.modules.forEach((m) => {
           (m?.lessons || []).forEach((l) => {
             if (l?.title && l?.rawIndexText) {
               const subs = parseCourseIndexSubtopics(l.rawIndexText, [m.name, l.title]);
               if (subs.length > 0) {
+                const lesKey = normalizeCourseIndexKey(l.title);
+                const lesCid = String(resolvedCid || (String(l.url || '').match(/\/courses\/(\d+)/i)?.[1] || ''));
+                const compositeKey = lesCid && lesKey ? `${lesCid}::${lesKey}` : lesKey;
                 indexLessons.push({
-                  key: normalizeCourseIndexKey(l.title),
+                  key: compositeKey,
                   entry: {
                     url: l.url || window.location.href,
+                    courseId: lesCid,
+                    courseName: resolvedCName,
+                    moduleName: m.name || '',
                     videoId: l.id ? String(l.id) : '',
                     lessonTitle: l.title,
                     source: 'indice_api',
@@ -1212,15 +1225,15 @@ import {
     const modulesMap = new Map();
     const courseIdMatch = window.location.pathname.match(/\/courses\/(\d+)/i);
     const modIdMatch = window.location.pathname.match(/\/modules\/(\d+)/i);
-    const courseId = courseIdMatch ? courseIdMatch[1] : '12';
+    const courseId = courseIdMatch ? courseIdMatch[1] : '';
     const currentModId = modIdMatch ? modIdMatch[1] : '';
-    const courseName = (document.querySelector('h1, h2, .text-h5, .text-h6')?.innerText || 'Curso Caveira PRF').trim();
+    const courseName = (document.querySelector('h1, h2, .text-h5, .text-h6')?.innerText || 'Curso Caveira').trim();
 
     const activeModEl = document.querySelector('.q-item--active, [aria-selected="true"].q-item, [class*="module"].active, [class*="breadcrumb"] a:last-child');
     const activeModName = (activeModEl?.innerText || activeModEl?.textContent || '').split(/\r?\n/)[0]?.trim() || courseName;
     const defaultModuleUrl = (courseId && currentModId)
       ? `${window.location.origin}/courses/${courseId}/modules/${currentModId}/playground`
-      : `${window.location.origin}/courses/${courseId}`;
+      : (courseId ? `${window.location.origin}/courses/${courseId}` : `${window.location.origin}/courses`);
 
     const lessonLinks = Array.from(document.querySelectorAll('a[href*="course_video_id"], a[href*="/modules/"], [data-course-video-id], .q-expansion-item, .q-item, .q-card'))
       .filter((el) => !el.closest('#qg-caveira-shadow-host, #qg-caveira-hud') && isElementVisible(el));
@@ -1312,8 +1325,9 @@ import {
       lessons.push({ id: videoId || null, title, durationMin, completed, url });
     });
 
-    // Mescla módulos capturados passivamente pela API (#2 — todos os módulos de 1 vez)
-    const apiMods = Array.isArray(apiCourseCatalogCache?.modules) ? apiCourseCatalogCache.modules : [];
+    // Mescla módulos capturados passivamente pela API somente se forem do mesmo curso
+    const apiMatchesCourse = !courseId || !apiCourseCatalogCache?.courseId || String(apiCourseCatalogCache.courseId) === String(courseId);
+    const apiMods = (apiMatchesCourse && Array.isArray(apiCourseCatalogCache?.modules)) ? apiCourseCatalogCache.modules : [];
     apiMods.forEach((m) => {
       if (m && m.name && (Array.isArray(m.lessons) && (m.lessons.length > 0 || m.moduleUrl))) {
         modulesMap.set(m.name, m);
@@ -1340,8 +1354,8 @@ import {
 
     const totalLessonsCount = Array.from(modulesMap.values()).reduce((sum, m) => sum + (m.lessons?.length || 0), 0);
     const payload = {
-      courseId: apiCourseCatalogCache?.courseId || courseId,
-      courseName: apiCourseCatalogCache?.courseName || courseName,
+      courseId: courseId || apiCourseCatalogCache?.courseId || '',
+      courseName: (apiMatchesCourse ? apiCourseCatalogCache?.courseName : '') || courseName,
       modules: Array.from(modulesMap.values()),
       syncedAt: Date.now()
     };
@@ -1362,15 +1376,23 @@ import {
   function extractLessonPartNum(txt) {
     const clean = normalizeCourseIndexKey(txt);
     if (!clean) return '';
-    const mNum = clean.match(/\b(?:parte|pt|bloco|aula)\s*0*(\d{1,2})\b/);
+    const mNum = clean.match(/\b(?:parte|pt)\s*0*(\d{1,2})\b/);
     if (mNum) return String(Number(mNum[1]));
-    const mRom = clean.match(/\b(?:parte|pt|bloco|aula)?\s*(i{1,3}|iv|v|vi{0,3})\b$/);
-    if (mRom) {
-      const romanMap = { i: '1', ii: '2', iii: '3', iv: '4', v: '5', vi: '6', vii: '7', viii: '8' };
-      if (romanMap[mRom[1]]) return romanMap[mRom[1]];
+    const romanMap = { i: '1', ii: '2', iii: '3', iv: '4', v: '5', vi: '6', vii: '7', viii: '8' };
+    const mRom = clean.match(/\b(?:parte|pt)\s*(viii|vii|vi|iv|v|iii|ii|i)\b/);
+    if (mRom && romanMap[mRom[1]]) return romanMap[mRom[1]];
+
+    const stripped = clean
+      .replace(/^\s*(?:aula|bloco|parte|m[oó]dulo)\s*\d+\s*[-–—:|.]*\s*/i, '')
+      .replace(/^\s*\d{1,3}\s*[-–—:|.]+\s*/, '')
+      .trim();
+    if (!stripped) return '';
+    if (!/\b(?:art|artigo|lei|decreto|aula|bloco|modulo)\s+\d{1,2}$/.test(stripped)) {
+      const mEnd = stripped.match(/\b0*(\d{1,2})$/);
+      if (mEnd) return String(Number(mEnd[1]));
     }
-    const mEnd = clean.match(/\b0*(\d{1,2})$/);
-    return mEnd ? String(Number(mEnd[1])) : '';
+    const mEndRom = stripped.match(/\b(viii|vii|vi|iv|v|iii|ii|i)$/);
+    return (mEndRom && romanMap[mEndRom[1]]) ? romanMap[mEndRom[1]] : '';
   }
 
   function scoreCaveiraLessonCandidate(candidateText, targetLesson) {
@@ -1380,7 +1402,7 @@ import {
 
     const partCand = extractLessonPartNum(candidateText);
     const partTgt = extractLessonPartNum(targetLesson);
-    if (partCand && partTgt && partCand !== partTgt) return 0;
+    if (partCand !== partTgt) return 0;
 
     if (cleanCand === cleanTarget) return 100;
     const stripPref = (s) => s
@@ -1391,7 +1413,7 @@ import {
     const st = stripPref(cleanTarget);
     if (sc && st && sc === st) return 90;
     if ((st && sc.includes(st)) || (sc && st.includes(sc))) {
-      return (!partCand || !partTgt || partCand === partTgt) ? 75 : 0;
+      return 75;
     }
 
     const tok = (s) => s.split(' ').map(w => (/^\d+$/.test(w) ? String(Number(w)) : w)).filter(w => w.length >= 3 || /^\d+$/.test(w));
@@ -1400,25 +1422,39 @@ import {
     if (tTgt.length === 0 || tCand.size === 0) return 0;
     const hits = tTgt.filter(w => tCand.has(w)).length;
     const ratio = hits / Math.max(tTgt.length, tCand.size);
-    return ratio >= 0.5 ? Math.round(ratio * 70) : 0;
+    return ratio >= 0.65 ? Math.round(ratio * 70) : 0;
   }
 
   function autoOpenTargetLessonFromHash() {
     if (!isCourseCatalogPage()) return;
 
+    // Se a URL já trouxe um course_video_id= direto, respeita o vídeo exato e não sequestra a navegação
+    if (/course_video_id=\d+/i.test(window.location.search || '')) {
+      try { sessionStorage.removeItem('qg_target_lesson_pending'); } catch (_) {}
+      return;
+    }
+
     let targetLesson = '';
     let targetSubject = '';
+    let targetTopic = '';
+    let targetCourse = '';
     const rawHash = String(window.location.hash || '');
     if (rawHash.includes('qg_lesson=')) {
       const mLes = rawHash.match(/qg_lesson=([^&]+)/);
       const mSub = rawHash.match(/qg_subject=([^&]+)/);
+      const mTop = rawHash.match(/qg_topic=([^&]+)/);
+      const mCrs = rawHash.match(/qg_course=([^&]+)/);
       if (mLes) targetLesson = decodeURIComponent(mLes[1] || '').trim();
       if (mSub) targetSubject = decodeURIComponent(mSub[1] || '').trim();
+      if (mTop) targetTopic = decodeURIComponent(mTop[1] || '').trim();
+      if (mCrs) targetCourse = decodeURIComponent(mCrs[1] || '').trim();
       if (targetLesson) {
         try {
           sessionStorage.setItem('qg_target_lesson_pending', JSON.stringify({
             lesson: targetLesson,
             subject: targetSubject,
+            topic: targetTopic,
+            course: targetCourse,
             savedAt: Date.now()
           }));
         } catch (_) {}
@@ -1429,6 +1465,8 @@ import {
         if (stored && stored.lesson && (Date.now() - (Number(stored.savedAt) || 0)) < 25000) {
           targetLesson = stored.lesson;
           targetSubject = stored.subject || '';
+          targetTopic = stored.topic || '';
+          targetCourse = stored.course || '';
         }
       } catch (_) {}
     }
@@ -1464,6 +1502,47 @@ import {
       }
       attempts += 1;
 
+      // 0. Se estamos no catálogo geral (/courses sem ID de curso), entra primeiro no card do curso certo
+      const currentCourseIdMatch = window.location.pathname.match(/\/courses\/(\d+)/i);
+      if (!currentCourseIdMatch) {
+        const courseQuery = targetCourse || targetTopic || targetSubject;
+        if (courseQuery) {
+          const courseCards = Array.from(document.querySelectorAll('a[href*="/courses/"], .q-card'))
+            .filter((el) => !el.closest('#qg-caveira-shadow-host, #qg-caveira-hud') && isElementVisible(el));
+          let bestCourseEl = null;
+          let bestCourseScore = 0;
+          const qNorm = normalizeCourseIndexKey(courseQuery);
+          const qTokens = qNorm.split(' ').filter((w) => w.length >= 3);
+          courseCards.forEach((el) => {
+            const raw = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+            if (!raw || raw.length > 220) return;
+            const cNorm = normalizeCourseIndexKey(raw);
+            let sc = 0;
+            if (targetCourse && cNorm.includes(normalizeCourseIndexKey(targetCourse))) sc += 100;
+            if (targetTopic && cNorm.includes(normalizeCourseIndexKey(targetTopic))) sc += 80;
+            if (qTokens.length > 0) {
+              const hits = qTokens.filter((t) => cNorm.includes(t)).length;
+              sc += Math.round((hits / qTokens.length) * 60);
+            }
+            if (sc > bestCourseScore) {
+              bestCourseScore = sc;
+              bestCourseEl = el;
+            }
+          });
+          if (bestCourseEl && bestCourseScore >= 40) {
+            try {
+              bestCourseEl.scrollIntoView({ behavior: 'smooth', block: 'center' });
+              bestCourseEl.click();
+              const innerLink = bestCourseEl.querySelector('a[href*="/courses/"]');
+              if (innerLink && innerLink !== bestCourseEl) innerLink.click();
+            } catch (_) {}
+            return;
+          }
+        }
+        if (attempts >= 16) clearTargetPending();
+        return;
+      }
+
       // 1. Já está no playground tocando exatamente a aula alvo?
       if (isCoursePlaygroundPage()) {
         const curPlayTitle = extractCourseLessonTitle() || currentCourseIndexStatus?.lessonTitle || '';
@@ -1473,8 +1552,10 @@ import {
         }
       }
 
-      // 2. Procura link exato no cache da API do curso
-      const apiMods = Array.isArray(apiCourseCatalogCache?.modules) ? apiCourseCatalogCache.modules : [];
+      // 2. Procura link exato no cache da API do curso (somente se for do mesmo curso aberto)
+      const currentCourseId = currentCourseIdMatch[1];
+      const apiSameCourse = !apiCourseCatalogCache?.courseId || String(apiCourseCatalogCache.courseId) === String(currentCourseId);
+      const apiMods = (apiSameCourse && Array.isArray(apiCourseCatalogCache?.modules)) ? apiCourseCatalogCache.modules : [];
       let bestApiLesson = null;
       let bestApiScore = 0;
       apiMods.forEach((m) => {
@@ -1487,7 +1568,7 @@ import {
           }
         });
       });
-      if (bestApiLesson && bestApiScore >= 55) {
+      if (bestApiLesson && bestApiScore >= 70) {
         const currentNoHash = window.location.href.split('#')[0];
         let seekSec = 0;
         try {
@@ -1527,7 +1608,7 @@ import {
         }
       });
 
-      if (bestDomEl && bestDomScore >= 55) {
+      if (bestDomEl && bestDomScore >= 70) {
         let seekSec = 0;
         try {
           seekSec = Math.max(0, Number(new URLSearchParams(window.location.search || '').get('t')) || 0);
@@ -7855,9 +7936,15 @@ import {
     try {
       videoId = new URL(window.location.href).searchParams.get('course_video_id') || '';
     } catch (_) {}
+    const courseIdMatch = window.location.pathname.match(/\/courses\/(\d+)/i);
+    const courseId = courseIdMatch ? courseIdMatch[1] : '';
+    const sameCourseApi = !courseId || !apiCourseCatalogCache?.courseId || String(apiCourseCatalogCache.courseId) === String(courseId);
+    const courseName = sameCourseApi ? (apiCourseCatalogCache?.courseName || '') : '';
 
     const entry = {
       url: window.location.href,
+      courseId,
+      courseName,
       videoId,
       lessonTitle,
       source: captureSource,
@@ -7874,7 +7961,8 @@ import {
           ? res[COURSE_INDEX_CACHE_KEY]
           : { latest: null, byLesson: {} };
         const nextByLesson = { ...(prev.byLesson || {}) };
-        const lessonKey = normalizeCourseIndexKey(lessonTitle);
+        const rawLessonKey = normalizeCourseIndexKey(lessonTitle);
+        const lessonKey = (courseId && rawLessonKey) ? `${courseId}::${rawLessonKey}` : rawLessonKey;
         if (lessonKey) {
           const existing = nextByLesson[lessonKey];
           if (captureSource === 'bizus') {
@@ -7885,10 +7973,10 @@ import {
             nextByLesson[lessonKey] = entry;
           }
         }
-        // Mantém no máximo 40 aulas mais recentes em cache
+        // Mantém no máximo 120 aulas mais recentes em cache
         const ordered = Object.entries(nextByLesson)
           .sort((a, b) => (b[1]?.capturedAt || 0) - (a[1]?.capturedAt || 0))
-          .slice(0, 40);
+          .slice(0, 120);
         const compactedByLesson = Object.fromEntries(ordered);
         const latestEntry =
           (prev.latest && prev.latest.source === 'bizus' && captureSource === 'indice' && lessonKey && normalizeCourseIndexKey(prev.latest.lessonTitle || '') === lessonKey)
