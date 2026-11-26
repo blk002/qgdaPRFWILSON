@@ -3,6 +3,7 @@ import { toast } from 'sonner';
 import { useStore } from '../store/useStore';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabaseClient';
 import { normalizeCourseLookupKey } from '../lib/courseIndexParser';
+import { formatDifficultyIdsLabel, sanitizeDifficultyIds } from '../lib/caveiraDifficulty';
 
 export function triggerCaveiraPractice(
   subjectName = '',
@@ -10,7 +11,8 @@ export function triggerCaveiraPractice(
   topicName = '',
   subtopics = [],
   rawIndexText = '',
-  questionStatus = 'not_resolved'
+  questionStatus = 'not_resolved',
+  difficultyIds = []
 ) {
   const isGenericLesson = (name) => {
     const clean = String(name || '')
@@ -50,6 +52,8 @@ export function triggerCaveiraPractice(
   }
 
   if (hasExt) {
+    const cleanDifficultyIds = sanitizeDifficultyIds(difficultyIds);
+    const diffLabel = formatDifficultyIdsLabel(cleanDifficultyIds);
     window.postMessage(
       {
         source: 'QG_WEB_APP',
@@ -62,15 +66,16 @@ export function triggerCaveiraPractice(
           subtopics: cleanSubtopics,
           rawIndexText: String(rawIndexText || ''),
           status: typeof questionStatus === 'string' ? questionStatus : 'not_resolved',
+          difficultyIds: cleanDifficultyIds,
         },
       },
       window.location.origin
     );
-    toast.success(
+    const baseToast =
       cleanSubtopics.length > 0
         ? `Abrindo Caveira com ${cleanSubtopics.length} subassuntos do Índice`
-        : `Abrindo Caveira com filtro: ${displayFilterLabel || subjectName}`
-    );
+        : `Abrindo Caveira com filtro: ${displayFilterLabel || subjectName}`;
+    toast.success(diffLabel ? `${baseToast} (${diffLabel})` : baseToast);
   } else {
     window.open('https://app.caveira.com/', '_blank', 'noopener');
     toast.info('Extensão não detectada nesta aba. Conteúdo copiado para a área de transferência.');

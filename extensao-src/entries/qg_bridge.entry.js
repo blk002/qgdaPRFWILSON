@@ -757,6 +757,9 @@ import {
         const rawIndexText = String(event.data.payload?.rawIndexText || '');
         const examBoards = Array.isArray(event.data.payload?.examBoards) ? event.data.payload.examBoards.map(String) : undefined;
         const numberAlternatives = Array.isArray(event.data.payload?.numberAlternatives) ? event.data.payload.numberAlternatives.map(Number).filter(Number.isFinite) : undefined;
+        const difficultyIds = Array.isArray(event.data.payload?.difficultyIds)
+          ? Array.from(new Set(event.data.payload.difficultyIds.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 6))).sort((a, b) => a - b)
+          : undefined;
         const allowedStatuses = new Set(['not_resolved', 'resolved', 'right', 'wrong', '']);
         const rawStatus = event.data.payload?.status;
         const status = typeof rawStatus === 'string' && allowedStatuses.has(rawStatus) ? rawStatus : undefined;
@@ -769,6 +772,7 @@ import {
           rawIndexText,
           examBoards,
           numberAlternatives,
+          ...(difficultyIds !== undefined ? { difficultyIds } : {}),
           ...(status !== undefined ? { status } : {}),
           createdAt: Date.now()
         };

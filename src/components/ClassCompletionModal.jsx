@@ -24,6 +24,15 @@ import {
   calculateLessonsForGoal
 } from '../lib/durationHelpers';
 import { parseCourseIndexSubtopics } from '../lib/courseIndexParser';
+import { CAVEIRA_DIFFICULTY_LEVELS, sanitizeDifficultyIds } from '../lib/caveiraDifficulty';
+
+const COMPACT_DIFF_ACTIVE = {
+  emerald: 'bg-emerald-600 text-white border-emerald-600 dark:bg-emerald-500 dark:text-slate-950 dark:border-emerald-500',
+  sky: 'bg-sky-600 text-white border-sky-600 dark:bg-sky-500 dark:text-slate-950 dark:border-sky-500',
+  amber: 'bg-amber-600 text-white border-amber-600 dark:bg-amber-500 dark:text-slate-950 dark:border-amber-500',
+  orange: 'bg-orange-600 text-white border-orange-600 dark:bg-orange-500 dark:text-slate-950 dark:border-orange-500',
+  rose: 'bg-rose-600 text-white border-rose-600 dark:bg-rose-500 dark:text-white dark:border-rose-500',
+};
 
 const shiftDateStr = (baseStr, offsetDays) => {
   const base =
@@ -62,7 +71,10 @@ export default function ClassCompletionModal({
   initialIndexText = '',
   latestCapturedCourseIndex = null,
   onSaveLessonIndex = null,
-  onPracticeQuestions = null
+  onPracticeQuestions = null,
+  selectedDifficultyIds = [],
+  onChangeDifficultyIds = null,
+  difficultyRecommendation = null
 }) {
   const todayStr = todayDateStr || shiftDateStr('', 0);
   const yesterdayStr = shiftDateStr(todayStr, -1);
@@ -562,6 +574,63 @@ export default function ClassCompletionModal({
                             Usar índice capturado ({latestCapturedCourseIndex.lessonTitle || 'Aula aberta'})
                           </button>
                         )}
+                    </div>
+                  )}
+
+                  {typeof onChangeDifficultyIds === 'function' && (
+                    <div className="pt-2 border-t border-slate-200/70 dark:border-slate-800/80 space-y-1.5">
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-[11px] font-semibold text-slate-600 dark:text-slate-400">
+                          Nível (Caveira)
+                        </span>
+                        {difficultyRecommendation && (
+                          <button
+                            type="button"
+                            onClick={() => onChangeDifficultyIds([difficultyRecommendation.recommendedId])}
+                            title={difficultyRecommendation.summary}
+                            className="text-[10px] font-semibold text-sky-600 dark:text-sky-400 bg-sky-500/10 hover:bg-sky-500/15 border border-sky-500/25 rounded px-1.5 py-0.5 transition-colors cursor-pointer"
+                          >
+                            ⚡ Auto: {difficultyRecommendation.level.shortLabel}
+                          </button>
+                        )}
+                      </div>
+                      <div className="flex flex-wrap gap-1">
+                        <button
+                          type="button"
+                          onClick={() => onChangeDifficultyIds([])}
+                          className={`px-2 py-1 rounded-md text-[10px] font-semibold border transition-colors cursor-pointer ${
+                            selectedDifficultyIds.length === 0
+                              ? 'bg-sky-600 text-white border-sky-600 dark:bg-sky-500 dark:text-slate-950 dark:border-sky-500'
+                              : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                          }`}
+                        >
+                          Todos
+                        </button>
+                        {CAVEIRA_DIFFICULTY_LEVELS.map((lvl) => {
+                          const active = selectedDifficultyIds.includes(lvl.id);
+                          return (
+                            <button
+                              key={lvl.id}
+                              type="button"
+                              title={`${lvl.label} (${lvl.rateLabel} acertos)`}
+                              onClick={() => {
+                                const clean = sanitizeDifficultyIds(selectedDifficultyIds);
+                                const next = active
+                                  ? clean.filter((x) => x !== lvl.id)
+                                  : sanitizeDifficultyIds([...clean, lvl.id]);
+                                onChangeDifficultyIds(next.some((x) => x >= 2) ? next : []);
+                              }}
+                              className={`px-2 py-1 rounded-md text-[10px] font-semibold border transition-colors cursor-pointer ${
+                                active
+                                  ? COMPACT_DIFF_ACTIVE[lvl.tone]
+                                  : 'bg-white dark:bg-slate-900 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-700'
+                              }`}
+                            >
+                              {lvl.shortLabel}
+                            </button>
+                          );
+                        })}
+                      </div>
                     </div>
                   )}
                 </div>

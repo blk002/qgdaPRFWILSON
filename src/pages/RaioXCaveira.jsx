@@ -683,7 +683,7 @@ export default function RaioXCaveira() {
     setSelectedLegalDevice(null);
   };
 
-  const triggerCriticalTopicPractice = (subjectName = '', topicsList = [], questionStatus = 'not_resolved') => {
+  const triggerCriticalTopicPractice = (subjectName = '', topicsList = [], questionStatus = 'not_resolved', difficultyIds = []) => {
     const cleanTopics = (Array.isArray(topicsList) ? topicsList : [topicsList])
       .map(t => String(t || '').trim())
       .filter(Boolean);
@@ -692,6 +692,9 @@ export default function RaioXCaveira() {
       t.split(/\s*(?:➔|->|•|\|)\s*/).map(s => s.trim()).filter(Boolean)
     );
     const uniqueSubtopics = Array.from(new Set(subtopics.length > 0 ? subtopics : cleanTopics));
+    const cleanDifficultyIds = Array.isArray(difficultyIds)
+      ? Array.from(new Set(difficultyIds.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 6))).sort((a, b) => a - b)
+      : [];
     const hasExt = typeof document !== 'undefined' && document.documentElement.getAttribute('data-qg-caveira-extension-installed') === 'true';
     if (navigator.clipboard && (uniqueSubtopics[0] || primaryTopic || subjectName)) {
       navigator.clipboard.writeText(uniqueSubtopics[0] || primaryTopic || subjectName).catch(() => {});
@@ -707,7 +710,8 @@ export default function RaioXCaveira() {
           fallbackTopic: primaryTopic,
           subtopics: uniqueSubtopics,
           rawIndexText: uniqueSubtopics.map((s, idx) => `${idx + 1}. ${s}`).join('\n'),
-          status: questionStatus
+          status: questionStatus,
+          ...(cleanDifficultyIds.length > 0 ? { difficultyIds: cleanDifficultyIds } : {})
         }
       }, window.location.origin);
       const statusTag = questionStatus === 'wrong' ? ' (só erradas)' : questionStatus === 'right' ? ' (só certas)' : '';

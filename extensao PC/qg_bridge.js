@@ -790,6 +790,7 @@
           const rawIndexText = String(event.data.payload?.rawIndexText || "");
           const examBoards = Array.isArray(event.data.payload?.examBoards) ? event.data.payload.examBoards.map(String) : void 0;
           const numberAlternatives = Array.isArray(event.data.payload?.numberAlternatives) ? event.data.payload.numberAlternatives.map(Number).filter(Number.isFinite) : void 0;
+          const difficultyIds = Array.isArray(event.data.payload?.difficultyIds) ? Array.from(new Set(event.data.payload.difficultyIds.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 6))).sort((a, b) => a - b) : void 0;
           const allowedStatuses = /* @__PURE__ */ new Set(["not_resolved", "resolved", "right", "wrong", ""]);
           const rawStatus = event.data.payload?.status;
           const status = typeof rawStatus === "string" && allowedStatuses.has(rawStatus) ? rawStatus : void 0;
@@ -802,6 +803,7 @@
             rawIndexText,
             examBoards,
             numberAlternatives,
+            ...difficultyIds !== void 0 ? { difficultyIds } : {},
             ...status !== void 0 ? { status } : {},
             createdAt: Date.now()
           };

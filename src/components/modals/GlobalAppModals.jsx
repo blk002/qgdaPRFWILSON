@@ -14,6 +14,20 @@ import {
   findMatchingCourseIndexEntry,
 } from '../../lib/courseIndexParser';
 import { triggerCaveiraPractice } from '../../hooks/useExtensionBridge';
+import {
+  CAVEIRA_DIFFICULTY_LEVELS,
+  CAVEIRA_UNDEFINED_DIFFICULTY,
+  recommendDifficultyForTopic,
+  sanitizeDifficultyIds,
+} from '../../lib/caveiraDifficulty';
+
+const DIFF_TONE_ACTIVE = {
+  emerald: 'bg-emerald-600 text-white border-emerald-600 dark:bg-emerald-500 dark:text-slate-950 dark:border-emerald-500',
+  sky: 'bg-sky-600 text-white border-sky-600 dark:bg-sky-500 dark:text-slate-950 dark:border-sky-500',
+  amber: 'bg-amber-600 text-white border-amber-600 dark:bg-amber-500 dark:text-slate-950 dark:border-amber-500',
+  orange: 'bg-orange-600 text-white border-orange-600 dark:bg-orange-500 dark:text-slate-950 dark:border-orange-500',
+  rose: 'bg-rose-600 text-white border-rose-600 dark:bg-rose-500 dark:text-white dark:border-rose-500',
+};
 
 export default function GlobalAppModals({
   courseIndexCache,
@@ -35,11 +49,13 @@ export default function GlobalAppModals({
   const watchClass = useStore((s) => s.watchClass);
   const handleReplaceSubject = useStore((s) => s.handleReplaceSubject);
   const getLocalDateStr = useStore((s) => s.getLocalDateStr);
+  const caveiraQuestions = useStore((s) => s.caveiraQuestions);
 
   const [reviewInputs, setReviewInputs] = useState({ total: 10, correct: 0 });
   const [dismissedPrePromptModalRef, setDismissedPrePromptModalRef] = useState(null);
   const [prePromptIndexText, setPrePromptIndexText] = useState('');
   const [prePromptQuestionStatus, setPrePromptQuestionStatus] = useState('not_resolved');
+  const [prePromptDifficultyIds, setPrePromptDifficultyIds] = useState([]);
   const [showPrePromptIndexBox, setShowPrePromptIndexBox] = useState(false);
   const [prevPrePromptModalRef, setPrevPrePromptModalRef] = useState(null);
 
@@ -58,8 +74,31 @@ export default function GlobalAppModals({
     const autoText = matchedModalIndexEntry?.rawIndexText || '';
     setPrePromptIndexText(autoText);
     setPrePromptQuestionStatus('not_resolved');
+    setPrePromptDifficultyIds([]);
     setShowPrePromptIndexBox(false);
   }
+
+  const difficultyRecommendation = useMemo(() => {
+    if (!classConfirmModal) return null;
+    const subjectName = subjects?.[classConfirmModal.subjectId]?.name || '';
+    return recommendDifficultyForTopic(
+      caveiraQuestions || [],
+      subjectName,
+      classConfirmModal.topicName || '',
+      classConfirmModal.lessonNames || []
+    );
+  }, [classConfirmModal, caveiraQuestions, subjects]);
+
+  const togglePrePromptDifficulty = (id) => {
+    setPrePromptDifficultyIds((prev) => {
+      const clean = sanitizeDifficultyIds(prev);
+      if (clean.includes(id)) {
+        const next = clean.filter((x) => x !== id);
+        return next.some((x) => x >= 2) ? next : [];
+      }
+      return sanitizeDifficultyIds([...clean, id]);
+    });
+  };
 
   const prePromptSubtopics = useMemo(() => {
     if (!classConfirmModal) return [];
@@ -422,6 +461,66 @@ export default function GlobalAppModals({
                 </div>
               </div>
 
+              <div className="mb-4">
+                <div className="flex items-center justify-between gap-2 mb-1.5">
+                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
+                    Nível de dificuldade (Caveira)
+                  </span>
+                  {difficultyRecommendation && (
+                    <button
+                      type="button"
+                      onClick={() => setPrePromptDifficultyIds([difficultyRecommendation.recommendedId])}
+                      title={difficultyRecommendation.summary}
+                      className="text-[11px] font-semibold text-sky-600 dark:text-sky-400 bg-sky-500/10 hover:bg-sky-500/15 border border-sky-500/25 rounded-md px-2 py-0.5 transition-colors cursor-pointer"
+                    >
+                      ⚡ Auto: {difficultyRecommendation.level.label}
+                    </button>
+                  )}
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setPrePromptDifficultyIds([])}
+                    className={`h-8 px-2.5 rounded-lg text-xs font-medium transition-colors border cursor-pointer ${
+                      prePromptDifficultyIds.length === 0
+                        ? 'bg-sky-600 text-white border-sky-600 dark:bg-sky-500 dark:text-slate-950 dark:border-sky-500'
+                        : 'bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                    }`}
+                  >
+                    Todos
+                  </button>
+                  {CAVEIRA_DIFFICULTY_LEVELS.map((lvl) => {
+                    const active = prePromptDifficultyIds.includes(lvl.id);
+                    return (
+                      <button
+                        key={lvl.id}
+                        type="button"
+                        onClick={() => togglePrePromptDifficulty(lvl.id)}
+                        title={`${lvl.label} (${lvl.rateLabel} de acertos na plataforma)`}
+                        className={`h-8 px-2.5 rounded-lg text-xs font-medium transition-colors border cursor-pointer ${
+                          active
+                            ? DIFF_TONE_ACTIVE[lvl.tone]
+                            : 'bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                        }`}
+                      >
+                        {lvl.label}
+                      </button>
+                    );
+                  })}
+                </div>
+                {prePromptDifficultyIds.some((id) => id >= 2) && (
+                  <label className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={prePromptDifficultyIds.includes(CAVEIRA_UNDEFINED_DIFFICULTY.id)}
+                      onChange={() => togglePrePromptDifficulty(CAVEIRA_UNDEFINED_DIFFICULTY.id)}
+                      className="rounded border-slate-300 dark:border-slate-700"
+                    />
+                    <span>Incluir questões novas (&quot;Em definição&quot;)</span>
+                  </label>
+                )}
+              </div>
+
               </div>
 
               <div className="px-5 py-3.5 border-t border-slate-100 dark:border-slate-800/90 bg-slate-50/60 dark:bg-slate-950/40 flex flex-col gap-2 shrink-0">
@@ -437,7 +536,8 @@ export default function GlobalAppModals({
                       topicName,
                       prePromptSubtopics,
                       prePromptIndexText,
-                      prePromptQuestionStatus
+                      prePromptQuestionStatus,
+                      prePromptDifficultyIds
                     );
                     setClassConfirmModal(null);
                   }}
@@ -493,6 +593,9 @@ export default function GlobalAppModals({
         allRemainingLessonNames={classConfirmModal?.allRemainingLessonNames || []}
         initialIndexText={prePromptIndexText || matchedModalIndexEntry?.rawIndexText || ''}
         latestCapturedCourseIndex={courseIndexCache?.latest || null}
+        selectedDifficultyIds={prePromptDifficultyIds}
+        onChangeDifficultyIds={setPrePromptDifficultyIds}
+        difficultyRecommendation={difficultyRecommendation}
         onSaveLessonIndex={saveManualLessonIndex}
         onPracticeQuestions={(selectedCount, subtopics = [], rawIndexText = '') => {
           const subjectName = subjects?.[classConfirmModal?.subjectId]?.name || '';
@@ -506,7 +609,8 @@ export default function GlobalAppModals({
             topicName,
             subtopics,
             rawIndexText,
-            prePromptQuestionStatus
+            prePromptQuestionStatus,
+            prePromptDifficultyIds
           );
         }}
         onClose={() => setClassConfirmModal(null)}

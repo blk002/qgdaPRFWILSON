@@ -288,7 +288,16 @@
   // Ids reais do Caveira (examining-boards): CAVEIRA (Inéditas)=2, CEBRASPE=5, CAVEIRA (ADAPTADA)=12
   const BOARD_KEY_TO_ID = { caveira_ineditas: 2, cebraspe: 5, caveira_adaptadas: 12 };
   const BOARD_LABELS = { caveira_ineditas: 'Caveira Inéditas', cebraspe: 'CEBRASPE', caveira_adaptadas: 'Caveira Adaptadas' };
-  const DEFAULT_PREFS = { examBoards: ['cebraspe', 'caveira_ineditas', 'caveira_adaptadas'], numberAlternatives: [2] };
+  // Ids reais do Caveira (difficulty_ids): 1=Em definição, 2=Muito fácil (80-100%), 3=Fácil (60-79%), 4=Médio (40-59%), 5=Difícil (20-39%), 6=Muito difícil (<20%)
+  const DIFFICULTY_LABELS = {
+    1: 'Em definição',
+    2: 'Muito fácil',
+    3: 'Fácil',
+    4: 'Médio',
+    5: 'Difícil',
+    6: 'Muito difícil'
+  };
+  const DEFAULT_PREFS = { examBoards: ['cebraspe', 'caveira_ineditas', 'caveira_adaptadas'], numberAlternatives: [2], difficultyIds: [] };
 
   function boardKeysToIds(keys) {
     const out = [];
@@ -306,28 +315,40 @@
     }
     return out.sort((a, b) => a - b);
   }
-  function describePrefs(keys, alts) {
+  function sanitizeDifficultyIds(list) {
+    const out = [];
+    for (const v of Array.isArray(list) ? list : []) {
+      const n = Number(v);
+      if (Number.isInteger(n) && n >= 1 && n <= 6 && !out.includes(n)) out.push(n);
+    }
+    return out.sort((a, b) => a - b);
+  }
+  function describePrefs(keys, alts, diffIds) {
     const b = (Array.isArray(keys) ? keys : []).map(k => BOARD_LABELS[k]).filter(Boolean);
     const a = sanitizeAlternatives(alts).map(n => n === 2 ? 'Certo/Errado' : `${n} alternativas`);
-    return [b.length ? b.join(' + ') : 'qualquer banca', a.length ? a.join(' / ') : 'qualquer nº de alternativas'].join(' • ');
+    const d = sanitizeDifficultyIds(diffIds).map(id => DIFFICULTY_LABELS[id]).filter(Boolean);
+    const parts = [b.length ? b.join(' + ') : 'qualquer banca', a.length ? a.join(' / ') : 'qualquer nº de alternativas'];
+    if (d.length) parts.push(d.join(' + '));
+    return parts.join(' • ');
   }
 
-  // 4º argumento: string (status, compatível com v1.4) ou objeto { status, examBoards:[chaves], numberAlternatives:[2] }
+  // 4º argumento: string (status, compatível com v1.4) ou objeto { status, examBoards:[chaves], numberAlternatives:[2], difficultyIds:[2..6] }
   function buildUrl(origin, subjectId, ids, opts = 'not_resolved') {
     const o = (opts && typeof opts === 'object') ? opts : { status: opts };
     const status = o.status === undefined ? 'not_resolved' : o.status;
     const boardIds = boardKeysToIds(o.examBoards);
     const alts = sanitizeAlternatives(o.numberAlternatives);
+    const diffIds = sanitizeDifficultyIds(o.difficultyIds);
     const p = new URLSearchParams({
       career_id: 'all', subject_ids: String(subjectId), subtopic_id: '', subtopic_ids: ids.join(','),
       number_alternatives: alts.join(','), raw_text: '', examining_board_ids: boardIds.join(','), book_ids: '', years: '', education_level_ids: '',
-      situation: '', difficulty_ids: '', status: status, question_id: '', ids: '', institution_ids: '',
+      situation: '', difficulty_ids: diffIds.join(','), status: status, question_id: '', ids: '', institution_ids: '',
       occupation_ids: '', has_comment: '', has_video: '', category_ids: ''
     });
     return `${origin || 'https://app.caveira.com'}/questions?${p.toString()}`;
   }
 
-  const api = { loadTree, resolveSubject, resolveLesson, buildUrl, score, isLeafName, boardKeysToIds, sanitizeAlternatives, describePrefs, BOARD_KEY_TO_ID, DEFAULT_PREFS };
+  const api = { loadTree, resolveSubject, resolveLesson, buildUrl, score, isLeafName, boardKeysToIds, sanitizeAlternatives, sanitizeDifficultyIds, describePrefs, BOARD_KEY_TO_ID, DIFFICULTY_LABELS, DEFAULT_PREFS };
   if (typeof module !== 'undefined' && module.exports) module.exports = api;
   root.QGCaveiraResolver = api;
 })(typeof globalThis !== 'undefined' ? globalThis : window);

@@ -75,7 +75,7 @@ import {
 
 (function() {
   if (isExcludedCaveiraHost(window.location.hostname)) return;
-  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.2.7';
+  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.3.0';
   console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
@@ -85,6 +85,8 @@ import {
   } catch (_) {}
 
   const SCHEMA_VERSION_KEY = 'qg_caveira_schema_version';
+  const HUD_COURSE_DIFF_KEY = 'qg_hud_course_difficulty_ids';
+  let hudCourseDifficultyIds = [];
   const MAX_BUCKET_QUESTIONS = 1500;
   const CHANNEL_NONCE = generateChannelNonce();
   let diagnosticModeEnabled = false;
@@ -2529,6 +2531,14 @@ import {
             <span>🎉 Aula concluída detectada!</span>
             <button type="button" id="qg-btn-banner-complete" style="width:100%;background:#10b981;color:#052e16;border:none;border-radius:6px;padding:5px 8px;font-size:10px;font-weight:900;text-transform:uppercase;cursor:pointer;">✅ Registrar Aula no QG Agora</button>
           </div>
+          <div id="qg-hud-course-diff-bar" style="display:flex;flex-wrap:wrap;gap:3px;align-items:center;">
+            <button type="button" class="qg-course-diff-pill active" data-diff="" style="font-size:9px;font-weight:800;padding:3px 6px;border-radius:5px;border:1px solid rgba(56,189,248,0.45);background:rgba(14,165,233,0.22);color:#e0f2fe;cursor:pointer;">Todas</button>
+            <button type="button" class="qg-course-diff-pill" data-diff="2" title="80–100% acertos" style="font-size:9px;font-weight:800;padding:3px 5px;border-radius:5px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#a1a1aa;cursor:pointer;">M.Fácil</button>
+            <button type="button" class="qg-course-diff-pill" data-diff="3" title="60–79% acertos" style="font-size:9px;font-weight:800;padding:3px 5px;border-radius:5px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#a1a1aa;cursor:pointer;">Fácil</button>
+            <button type="button" class="qg-course-diff-pill" data-diff="4" title="40–59% acertos" style="font-size:9px;font-weight:800;padding:3px 5px;border-radius:5px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#a1a1aa;cursor:pointer;">Médio</button>
+            <button type="button" class="qg-course-diff-pill" data-diff="5" title="20–39% acertos" style="font-size:9px;font-weight:800;padding:3px 5px;border-radius:5px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#a1a1aa;cursor:pointer;">Difícil</button>
+            <button type="button" class="qg-course-diff-pill" data-diff="6" title="< 20% acertos" style="font-size:9px;font-weight:800;padding:3px 5px;border-radius:5px;border:1px solid rgba(255,255,255,0.12);background:rgba(255,255,255,0.04);color:#a1a1aa;cursor:pointer;">M.Difícil</button>
+          </div>
           <button type="button" id="qg-btn-course-practice" style="width:100%;background:linear-gradient(90deg,#0284c7,#2563eb);color:#fff;border:none;border-radius:8px;padding:7px 10px;font-size:10px;font-weight:900;text-transform:uppercase;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:6px;box-shadow:0 3px 10px rgba(2,132,199,0.3);">
             <span>🎯 Resolver Questões desta Aula</span>
           </button>
@@ -2697,6 +2707,71 @@ import {
       }
     });
 
+    const diffAccentStyles = {
+      '': { border: 'rgba(56,189,248,0.55)', bg: 'rgba(14,165,233,0.24)', color: '#e0f2fe' },
+      '2': { border: 'rgba(16,185,129,0.55)', bg: 'rgba(16,185,129,0.22)', color: '#a7f3d0' },
+      '3': { border: 'rgba(56,189,248,0.55)', bg: 'rgba(14,165,233,0.22)', color: '#bae6fd' },
+      '4': { border: 'rgba(245,158,11,0.55)', bg: 'rgba(245,158,11,0.22)', color: '#fde68a' },
+      '5': { border: 'rgba(249,115,22,0.55)', bg: 'rgba(249,115,22,0.22)', color: '#fed7aa' },
+      '6': { border: 'rgba(244,63,94,0.55)', bg: 'rgba(244,63,94,0.22)', color: '#fecdd3' },
+    };
+    const renderCourseDiffBar = () => {
+      const bar = hud.querySelector('#qg-hud-course-diff-bar');
+      if (!bar) return;
+      const pills = bar.querySelectorAll('.qg-course-diff-pill');
+      pills.forEach((pill) => {
+        const val = pill.getAttribute('data-diff') || '';
+        const isActive = val === ''
+          ? hudCourseDifficultyIds.length === 0
+          : hudCourseDifficultyIds.includes(Number(val));
+        pill.classList.toggle('active', isActive);
+        if (isActive) {
+          const st = diffAccentStyles[val] || diffAccentStyles[''];
+          pill.style.borderColor = st.border;
+          pill.style.background = st.bg;
+          pill.style.color = st.color;
+        } else {
+          pill.style.borderColor = 'rgba(255,255,255,0.12)';
+          pill.style.background = 'rgba(255,255,255,0.04)';
+          pill.style.color = '#a1a1aa';
+        }
+      });
+    };
+    try {
+      if (isExtensionContextValid() && chrome?.storage?.local) {
+        chrome.storage.local.get([HUD_COURSE_DIFF_KEY], (res) => {
+          if (chrome.runtime?.lastError || isDestroyed) return;
+          const savedDiffs = Array.isArray(res?.[HUD_COURSE_DIFF_KEY])
+            ? Array.from(new Set(res[HUD_COURSE_DIFF_KEY].map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 6))).sort((a, b) => a - b)
+            : [];
+          hudCourseDifficultyIds = savedDiffs;
+          renderCourseDiffBar();
+        });
+      }
+    } catch (_) {}
+    hud.querySelector('#qg-hud-course-diff-bar')?.addEventListener('click', (e) => {
+      const pill = e.target?.closest?.('.qg-course-diff-pill');
+      if (!pill) return;
+      e.stopPropagation();
+      const raw = pill.getAttribute('data-diff') || '';
+      if (!raw) {
+        hudCourseDifficultyIds = [];
+      } else {
+        const num = Number(raw);
+        if (hudCourseDifficultyIds.includes(num)) {
+          hudCourseDifficultyIds = hudCourseDifficultyIds.filter((id) => id !== num);
+        } else {
+          hudCourseDifficultyIds = [...hudCourseDifficultyIds, num].sort((a, b) => a - b);
+        }
+      }
+      renderCourseDiffBar();
+      try {
+        if (isExtensionContextValid() && chrome?.storage?.local) {
+          chrome.storage.local.set({ [HUD_COURSE_DIFF_KEY]: hudCourseDifficultyIds });
+        }
+      } catch (_) {}
+    });
+
     hud.querySelector('#qg-btn-course-practice')?.addEventListener('click', (e) => {
       e.stopPropagation();
       const btn = e.currentTarget;
@@ -2724,6 +2799,7 @@ import {
         fallbackTopic: topicValue,
         subtopics,
         rawIndexText,
+        difficultyIds: [...hudCourseDifficultyIds],
         createdAt: Date.now()
       };
       const origHtml = btn ? btn.innerHTML : '';
@@ -5679,7 +5755,7 @@ import {
       ? filterCtx.status
       : null;
     const fromSite = filterCtx && (Array.isArray(filterCtx.examBoards) || Array.isArray(filterCtx.numberAlternatives));
-    const fallback = resolver?.DEFAULT_PREFS || { examBoards: [], numberAlternatives: [] };
+    const fallback = resolver?.DEFAULT_PREFS || { examBoards: [], numberAlternatives: [], difficultyIds: [] };
     let saved = null;
     try {
       if (isExtensionContextValid() && chrome?.storage?.local) {
@@ -5691,26 +5767,33 @@ import {
       : 'not_resolved';
     const status = fromSiteStatus !== null ? fromSiteStatus : savedStatus;
 
+    const sanitizeDiff = (arr) => Array.isArray(arr)
+      ? Array.from(new Set(arr.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 6))).sort((a, b) => a - b)
+      : null;
+    const fromSiteDiff = sanitizeDiff(filterCtx?.difficultyIds);
+    const savedDiff = sanitizeDiff(saved?.difficultyIds) || [];
+    const difficultyIds = fromSiteDiff !== null ? fromSiteDiff : savedDiff;
+
     if (fromSite) {
       // site novo: array vazio = "sem filtro" explícito
-      return { examBoards: filterCtx.examBoards || [], numberAlternatives: filterCtx.numberAlternatives || [], status, source: 'site' };
+      return { examBoards: filterCtx.examBoards || [], numberAlternatives: filterCtx.numberAlternatives || [], difficultyIds, status, source: 'site' };
     }
     if (saved && (Array.isArray(saved.examBoards) || Array.isArray(saved.numberAlternatives))) {
-      return { examBoards: saved.examBoards || [], numberAlternatives: saved.numberAlternatives || [], status, source: 'popup' };
+      return { examBoards: saved.examBoards || [], numberAlternatives: saved.numberAlternatives || [], difficultyIds, status, source: 'popup' };
     }
-    return { examBoards: fallback.examBoards, numberAlternatives: fallback.numberAlternatives, status, source: 'padrao' };
+    return { examBoards: fallback.examBoards, numberAlternatives: fallback.numberAlternatives, difficultyIds, status, source: 'padrao' };
   }
 
   async function navigateToCaveiraDeepLink(subjectId, ids, bannerText) {
     const resolver = (typeof globalThis !== 'undefined' && globalThis.QGCaveiraResolver) ? globalThis.QGCaveiraResolver : null;
     if (!resolver || !subjectId || !Array.isArray(ids) || ids.length === 0) return false;
     const prefs = await getEffectiveQuestionPrefs(activePracticeFilter);
-    const url = resolver.buildUrl(window.location.origin, subjectId, ids, { status: prefs.status, examBoards: prefs.examBoards, numberAlternatives: prefs.numberAlternatives });
-    const basePrefsLabel = resolver.describePrefs ? resolver.describePrefs(prefs.examBoards, prefs.numberAlternatives) : '';
+    const url = resolver.buildUrl(window.location.origin, subjectId, ids, { status: prefs.status, examBoards: prefs.examBoards, numberAlternatives: prefs.numberAlternatives, difficultyIds: prefs.difficultyIds });
+    const basePrefsLabel = resolver.describePrefs ? resolver.describePrefs(prefs.examBoards, prefs.numberAlternatives, prefs.difficultyIds) : '';
     const statusLabel = prefs.status !== 'not_resolved' ? (STATUS_LABELS[prefs.status] || prefs.status) : '';
     const prefsLabel = [statusLabel, basePrefsLabel].filter(Boolean).join(' • ');
     if (bannerText && prefsLabel) bannerText = `${bannerText} • ${prefsLabel}`;
-    if (lastFilterDiagnosticLog) { lastFilterDiagnosticLog.examBoards = prefs.examBoards; lastFilterDiagnosticLog.numberAlternatives = prefs.numberAlternatives; lastFilterDiagnosticLog.status = prefs.status; lastFilterDiagnosticLog.prefsSource = prefs.source; lastFilterDiagnosticLog.url = url; }
+    if (lastFilterDiagnosticLog) { lastFilterDiagnosticLog.examBoards = prefs.examBoards; lastFilterDiagnosticLog.numberAlternatives = prefs.numberAlternatives; lastFilterDiagnosticLog.difficultyIds = prefs.difficultyIds; lastFilterDiagnosticLog.status = prefs.status; lastFilterDiagnosticLog.prefsSource = prefs.source; lastFilterDiagnosticLog.url = url; }
     try {
       if (isExtensionContextValid() && chrome?.storage?.local) {
         await new Promise((res) => {
@@ -6773,6 +6856,7 @@ import {
       rawIndexText,
       examBoards: Array.isArray(filterObj.examBoards) ? filterObj.examBoards : undefined,
       numberAlternatives: Array.isArray(filterObj.numberAlternatives) ? filterObj.numberAlternatives : undefined,
+      ...(Array.isArray(filterObj.difficultyIds) ? { difficultyIds: filterObj.difficultyIds } : {}),
       ...(typeof filterObj.status === 'string' ? { status: filterObj.status } : {})
     };
     const resolverBox = getHudEl('qg-hud-resolver-box');

@@ -30,7 +30,7 @@ import {
 
 // Popup Script — QG da PRF Rastreador Caveira (v3.2.0 — Dexie + Diagnóstico + Fila ACK + API Real)
 const USER_BUCKETS_KEY = 'qg_caveira_user_buckets';
-const FIRST_PREFS = { examBoards: ['cebraspe', 'caveira_ineditas', 'caveira_adaptadas'], numberAlternatives: [2], status: 'not_resolved' };
+const FIRST_PREFS = { examBoards: ['cebraspe', 'caveira_ineditas', 'caveira_adaptadas'], numberAlternatives: [2], status: 'not_resolved', difficultyIds: [] };
 const TREE_STALE_DAYS = 30;
 
 function renderAccountStatus(activeUserId, activeUserLabel) {
@@ -127,7 +127,7 @@ async function getBaselineTreeDateFallback() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const manifestVer = chrome.runtime?.getManifest?.().version || '3.2.7';
+  const manifestVer = chrome.runtime?.getManifest?.().version || '3.3.0';
   const verEl = document.getElementById('ext-version');
   if (verEl) verEl.textContent = `v${manifestVer}`;
 
@@ -384,11 +384,14 @@ document.addEventListener('DOMContentLoaded', () => {
   // Filtros padrão
   (function initPrefs() {
     const boxes = Array.from(document.querySelectorAll('.pref-board'));
+    const diffBoxes = Array.from(document.querySelectorAll('.pref-diff'));
     const sel = document.getElementById('pref-alts');
     const statusSel = document.getElementById('pref-status');
     if (!boxes.length || !sel) return;
     const render = (p) => {
       boxes.forEach((b) => { b.checked = (p.examBoards || []).includes(b.value); });
+      const diffs = Array.isArray(p.difficultyIds) ? p.difficultyIds.map(Number) : [];
+      diffBoxes.forEach((b) => { b.checked = diffs.includes(Number(b.value)); });
       sel.value = (p.numberAlternatives && p.numberAlternatives[0]) ? String(p.numberAlternatives[0]) : '';
       if (statusSel) {
         statusSel.value = typeof p.status === 'string' ? p.status : 'not_resolved';
@@ -398,12 +401,14 @@ document.addEventListener('DOMContentLoaded', () => {
       const p = {
         examBoards: boxes.filter((b) => b.checked).map((b) => b.value),
         numberAlternatives: sel.value ? [Number(sel.value)] : [],
+        difficultyIds: diffBoxes.filter((b) => b.checked).map((b) => Number(b.value)).sort((a, b) => a - b),
         status: statusSel ? statusSel.value : 'not_resolved',
       };
       chrome.storage.local.set({ [DEFAULT_PREFS_KEY]: p });
     };
     chrome.storage.local.get([DEFAULT_PREFS_KEY], (r) => render(r[DEFAULT_PREFS_KEY] || FIRST_PREFS));
     boxes.forEach((b) => b.addEventListener('change', save));
+    diffBoxes.forEach((b) => b.addEventListener('change', save));
     sel.addEventListener('change', save);
     if (statusSel) statusSel.addEventListener('change', save);
   })();
