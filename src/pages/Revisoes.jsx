@@ -560,19 +560,21 @@ export default function Revisoes() {
         </div>
       )}
 
-      {/* Previsão de 7 Dias + Curva de Esquecimento */}
-      {(progressiveReviews || []).length > 0 && (
-        <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 p-5 space-y-3">
-          <div className="flex flex-wrap items-center justify-between gap-2">
-            <div>
-              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white">
-                Trilha de Maestria das Aulas (5 níveis · 5q · 100%)
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                {(progressiveReviews || []).length} {(progressiveReviews || []).length === 1 ? 'aula monitorada' : 'aulas monitoradas'} · Suba de nível ao gabaritar 5/5 questões inéditas.
-              </p>
-            </div>
+      {/* Trilha de Maestria das Aulas */}
+      <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 p-5 space-y-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white">
+              Trilha de Maestria das Aulas (5 níveis · 5q · 100%)
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              {(progressiveReviews || []).length > 0
+                ? `${(progressiveReviews || []).length} ${(progressiveReviews || []).length === 1 ? 'aula monitorada' : 'aulas monitoradas'} · Suba de nível ao gabaritar 5/5 questões inéditas.`
+                : 'Nenhuma aula monitorada ainda · Conclua a fixação inicial de 10 questões (Muito fácil) ao assistir uma aula para iniciar a trilha.'}
+            </p>
           </div>
+        </div>
+        {(progressiveReviews || []).length > 0 ? (
           <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {(progressiveReviews || []).slice(0, 6).map((progRev) => (
               <ProgressiveReviewCard
@@ -587,8 +589,12 @@ export default function Revisoes() {
               />
             ))}
           </div>
-        </section>
-      )}
+        ) : (
+          <div className="rounded-lg border border-dashed border-slate-200 dark:border-slate-800 px-4 py-3 text-xs text-slate-500 dark:text-slate-400">
+            Assim que você concluir a última parte de uma aula e finalizar as 10 questões de fixação, a primeira revisão de 5 questões será agendada automaticamente aqui.
+          </div>
+        )}
+      </section>
 
       {/* Previsão de 7 Dias + Curva de Esquecimento */}
       <div className="grid grid-cols-1 lg:grid-cols-12 gap-5">

@@ -734,7 +734,6 @@ export default function GlobalAppModals({
                           speed: subjects?.[classConfirmModal.subjectId]?.speed || 1,
                           studyDateStr: classConfirmModal.initialStudyDate || todayStrForModal,
                           plannedBlockCount: classConfirmModal.plannedBlockCount ?? null,
-                          onConfirmed: classConfirmModal.onConfirmed,
                         },
                       });
                       setClassConfirmModal(null);
@@ -853,7 +852,6 @@ export default function GlobalAppModals({
               speed,
               studyDateStr: studyDate,
               plannedBlockCount: classConfirmModal.plannedBlockCount ?? null,
-              onConfirmed: classConfirmModal.onConfirmed,
             },
           });
           setClassConfirmModal(null);

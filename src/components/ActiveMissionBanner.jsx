@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { Target, RotateCcw, ArrowUpRight, Plus, CheckCircle2, X } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { formatDifficultyIdsLabel } from '../lib/caveiraDifficulty';
+import { serializeMissionForBridge } from '../lib/lessonMastery';
 
 export default function ActiveMissionBanner() {
   const activePracticeMission = useStore((s) => s.activePracticeMission);
@@ -28,37 +29,54 @@ export default function ActiveMissionBanner() {
       typeof document !== 'undefined' &&
       document.documentElement.getAttribute('data-qg-caveira-extension-installed') === 'true';
     if (hasExt) {
-      window.postMessage(
-        {
-          source: 'QG_WEB_APP',
-          type: 'OPEN_CAVEIRA_PRACTICE',
-          payload: {
-            missionId: m.id,
-            subject: m.subjectName || '',
-            lessons: m.lessonNames || [],
-            topic:
-              Array.isArray(m.subtopics) && m.subtopics.length > 0
-                ? m.subtopics.slice(0, 3).join(' • ')
-                : (m.lessonNames || []).join(' • ') || m.topicName || '',
-            fallbackTopic: m.topicName || '',
-            subtopics: m.subtopics || [],
-            rawIndexText: m.rawIndexText || '',
-            status: 'not_resolved',
-            difficultyIds: m.activeDifficultyIds || [m.baseDifficultyId || 2],
-            ...(hasCustomQgPrefs
-              ? {
-                  examBoards: Array.isArray(caveiraQuestionPrefs.examBoards)
-                    ? caveiraQuestionPrefs.examBoards
-                    : [],
-                  numberAlternatives: Array.isArray(caveiraQuestionPrefs.numberAlternatives)
-                    ? caveiraQuestionPrefs.numberAlternatives
-                    : [],
-                }
-              : {}),
+      try {
+        window.postMessage(
+          {
+            source: 'QG_WEB_APP',
+            type: 'QG_PRF_SYNC_ACTIVE_MISSION',
+            payload: { mission: serializeMissionForBridge(m) },
           },
-        },
-        window.location.origin
-      );
+          window.location.origin
+        );
+      } catch (err) {
+        console.warn('[QG_WEB_APP] Falha ao sincronizar missão ativa antes de abrir Caveira:', err);
+      }
+
+      try {
+        window.postMessage(
+          {
+            source: 'QG_WEB_APP',
+            type: 'OPEN_CAVEIRA_PRACTICE',
+            payload: {
+              missionId: m.id,
+              subject: m.subjectName || '',
+              lessons: m.lessonNames || [],
+              topic:
+                Array.isArray(m.subtopics) && m.subtopics.length > 0
+                  ? m.subtopics.slice(0, 3).join(' • ')
+                  : (m.lessonNames || []).join(' • ') || m.topicName || '',
+              fallbackTopic: m.topicName || '',
+              subtopics: m.subtopics || [],
+              rawIndexText: m.rawIndexText || '',
+              status: 'not_resolved',
+              difficultyIds: m.activeDifficultyIds || [m.baseDifficultyId || 2],
+              ...(hasCustomQgPrefs
+                ? {
+                    examBoards: Array.isArray(caveiraQuestionPrefs.examBoards)
+                      ? caveiraQuestionPrefs.examBoards
+                      : [],
+                    numberAlternatives: Array.isArray(caveiraQuestionPrefs.numberAlternatives)
+                      ? caveiraQuestionPrefs.numberAlternatives
+                      : [],
+                  }
+                : {}),
+            },
+          },
+          window.location.origin
+        );
+      } catch (err) {
+        console.warn('[QG_WEB_APP] Falha ao abrir Caveira para a missão ativa:', err);
+      }
     } else {
       window.open('https://app.caveira.com/questions', '_blank', 'noopener');
     }

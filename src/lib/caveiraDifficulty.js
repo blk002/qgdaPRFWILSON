@@ -233,10 +233,11 @@ export function recommendDifficultyForTopic(
   }
 
   const level = LEVEL_MAP.get(recommendedId) || CAVEIRA_DIFFICULTY_LEVELS[0];
+  const scopeLabel = scope === 'disciplina' ? 'na disciplina' : 'no assunto';
   const summary =
     sampleSize === 0
       ? `Sem histórico neste tema — sugerido começar em ${level.label}.`
-      : `Baseado em ${sampleSize} ${sampleSize === 1 ? 'questão' : 'questões'} (${accuracyPct}% de acerto no ${scope}) → sugerido ${level.label}.`;
+      : `Baseado em ${sampleSize} ${sampleSize === 1 ? 'questão' : 'questões'} (${accuracyPct}% de acerto ${scopeLabel}) → sugerido ${level.label}.`;
 
   return {
     recommendedId,

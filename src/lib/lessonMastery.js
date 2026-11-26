@@ -403,3 +403,35 @@ export function computeNextProgressiveReviewState(
     newlyMastered: Boolean(!review?.mastered && mastered),
   };
 }
+
+/**
+ * Serializa uma missão ativa removendo callbacks ou valores não-clonáveis
+ * (ex: `lessonContext.onConfirmed`) antes de trafegar por `window.postMessage`.
+ */
+export function serializeMissionForBridge(mission) {
+  if (!mission || typeof mission !== 'object') return null;
+
+  const { lessonContext, finishedSeries, ...rest } = mission;
+  const serialized = { ...rest };
+
+  if (Array.isArray(finishedSeries)) {
+    serialized.finishedSeries = finishedSeries.map((item) => ({
+      id: item?.id || '',
+      title: item?.title || '',
+      partIndex: Number.isFinite(Number(item?.partIndex)) ? Number(item.partIndex) : null,
+    }));
+  }
+
+  if (lessonContext && typeof lessonContext === 'object') {
+    const { onConfirmed: _ignoredOnConfirmed, ...safeCtx } = lessonContext;
+    const cleanCtx = {};
+    for (const [key, val] of Object.entries(safeCtx)) {
+      if (typeof val !== 'function' && val !== undefined) {
+        cleanCtx[key] = val;
+      }
+    }
+    serialized.lessonContext = cleanCtx;
+  }
+
+  return serialized;
+}

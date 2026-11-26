@@ -21,6 +21,7 @@ import {
   getExpandedDifficultyIds,
   addDaysToLocalDateStr,
   computeNextProgressiveReviewState,
+  serializeMissionForBridge,
 } from '../lib/lessonMastery';
 import {
   LOCAL_TEST_ACCOUNT,
@@ -1946,13 +1947,29 @@ export const useStore = create(
         
         let newCount = 0;
         let updatedExisting = false;
+        const activeMission = get().activePracticeMission;
+        const missionStartedAt =
+          activeMission && activeMission.status === 'active'
+            ? Number(activeMission.startedAt) || 0
+            : 0;
+        const newlyAnsweredForMission = [];
 
         questionsList.forEach(q => {
           if (!q || !q.id) return;
           const prev = map.get(q.id);
           if (!prev) {
             newCount++;
-            map.set(q.id, enrichCaveiraQuestionPayload(null, q));
+            const enrichedNew = enrichCaveiraQuestionPayload(null, q);
+            map.set(q.id, enrichedNew);
+            if (missionStartedAt > 0) {
+              const qTs = new Date(enrichedNew.timestamp || enrichedNew.updatedAt || Date.now()).getTime();
+              if (Number.isFinite(qTs) && qTs >= missionStartedAt - 15000) {
+                newlyAnsweredForMission.push({
+                  id: enrichedNew.id,
+                  hit: Boolean(enrichedNew.hit),
+                });
+              }
+            }
           } else {
             const prevIsNewer = Boolean(prev.updatedAt && (!q.updatedAt || prev.updatedAt > q.updatedAt));
             const baseMerged = prevIsNewer
@@ -2001,6 +2018,19 @@ export const useStore = create(
             ) {
               updatedExisting = true;
             }
+            const prevAttemptsLen = Array.isArray(prev.attempts) ? prev.attempts.length : 0;
+            const nextAttemptsLen = Array.isArray(mergedItem.attempts) ? mergedItem.attempts.length : 0;
+            if (missionStartedAt > 0 && nextAttemptsLen > prevAttemptsLen) {
+              const latestTs = new Date(
+                mergedItem.timestamp || mergedItem.updatedAt || Date.now()
+              ).getTime();
+              if (Number.isFinite(latestTs) && latestTs >= missionStartedAt - 15000) {
+                newlyAnsweredForMission.push({
+                  id: mergedItem.id,
+                  hit: Boolean(mergedItem.hit),
+                });
+              }
+            }
             map.set(q.id, mergedItem);
           }
         });
@@ -2026,6 +2056,12 @@ export const useStore = create(
 
         // Sincroniza, repara e agenda no FSRS todas as questões erradas sem duplicar
         get().syncAndRepairCaveiraReviews?.();
+
+        if (newlyAnsweredForMission.length > 0) {
+          newlyAnsweredForMission.forEach((item) => {
+            get().recordMissionQuestionAnswer?.(item.id, Boolean(item.hit));
+          });
+        }
         return newCount;
       },
 
@@ -4088,10 +4124,14 @@ export const useStore = create(
               {
                 source: 'QG_WEB_APP',
                 type: 'QG_PRF_SYNC_ACTIVE_MISSION',
-                payload: { mission },
+                payload: { mission: serializeMissionForBridge(mission) },
               },
               window.location.origin
             );
+          } catch (err) {
+            console.warn('[QG_WEB_APP] Falha ao sincronizar missão ativa:', err);
+          }
+          try {
             window.postMessage(
               {
                 source: 'QG_WEB_APP',
@@ -4121,7 +4161,9 @@ export const useStore = create(
               },
               window.location.origin
             );
-          } catch (_) {}
+          } catch (err) {
+            console.warn('[QG_WEB_APP] Falha ao abrir Caveira para a missão:', err);
+          }
           const diffLabel = formatDifficultyIdsLabel(mission.activeDifficultyIds);
           toast.success(
             `${type === 'lesson_fixation' ? 'Fixação iniciada' : 'Revisão iniciada'}: ${mission.targetCount} questões (${diffLabel})`
@@ -4155,10 +4197,14 @@ export const useStore = create(
             {
               source: 'QG_WEB_APP',
               type: 'QG_PRF_SYNC_ACTIVE_MISSION',
-              payload: { mission: updated },
+              payload: { mission: serializeMissionForBridge(updated) },
             },
             window.location.origin
           );
+        } catch (err) {
+          console.warn('[QG_WEB_APP] Falha ao sincronizar missão expandida:', err);
+        }
+        try {
           window.postMessage(
             {
               source: 'QG_WEB_APP',
@@ -4188,7 +4234,9 @@ export const useStore = create(
             },
             window.location.origin
           );
-        } catch (_) {}
+        } catch (err) {
+          console.warn('[QG_WEB_APP] Falha ao abrir Caveira após expandir nível:', err);
+        }
         toast.info(`Filtro expandido: ${formatDifficultyIdsLabel(expanded)}`);
         return updated;
       },
@@ -4235,11 +4283,13 @@ export const useStore = create(
             {
               source: 'QG_WEB_APP',
               type: 'QG_PRF_SYNC_ACTIVE_MISSION',
-              payload: { mission: updated },
+              payload: { mission: serializeMissionForBridge(updated) },
             },
             window.location.origin
           );
-        } catch (_) {}
+        } catch (err) {
+          console.warn('[QG_WEB_APP] Falha ao sincronizar progresso da missão:', err);
+        }
 
         if (isDone) {
           get().completeActivePracticeMission(updated);
@@ -4347,6 +4397,33 @@ export const useStore = create(
               ctx.studyDateStr || todayStr,
               ctx.plannedBlockCount ?? null
             );
+            if (ctx.slotIndex !== undefined && ctx.slotIndex !== null) {
+              try {
+                const storageKey = `qg_checked_lessons_${todayStr || 'today'}`;
+                const rawChecked = localStorage.getItem(storageKey);
+                if (rawChecked) {
+                  const parsedChecked = JSON.parse(rawChecked);
+                  const prefix = `${ctx.subjectId}:${ctx.slotIndex}:`;
+                  let changed = false;
+                  for (const k of Object.keys(parsedChecked)) {
+                    if (k.startsWith(prefix)) {
+                      delete parsedChecked[k];
+                      changed = true;
+                    }
+                  }
+                  if (changed) {
+                    localStorage.setItem(storageKey, JSON.stringify(parsedChecked));
+                  }
+                }
+                if (typeof window !== 'undefined') {
+                  window.dispatchEvent(
+                    new CustomEvent('qg-checked-lessons-cleared', {
+                      detail: { subjectId: ctx.subjectId, slotIndex: ctx.slotIndex },
+                    })
+                  );
+                }
+              } catch (_) {}
+            }
             if (typeof ctx.onConfirmed === 'function') {
               try { ctx.onConfirmed(); } catch (_) {}
             }

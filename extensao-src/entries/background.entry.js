@@ -611,7 +611,10 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             await chrome.windows.update(fallbackTab.windowId, { focused: true }).catch(() => {});
           }
         } else if (chrome.tabs) {
-          await chrome.tabs.create({ url: `${targetOrigin}/questions`, active: true });
+          const created = await chrome.tabs.create({ url: `${targetOrigin}/questions`, active: true });
+          if (created?.windowId && chrome.windows?.update) {
+            await chrome.windows.update(created.windowId, { focused: true }).catch(() => {});
+          }
         }
         sendResponse({ success: true });
       } catch (_) {

@@ -8,6 +8,7 @@ import {
   resolveEffectiveDifficultyIds,
   sanitizeDifficultyIds,
 } from '../lib/caveiraDifficulty';
+import { serializeMissionForBridge } from '../lib/lessonMastery';
 
 export function triggerCaveiraPractice(
   subjectName = '',
@@ -557,7 +558,7 @@ export function useExtensionBridge() {
           {
             source: 'QG_WEB_APP',
             type: 'QG_PRF_SYNC_ACTIVE_MISSION',
-            payload: { mission: activePracticeMission },
+            payload: { mission: serializeMissionForBridge(activePracticeMission) },
           },
           window.location.origin
         );
