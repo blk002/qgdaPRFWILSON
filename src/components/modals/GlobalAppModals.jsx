@@ -3,7 +3,7 @@ import { createPortal } from 'react-dom';
 import { AnimatePresence, motion } from 'framer-motion';
 import {
   BrainCircuit, Calendar as CalendarIcon, Crosshair, ListFilter, Skull,
-  ArrowRight, Check, Repeat, AlertTriangle, Info, X
+  ArrowRight, Check, Repeat, AlertTriangle, Info, X, Zap
 } from 'lucide-react';
 import { useStore } from '../../store/useStore';
 import ClassCompletionModal from '../ClassCompletionModal';
@@ -22,11 +22,31 @@ import {
 } from '../../lib/caveiraDifficulty';
 
 const DIFF_TONE_ACTIVE = {
-  emerald: 'bg-emerald-600 text-white border-emerald-600 dark:bg-emerald-500 dark:text-slate-950 dark:border-emerald-500',
-  sky: 'bg-sky-600 text-white border-sky-600 dark:bg-sky-500 dark:text-slate-950 dark:border-sky-500',
-  amber: 'bg-amber-600 text-white border-amber-600 dark:bg-amber-500 dark:text-slate-950 dark:border-amber-500',
-  orange: 'bg-orange-600 text-white border-orange-600 dark:bg-orange-500 dark:text-slate-950 dark:border-orange-500',
-  rose: 'bg-rose-600 text-white border-rose-600 dark:bg-rose-500 dark:text-white dark:border-rose-500',
+  emerald: {
+    card: 'bg-emerald-50/90 text-emerald-900 border-emerald-400/80 ring-1 ring-emerald-500/15 dark:bg-emerald-500/15 dark:text-emerald-200 dark:border-emerald-400/50 dark:ring-emerald-400/15',
+    sub: 'text-emerald-700/80 dark:text-emerald-300/80',
+    icon: 'text-emerald-600 dark:text-emerald-400',
+  },
+  sky: {
+    card: 'bg-sky-50/90 text-sky-900 border-sky-400/80 ring-1 ring-sky-500/15 dark:bg-sky-500/15 dark:text-sky-200 dark:border-sky-400/50 dark:ring-sky-400/15',
+    sub: 'text-sky-700/80 dark:text-sky-300/80',
+    icon: 'text-sky-600 dark:text-sky-400',
+  },
+  amber: {
+    card: 'bg-amber-50/90 text-amber-900 border-amber-400/80 ring-1 ring-amber-500/15 dark:bg-amber-500/15 dark:text-amber-200 dark:border-amber-400/50 dark:ring-amber-400/15',
+    sub: 'text-amber-700/80 dark:text-amber-300/80',
+    icon: 'text-amber-600 dark:text-amber-400',
+  },
+  orange: {
+    card: 'bg-orange-50/90 text-orange-900 border-orange-400/80 ring-1 ring-orange-500/15 dark:bg-orange-500/15 dark:text-orange-200 dark:border-orange-400/50 dark:ring-orange-400/15',
+    sub: 'text-orange-700/80 dark:text-orange-300/80',
+    icon: 'text-orange-600 dark:text-orange-400',
+  },
+  rose: {
+    card: 'bg-rose-50/90 text-rose-900 border-rose-400/80 ring-1 ring-rose-500/15 dark:bg-rose-500/15 dark:text-rose-200 dark:border-rose-400/50 dark:ring-rose-400/15',
+    sub: 'text-rose-700/80 dark:text-rose-300/80',
+    icon: 'text-rose-600 dark:text-rose-400',
+  },
 };
 
 export default function GlobalAppModals({
@@ -354,173 +374,249 @@ export default function GlobalAppModals({
                 </button>
               </div>
 
-              <div className="p-5 overflow-y-auto custom-scrollbar flex-1">
-              <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed mb-4">
-                Conteúdo:{' '}
-                <strong className="font-semibold text-slate-900 dark:text-white">
-                  {classConfirmModal.lessonNames?.length
-                    ? classConfirmModal.lessonNames.join(' · ')
-                    : classConfirmModal.topicName}
-                </strong>
-                . Deseja abrir o Projeto Caveira com esse filtro antes de registrar a aula?
-              </p>
-
-              {/* Subassuntos do Índice da Aula */}
-              <div className="bg-slate-50 dark:bg-slate-950/60 p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 mb-4">
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
-                    <ListFilter className="w-3.5 h-3.5 text-sky-500" />
-                    {prePromptSubtopics.length > 0
-                      ? `Índice (${prePromptSubtopics.length} subassuntos)`
-                      : 'Índice da aula (opcional)'}
-                  </span>
-                  <button
-                    type="button"
-                    onClick={() => setShowPrePromptIndexBox((v) => !v)}
-                    className="text-xs font-medium text-sky-600 dark:text-sky-400 hover:underline cursor-pointer"
-                  >
-                    {showPrePromptIndexBox ? 'Ocultar' : prePromptIndexText ? 'Editar índice' : 'Colar índice'}
-                  </button>
+              <div className="p-5 overflow-y-auto custom-scrollbar flex-1 space-y-4">
+                {/* Contexto da aula */}
+                <div>
+                  <p className="text-[11px] font-semibold uppercase tracking-[0.06em] text-slate-400 dark:text-slate-500">
+                    Conteúdo da aula
+                  </p>
+                  <p className="text-sm font-semibold text-slate-900 dark:text-white leading-snug mt-0.5">
+                    {classConfirmModal.lessonNames?.length
+                      ? classConfirmModal.lessonNames.join(' · ')
+                      : classConfirmModal.topicName}
+                  </p>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
+                    Ajuste os filtros abaixo para praticar no Projeto Caveira antes de registrar a aula.
+                  </p>
                 </div>
 
-                {prePromptSubtopics.length > 0 ? (
-                  <p className="text-xs text-slate-600 dark:text-slate-400 leading-relaxed">
-                    {prePromptSubtopics.slice(0, 6).join(' · ')}
-                    {prePromptSubtopics.length > 6 ? ` · +${prePromptSubtopics.length - 6}` : ''}
-                  </p>
-                ) : (
-                  <p className="text-xs text-slate-500 dark:text-slate-400 leading-snug">
-                    Para aulas genéricas, cole o índice ou abra o player do Caveira para filtrar por subassuntos.
-                  </p>
-                )}
-
-                {courseIndexCache?.latest?.rawIndexText &&
-                  courseIndexCache.latest.rawIndexText !== prePromptIndexText && (
+                {/* Subassuntos do Índice da Aula */}
+                <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800/80 space-y-2">
+                  <div className="flex items-center justify-between gap-2">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200 flex items-center gap-1.5 min-w-0">
+                      <ListFilter className="w-3.5 h-3.5 text-sky-500 dark:text-sky-400 shrink-0" />
+                      <span className="truncate">Índice da aula</span>
+                      <span className="text-[11px] font-normal text-slate-400 dark:text-slate-500 tabular-nums shrink-0">
+                        {prePromptSubtopics.length > 0
+                          ? `· ${prePromptSubtopics.length} ${prePromptSubtopics.length === 1 ? 'subassunto' : 'subassuntos'}`
+                          : '· opcional'}
+                      </span>
+                    </span>
                     <button
                       type="button"
-                      onClick={() => {
-                        const captured = courseIndexCache.latest.rawIndexText;
-                        setPrePromptIndexText(captured);
+                      onClick={() => setShowPrePromptIndexBox((v) => !v)}
+                      className="text-xs font-medium text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 transition-colors shrink-0 cursor-pointer"
+                    >
+                      {showPrePromptIndexBox ? 'Ocultar' : prePromptIndexText ? 'Editar índice' : 'Colar índice'}
+                    </button>
+                  </div>
+
+                  {prePromptSubtopics.length > 0 ? (
+                    <p className="text-xs text-slate-600 dark:text-slate-300 leading-relaxed bg-slate-50/90 dark:bg-slate-800/40 rounded-lg px-3 py-2 border border-slate-200/70 dark:border-slate-800/80">
+                      {prePromptSubtopics.slice(0, 6).join(' · ')}
+                      {prePromptSubtopics.length > 6 ? ` · +${prePromptSubtopics.length - 6}` : ''}
+                    </p>
+                  ) : (
+                    <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed">
+                      Para aulas genéricas, cole o índice ou abra o player do Caveira para filtrar por subassuntos.
+                    </p>
+                  )}
+
+                  {courseIndexCache?.latest?.rawIndexText &&
+                    courseIndexCache.latest.rawIndexText !== prePromptIndexText && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const captured = courseIndexCache.latest.rawIndexText;
+                          setPrePromptIndexText(captured);
+                          const lessonKeyTarget = classConfirmModal.lessonNames?.[0] || classConfirmModal.topicName;
+                          if (lessonKeyTarget) saveManualLessonIndex(captured, lessonKeyTarget);
+                        }}
+                        className="text-xs font-medium text-emerald-700 dark:text-emerald-300 bg-emerald-500/10 border border-emerald-500/25 rounded-lg px-2.5 py-1.5 hover:bg-emerald-500/15 transition-colors w-full text-left flex items-center justify-between gap-2 cursor-pointer"
+                        title={courseIndexCache.latest.lessonTitle || ''}
+                      >
+                        <span className="truncate">
+                          Usar índice aberto no Caveira (
+                          {courseIndexCache.latest.lessonTitle ||
+                            `${courseIndexCache.latest.subtopics?.length || 0} tópicos`}
+                          )
+                        </span>
+                        <ArrowRight className="w-3.5 h-3.5 shrink-0" />
+                      </button>
+                    )}
+
+                  {showPrePromptIndexBox && (
+                    <textarea
+                      rows={3}
+                      value={prePromptIndexText}
+                      onChange={(e) => {
+                        const val = e.target.value;
+                        setPrePromptIndexText(val);
                         const lessonKeyTarget = classConfirmModal.lessonNames?.[0] || classConfirmModal.topicName;
-                        if (lessonKeyTarget) saveManualLessonIndex(captured, lessonKeyTarget);
+                        if (lessonKeyTarget) saveManualLessonIndex(val, lessonKeyTarget);
                       }}
-                      className="mt-2 text-xs font-medium text-emerald-700 dark:text-emerald-400 bg-emerald-500/10 border border-emerald-500/25 rounded-lg px-2.5 py-1.5 hover:bg-emerald-500/15 transition-colors w-full text-left truncate cursor-pointer"
-                      title={courseIndexCache.latest.lessonTitle || ''}
-                    >
-                      Usar índice aberto no Caveira (
-                      {courseIndexCache.latest.lessonTitle ||
-                        `${courseIndexCache.latest.subtopics?.length || 0} tópicos`}
-                      )
-                    </button>
+                      placeholder="Cole aqui o texto da aba Índice ([00:01:42] Conceitos...)"
+                      className="w-full text-xs font-mono bg-white dark:bg-slate-950/70 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-slate-700 dark:text-slate-200 focus:border-sky-500 focus:ring-2 focus:ring-sky-500/15 outline-none resize-y transition-shadow"
+                    />
                   )}
-
-                {showPrePromptIndexBox && (
-                  <textarea
-                    rows={3}
-                    value={prePromptIndexText}
-                    onChange={(e) => {
-                      const val = e.target.value;
-                      setPrePromptIndexText(val);
-                      const lessonKeyTarget = classConfirmModal.lessonNames?.[0] || classConfirmModal.topicName;
-                      if (lessonKeyTarget) saveManualLessonIndex(val, lessonKeyTarget);
-                    }}
-                    placeholder="Cole aqui o texto da aba Índice ([00:01:42] Conceitos...)"
-                    className="mt-2 w-full text-xs font-mono bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-lg p-2.5 text-slate-700 dark:text-slate-200 focus:border-sky-500 outline-none resize-y"
-                  />
-                )}
-              </div>
-
-              <div className="mb-4">
-                <div className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1.5">
-                  Filtro de status no Caveira
                 </div>
-                <div className="flex flex-wrap gap-1.5">
-                  {[
-                    { value: 'not_resolved', label: 'Não resolvidas' },
-                    { value: 'wrong', label: 'Só erradas' },
-                    { value: 'right', label: 'Só certas' },
-                    { value: 'resolved', label: 'Resolvidas' },
-                    { value: '', label: 'Todas' },
-                  ].map((opt) => {
-                    const active = prePromptQuestionStatus === opt.value;
-                    return (
-                      <button
-                        key={opt.label}
-                        type="button"
-                        onClick={() => setPrePromptQuestionStatus(opt.value)}
-                        className={`h-8 px-2.5 rounded-lg text-xs font-medium transition-colors border cursor-pointer ${
-                          active
-                            ? 'bg-sky-600 text-white border-sky-600 dark:bg-sky-500 dark:text-slate-950 dark:border-sky-500'
-                            : 'bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                        }`}
-                      >
-                        {opt.label}
-                      </button>
-                    );
-                  })}
-                </div>
-              </div>
 
-              <div className="mb-4">
-                <div className="flex items-center justify-between gap-2 mb-1.5">
-                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">
-                    Nível de dificuldade (Caveira)
-                  </span>
-                  {difficultyRecommendation && (
+                {/* Filtro de status */}
+                <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800/80">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                      Status das questões
+                    </span>
+                  </div>
+                  <div className="bg-slate-100/90 dark:bg-slate-950/70 p-1 rounded-xl border border-slate-200/70 dark:border-slate-800/80 flex flex-wrap gap-1">
+                    {[
+                      { value: 'not_resolved', label: 'Não resolvidas' },
+                      { value: 'wrong', label: 'Erradas' },
+                      { value: 'right', label: 'Certas' },
+                      { value: 'resolved', label: 'Resolvidas' },
+                      { value: '', label: 'Todas' },
+                    ].map((opt) => {
+                      const active = prePromptQuestionStatus === opt.value;
+                      return (
+                        <button
+                          key={opt.label}
+                          type="button"
+                          onClick={() => setPrePromptQuestionStatus(opt.value)}
+                          className={`flex-1 min-w-fit h-8 px-2.5 rounded-lg text-[11px] transition-all whitespace-nowrap cursor-pointer ${
+                            active
+                              ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-white font-semibold shadow-xs ring-1 ring-slate-200/80 dark:ring-slate-700/80'
+                              : 'text-slate-600 dark:text-slate-400 hover:text-slate-900 dark:hover:text-slate-200 font-medium'
+                          }`}
+                        >
+                          {opt.label}
+                        </button>
+                      );
+                    })}
+                  </div>
+                </div>
+
+                {/* Nível de dificuldade */}
+                <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800/80">
+                  <div className="flex items-center justify-between gap-2 mb-2">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                        Nível de dificuldade
+                      </span>
+                      <span className="text-[11px] text-slate-400 dark:text-slate-500 tabular-nums">
+                        {prePromptDifficultyIds.length === 0
+                          ? '· todos'
+                          : `· ${prePromptDifficultyIds.length} ${prePromptDifficultyIds.length === 1 ? 'selecionado' : 'selecionados'}`}
+                      </span>
+                    </div>
+                    {difficultyRecommendation && (() => {
+                      const isAutoSelected =
+                        prePromptDifficultyIds.length === 1 &&
+                        prePromptDifficultyIds[0] === difficultyRecommendation.recommendedId;
+                      return (
+                        <button
+                          type="button"
+                          onClick={() => setPrePromptDifficultyIds([difficultyRecommendation.recommendedId])}
+                          title={difficultyRecommendation.summary}
+                          className={`inline-flex items-center gap-1 text-[11px] font-semibold rounded-lg px-2 py-1 border transition-colors shrink-0 cursor-pointer ${
+                            isAutoSelected
+                              ? 'bg-sky-600 text-white border-sky-600 dark:bg-sky-500 dark:text-slate-950 dark:border-sky-500'
+                              : 'text-sky-700 dark:text-sky-300 bg-sky-500/10 hover:bg-sky-500/15 border-sky-500/25'
+                          }`}
+                        >
+                          <Zap className="w-3 h-3 shrink-0" />
+                          <span>Auto: {difficultyRecommendation.level.label}</span>
+                        </button>
+                      );
+                    })()}
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-1.5">
                     <button
                       type="button"
-                      onClick={() => setPrePromptDifficultyIds([difficultyRecommendation.recommendedId])}
-                      title={difficultyRecommendation.summary}
-                      className="text-[11px] font-semibold text-sky-600 dark:text-sky-400 bg-sky-500/10 hover:bg-sky-500/15 border border-sky-500/25 rounded-md px-2 py-0.5 transition-colors cursor-pointer"
+                      onClick={() => setPrePromptDifficultyIds([])}
+                      className={`px-2.5 py-2 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-0.5 ${
+                        prePromptDifficultyIds.length === 0
+                          ? 'bg-sky-50/90 text-sky-900 border-sky-400/80 ring-1 ring-sky-500/15 dark:bg-sky-500/15 dark:text-sky-200 dark:border-sky-400/50 dark:ring-sky-400/15'
+                          : 'bg-white dark:bg-slate-900/60 text-slate-700 dark:text-slate-200 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50/80 dark:hover:bg-slate-800/50'
+                      }`}
                     >
-                      ⚡ Auto: {difficultyRecommendation.level.label}
-                    </button>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() => setPrePromptDifficultyIds([])}
-                    className={`h-8 px-2.5 rounded-lg text-xs font-medium transition-colors border cursor-pointer ${
-                      prePromptDifficultyIds.length === 0
-                        ? 'bg-sky-600 text-white border-sky-600 dark:bg-sky-500 dark:text-slate-950 dark:border-sky-500'
-                        : 'bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
-                    }`}
-                  >
-                    Todos
-                  </button>
-                  {CAVEIRA_DIFFICULTY_LEVELS.map((lvl) => {
-                    const active = prePromptDifficultyIds.includes(lvl.id);
-                    return (
-                      <button
-                        key={lvl.id}
-                        type="button"
-                        onClick={() => togglePrePromptDifficulty(lvl.id)}
-                        title={`${lvl.label} (${lvl.rateLabel} de acertos na plataforma)`}
-                        className={`h-8 px-2.5 rounded-lg text-xs font-medium transition-colors border cursor-pointer ${
-                          active
-                            ? DIFF_TONE_ACTIVE[lvl.tone]
-                            : 'bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                      <span className="flex items-center justify-between gap-1 text-xs font-semibold leading-tight">
+                        <span>Todos</span>
+                        {prePromptDifficultyIds.length === 0 && (
+                          <Check className="w-3.5 h-3.5 text-sky-600 dark:text-sky-400 shrink-0" />
+                        )}
+                      </span>
+                      <span
+                        className={`text-[10px] leading-tight ${
+                          prePromptDifficultyIds.length === 0
+                            ? 'text-sky-700/80 dark:text-sky-300/80'
+                            : 'text-slate-400 dark:text-slate-500'
                         }`}
                       >
-                        {lvl.label}
-                      </button>
-                    );
-                  })}
-                </div>
-                {prePromptDifficultyIds.some((id) => id >= 2) && (
-                  <label className="mt-2 inline-flex items-center gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={prePromptDifficultyIds.includes(CAVEIRA_UNDEFINED_DIFFICULTY.id)}
-                      onChange={() => togglePrePromptDifficulty(CAVEIRA_UNDEFINED_DIFFICULTY.id)}
-                      className="rounded border-slate-300 dark:border-slate-700"
-                    />
-                    <span>Incluir questões novas (&quot;Em definição&quot;)</span>
-                  </label>
-                )}
-              </div>
+                        Todas as faixas
+                      </span>
+                    </button>
 
+                    {CAVEIRA_DIFFICULTY_LEVELS.map((lvl) => {
+                      const active = prePromptDifficultyIds.includes(lvl.id);
+                      const isRecommended = difficultyRecommendation?.recommendedId === lvl.id;
+                      const tone = DIFF_TONE_ACTIVE[lvl.tone];
+                      return (
+                        <button
+                          key={lvl.id}
+                          type="button"
+                          onClick={() => togglePrePromptDifficulty(lvl.id)}
+                          title={`${lvl.label} (${lvl.rateLabel} de acertos na plataforma)`}
+                          className={`px-2.5 py-2 rounded-xl border text-left transition-all cursor-pointer flex flex-col justify-between gap-0.5 ${
+                            active
+                              ? tone.card
+                              : 'bg-white dark:bg-slate-900/60 text-slate-700 dark:text-slate-200 border-slate-200/90 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:bg-slate-50/80 dark:hover:bg-slate-800/50'
+                          }`}
+                        >
+                          <span className="flex items-center justify-between gap-1 text-xs font-semibold leading-tight">
+                            <span className="truncate">{lvl.label}</span>
+                            {active ? (
+                              <Check className={`w-3.5 h-3.5 shrink-0 ${tone.icon}`} />
+                            ) : isRecommended ? (
+                              <Zap className="w-3 h-3 text-sky-500 dark:text-sky-400 shrink-0 opacity-80" />
+                            ) : null}
+                          </span>
+                          <span
+                            className={`text-[10px] font-mono tabular-nums leading-tight ${
+                              active ? tone.sub : 'text-slate-400 dark:text-slate-500'
+                            }`}
+                          >
+                            {lvl.rateLabel}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+
+                  {difficultyRecommendation?.summary && (
+                    <p className="mt-2.5 flex items-start gap-1.5 text-[11px] text-slate-500 dark:text-slate-400 leading-snug">
+                      <Info className="w-3.5 h-3.5 text-slate-400 dark:text-slate-500 shrink-0 mt-0.5" />
+                      <span>{difficultyRecommendation.summary}</span>
+                    </p>
+                  )}
+
+                  {prePromptDifficultyIds.some((id) => id >= 2) && (
+                    <label className="mt-2.5 pt-2.5 border-t border-slate-100 dark:border-slate-800/80 flex items-center justify-between gap-2 text-xs text-slate-600 dark:text-slate-300 cursor-pointer select-none">
+                      <span className="inline-flex items-center gap-2">
+                        <input
+                          type="checkbox"
+                          checked={prePromptDifficultyIds.includes(CAVEIRA_UNDEFINED_DIFFICULTY.id)}
+                          onChange={() => togglePrePromptDifficulty(CAVEIRA_UNDEFINED_DIFFICULTY.id)}
+                          className="w-3.5 h-3.5 rounded border-slate-300 dark:border-slate-700 accent-sky-600 dark:accent-sky-400 cursor-pointer"
+                        />
+                        <span>Incluir questões novas (&quot;Em definição&quot;)</span>
+                      </span>
+                      <span className="text-[10px] font-medium text-slate-400 dark:text-slate-500">
+                        {CAVEIRA_UNDEFINED_DIFFICULTY.rateLabel}
+                      </span>
+                    </label>
+                  )}
+                </div>
               </div>
 
               <div className="px-5 py-3.5 border-t border-slate-100 dark:border-slate-800/90 bg-slate-50/60 dark:bg-slate-950/40 flex flex-col gap-2 shrink-0">
