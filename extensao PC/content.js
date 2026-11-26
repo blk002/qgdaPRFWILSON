@@ -937,9 +937,185 @@ ${EXTRA_SHADOW_CSS}`;
     return 1;
   }
 
+  // extensao-src/content/courseNavHelper.js
+  var EXCLUDED_CAVEIRA_HOST_RX = /^(?:loja|checkout|blog|pay|pagamentos?|www)\./i;
+  function isExcludedCaveiraHost(hostname = "") {
+    return EXCLUDED_CAVEIRA_HOST_RX.test(String(hostname || "").trim());
+  }
+  function stripCaveiraLessonUiNoise(txt = "") {
+    return String(txt || "").replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, " ").replace(
+      /\b(?:assistir|conclu[íi]d[oa]s?|novo|novos\s+conte[úu]dos?|play_arrow|play_circle|ondemand_video|smart_display|check_circle|check_box|done|task_alt|colapso)\b/gi,
+      " "
+    ).replace(/[·•]/g, " ").replace(/\s+/g, " ").trim();
+  }
+  var ROMAN_PART_MAP = {
+    i: "1",
+    ii: "2",
+    iii: "3",
+    iv: "4",
+    v: "5",
+    vi: "6",
+    vii: "7",
+    viii: "8"
+  };
+  function extractLessonPartNum(txt = "") {
+    const clean = normalizeCourseIndexKey(stripCaveiraLessonUiNoise(txt));
+    if (!clean) return "";
+    const mNum = clean.match(/\b(?:parte|pt)\s*0*(\d{1,2})\b/);
+    if (mNum) return String(Number(mNum[1]));
+    const mRom = clean.match(/\b(?:parte|pt)\s*(viii|vii|vi|iv|v|iii|ii|i)\b/);
+    if (mRom && ROMAN_PART_MAP[mRom[1]]) return ROMAN_PART_MAP[mRom[1]];
+    const stripped = clean.replace(/^\s*(?:aula|bloco|parte|m[oó]dulo)\s*\d+\s*[-–—:|.]*\s*/i, "").replace(/^\s*\d{1,3}\s*[-–—:|.]+\s*/, "").trim();
+    if (!stripped) return "";
+    if (!/\b(?:art|artigo|lei|decreto|aula|bloco|modulo)\s+\d{1,2}$/.test(stripped)) {
+      const mEnd = stripped.match(/\b0*(\d{1,2})$/);
+      if (mEnd) return String(Number(mEnd[1]));
+    }
+    const mEndRom = stripped.match(/\b(viii|vii|vi|iv|v|iii|ii|i)$/);
+    return mEndRom && ROMAN_PART_MAP[mEndRom[1]] ? ROMAN_PART_MAP[mEndRom[1]] : "";
+  }
+  function stemPtToken(w = "") {
+    if (!w || w.length < 5) return w;
+    if (/(?:oes|aes|aos)$/.test(w)) return `${w.slice(0, -3)}ao`;
+    if (w.endsWith("s") && !/(?:ss|us|is)$/.test(w)) return w.slice(0, -1);
+    return w;
+  }
+  function canonicalizeLessonText(txt = "") {
+    const norm = normalizeCourseIndexKey(stripCaveiraLessonUiNoise(txt)).replace(/^\s*(?:aula|bloco|parte|m[oó]dulo)\s*\d+\s*[-–—:|.]*\s*/i, "").replace(/^\s*\d{1,3}\s*[-–—:|.]+\s*/, "").replace(/\b0+(\d+)\b/g, "$1").trim();
+    if (!norm) return "";
+    return norm.split(" ").filter(Boolean).map(stemPtToken).join(" ");
+  }
+  function scoreCaveiraLessonCandidate(candidateText = "", targetLesson = "") {
+    const cleanCand = normalizeCourseIndexKey(stripCaveiraLessonUiNoise(candidateText));
+    const cleanTarget = normalizeCourseIndexKey(stripCaveiraLessonUiNoise(targetLesson));
+    if (!cleanCand || !cleanTarget) return 0;
+    const partCand = extractLessonPartNum(candidateText);
+    const partTgt = extractLessonPartNum(targetLesson);
+    if (partCand !== partTgt) return 0;
+    if (cleanCand === cleanTarget) return 100;
+    const canonCand = canonicalizeLessonText(candidateText);
+    const canonTarget = canonicalizeLessonText(targetLesson);
+    if (canonCand && canonTarget && canonCand === canonTarget) return 95;
+    if (canonTarget && canonCand && (canonTarget.length >= 6 && canonCand.includes(canonTarget) || canonCand.length >= 6 && canonTarget.includes(canonCand)) || cleanTarget.length >= 6 && cleanCand.includes(cleanTarget) || cleanCand.length >= 6 && cleanTarget.includes(cleanCand)) {
+      return 80;
+    }
+    const tok = (s) => s.split(" ").filter((w) => w.length >= 3 || /^\d+$/.test(w));
+    const tTgt = tok(canonTarget || cleanTarget);
+    const tCand = new Set(tok(canonCand || cleanCand));
+    if (tTgt.length === 0 || tCand.size === 0) return 0;
+    const hits = tTgt.filter((w) => tCand.has(w)).length;
+    const ratio = hits / Math.max(tTgt.length, tCand.size);
+    return ratio >= 0.65 ? Math.round(ratio * 75) : 0;
+  }
+  var COURSE_TRACK_KEYWORDS = [
+    "iniciante",
+    "nivelamento",
+    "isolad",
+    "extensivo",
+    "intensivo",
+    "prf",
+    "redacao"
+  ];
+  function scoreCaveiraCourseCandidate(courseTitle = "", { targetCourse = "", targetTopic = "", targetSubject = "" } = {}) {
+    const candNorm = normalizeCourseIndexKey(stripCaveiraLessonUiNoise(courseTitle));
+    if (!candNorm) return 0;
+    const queryPrimary = String(targetCourse || targetTopic || "").trim();
+    const queryPart = queryPrimary ? extractLessonPartNum(queryPrimary) : "";
+    const candPart = extractLessonPartNum(courseTitle);
+    if (queryPart && candPart && queryPart !== candPart) {
+      return 0;
+    }
+    const candCanon = canonicalizeLessonText(courseTitle);
+    const courseNorm = normalizeCourseIndexKey(stripCaveiraLessonUiNoise(targetCourse));
+    const topicNorm = normalizeCourseIndexKey(stripCaveiraLessonUiNoise(targetTopic));
+    const subNorm = normalizeCourseIndexKey(stripCaveiraLessonUiNoise(targetSubject));
+    let score = 0;
+    if (courseNorm) {
+      const courseCanon = canonicalizeLessonText(targetCourse);
+      if (candNorm.includes(courseNorm) || courseCanon && candCanon.includes(courseCanon)) {
+        score += 100;
+      }
+    }
+    if (topicNorm) {
+      const topicCanon = canonicalizeLessonText(targetTopic);
+      if (candNorm.includes(topicNorm) || topicCanon && candCanon.includes(topicCanon)) {
+        score += 80;
+      }
+    }
+    const combinedQuery = queryPrimary || targetSubject;
+    if (combinedQuery) {
+      const qCanon = canonicalizeLessonText(combinedQuery) || normalizeCourseIndexKey(combinedQuery);
+      const qTokens = qCanon.split(" ").filter((w) => w.length >= 3 || /^\d+$/.test(w));
+      const cTokens = new Set((candCanon || candNorm).split(" ").filter((w) => w.length >= 3 || /^\d+$/.test(w)));
+      if (qTokens.length > 0 && cTokens.size > 0) {
+        const hits = qTokens.filter((t) => cTokens.has(t)).length;
+        score += Math.round(hits / qTokens.length * 70);
+      }
+    }
+    const queryAllNorm = `${courseNorm} ${topicNorm} ${subNorm}`.trim();
+    for (const kw of COURSE_TRACK_KEYWORDS) {
+      if (queryAllNorm.includes(kw) && candNorm.includes(kw)) {
+        score += 40;
+      }
+    }
+    const queryIsStandalone = queryAllNorm.includes("iniciante") || queryAllNorm.includes("isolad") || queryAllNorm.includes("nivelamento");
+    if (queryIsStandalone && candNorm.includes("prf") && !candNorm.includes("iniciante")) {
+      score -= 40;
+    }
+    return Math.max(0, score);
+  }
+  function scoreCaveiraModuleCandidate(moduleText = "", { targetSubject = "", targetTopic = "", targetLesson = "" } = {}) {
+    const cleanedModule = String(moduleText || "").replace(/\b\d+\s+aulas?\b/gi, " ").replace(/\b\d+\s+conclu[íi]d[oa]s?\b/gi, " ").replace(/\bem\s+grava[çc][ãa]o\b/gi, " ").replace(/\bnovo\b/gi, " ").replace(/[,·•()]+/g, " ").replace(/\s+/g, " ").trim();
+    const modNorm = normalizeCourseIndexKey(cleanedModule);
+    if (!modNorm) return 0;
+    const modCanon = canonicalizeLessonText(cleanedModule);
+    const subNorm = normalizeCourseIndexKey(stripCaveiraLessonUiNoise(targetSubject));
+    const subCanon = canonicalizeLessonText(targetSubject);
+    const topicNorm = normalizeCourseIndexKey(stripCaveiraLessonUiNoise(targetTopic));
+    const topicCanon = canonicalizeLessonText(targetTopic);
+    const lesNorm = normalizeCourseIndexKey(stripCaveiraLessonUiNoise(targetLesson));
+    let score = 0;
+    if (subNorm) {
+      if (modNorm === subNorm || subCanon && modCanon === subCanon) {
+        score += 100;
+      } else if (modNorm.includes(subNorm) || subNorm.includes(modNorm) || subCanon && modCanon && (modCanon.includes(subCanon) || subCanon.includes(modCanon))) {
+        score += 85;
+      } else {
+        const sTokens = (subCanon || subNorm).split(" ").filter((w) => w.length >= 3);
+        const mTokens = new Set((modCanon || modNorm).split(" ").filter((w) => w.length >= 3));
+        if (sTokens.length > 0 && mTokens.size > 0) {
+          const hits = sTokens.filter((t) => mTokens.has(t)).length;
+          score += Math.round(hits / sTokens.length * 75);
+        }
+      }
+    }
+    if (topicNorm) {
+      if (modNorm.includes(topicNorm) || topicCanon && modCanon.includes(topicCanon)) {
+        score += 70;
+      } else {
+        const tTokens = (topicCanon || topicNorm).split(" ").filter((w) => w.length >= 4);
+        const mTokens = new Set((modCanon || modNorm).split(" ").filter((w) => w.length >= 4));
+        if (tTokens.length > 0 && mTokens.size > 0) {
+          const hits = tTokens.filter((t) => mTokens.has(t)).length;
+          score += Math.round(hits / tTokens.length * 45);
+        }
+      }
+    }
+    if (lesNorm) {
+      const lTokens = lesNorm.split(" ").filter((w) => w.length >= 4);
+      const mTokens = new Set(modNorm.split(" ").filter((w) => w.length >= 4));
+      if (lTokens.length > 0 && mTokens.size > 0) {
+        const hits = lTokens.filter((t) => mTokens.has(t)).length;
+        score += Math.round(hits / lTokens.length * 40);
+      }
+    }
+    return score;
+  }
+
   // extensao-src/entries/content.entry.js
   (function() {
-    console.log("💀 [QG da PRF] Rastreador Caveira v3.2.0 ativo em:", window.location.href);
+    if (isExcludedCaveiraHost(window.location.hostname)) return;
+    console.log("💀 [QG da PRF] Rastreador Caveira v3.2.4 ativo em:", window.location.href);
     try {
       window.dispatchEvent(new CustomEvent("qg-caveira-teardown"));
       destroyShadowHud();
@@ -970,6 +1146,7 @@ ${EXTRA_SHADOW_CSS}`;
     let lastPlaygroundSpeedApplied = 0;
     let lastSeekUrlApplied = "";
     let apiCourseCatalogCache = null;
+    let apiCoursesListCache = [];
     const apiQuestionCache = /* @__PURE__ */ new Map();
     const apiQuestionByApiId = /* @__PURE__ */ new Map();
     const apiQuestionByCode = /* @__PURE__ */ new Map();
@@ -1479,6 +1656,17 @@ ${EXTRA_SHADOW_CSS}`;
       if (!msg || msg.source !== "QG_CAVEIRA_API_SNIFFER" || msg.nonce !== CHANNEL_NONCE) return;
       if (msg.type === "API_DIAGNOSTIC_SHAPE" && msg.payload) {
         appendDiagnosticShape(msg.payload);
+        return;
+      }
+      if (msg.type === "API_COURSES_LIST" && msg.payload && Array.isArray(msg.payload.courses)) {
+        const byId = /* @__PURE__ */ new Map();
+        apiCoursesListCache.forEach((c) => {
+          if (c?.id) byId.set(String(c.id), c);
+        });
+        msg.payload.courses.forEach((c) => {
+          if (c?.id) byId.set(String(c.id), c);
+        });
+        apiCoursesListCache = Array.from(byId.values());
         return;
       }
       if (msg.type === "API_COURSE_CATALOG" && msg.payload && Array.isArray(msg.payload.modules)) {
@@ -2056,7 +2244,16 @@ ${EXTRA_SHADOW_CSS}`;
       const activeModEl = document.querySelector('.q-item--active, [aria-selected="true"].q-item, [class*="module"].active, [class*="breadcrumb"] a:last-child');
       const activeModName = (activeModEl?.innerText || activeModEl?.textContent || "").split(/\r?\n/)[0]?.trim() || courseName;
       const defaultModuleUrl = courseId && currentModId ? `${window.location.origin}/courses/${courseId}/modules/${currentModId}/playground` : courseId ? `${window.location.origin}/courses/${courseId}` : `${window.location.origin}/courses`;
-      const lessonLinks = Array.from(document.querySelectorAll('a[href*="course_video_id"], a[href*="/modules/"], [data-course-video-id], .q-expansion-item, .q-item, .q-card')).filter((el) => !el.closest("#qg-caveira-shadow-host, #qg-caveira-hud") && isElementVisible(el));
+      const lessonLinks = Array.from(document.querySelectorAll('a[href*="course_video_id"], a[href*="/modules/"], [data-course-video-id], .q-expansion-item, .q-item, .q-card, div')).filter((el) => {
+        if (el.closest("#qg-caveira-shadow-host, #qg-caveira-hud, header, .q-header, .q-toolbar, aside, nav") || !isElementVisible(el)) return false;
+        if (el.tagName !== "DIV") return true;
+        const txt = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+        if (!txt || txt.length < 4 || txt.length > 220) return false;
+        const hasChk = Boolean(el.querySelector('input[type="checkbox"], [role="checkbox"], .q-checkbox'));
+        const hasDur = /\b\d{1,2}:\d{2}(?::\d{2})?\b/.test(txt);
+        const isPtr = window.getComputedStyle(el).cursor === "pointer";
+        return isPtr && (hasChk || hasDur);
+      });
       const lessons = [];
       const seenLessonKeys = /* @__PURE__ */ new Set();
       if (isCoursePlaygroundPage()) {
@@ -2115,7 +2312,7 @@ ${EXTRA_SHADOW_CSS}`;
         if (durMatch) {
           durationMin = durMatch[3] !== void 0 ? Math.round(Number(durMatch[1]) * 60 + Number(durMatch[2]) + Number(durMatch[3]) / 60) : Math.max(1, Math.round(Number(durMatch[1]) + Number(durMatch[2]) / 60));
         }
-        const title = rawText.replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, "").replace(/\b(?:assistir|conclu[íi]da|play_arrow|play_circle|ondemand_video|smart_display|check_circle|done)\b/gi, "").trim();
+        const title = stripCaveiraLessonUiNoise(rawText);
         if (!title || title.length < 3) return;
         const dedupKey = videoId ? `vid:${videoId}` : normalizeCourseIndexKey(title);
         if (seenLessonKeys.has(dedupKey)) return;
@@ -2169,59 +2366,24 @@ ${EXTRA_SHADOW_CSS}`;
       return { modulesCount: payload.modules.length, lessonsCount: totalLessonsCount };
     }
     let targetLessonPollTimer = null;
-    function extractLessonPartNum(txt) {
-      const clean = normalizeCourseIndexKey(txt);
-      if (!clean) return "";
-      const mNum = clean.match(/\b(?:parte|pt)\s*0*(\d{1,2})\b/);
-      if (mNum) return String(Number(mNum[1]));
-      const romanMap = { i: "1", ii: "2", iii: "3", iv: "4", v: "5", vi: "6", vii: "7", viii: "8" };
-      const mRom = clean.match(/\b(?:parte|pt)\s*(viii|vii|vi|iv|v|iii|ii|i)\b/);
-      if (mRom && romanMap[mRom[1]]) return romanMap[mRom[1]];
-      const stripped = clean.replace(/^\s*(?:aula|bloco|parte|m[oó]dulo)\s*\d+\s*[-–—:|.]*\s*/i, "").replace(/^\s*\d{1,3}\s*[-–—:|.]+\s*/, "").trim();
-      if (!stripped) return "";
-      if (!/\b(?:art|artigo|lei|decreto|aula|bloco|modulo)\s+\d{1,2}$/.test(stripped)) {
-        const mEnd = stripped.match(/\b0*(\d{1,2})$/);
-        if (mEnd) return String(Number(mEnd[1]));
-      }
-      const mEndRom = stripped.match(/\b(viii|vii|vi|iv|v|iii|ii|i)$/);
-      return mEndRom && romanMap[mEndRom[1]] ? romanMap[mEndRom[1]] : "";
-    }
-    function stemPtToken(w) {
-      if (!w || w.length < 5) return w;
-      if (/(?:oes|aes|aos)$/.test(w)) return `${w.slice(0, -3)}ao`;
-      if (w.endsWith("s") && !/(?:ss|us|is)$/.test(w)) return w.slice(0, -1);
-      return w;
-    }
-    function canonicalizeLessonText(txt) {
-      const cleaned = String(txt || "").replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, " ").replace(/\b(?:assistir|conclu[íi]da|play_arrow|play_circle|ondemand_video|smart_display|check_circle|check_box|done)\b/gi, " ");
-      const norm = normalizeCourseIndexKey(cleaned).replace(/^\s*(?:aula|bloco|parte|m[oó]dulo)\s*\d+\s*[-–—:|.]*\s*/i, "").replace(/^\s*\d{1,3}\s*[-–—:|.]+\s*/, "").replace(/\b0+(\d+)\b/g, "$1").trim();
-      if (!norm) return "";
-      return norm.split(" ").filter(Boolean).map(stemPtToken).join(" ");
-    }
-    function scoreCaveiraLessonCandidate(candidateText, targetLesson) {
-      const cleanCand = normalizeCourseIndexKey(candidateText || "");
-      const cleanTarget = normalizeCourseIndexKey(targetLesson || "");
-      if (!cleanCand || !cleanTarget) return 0;
-      const partCand = extractLessonPartNum(candidateText);
-      const partTgt = extractLessonPartNum(targetLesson);
-      if (partCand !== partTgt) return 0;
-      if (cleanCand === cleanTarget) return 100;
-      const canonCand = canonicalizeLessonText(candidateText);
-      const canonTarget = canonicalizeLessonText(targetLesson);
-      if (canonCand && canonTarget && canonCand === canonTarget) return 95;
-      if (canonTarget && canonCand.includes(canonTarget) || canonCand && canonTarget.includes(canonCand)) {
-        return 80;
-      }
-      const tok = (s) => s.split(" ").filter((w) => w.length >= 3 || /^\d+$/.test(w));
-      const tTgt = tok(canonTarget || cleanTarget);
-      const tCand = new Set(tok(canonCand || cleanCand));
-      if (tTgt.length === 0 || tCand.size === 0) return 0;
-      const hits = tTgt.filter((w) => tCand.has(w)).length;
-      const ratio = hits / Math.max(tTgt.length, tCand.size);
-      return ratio >= 0.65 ? Math.round(ratio * 75) : 0;
-    }
     function extractPlayingVideoTitleFromHeader() {
       try {
+        const toggleListBtn = Array.from(document.querySelectorAll("button, .q-btn")).find((el) => !el.closest("#qg-caveira-shadow-host, #qg-caveira-hud") && isElementVisible(el) && /(?:ocultar|mostrar)\s+lista/i.test(el.innerText || el.textContent || ""));
+        if (toggleListBtn) {
+          const bar = toggleListBtn.parentElement;
+          const rawBar = (bar?.innerText || bar?.textContent || "").replace(/(?:ocultar|mostrar)\s+lista/gi, "").replace(/\s+/g, " ").trim();
+          if (rawBar && rawBar.length <= 240) {
+            if (rawBar.includes("|")) {
+              const right = rawBar.split("|").slice(1).join("|").trim();
+              if (right.length >= 4) return right;
+            }
+            if (rawBar.includes(" - ")) {
+              const right = rawBar.split(" - ").slice(1).join(" - ").trim();
+              if (right.length >= 4) return right;
+            }
+            if (rawBar.length >= 4) return rawBar;
+          }
+        }
         const headerCandidates = Array.from(document.querySelectorAll("header, .q-toolbar, .q-header, h1, h2, .text-subtitle1, .text-h6")).filter((el) => !el.closest("#qg-caveira-shadow-host, #qg-caveira-hud") && isElementVisible(el));
         for (const el of headerCandidates) {
           const txt = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
@@ -2233,6 +2395,75 @@ ${EXTRA_SHADOW_CSS}`;
       } catch (_) {
       }
       return "";
+    }
+    function isInsideExcludedUi(el) {
+      return Boolean(
+        el && el.closest('#qg-caveira-shadow-host, #qg-caveira-hud, header, .q-header, .q-toolbar, aside, nav, [role="tablist"], .q-checkbox, [role="checkbox"], input[type="checkbox"]')
+      );
+    }
+    function isClickableLike(el) {
+      if (!el) return false;
+      if (el.matches('a, button, .q-item, [role="button"], [data-course-video-id], .cursor-pointer')) return true;
+      try {
+        return window.getComputedStyle(el).cursor === "pointer";
+      } catch (_) {
+        return false;
+      }
+    }
+    function findBestClickableLessonRowInDom(targetLesson) {
+      const rawNodes = Array.from(
+        document.querySelectorAll('a[href*="course_video_id"], [data-course-video-id], .q-item, [role="button"], li, div, span')
+      ).filter((el) => !isInsideExcludedUi(el) && isElementVisible(el));
+      const matched = [];
+      for (const el of rawNodes) {
+        const rawTxt = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+        if (!rawTxt || rawTxt.length < 3 || rawTxt.length > 200) continue;
+        if (/^[\[(]?\d{1,2}:\d{2}/.test(rawTxt)) continue;
+        const clickable = isClickableLike(el) || Boolean(el.parentElement && isClickableLike(el.parentElement)) || Boolean(el.closest('[class*="cursor-pointer"], a, button, .q-item'));
+        if (!clickable) continue;
+        const sc = scoreCaveiraLessonCandidate(rawTxt, targetLesson);
+        if (sc < 75) continue;
+        const hasRowSignals = Boolean(
+          el.querySelector('input[type="checkbox"], [role="checkbox"], .q-checkbox') || /\b\d{1,2}:\d{2}(?::\d{2})?\b/.test(rawTxt) || el.matches('a[href*="course_video_id"], [data-course-video-id]')
+        );
+        matched.push({ el, rawTxt, score: sc, hasRowSignals, selfClickable: isClickableLike(el) });
+      }
+      const specific = matched.filter(
+        (a) => !matched.some((b) => b !== a && a.el.contains(b.el) && b.score >= a.score)
+      );
+      if (specific.length === 0) return null;
+      specific.sort((a, b) => {
+        if (b.score !== a.score) return b.score - a.score;
+        if (b.hasRowSignals !== a.hasRowSignals) return b.hasRowSignals ? 1 : -1;
+        if (a.rawTxt.length !== b.rawTxt.length) return a.rawTxt.length - b.rawTxt.length;
+        if (b.selfClickable !== a.selfClickable) return b.selfClickable ? 1 : -1;
+        return 0;
+      });
+      const chosen = specific[0];
+      let targetEl = chosen.el;
+      if (!isClickableLike(targetEl)) {
+        let cur = targetEl.parentElement;
+        for (let i = 0; i < 3 && cur && !isInsideExcludedUi(cur); i += 1) {
+          if (isClickableLike(cur)) {
+            const pTxt = (cur.innerText || cur.textContent || "").replace(/\s+/g, " ").trim();
+            if (pTxt.length <= 220 && scoreCaveiraLessonCandidate(pTxt, targetLesson) >= 75) {
+              targetEl = cur;
+              break;
+            }
+          }
+          cur = cur.parentElement;
+        }
+      }
+      const hasCheckboxChild = targetEl.querySelector('input[type="checkbox"], [role="checkbox"], .q-checkbox');
+      if (hasCheckboxChild) {
+        const safeLabelChild = Array.from(targetEl.children).find(
+          (ch) => !ch.matches('input[type="checkbox"], [role="checkbox"], .q-checkbox') && !ch.querySelector('input[type="checkbox"], [role="checkbox"], .q-checkbox') && scoreCaveiraLessonCandidate((ch.innerText || ch.textContent || "").trim(), targetLesson) >= 75
+        );
+        if (safeLabelChild && isClickableLike(safeLabelChild)) {
+          targetEl = safeLabelChild;
+        }
+      }
+      return targetEl;
     }
     function autoOpenTargetLessonFromHash() {
       if (!isCourseCatalogPage()) return;
@@ -2265,7 +2496,7 @@ ${EXTRA_SHADOW_CSS}`;
       } else {
         try {
           const stored = JSON.parse(sessionStorage.getItem("qg_target_lesson_pending") || "null");
-          if (stored && stored.lesson && Date.now() - (Number(stored.savedAt) || 0) < 25e3) {
+          if (stored && stored.lesson && Date.now() - (Number(stored.savedAt) || 0) < 45e3) {
             targetLesson = stored.lesson;
             targetSubject = stored.subject || "";
             targetTopic = stored.topic || "";
@@ -2296,136 +2527,254 @@ ${EXTRA_SHADOW_CSS}`;
         targetLessonPollTimer = null;
       }
       let attempts = 0;
-      const expandedModules = /* @__PURE__ */ new Set();
+      let lastPathname = window.location.pathname;
+      let lastClickAt = 0;
+      const clickCounts = /* @__PURE__ */ new WeakMap();
+      const clickedModules = /* @__PURE__ */ new Set();
+      let clickedListView = false;
+      let usedCourseSearch = false;
+      let usedCourseDetailSearch = false;
+      let navigatedToModuleUrl = "";
+      let waitingAfterDomClick = false;
+      let urlBeforeDomClick = "";
+      let titleBeforeDomClick = "";
+      let postNavConfirmTicks = 0;
+      const applyPendingSeekIfAny = () => {
+        let seekSec = 0;
+        try {
+          seekSec = Math.max(0, Number(new URLSearchParams(window.location.search || "").get("t")) || 0);
+        } catch (_) {
+        }
+        if (seekSec > 0) {
+          setTimeout(() => {
+            try {
+              chrome.storage.local.set({ [PLAYER_SEEK_KEY]: { seconds: seekSec, savedAt: Date.now() } }, () => {
+                if (chrome.runtime?.sendMessage) {
+                  chrome.runtime.sendMessage({ type: "SEEK_VIDEO_TO", payload: { seconds: seekSec } }).catch(() => {
+                  });
+                }
+              });
+            } catch (_) {
+            }
+          }, 1e3);
+        }
+      };
       const tryNavigate = () => {
         if (isDestroyed) {
           clearInterval(targetLessonPollTimer);
           targetLessonPollTimer = null;
           return;
         }
+        if (window.location.pathname !== lastPathname) {
+          lastPathname = window.location.pathname;
+          attempts = 0;
+          waitingAfterDomClick = false;
+          usedCourseDetailSearch = false;
+          postNavConfirmTicks = 0;
+        }
         attempts += 1;
+        const now = Date.now();
         const currentCourseIdMatch = window.location.pathname.match(/\/courses\/(\d+)/i);
         if (!currentCourseIdMatch) {
-          const courseQuery = targetCourse || targetTopic || targetSubject;
-          if (courseQuery) {
-            const courseCards = Array.from(document.querySelectorAll('a[href*="/courses/"], .q-card')).filter((el) => !el.closest("#qg-caveira-shadow-host, #qg-caveira-hud") && isElementVisible(el));
-            let bestCourseEl = null;
-            let bestCourseScore = 0;
-            const qNorm = normalizeCourseIndexKey(courseQuery);
-            const qTokens = qNorm.split(" ").filter((w) => w.length >= 3);
-            courseCards.forEach((el) => {
-              const raw = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
-              if (!raw || raw.length > 220) return;
-              const cNorm = normalizeCourseIndexKey(raw);
-              let sc = 0;
-              if (targetCourse && cNorm.includes(normalizeCourseIndexKey(targetCourse))) sc += 100;
-              if (targetTopic && cNorm.includes(normalizeCourseIndexKey(targetTopic))) sc += 80;
-              if (qTokens.length > 0) {
-                const hits = qTokens.filter((t) => cNorm.includes(t)).length;
-                sc += Math.round(hits / qTokens.length * 60);
-              }
-              if (sc > bestCourseScore) {
-                bestCourseScore = sc;
-                bestCourseEl = el;
+          if (apiCoursesListCache.length > 0) {
+            let bestApiCourse = null;
+            let bestApiCourseScore = 0;
+            apiCoursesListCache.forEach((c) => {
+              const sc = scoreCaveiraCourseCandidate(c.name, { targetCourse, targetTopic, targetSubject });
+              if (sc > bestApiCourseScore) {
+                bestApiCourseScore = sc;
+                bestApiCourse = c;
               }
             });
-            if (bestCourseEl && bestCourseScore >= 40) {
-              try {
-                bestCourseEl.scrollIntoView({ behavior: "smooth", block: "center" });
-                bestCourseEl.click();
-                const innerLink = bestCourseEl.querySelector('a[href*="/courses/"]');
-                if (innerLink && innerLink !== bestCourseEl) innerLink.click();
-              } catch (_) {
-              }
+            if (bestApiCourse && bestApiCourseScore >= 60) {
+              window.location.href = `${window.location.origin}/courses/${bestApiCourse.id}${window.location.hash}`;
               return;
             }
           }
-          if (attempts >= 16) clearTargetPending();
+          if (!clickedListView) {
+            const listToggle = Array.from(document.querySelectorAll("button, .q-btn, div, span")).find((el) => !isInsideExcludedUi(el) && isElementVisible(el) && /^lista$/i.test((el.innerText || el.textContent || "").trim()) && isClickableLike(el));
+            if (listToggle) {
+              clickedListView = true;
+              try {
+                listToggle.click();
+              } catch (_) {
+              }
+            }
+          }
+          if (!usedCourseSearch) {
+            const searchInput = document.querySelector('input[placeholder*="Pesquisar cursos" i]');
+            const courseQuery = targetCourse || targetTopic || targetSubject;
+            if (searchInput && courseQuery && isElementVisible(searchInput)) {
+              usedCourseSearch = true;
+              try {
+                setNativeInputValue(searchInput, courseQuery);
+              } catch (_) {
+              }
+            }
+          }
+          const courseEls = Array.from(document.querySelectorAll('a[href*="/courses/"], .q-card, [role="listitem"], div')).filter((el) => !isInsideExcludedUi(el) && isElementVisible(el) && isClickableLike(el));
+          let bestCourseEl = null;
+          let bestCourseScore = 0;
+          courseEls.forEach((el) => {
+            const raw = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+            if (!raw || raw.length > 220) return;
+            const sc = scoreCaveiraCourseCandidate(raw, { targetCourse, targetTopic, targetSubject });
+            if (sc > bestCourseScore) {
+              bestCourseScore = sc;
+              bestCourseEl = el;
+            }
+          });
+          if (bestCourseEl && bestCourseScore >= 50 && now - lastClickAt >= 1400) {
+            lastClickAt = now;
+            try {
+              bestCourseEl.scrollIntoView({ behavior: "smooth", block: "center" });
+              const innerLink = bestCourseEl.querySelector('a[href*="/courses/"], button');
+              (innerLink || bestCourseEl).click();
+            } catch (_) {
+            }
+            return;
+          }
+          if (attempts >= 24) clearTargetPending();
           return;
         }
         if (isCoursePlaygroundPage()) {
           const curPlayTitle = extractPlayingVideoTitleFromHeader() || extractCourseLessonTitle() || currentCourseIndexStatus?.lessonTitle || "";
           if (curPlayTitle && scoreCaveiraLessonCandidate(curPlayTitle, targetLesson) >= 75) {
+            applyPendingSeekIfAny();
             clearTargetPending();
             return;
           }
-        }
-        const candidateEls = Array.from(
-          document.querySelectorAll('a[href*="course_video_id"], [data-course-video-id], .q-item, [class*="lesson"], [class*="video"]')
-        ).filter((el) => !el.closest("#qg-caveira-shadow-host, #qg-caveira-hud, header, .q-header, .q-toolbar") && isElementVisible(el));
-        let bestDomEl = null;
-        let bestDomScore = 0;
-        candidateEls.forEach((el) => {
-          const rawTxt = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
-          if (!rawTxt || rawTxt.length > 200) return;
-          const sc = scoreCaveiraLessonCandidate(rawTxt, targetLesson);
-          if (sc > bestDomScore) {
-            bestDomScore = sc;
-            bestDomEl = el;
-          }
-        });
-        if (bestDomEl && bestDomScore >= 75) {
-          let seekSec = 0;
-          try {
-            seekSec = Math.max(0, Number(new URLSearchParams(window.location.search || "").get("t")) || 0);
-          } catch (_) {
-          }
-          clearTargetPending();
-          try {
-            bestDomEl.scrollIntoView({ behavior: "smooth", block: "center" });
-            bestDomEl.click();
-            const anchorInside = bestDomEl.querySelector("a");
-            if (anchorInside && anchorInside !== bestDomEl) anchorInside.click();
-            if (seekSec > 0) {
-              setTimeout(() => {
-                try {
-                  chrome.storage.local.set({ [PLAYER_SEEK_KEY]: { seconds: seekSec, savedAt: Date.now() } }, () => {
-                    if (chrome.runtime?.sendMessage) {
-                      chrome.runtime.sendMessage({ type: "SEEK_VIDEO_TO", payload: { seconds: seekSec } }).catch(() => {
-                      });
-                    }
-                  });
-                } catch (_) {
-                }
-              }, 900);
+          if (waitingAfterDomClick && window.location.href !== urlBeforeDomClick && curPlayTitle && curPlayTitle !== titleBeforeDomClick) {
+            postNavConfirmTicks += 1;
+            if (postNavConfirmTicks >= 2) {
+              applyPendingSeekIfAny();
+              clearTargetPending();
+              return;
             }
-          } catch (_) {
           }
-          return;
         }
-        if (isCoursePlaygroundPage() && attempts <= 4) {
+        if (isCoursePlaygroundPage() && attempts <= 6 && now - lastClickAt >= 900) {
           const showListBtn = Array.from(document.querySelectorAll("button, .q-btn, span, div")).find((el) => !el.closest("#qg-caveira-shadow-host, #qg-caveira-hud") && isElementVisible(el) && /mostrar\s+lista/i.test(el.innerText || el.textContent || ""));
           if (showListBtn) {
+            lastClickAt = now;
             try {
               showListBtn.click();
             } catch (_) {
             }
           }
         }
+        const targetEl = findBestClickableLessonRowInDom(targetLesson);
+        if (targetEl) {
+          const prevCount = clickCounts.get(targetEl) || 0;
+          if (prevCount < 2 && now - lastClickAt >= 1400) {
+            lastClickAt = now;
+            clickCounts.set(targetEl, prevCount + 1);
+            waitingAfterDomClick = true;
+            urlBeforeDomClick = window.location.href;
+            titleBeforeDomClick = extractPlayingVideoTitleFromHeader() || "";
+            try {
+              targetEl.scrollIntoView({ behavior: "smooth", block: "center" });
+              targetEl.click();
+              const anchorInside = targetEl.querySelector("a");
+              if (anchorInside && anchorInside !== targetEl) anchorInside.click();
+              if (isCoursePlaygroundPage()) {
+                applyPendingSeekIfAny();
+              }
+            } catch (_) {
+            }
+            return;
+          }
+        }
+        if (!isCoursePlaygroundPage()) {
+          const collapseBtns = Array.from(document.querySelectorAll('button[aria-expanded="false"], .q-expansion-item')).filter((el) => !isInsideExcludedUi(el) && isElementVisible(el));
+          collapseBtns.forEach((el) => {
+            const btn = el.matches('button[aria-expanded="false"]') ? el : el.querySelector(':scope > .q-expansion-item__container > .q-item, :scope > .q-item, button[aria-expanded="false"]');
+            if (!btn || btn.getAttribute("aria-expanded") === "true") return;
+            const hText = (el.innerText || btn.innerText || "").replace(/\s+/g, " ").trim();
+            if (!hText) return;
+            const matchesSubj = targetSubject && normalizeCourseIndexKey(hText).includes(normalizeCourseIndexKey(targetSubject).split(" ")[0]);
+            const matchesTok = scoreCaveiraLessonCandidate(hText, targetLesson) >= 30;
+            if (matchesSubj || matchesTok || collapseBtns.length <= 8) {
+              try {
+                btn.click();
+              } catch (_) {
+              }
+            }
+          });
+          const moduleCandidates = Array.from(document.querySelectorAll("div, li, a, button, .q-item")).filter((el) => {
+            if (isInsideExcludedUi(el) || !isElementVisible(el) || !isClickableLike(el)) return false;
+            const txt = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+            return txt.length >= 4 && txt.length <= 140 && /\b\d+\s+aulas?\b/i.test(txt);
+          });
+          let bestModEl = null;
+          let bestModKey = "";
+          let bestModScore = 0;
+          moduleCandidates.forEach((el) => {
+            const txt = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+            if (moduleCandidates.some((other) => other !== el && el.contains(other))) return;
+            const sc = scoreCaveiraModuleCandidate(txt, { targetSubject, targetTopic, targetLesson });
+            if (sc > bestModScore) {
+              bestModScore = sc;
+              bestModEl = el;
+              bestModKey = normalizeCourseIndexKey(txt);
+            }
+          });
+          if (bestModEl && bestModScore >= 55 && !clickedModules.has(bestModKey) && now - lastClickAt >= 1200) {
+            clickedModules.add(bestModKey);
+            lastClickAt = now;
+            try {
+              bestModEl.scrollIntoView({ behavior: "smooth", block: "center" });
+              bestModEl.click();
+            } catch (_) {
+            }
+            return;
+          }
+          if (attempts >= 4 && !usedCourseDetailSearch) {
+            const detailSearch = document.querySelector('input[placeholder*="Digite para pesquisar" i]');
+            if (detailSearch && isElementVisible(detailSearch)) {
+              usedCourseDetailSearch = true;
+              const cleanQuery = stripCaveiraLessonUiNoise(targetLesson).replace(/\s*[-–—]\s*parte\s*\d+$/i, "").trim() || targetLesson;
+              try {
+                setNativeInputValue(detailSearch, cleanQuery);
+              } catch (_) {
+              }
+            }
+          }
+        }
         const currentCourseId = currentCourseIdMatch[1];
         const apiSameCourse = !apiCourseCatalogCache?.courseId || String(apiCourseCatalogCache.courseId) === String(currentCourseId);
-        if ((!isCoursePlaygroundPage() || attempts >= 8) && apiSameCourse) {
+        if (apiSameCourse) {
           const apiMods = Array.isArray(apiCourseCatalogCache?.modules) ? apiCourseCatalogCache.modules : [];
           let bestApiLesson = null;
           let bestApiScore = 0;
+          let bestFallbackModuleUrl = "";
+          let bestFallbackModScore = 0;
           apiMods.forEach((m) => {
             (m?.lessons || []).forEach((l) => {
-              if (!l?.title || !l?.url || !l?.verifiedVideoUrl || !String(l.url).includes("course_video_id=")) return;
+              if (!l?.title) return;
               const sc = scoreCaveiraLessonCandidate(l.title, targetLesson);
-              if (sc > bestApiScore) {
-                bestApiScore = sc;
-                bestApiLesson = l;
+              if (sc >= 75 && l.url && l.verifiedVideoUrl && String(l.url).includes("course_video_id=")) {
+                if (sc > bestApiScore) {
+                  bestApiScore = sc;
+                  bestApiLesson = l;
+                }
+              } else if (sc >= 75 && m.moduleUrl && String(m.moduleUrl).includes("/playground")) {
+                if (sc > bestFallbackModScore) {
+                  bestFallbackModScore = sc;
+                  bestFallbackModuleUrl = m.moduleUrl;
+                }
               }
             });
           });
-          if (bestApiLesson && bestApiScore >= 75) {
+          const canUseExactApiUrl = !isCoursePlaygroundPage() && attempts >= 6 || isCoursePlaygroundPage() && attempts >= 10;
+          if (bestApiLesson && bestApiScore >= 75 && canUseExactApiUrl) {
             const currentNoHash = window.location.href.split("#")[0];
+            let targetUrl = bestApiLesson.url;
             let seekSec = 0;
             try {
               seekSec = Math.max(0, Number(new URLSearchParams(window.location.search || "").get("t")) || 0);
             } catch (_) {
             }
-            let targetUrl = bestApiLesson.url;
             if (seekSec > 0) {
               try {
                 const u = new URL(targetUrl);
@@ -2435,30 +2784,18 @@ ${EXTRA_SHADOW_CSS}`;
                 targetUrl = `${targetUrl}${targetUrl.includes("?") ? "&" : "?"}t=${seekSec}`;
               }
             }
-            clearTargetPending();
             if (targetUrl !== currentNoHash) {
               window.location.href = targetUrl;
             }
             return;
           }
-        }
-        const expansionHeaders = Array.from(document.querySelectorAll(".q-expansion-item")).filter((el) => !el.closest("#qg-caveira-shadow-host, #qg-caveira-hud") && isElementVisible(el));
-        expansionHeaders.forEach((expEl) => {
-          const headerBtn = expEl.querySelector(":scope > .q-expansion-item__container > .q-item, :scope > .q-item");
-          if (!headerBtn) return;
-          const hText = (headerBtn.innerText || headerBtn.textContent || "").replace(/\s+/g, " ").trim();
-          if (!hText || expandedModules.has(hText)) return;
-          const matchesSubj = targetSubject && normalizeCourseIndexKey(hText).includes(normalizeCourseIndexKey(targetSubject).split(" ")[0]);
-          const matchesTok = scoreCaveiraLessonCandidate(hText, targetLesson) >= 30;
-          if (matchesSubj || matchesTok || expansionHeaders.length <= 6) {
-            expandedModules.add(hText);
-            try {
-              headerBtn.click();
-            } catch (_) {
-            }
+          if (!isCoursePlaygroundPage() && attempts >= 8 && bestFallbackModuleUrl && navigatedToModuleUrl !== bestFallbackModuleUrl && bestFallbackModuleUrl !== window.location.href.split("#")[0]) {
+            navigatedToModuleUrl = bestFallbackModuleUrl;
+            window.location.href = bestFallbackModuleUrl;
+            return;
           }
-        });
-        if (attempts >= 16) {
+        }
+        if (attempts >= 24) {
           clearTargetPending();
         }
       };

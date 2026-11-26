@@ -22,6 +22,8 @@ export function normalizeLessonTitleKey(str) {
 export function stripLessonLeadingPrefix(txt) {
   return normalizeLessonTitleKey(
     String(txt || '')
+      .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, ' ')
+      .replace(/\bconclu[íi]d[oa]s?\b/gi, ' ')
       .replace(/^\s*(?:aula|bloco|parte|cap[ií]tulo|m[oó]dulo)\s*\d+\s*[-–—:|.]*\s*/i, '')
       .replace(/^\s*\d{1,3}\s*[-–—:|.]+\s*/, '')
       .trim()
@@ -44,7 +46,11 @@ const ROMAN_PART_MAP = {
  * Never confuses "Aula 02 - ..." with "Parte 2".
  */
 export function extractLessonPartTag(txt) {
-  const clean = normalizeLessonTitleKey(txt);
+  const clean = normalizeLessonTitleKey(
+    String(txt || '')
+      .replace(/\b\d{1,2}:\d{2}(?::\d{2})?\b/g, ' ')
+      .replace(/\bconclu[íi]d[oa]s?\b/gi, ' ')
+  );
   if (!clean) return '';
 
   const mPartNum = clean.match(/\b(?:parte|pt)\s*0*(\d{1,2})\b/);

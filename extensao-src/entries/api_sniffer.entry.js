@@ -1,7 +1,8 @@
 import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
 
-// Sniffer passivo da API do Projeto Caveira (MAIN world — somente leitura de respostas JSON) — v3.2.0
+// Sniffer passivo da API do Projeto Caveira (MAIN world — somente leitura de respostas JSON) — v3.2.4
 (function () {
+  if (/^(?:loja|checkout|blog|pay|pagamentos?|www)\./i.test(window.location.hostname || '')) return;
   if (window.__qgCaveiraApiSnifferInstalled) return;
   window.__qgCaveiraApiSnifferInstalled = true;
 
@@ -92,6 +93,20 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
         );
         if (idx >= 0) {
           replayBuffer[idx] = { type, payload };
+        } else {
+          replayBuffer.push({ type, payload });
+        }
+      } else if (type === 'API_COURSES_LIST' && payload && Array.isArray(payload.courses)) {
+        const idx = replayBuffer.findIndex((item) => item.type === 'API_COURSES_LIST');
+        if (idx >= 0) {
+          const mergedById = new Map();
+          (replayBuffer[idx].payload?.courses || []).forEach((c) => {
+            if (c?.id) mergedById.set(String(c.id), c);
+          });
+          payload.courses.forEach((c) => {
+            if (c?.id) mergedById.set(String(c.id), c);
+          });
+          replayBuffer[idx] = { type, payload: { courses: Array.from(mergedById.values()) } };
         } else {
           replayBuffer.push({ type, payload });
         }
@@ -310,6 +325,51 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
     // 1. Detectar catálogo de curso / módulos / videoaulas (ignorar rotas de simulados/turmas)
     const urlStr = String(url || '');
     const isSimuladoOrTeamUrl = /(?:practice-exam|simulado|enjoyment|ranking|\/teams\/\d+)/i.test(urlStr);
+
+    if (
+      !isSimuladoOrTeamUrl &&
+      !/\/courses\/\d+/i.test(urlStr) &&
+      /\/courses(?:\?|$|\/(?:me|my|student|list|catalog|categories|favorites|all)\b)/i.test(urlStr)
+    ) {
+      const coursesById = new Map();
+      const seenObjs = new Set();
+      const walkCourses = (node, depth = 0) => {
+        if (!node || typeof node !== 'object' || depth > 5 || seenObjs.has(node)) return;
+        seenObjs.add(node);
+        if (Array.isArray(node)) {
+          node.forEach((item) => walkCourses(item, depth + 1));
+          return;
+        }
+        const isVideoObj =
+          node.course_video_id !== undefined ||
+          node.video_id !== undefined ||
+          node.duration_seconds !== undefined ||
+          node.embed_url !== undefined;
+        const cId = node.id ?? node.course_id;
+        const cTitle = String(node.name || node.title || '').trim();
+        if (
+          !isVideoObj &&
+          cId !== undefined &&
+          cId !== null &&
+          cId !== '' &&
+          cTitle &&
+          !Array.isArray(node.courses) &&
+          !Array.isArray(node.items)
+        ) {
+          coursesById.set(String(cId), { id: String(cId), name: cTitle });
+        }
+        for (const key of ['courses', 'items', 'favorites', 'categories', 'data', 'results']) {
+          if (node[key] && typeof node[key] === 'object') {
+            walkCourses(node[key], depth + 1);
+          }
+        }
+      };
+      walkCourses(root, 0);
+      if (coursesById.size > 0) {
+        emit('API_COURSES_LIST', { courses: Array.from(coursesById.values()) });
+      }
+    }
+
     const courseIdMatch = urlStr.match(/\/courses\/(\d+)/i) || window.location.pathname.match(/\/courses\/(\d+)/i);
     const modIdMatch = urlStr.match(/\/modules\/(\d+)/i) || window.location.pathname.match(/\/modules\/(\d+)/i);
     const modIdFromUrl = modIdMatch?.[1] || '';
