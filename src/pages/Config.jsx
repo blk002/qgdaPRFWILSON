@@ -223,7 +223,7 @@ export default function Config({
             Ajustes
           </h1>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
-            {subjectsList.length} {subjectsList.length === 1 ? 'disciplina' : 'disciplinas'} · {totalSlots} {totalSlots === 1 ? 'bloco' : 'blocos'} no ciclo · v{APP_VERSION}
+            {subjectsList.length} {subjectsList.length === 1 ? 'disciplina' : 'disciplinas'} · {totalSlots} {totalSlots === 1 ? 'bloco' : 'blocos'} no ciclo · {APP_VERSION}
           </p>
         </div>
       </header>
@@ -1273,7 +1273,7 @@ export default function Config({
                   Versão do aplicativo
                 </h2>
                 <span className="font-mono text-xs text-slate-500 dark:text-slate-400">
-                  v{APP_VERSION}
+                  {APP_VERSION}
                 </span>
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
