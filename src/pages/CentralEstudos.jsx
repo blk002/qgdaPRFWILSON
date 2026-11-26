@@ -1,11 +1,10 @@
 import React, { useMemo, Suspense } from 'react';
-import { useNavigate, useSearchParams } from 'react-router-dom';
+import { useSearchParams } from 'react-router-dom';
 import { useStore } from '../store/useStore';
-import { startInteractiveTour } from '../lib/interactiveTour';
 import AbaHoje from '../components/AbaHoje';
 import {
   Zap, Repeat, Calendar as CalendarIcon, CalendarClock,
-  Settings, HelpCircle, Skull, Clock, Target, FileText
+  Skull, Clock, Target, FileText
 } from 'lucide-react';
 
 const Ciclo = React.lazy(() => import('./Ciclo'));
@@ -28,7 +27,6 @@ const TAB_CONFIG = [
 ];
 
 export default function CentralEstudos() {
-  const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
   const rawTab = searchParams.get('tab');
   const activeTab = VALID_TABS.has(rawTab) ? rawTab : 'hoje';
@@ -36,8 +34,18 @@ export default function CentralEstudos() {
   const {
     subjects = {},
     targetExamDate,
-    getEstimatedCompletionDate
+    getEstimatedCompletionDate,
+    userStats,
+    user,
   } = useStore();
+
+  const displayName = (
+    userStats?.displayName ||
+    user?.user_metadata?.display_name ||
+    user?.user_metadata?.full_name ||
+    user?.email?.split('@')[0] ||
+    'Combatente'
+  ).trim();
 
   const subjectsList = useMemo(() => Object.values(subjects || {}), [subjects]);
 
@@ -66,12 +74,18 @@ export default function CentralEstudos() {
 
   return (
     <div className="fade-in w-full pb-6 space-y-5">
-      {/* Cabeçalho Unificado com Progresso do Edital */}
-      <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-x-5 gap-y-3">
-        <div className="order-1 min-w-0 shrink-0">
-          <h1 className="font-display text-lg sm:text-xl font-bold tracking-tight text-slate-900 dark:text-white whitespace-nowrap">
+      {/* Cabeçalho com Título e Saudação */}
+      <div className="flex flex-wrap lg:flex-nowrap items-center justify-between gap-x-5 gap-y-2">
+        <div className="order-1 min-w-0">
+          <h1 className="font-display text-lg sm:text-xl font-bold tracking-tight text-slate-900 dark:text-white truncate">
             Central de Estudos
           </h1>
+        </div>
+
+        <div className="order-2 min-w-0">
+          <p className="text-sm sm:text-base font-medium text-slate-600 dark:text-slate-300 truncate">
+            Olá, <span className="font-semibold text-slate-900 dark:text-white">{displayName}</span>
+          </p>
         </div>
 
         {/* Progresso do Edital (apenas mobile; no desktop fica no menu superior) */}
@@ -119,26 +133,6 @@ export default function CentralEstudos() {
               style={{ width: `${completionPct}%` }}
             />
           </div>
-        </div>
-
-        <div className="order-2 lg:order-3 flex items-center gap-2 shrink-0">
-          <button
-            type="button"
-            onClick={() => startInteractiveTour()}
-            className="h-9 px-3 rounded-lg text-xs font-medium text-slate-600 hover:text-slate-900 hover:bg-slate-100 dark:text-slate-400 dark:hover:text-white dark:hover:bg-slate-850 inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0"
-          >
-            <HelpCircle className="w-4 h-4" />
-            <span>Tutorial</span>
-          </button>
-          <button
-            type="button"
-            data-tour="central-ajustar-edital"
-            onClick={() => navigate('/config')}
-            className="h-9 px-3.5 rounded-lg text-xs font-semibold bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap shrink-0"
-          >
-            <Settings className="w-3.5 h-3.5" />
-            <span>Ajustar edital</span>
-          </button>
         </div>
       </div>
 

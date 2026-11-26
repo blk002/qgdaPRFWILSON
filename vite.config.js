@@ -1,3 +1,4 @@
+import process from 'node:process'
 import { defineConfig } from 'vite'
 import react from '@vitejs/plugin-react'
 
@@ -7,7 +8,11 @@ export default defineConfig(({ command }) => ({
   base: command === 'build' ? '/qgdaPRFWILSON/' : '/',
   server: {
     port: 3000,
-    host: '0.0.0.0'
+    host: '0.0.0.0',
+    hmr: process.env.DISABLE_HMR !== 'true',
+    watch: {
+      ignored: ['**/.github/**', '**/scripts/**', '**/extensao*/**', '**/.playwright-cli/**']
+    }
   },
   build: {
     chunkSizeWarningLimit: 900,
