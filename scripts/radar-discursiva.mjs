@@ -14,6 +14,8 @@
  */
 
 import crypto from 'node:crypto';
+import path from 'node:path';
+import { pathToFileURL } from 'node:url';
 import { createClient } from '@supabase/supabase-js';
 import { GoogleGenAI, Type } from '@google/genai';
 
@@ -21,6 +23,14 @@ const DRY_RUN = process.argv.includes('--dry-run');
 const LOOKBACK_DAYS = Math.max(1, Math.min(14, Number(process.env.RADAR_LOOKBACK_DAYS || 3)));
 const MAX_CANDIDATES_TO_ANALYZE = 18;
 const MAX_DRAFTS_PER_RUN = 5;
+const DEFAULT_GEMINI_MODELS = [
+  'gemini-4-hydrogen',
+  'gemini-3.8-flash',
+  'gemini-3.1-flash-lite',
+  'gemini-flash-latest'
+];
+const MAX_RETRIES_PER_MODEL = 3;
+const RETRY_DELAYS_MS = [5000, 12000];
 
 // Lista fechada (allowlist) de fontes oficiais e institucionais brasileiras
 const OFFICIAL_FEEDS = [
@@ -258,99 +268,62 @@ async function fetchOfficialNews() {
     .slice(0, MAX_CANDIDATES_TO_ANALYZE);
 }
 
-async function synthesizeRepertoriosWithGemini(candidates) {
-  const apiKey = String(process.env.GEMINI_API_KEY || '').trim().replace(/^['"]|['"]$/g, '');
-  if (!apiKey) {
-    throw new Error('GEMINI_API_KEY não configurada no ambiente.');
+export function resolveGeminiModels(env = process.env) {
+  const modelsEnv = String(env.GEMINI_MODELS || '').trim();
+  const singleEnv = String(env.GEMINI_MODEL || '').trim();
+
+  let list;
+  if (modelsEnv) {
+    list = modelsEnv
+      .split(',')
+      .map((m) => m.trim())
+      .filter(Boolean);
+  } else if (singleEnv) {
+    list = [singleEnv, ...DEFAULT_GEMINI_MODELS];
+  } else {
+    list = [...DEFAULT_GEMINI_MODELS];
   }
 
-  const ai = new GoogleGenAI({
-    apiKey,
-    httpOptions: {
-      headers: {
-        'User-Agent': 'aistudio-build'
-      }
-    }
-  });
+  return Array.from(new Set(list));
+}
 
-  const newsBlock = candidates
-    .map(
-      (c, idx) =>
-        `[${idx + 1}] Fonte: ${c.feedName} | Data: ${c.pubDate.toISOString().slice(0, 10)} | URL: ${c.link}\nTítulo: ${c.title}\nResumo: ${c.description}`
+export function classifyGeminiError(err) {
+  const status = Number(err?.status ?? err?.code ?? 0);
+  const msg = String(err?.message || err || '');
+
+  if (/API_KEY_INVALID|API key not valid|invalid api key/i.test(msg)) {
+    return 'fatal';
+  }
+
+  if (
+    [429, 500, 502, 503, 504].includes(status) ||
+    /\b(429|500|502|503|504)\b|UNAVAILABLE|RESOURCE_EXHAUSTED|INTERNAL|DEADLINE_EXCEEDED|high demand|overloaded|try again later|fetch failed|ETIMEDOUT|ECONNRESET/i.test(
+      msg
     )
-    .join('\n\n');
+  ) {
+    return 'retryable';
+  }
 
-  const response = await ai.models.generateContent({
-    model: 'gemini-4-hydrogen',
-    contents: `Analise as notícias oficiais brasileiras abaixo e selecione NO MÁXIMO ${MAX_DRAFTS_PER_RUN} itens que realmente sirvam como repertório factual, jurídico ou estatístico de alto valor para uma redação discursiva da banca Cebraspe para a Polícia Rodoviária Federal (PRF).
+  return 'fallback';
+}
 
-Regras obrigatórias:
-- Ignore fofocas políticas, notas protocolares sem dado concreto, eventos locais irrelevantes ou assuntos fora dos 5 eixos da PRF.
-- Só aproveite uma notícia se ela trouxer nova lei/projeto relevante aprovado, política pública concreta, decisão relevante ou dado oficial aproveitável em prova.
-- NÃO invente números, artigos de lei ou estatísticas que não estejam explicitamente no texto fornecido.
-- Use exatamente o candidateIndex (1 a ${candidates.length}) correspondente à notícia escolhida.
-- Escreva "comoUsar" em português formal, objetivo, em ordem direta (estilo Cebraspe, 2 a 4 linhas), pronto para adaptar em parágrafo de desenvolvimento.
-
-Notícias coletadas:
-${newsBlock}`,
-    config: {
-      systemInstruction:
-        'Você é um curador especialista em provas discursivas da banca Cebraspe para o concurso da Polícia Rodoviária Federal (PRF). Seja extremamente rigoroso com precisão factual e utilidade para redação.',
-      responseMimeType: 'application/json',
-      responseSchema: {
-        type: Type.ARRAY,
-        items: {
-          type: Type.OBJECT,
-          properties: {
-            candidateIndex: { type: Type.INTEGER },
-            eixo: {
-              type: Type.STRING,
-              description:
-                'Um dentre: seguranca_viaria, seguranca_publica, direitos_humanos, tecnologia_gestao, meio_ambiente'
-            },
-            tipo: {
-              type: Type.STRING,
-              description:
-                'Um dentre: legislacao, politica_publica, dado_oficial, conceito_autor'
-            },
-            titulo: { type: Type.STRING },
-            fonte: { type: Type.STRING },
-            aspectoTipico: { type: Type.STRING },
-            resumo: { type: Type.STRING },
-            comoUsar: { type: Type.STRING },
-            palavrasChave: {
-              type: Type.ARRAY,
-              items: { type: Type.STRING }
-            }
-          },
-          required: [
-            'candidateIndex',
-            'eixo',
-            'tipo',
-            'titulo',
-            'fonte',
-            'aspectoTipico',
-            'resumo',
-            'comoUsar',
-            'palavrasChave'
-          ]
-        }
-      }
-    }
-  });
-
-  const rawText = (response.text || '[]')
+export function parseDraftsFromRawJson(rawText, candidates) {
+  const cleaned = String(rawText || '[]')
     .trim()
     .replace(/^```(?:json)?\s*/i, '')
     .replace(/\s*```$/i, '');
-  const parsed = JSON.parse(rawText);
+  const parsed = JSON.parse(cleaned);
   if (!Array.isArray(parsed)) return [];
 
   const drafts = [];
-  for (const item of parsed.slice(0, MAX_DRAFTS_PER_RUN)) {
-    const idx = Number(item.candidateIndex) - 1;
+  const seenHashes = new Set();
+
+  for (const item of parsed) {
+    if (drafts.length >= MAX_DRAFTS_PER_RUN) break;
+
+    const idx = Number(item?.candidateIndex) - 1;
     const candidate = candidates[idx];
-    if (!candidate) continue;
+    if (!candidate || seenHashes.has(candidate.sourceHash)) continue;
 
     const eixo = VALID_EIXOS.has(item.eixo) ? item.eixo : 'seguranca_publica';
     const tipo = VALID_TIPOS.has(item.tipo) ? item.tipo : 'dado_oficial';
@@ -362,6 +335,7 @@ ${newsBlock}`,
 
     if (!titulo || !resumo || !comoUsar) continue;
 
+    seenHashes.add(candidate.sourceHash);
     drafts.push({
       id: `radar_${candidate.sourceHash.slice(0, 16)}`,
       eixo,
@@ -386,6 +360,158 @@ ${newsBlock}`,
   }
 
   return drafts;
+}
+
+export async function callGeminiWithRetryAndFallback({
+  generate,
+  candidates,
+  models = resolveGeminiModels(),
+  maxRetries = MAX_RETRIES_PER_MODEL,
+  retryDelaysMs = RETRY_DELAYS_MS,
+  sleep = (ms) => new Promise((r) => setTimeout(r, ms)),
+  logger = console
+}) {
+  const errors = [];
+
+  for (const model of models) {
+    for (let attempt = 1; attempt <= maxRetries; attempt += 1) {
+      try {
+        const response = await generate(model);
+        const drafts = parseDraftsFromRawJson(response?.text || '[]', candidates);
+        logger.log(`[Radar Discursiva PRF] Curadoria concluída via modelo: ${model}`);
+        return drafts;
+      } catch (err) {
+        const errMsg = String(err?.message || err);
+        errors.push(`${model}#${attempt}: ${errMsg}`);
+
+        if (err instanceof SyntaxError) {
+          logger.warn(
+            `[Radar Discursiva PRF] JSON inválido do modelo ${model} (tentativa ${attempt}/${maxRetries}).`
+          );
+          if (attempt < maxRetries) {
+            await sleep(retryDelaysMs[attempt - 1] ?? 5000);
+            continue;
+          }
+          break;
+        }
+
+        const kind = classifyGeminiError(err);
+        if (kind === 'fatal') {
+          throw err;
+        }
+
+        if (kind === 'retryable' && attempt < maxRetries) {
+          const delay =
+            retryDelaysMs[attempt - 1] ?? retryDelaysMs[retryDelaysMs.length - 1] ?? 5000;
+          logger.warn(
+            `[Radar Discursiva PRF] Modelo ${model} indisponível (tentativa ${attempt}/${maxRetries}). Nova tentativa em ${Math.round(delay / 1000)}s...`
+          );
+          await sleep(delay);
+          continue;
+        }
+
+        logger.warn(
+          `[Radar Discursiva PRF] Modelo ${model} falhou (${kind}): ${errMsg.slice(0, 180)}. Tentando próximo modelo...`
+        );
+        break;
+      }
+    }
+  }
+
+  throw new Error(
+    `Todos os modelos Gemini falharam (${models.join(', ')}). Último erro: ${errors[errors.length - 1] || 'desconhecido'}`
+  );
+}
+
+async function synthesizeRepertoriosWithGemini(candidates) {
+  const apiKey = String(process.env.GEMINI_API_KEY || '').trim().replace(/^['"]|['"]$/g, '');
+  if (!apiKey) {
+    throw new Error('GEMINI_API_KEY não configurada no ambiente.');
+  }
+
+  const ai = new GoogleGenAI({
+    apiKey,
+    httpOptions: {
+      headers: {
+        'User-Agent': 'aistudio-build'
+      }
+    }
+  });
+
+  const newsBlock = candidates
+    .map(
+      (c, idx) =>
+        `[${idx + 1}] Fonte: ${c.feedName} | Data: ${c.pubDate.toISOString().slice(0, 10)} | URL: ${c.link}\nTítulo: ${c.title}\nResumo: ${c.description}`
+    )
+    .join('\n\n');
+
+  const prompt = `Analise as notícias oficiais brasileiras abaixo e selecione NO MÁXIMO ${MAX_DRAFTS_PER_RUN} itens que realmente sirvam como repertório factual, jurídico ou estatístico de alto valor para uma redação discursiva da banca Cebraspe para a Polícia Rodoviária Federal (PRF).
+
+Regras obrigatórias:
+- Ignore fofocas políticas, notas protocolares sem dado concreto, eventos locais irrelevantes ou assuntos fora dos 5 eixos da PRF.
+- Só aproveite uma notícia se ela trouxer nova lei/projeto relevante aprovado, política pública concreta, decisão relevante ou dado oficial aproveitável em prova.
+- NÃO invente números, artigos de lei ou estatísticas que não estejam explicitamente no texto fornecido.
+- Use exatamente o candidateIndex (1 a ${candidates.length}) correspondente à notícia escolhida.
+- Escreva "comoUsar" em português formal, objetivo, em ordem direta (estilo Cebraspe, 2 a 4 linhas), pronto para adaptar em parágrafo de desenvolvimento.
+
+Notícias coletadas:
+${newsBlock}`;
+
+  const config = {
+    systemInstruction:
+      'Você é um curador especialista em provas discursivas da banca Cebraspe para o concurso da Polícia Rodoviária Federal (PRF). Seja extremamente rigoroso com precisão factual e utilidade para redação.',
+    responseMimeType: 'application/json',
+    responseSchema: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          candidateIndex: { type: Type.INTEGER },
+          eixo: {
+            type: Type.STRING,
+            description:
+              'Um dentre: seguranca_viaria, seguranca_publica, direitos_humanos, tecnologia_gestao, meio_ambiente'
+          },
+          tipo: {
+            type: Type.STRING,
+            description:
+              'Um dentre: legislacao, politica_publica, dado_oficial, conceito_autor'
+          },
+          titulo: { type: Type.STRING },
+          fonte: { type: Type.STRING },
+          aspectoTipico: { type: Type.STRING },
+          resumo: { type: Type.STRING },
+          comoUsar: { type: Type.STRING },
+          palavrasChave: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING }
+          }
+        },
+        required: [
+          'candidateIndex',
+          'eixo',
+          'tipo',
+          'titulo',
+          'fonte',
+          'aspectoTipico',
+          'resumo',
+          'comoUsar',
+          'palavrasChave'
+        ]
+      }
+    }
+  };
+
+  return callGeminiWithRetryAndFallback({
+    candidates,
+    models: resolveGeminiModels(),
+    generate: (model) =>
+      ai.models.generateContent({
+        model,
+        contents: prompt,
+        config
+      })
+  });
 }
 
 function normalizeSupabaseUrl(rawUrl) {
@@ -477,7 +603,13 @@ async function main() {
   console.log(`[Radar Discursiva PRF] ${drafts.length} rascunhos enviados para a fila de aprovação (status='pending').`);
 }
 
-main().catch((err) => {
-  console.error('[Radar Discursiva PRF] Erro fatal:', err.message);
-  process.exit(1);
-});
+const isMainModule =
+  Boolean(process.argv[1]) &&
+  pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
+
+if (isMainModule) {
+  main().catch((err) => {
+    console.error('[Radar Discursiva PRF] Erro fatal:', err.message);
+    process.exit(1);
+  });
+}
