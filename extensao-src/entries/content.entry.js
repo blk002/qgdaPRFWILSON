@@ -1421,6 +1421,7 @@ import {
   }
 
   let targetLessonPollTimer = null;
+  let lastOpenedCourseContext = null;
 
   function extractPlayingVideoTitleFromHeader() {
     try {
@@ -1590,6 +1591,20 @@ import {
     }
 
     if (!targetLesson) return;
+
+    try {
+      const cidMatch = window.location.pathname.match(/\/courses\/(\d+)/i);
+      const midMatch = window.location.pathname.match(/\/modules\/(\d+)/i);
+      lastOpenedCourseContext = {
+        lesson: targetLesson,
+        subject: targetSubject,
+        topic: targetTopic,
+        course: targetCourse,
+        courseId: cidMatch ? cidMatch[1] : '',
+        moduleId: midMatch ? midMatch[1] : '',
+        savedAt: Date.now()
+      };
+    } catch (_) {}
 
     const clearTargetPending = () => {
       if (targetLessonPollTimer) {
@@ -2652,19 +2667,39 @@ import {
 
     hud.querySelector('#qg-btn-course-practice')?.addEventListener('click', (e) => {
       e.stopPropagation();
+      const btn = e.currentTarget;
       const lessonTitle = currentCourseIndexStatus?.lessonTitle || extractPlayingVideoTitleFromHeader() || extractCourseLessonTitle() || '';
       if (!lessonTitle) return;
       const subtopics = Array.isArray(currentCourseIndexStatus?.subtopics) ? currentCourseIndexStatus.subtopics : [];
       const rawIndexText = currentCourseIndexStatus?.rawIndexText || '';
-      const inferredSubject = inferSubjectFromLessons([lessonTitle], lessonTitle) || '';
+      const inferredSubject = extractCourseSubjectFromPage(lessonTitle);
+      const topicValue = (lastOpenedCourseContext?.topic && normalizeCourseIndexKey(lastOpenedCourseContext.lesson) === normalizeCourseIndexKey(lessonTitle))
+        ? lastOpenedCourseContext.topic
+        : lessonTitle;
       const filterData = {
         subject: inferredSubject,
-        topic: lessonTitle,
+        topic: topicValue,
         lessons: lessonTitle ? [lessonTitle] : [],
-        fallbackTopic: lessonTitle,
+        fallbackTopic: topicValue,
         subtopics,
         rawIndexText,
         createdAt: Date.now()
+      };
+      const origHtml = btn ? btn.innerHTML : '';
+      if (btn) btn.innerHTML = '<span>⏳ Abrindo questões...</span>';
+      const restoreBtn = () => {
+        if (btn && btn.isConnected && origHtml) {
+          setTimeout(() => {
+            if (btn && btn.isConnected) btn.innerHTML = origHtml;
+          }, 2200);
+        }
+      };
+      const openQuestionsFallback = () => {
+        try {
+          window.open(`${window.location.origin}/questions`, '_blank');
+          if (btn && btn.isConnected) btn.innerHTML = '<span>✓ Filtro enviado!</span>';
+        } catch (_) {}
+        restoreBtn();
       };
       try {
         chrome.storage.local.set({ [PENDING_FILTER_KEY]: filterData }, () => {
@@ -2672,10 +2707,23 @@ import {
             chrome.runtime.sendMessage({
               type: 'OPEN_CAVEIRA_PRACTICE',
               payload: filterData
-            }).catch(() => {});
+            }).then((resp) => {
+              if (!resp || !resp.success) {
+                openQuestionsFallback();
+                return;
+              }
+              if (btn && btn.isConnected) btn.innerHTML = '<span>✓ Filtro enviado!</span>';
+              restoreBtn();
+            }).catch(() => {
+              openQuestionsFallback();
+            });
+          } else {
+            openQuestionsFallback();
           }
         });
-      } catch (_) {}
+      } catch (_) {
+        openQuestionsFallback();
+      }
     });
 
     hud.querySelector('#qg-btn-course-complete')?.addEventListener('click', (e) => {
@@ -2684,7 +2732,7 @@ import {
       const lessonTitle = currentCourseIndexStatus?.lessonTitle || extractCourseLessonTitle() || '';
       const subtopics = Array.isArray(currentCourseIndexStatus?.subtopics) ? currentCourseIndexStatus.subtopics : [];
       const rawIndexText = currentCourseIndexStatus?.rawIndexText || '';
-      const inferredSubject = inferSubjectFromLessons([lessonTitle], lessonTitle) || '';
+      const inferredSubject = extractCourseSubjectFromPage(lessonTitle);
       const payload = {
         subject: inferredSubject,
         lessonTitle,
@@ -3804,7 +3852,7 @@ import {
   ];
 
   function matchExactSubjectRule(segment) {
-    const norm = normalizeFilterText(segment)
+    const norm = normalizeFilterText(String(segment || '').replace(/\([^)]*\)/g, ' '))
       .replace(/^(?:nocoes\s+de|disciplina\s*:?|materia\s*:?)\s+/i, '')
       .replace(/\b(?:aula|parte|bloco|modulo)\s*\d+\b/gi, ' ')
       .replace(/[^a-z0-9\s]/g, ' ')
@@ -3891,6 +3939,51 @@ import {
       if (subject) return subject;
     }
     return '';
+  }
+
+  function extractCourseSubjectFromPage(lessonTitle = '') {
+    const candidates = [];
+    try {
+      const videoMain = document.querySelector('.video-main-title');
+      const videoMainTxt = (videoMain?.innerText || videoMain?.textContent || '').replace(/\s+/g, ' ').trim();
+      if (videoMainTxt) candidates.push(videoMainTxt);
+
+      const courseMain = document.querySelector('.course-main-title');
+      const courseMainTxt = (courseMain?.innerText || courseMain?.textContent || '').replace(/\s+/g, ' ').trim();
+      if (courseMainTxt) candidates.push(courseMainTxt);
+
+      const toggleListBtn = Array.from(document.querySelectorAll('button, .q-btn'))
+        .find((el) => !el.closest('#qg-caveira-shadow-host, #qg-caveira-hud') && isElementVisible(el) && /(?:ocultar|mostrar)\s+lista/i.test(el.innerText || el.textContent || ''));
+      if (toggleListBtn?.parentElement) {
+        const rawBar = (toggleListBtn.parentElement.innerText || toggleListBtn.parentElement.textContent || '')
+          .replace(/(?:ocultar|mostrar)\s+lista/gi, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        if (rawBar && rawBar.length <= 240) candidates.push(rawBar);
+      }
+
+      const midMatch = window.location.pathname.match(/\/modules\/(\d+)/i);
+      const curModuleId = midMatch ? midMatch[1] : '';
+      if (curModuleId && Array.isArray(apiCourseCatalogCache?.modules)) {
+        const mod = apiCourseCatalogCache.modules.find((m) => String(m?.id || m?.moduleId || '') === curModuleId);
+        if (mod?.title || mod?.name) candidates.push(String(mod.title || mod.name).trim());
+      }
+    } catch (_) {}
+
+    if (lessonTitle) candidates.push(lessonTitle);
+
+    let contextSubject = '';
+    if (lastOpenedCourseContext?.subject) {
+      const cidMatch = window.location.pathname.match(/\/courses\/(\d+)/i);
+      const midMatch = window.location.pathname.match(/\/modules\/(\d+)/i);
+      const sameCourse = !lastOpenedCourseContext.courseId || !cidMatch || lastOpenedCourseContext.courseId === cidMatch[1];
+      const sameModule = !lastOpenedCourseContext.moduleId || !midMatch || lastOpenedCourseContext.moduleId === midMatch[1];
+      if (sameCourse && sameModule) {
+        contextSubject = lastOpenedCourseContext.subject;
+      }
+    }
+
+    return inferSubjectFromLessons(candidates, contextSubject) || contextSubject || '';
   }
 
   function stripSubjectFromLessonTitle(lessonTitle, subjectName = '') {

@@ -164,7 +164,7 @@ export const TacticalRange3D: React.FC<TacticalRange3DProps> = ({
     renderer.toneMappingExposure = 1.18;
     renderer.setPixelRatio(isSoftwareGl ? 1 : Math.min(window.devicePixelRatio, 2));
     renderer.shadowMap.enabled = !isSoftwareGl;
-    renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+    renderer.shadowMap.type = THREE.PCFShadowMap;
     renderer.setSize(container.clientWidth || window.innerWidth, container.clientHeight || window.innerHeight);
     container.appendChild(renderer.domElement);
 
@@ -733,7 +733,8 @@ export const TacticalRange3D: React.FC<TacticalRange3DProps> = ({
     }
 
     // 11. Render Loop with Software-WebGL Pacing Guard (`afterDraw`)
-    const clock = new THREE.Clock();
+    const startTimeMs = performance.now();
+    let lastFrameMs = startTimeMs;
     let frameId = 0;
     let isDisposed = false;
 
@@ -760,8 +761,10 @@ export const TacticalRange3D: React.FC<TacticalRange3DProps> = ({
 
     function tick() {
       if (isDisposed) return;
-      const delta = Math.min(clock.getDelta(), 0.1);
-      const elapsed = clock.getElapsedTime();
+      const nowMs = performance.now();
+      const delta = Math.min(Math.max(0, (nowMs - lastFrameMs) / 1000), 0.1);
+      lastFrameMs = nowMs;
+      const elapsed = (nowMs - startTimeMs) / 1000;
       const st = stateRef.current;
 
       // 1. Sculpted NPC tension, breathing, and head/rifle tracking (NO LASER)

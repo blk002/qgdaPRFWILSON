@@ -315,7 +315,7 @@ export default function RaioXOverview({
               </div>
             ) : (
               <div className="w-full h-[220px]">
-                <ResponsiveContainer width="100%" height="100%">
+                <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} initialDimension={{ width: 520, height: 220 }}>
                   <BarChart data={chartData} margin={{ top: 8, right: 8, left: -22, bottom: 2 }}>
                     <CartesianGrid
                       strokeDasharray="3 3"

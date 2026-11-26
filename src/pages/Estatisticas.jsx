@@ -192,7 +192,7 @@ export default function Estatisticas() {
           </div>
           {stats.length > 0 ? (
             <div className="w-full h-[210px]">
-              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+              <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} initialDimension={{ width: 400, height: 210 }}>
                 <RadarChart cx="50%" cy="50%" outerRadius="74%" data={radarData}>
                   <PolarGrid stroke={isDarkMode ? '#1e293b' : '#e2e8f0'} />
                   <PolarAngleAxis
@@ -320,7 +320,7 @@ export default function Estatisticas() {
         </div>
 
         <div className="w-full h-[220px] sm:h-[250px]">
-          <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1}>
+          <ResponsiveContainer width="100%" height="100%" minWidth={1} minHeight={1} initialDimension={{ width: 600, height: 220 }}>
             <AreaChart data={chartData} margin={{ top: 10, right: 10, left: -20, bottom: 0 }}>
               <defs>
                 <linearGradient id="chartMinutesGrad" x1="0" y1="0" x2="0" y2="1">

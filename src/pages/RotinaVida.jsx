@@ -976,7 +976,18 @@ export default function RotinaVida() {
   const handleToggleAutoSync = () => {
     setLifeRoutine((prev) => {
       const current = normalizeRoutine(prev);
-      return { ...current, autoSyncLessons: !current.autoSyncLessons };
+      const nextAutoSync = !current.autoSyncLessons;
+      if (!nextAutoSync) {
+        return { ...current, autoSyncLessons: false };
+      }
+      const nextSignatures = { ...(current.syncedSignatures || {}) };
+      WEEK_DAYS.forEach(({ key }) => {
+        const hasStudyBlock = (current.days[key] || []).some((b) => b.category === 'study');
+        if (!hasStudyBlock) {
+          delete nextSignatures[key];
+        }
+      });
+      return { ...current, autoSyncLessons: true, syncedSignatures: nextSignatures };
     });
   };
 

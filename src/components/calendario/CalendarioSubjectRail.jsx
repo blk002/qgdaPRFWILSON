@@ -129,49 +129,46 @@ export default function CalendarioSubjectRail({
             return (
               <div
                 key={sub.id}
-                onClick={() => onToggleHighlight(isSelected ? null : sub.id)}
-                role="button"
-                tabIndex={0}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' || e.key === ' ') {
-                    e.preventDefault();
-                    onToggleHighlight(isSelected ? null : sub.id);
-                  }
-                }}
-                className={`px-3.5 py-2.5 flex flex-col gap-1.5 transition-colors cursor-pointer ${
+                className={`px-3.5 py-2.5 flex flex-col gap-1.5 transition-colors ${
                   isSelected
                     ? 'bg-sky-50/75 dark:bg-sky-950/30'
                     : 'hover:bg-slate-50/80 dark:hover:bg-slate-800/40'
                 }`}
               >
-                <div className="flex items-center justify-between gap-2 min-w-0">
-                  <span className={`text-xs font-bold truncate ${textColorClass}`} title={sub.name}>
-                    {sub.name}
-                  </span>
-
-                  {isDone ? (
-                    <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 shrink-0 whitespace-nowrap">
-                      <CheckCircle className="w-3 h-3" /> Concluída
+                <button
+                  type="button"
+                  onClick={() => onToggleHighlight(isSelected ? null : sub.id)}
+                  className="w-full text-left flex flex-col gap-1.5 cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 rounded-md"
+                >
+                  <div className="flex items-center justify-between gap-2 min-w-0">
+                    <span className={`text-xs font-bold truncate ${textColorClass}`} title={sub.name}>
+                      {sub.name}
                     </span>
-                  ) : (
-                    <span className="text-[11px] font-mono font-bold tabular-nums text-slate-800 dark:text-slate-200 shrink-0 whitespace-nowrap">
-                      {displayDateStr}
-                    </span>
-                  )}
-                </div>
 
-                {/* Barra de progresso fina */}
-                <div className="flex items-center gap-2">
-                  <div className="flex-1 h-1 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
-                    <div
-                      className={`h-full rounded-full ${isDone ? 'bg-emerald-500' : 'bg-sky-500'}`}
-                      style={{ width: `${pct}%` }}
-                    />
+                    {isDone ? (
+                      <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 shrink-0 whitespace-nowrap">
+                        <CheckCircle className="w-3 h-3" /> Concluída
+                      </span>
+                    ) : (
+                      <span className="text-[11px] font-mono font-bold tabular-nums text-slate-800 dark:text-slate-200 shrink-0 whitespace-nowrap">
+                        {displayDateStr}
+                      </span>
+                    )}
                   </div>
-                  <span className="text-[10px] font-mono tabular-nums text-slate-500 dark:text-slate-400 w-7 text-right">
-                    {pct}%
-                  </span>
-                </div>
+
+                  {/* Barra de progresso fina */}
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 h-1 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${isDone ? 'bg-emerald-500' : 'bg-sky-500'}`}
+                        style={{ width: `${pct}%` }}
+                      />
+                    </div>
+                    <span className="text-[10px] font-mono tabular-nums text-slate-500 dark:text-slate-400 w-7 text-right">
+                      {pct}%
+                    </span>
+                  </div>
+                </button>
 
                 {/* Metadados enxutos + botão de regra ao concluir */}
                 {!isDone && (
