@@ -824,6 +824,23 @@ export default function Config({
             <p className="text-[11px] text-slate-500 dark:text-slate-400 pt-1">
               Salvo na sua conta do QG e sincronizado automaticamente com a extensão.
             </p>
+
+            <label className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-start justify-between gap-3 cursor-pointer">
+              <div>
+                <p className="text-xs font-semibold text-slate-800 dark:text-slate-200">
+                  Fixação obrigatória na 1ª conclusão da aula (10q · Muito fácil)
+                </p>
+                <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                  Aulas divididas em Parte 1, 2, 3... cobram apenas ao concluir a última parte e agendam revisões progressivas de 5 questões (100% para subir de nível).
+                </p>
+              </div>
+              <input
+                type="checkbox"
+                checked={caveiraQuestionPrefs?.lessonFixationRequired !== false}
+                onChange={(e) => setCaveiraQuestionPrefs?.({ lessonFixationRequired: e.target.checked })}
+                className="w-4 h-4 mt-0.5 rounded accent-sky-600 cursor-pointer shrink-0"
+              />
+            </label>
           </section>
 
           {/* Aceleração de Videoaulas & Meta por Bloco */}

@@ -10,7 +10,18 @@ import {
   DEFAULT_CAVEIRA_QUESTION_PREFS,
   sanitizeCaveiraQuestionPrefs,
   resolveEffectiveDifficultyIds,
+  formatDifficultyIdsLabel,
+  sanitizeDifficultyIds,
 } from '../lib/caveiraDifficulty';
+import {
+  INITIAL_FIXATION_TARGET,
+  INITIAL_FIXATION_DIFFICULTY_ID,
+  PROGRESSIVE_REVIEW_TARGET,
+  FIRST_REVIEW_DIFFICULTY_ID,
+  getExpandedDifficultyIds,
+  addDaysToLocalDateStr,
+  computeNextProgressiveReviewState,
+} from '../lib/lessonMastery';
 import {
   LOCAL_TEST_ACCOUNT,
   createLocalTestSession,
@@ -1913,6 +1924,10 @@ export const useStore = create(
 
         if (!question.hit || question.confidence === 'chute' || question.confidence === 'duvida' || question.fsrsRequested) {
           get().createFsrsCardFromCaveira(updatedList.find(q => q.id === question.id) || question, true);
+        }
+        const activeMission = get().activePracticeMission;
+        if (activeMission && activeMission.status === 'active') {
+          get().recordMissionQuestionAnswer?.(question.id, Boolean(question.hit));
         }
         return true;
       },
@@ -4019,6 +4034,535 @@ export const useStore = create(
             window.location.origin
           );
         } catch (_) {}
+      },
+
+      // --- MISSÕES ATIVAS DE FIXAÇÃO (10q) & REVISÕES PROGRESSIVAS (5q · 100%) ---
+      startPracticeMission: (config = {}) => {
+        const type = config.type === 'progressive_review' ? 'progressive_review' : 'lesson_fixation';
+        const baseDiffId = Number(config.baseDifficultyId) || (type === 'lesson_fixation' ? INITIAL_FIXATION_DIFFICULTY_ID : FIRST_REVIEW_DIFFICULTY_ID);
+        const initialDiffIds = sanitizeDifficultyIds(
+          Array.isArray(config.difficultyIds) && config.difficultyIds.length > 0
+            ? config.difficultyIds
+            : [baseDiffId]
+        );
+        const targetCount = Math.max(
+          1,
+          Number(config.targetCount) || (type === 'lesson_fixation' ? INITIAL_FIXATION_TARGET : PROGRESSIVE_REVIEW_TARGET)
+        );
+        const missionId = config.id || `mission_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const now = Date.now();
+        const mission = {
+          id: missionId,
+          type,
+          status: 'active',
+          title: String(config.title || config.topicName || config.subjectName || 'Prática Caveira').trim(),
+          subjectId: config.subjectId || '',
+          subjectName: String(config.subjectName || '').trim(),
+          topicName: String(config.topicName || '').trim(),
+          lessonNames: Array.isArray(config.lessonNames) ? config.lessonNames.filter(Boolean) : [],
+          subtopics: Array.isArray(config.subtopics) ? config.subtopics.filter(Boolean) : [],
+          rawIndexText: String(config.rawIndexText || ''),
+          baseDifficultyId: baseDiffId,
+          activeDifficultyIds: initialDiffIds,
+          targetCount,
+          requirePerfectScore: type === 'progressive_review',
+          answeredQuestionIds: [],
+          hits: 0,
+          errors: 0,
+          startedAt: now,
+          updatedAt: now,
+          reviewId: config.reviewId || null,
+          lessonContext: config.lessonContext || null,
+          finishedSeries: Array.isArray(config.finishedSeries) ? config.finishedSeries : [],
+        };
+
+        set({ activePracticeMission: mission });
+
+        const savedPrefs = get().caveiraQuestionPrefs;
+        const hasCustomQgPrefs = Boolean(savedPrefs && Number(savedPrefs.updatedAt) > 0);
+        const hasExt = typeof document !== 'undefined' && document.documentElement.getAttribute('data-qg-caveira-extension-installed') === 'true';
+
+        if (hasExt) {
+          try {
+            window.postMessage(
+              {
+                source: 'QG_WEB_APP',
+                type: 'QG_PRF_SYNC_ACTIVE_MISSION',
+                payload: { mission },
+              },
+              window.location.origin
+            );
+            window.postMessage(
+              {
+                source: 'QG_WEB_APP',
+                type: 'OPEN_CAVEIRA_PRACTICE',
+                payload: {
+                  missionId: mission.id,
+                  subject: mission.subjectName,
+                  lessons: mission.lessonNames,
+                  topic:
+                    mission.subtopics.length > 0
+                      ? mission.subtopics.slice(0, 3).join(' • ')
+                      : mission.lessonNames.join(' • ') || mission.topicName,
+                  fallbackTopic: mission.topicName,
+                  subtopics: mission.subtopics,
+                  rawIndexText: mission.rawIndexText,
+                  status: 'not_resolved',
+                  difficultyIds: mission.activeDifficultyIds,
+                  ...(hasCustomQgPrefs
+                    ? {
+                        examBoards: Array.isArray(savedPrefs.examBoards) ? savedPrefs.examBoards : [],
+                        numberAlternatives: Array.isArray(savedPrefs.numberAlternatives)
+                          ? savedPrefs.numberAlternatives
+                          : [],
+                      }
+                    : {}),
+                },
+              },
+              window.location.origin
+            );
+          } catch (_) {}
+          const diffLabel = formatDifficultyIdsLabel(mission.activeDifficultyIds);
+          toast.success(
+            `${type === 'lesson_fixation' ? 'Fixação iniciada' : 'Revisão iniciada'}: ${mission.targetCount} questões (${diffLabel})`
+          );
+        } else {
+          window.open('https://app.caveira.com/questions', '_blank', 'noopener');
+          toast.info('Extensão não detectada nesta aba. Missão salva no QG.');
+        }
+
+        return mission;
+      },
+
+      expandActiveMissionDifficulty: () => {
+        const mission = get().activePracticeMission;
+        if (!mission || mission.status !== 'active') return null;
+        const expanded = getExpandedDifficultyIds(mission.activeDifficultyIds, mission.baseDifficultyId);
+        if (expanded.join(',') === sanitizeDifficultyIds(mission.activeDifficultyIds).join(',')) {
+          toast.info('Todos os níveis vizinhos já estão incluídos.');
+          return mission;
+        }
+        const updated = {
+          ...mission,
+          activeDifficultyIds: expanded,
+          updatedAt: Date.now(),
+        };
+        set({ activePracticeMission: updated });
+        const savedPrefs = get().caveiraQuestionPrefs;
+        const hasCustomQgPrefs = Boolean(savedPrefs && Number(savedPrefs.updatedAt) > 0);
+        try {
+          window.postMessage(
+            {
+              source: 'QG_WEB_APP',
+              type: 'QG_PRF_SYNC_ACTIVE_MISSION',
+              payload: { mission: updated },
+            },
+            window.location.origin
+          );
+          window.postMessage(
+            {
+              source: 'QG_WEB_APP',
+              type: 'OPEN_CAVEIRA_PRACTICE',
+              payload: {
+                missionId: updated.id,
+                subject: updated.subjectName,
+                lessons: updated.lessonNames,
+                topic:
+                  updated.subtopics.length > 0
+                    ? updated.subtopics.slice(0, 3).join(' • ')
+                    : updated.lessonNames.join(' • ') || updated.topicName,
+                fallbackTopic: updated.topicName,
+                subtopics: updated.subtopics,
+                rawIndexText: updated.rawIndexText,
+                status: 'not_resolved',
+                difficultyIds: expanded,
+                ...(hasCustomQgPrefs
+                  ? {
+                      examBoards: Array.isArray(savedPrefs.examBoards) ? savedPrefs.examBoards : [],
+                      numberAlternatives: Array.isArray(savedPrefs.numberAlternatives)
+                        ? savedPrefs.numberAlternatives
+                        : [],
+                    }
+                  : {}),
+              },
+            },
+            window.location.origin
+          );
+        } catch (_) {}
+        toast.info(`Filtro expandido: ${formatDifficultyIdsLabel(expanded)}`);
+        return updated;
+      },
+
+      cancelActivePracticeMission: () => {
+        if (!get().activePracticeMission) return;
+        set({ activePracticeMission: null });
+        try {
+          window.postMessage(
+            {
+              source: 'QG_WEB_APP',
+              type: 'QG_PRF_CLEAR_ACTIVE_MISSION',
+            },
+            window.location.origin
+          );
+        } catch (_) {}
+        toast.info('Missão ativa cancelada.');
+      },
+
+      recordMissionQuestionAnswer: (questionId, hit) => {
+        const mission = get().activePracticeMission;
+        if (!mission || mission.status !== 'active' || !questionId) return false;
+        const qKey = String(questionId);
+        const answered = Array.isArray(mission.answeredQuestionIds) ? [...mission.answeredQuestionIds] : [];
+        if (answered.includes(qKey)) return false;
+
+        answered.push(qKey);
+        const hits = (Number(mission.hits) || 0) + (hit ? 1 : 0);
+        const errors = (Number(mission.errors) || 0) + (hit ? 0 : 1);
+        const isDone = answered.length >= (Number(mission.targetCount) || 1);
+        const updated = {
+          ...mission,
+          answeredQuestionIds: answered,
+          hits,
+          errors,
+          status: isDone ? 'completed' : 'active',
+          completedAt: isDone ? Date.now() : null,
+          updatedAt: Date.now(),
+        };
+
+        set({ activePracticeMission: updated });
+        try {
+          window.postMessage(
+            {
+              source: 'QG_WEB_APP',
+              type: 'QG_PRF_SYNC_ACTIVE_MISSION',
+              payload: { mission: updated },
+            },
+            window.location.origin
+          );
+        } catch (_) {}
+
+        if (isDone) {
+          get().completeActivePracticeMission(updated);
+        }
+        return true;
+      },
+
+      syncActiveMissionFromExtension: (extMission) => {
+        if (!extMission || !extMission.id) return false;
+        const completedIds = Array.isArray(get().completedMissionIds) ? get().completedMissionIds : [];
+        if (completedIds.includes(extMission.id)) {
+          try {
+            window.postMessage(
+              {
+                source: 'QG_WEB_APP',
+                type: 'QG_PRF_MISSION_FINALIZED',
+                payload: { missionId: extMission.id },
+              },
+              window.location.origin
+            );
+          } catch (_) {}
+          return false;
+        }
+
+        const local = get().activePracticeMission;
+        if (!local || local.id !== extMission.id) {
+          const extAnswered = Array.isArray(extMission.answeredQuestionIds)
+            ? Array.from(new Set(extMission.answeredQuestionIds.map(String)))
+            : [];
+          const target = Math.max(1, Number(extMission.targetCount) || 1);
+          const merged = {
+            ...extMission,
+            answeredQuestionIds: extAnswered,
+            hits: Number(extMission.hits) || 0,
+            errors: Number(extMission.errors) || 0,
+          };
+          if (merged.status === 'completed' || extAnswered.length >= target) {
+            return get().completeActivePracticeMission(merged);
+          }
+          set({ activePracticeMission: merged });
+          return true;
+        }
+
+        const localIds = Array.isArray(local.answeredQuestionIds) ? local.answeredQuestionIds.map(String) : [];
+        const extIds = Array.isArray(extMission.answeredQuestionIds) ? extMission.answeredQuestionIds.map(String) : [];
+        const unionIds = Array.from(new Set([...localIds, ...extIds]));
+        const hits = extIds.length >= localIds.length ? (Number(extMission.hits) || 0) : (Number(local.hits) || 0);
+        const errors = extIds.length >= localIds.length ? (Number(extMission.errors) || 0) : (Number(local.errors) || 0);
+        const activeDifficultyIds = sanitizeDifficultyIds(
+          Array.isArray(extMission.activeDifficultyIds) && extMission.activeDifficultyIds.length > (local.activeDifficultyIds?.length || 0)
+            ? extMission.activeDifficultyIds
+            : local.activeDifficultyIds
+        );
+        const targetCount = Math.max(1, Number(local.targetCount) || Number(extMission.targetCount) || 1);
+        const isDone = extMission.status === 'completed' || unionIds.length >= targetCount;
+
+        const merged = {
+          ...local,
+          answeredQuestionIds: unionIds,
+          hits,
+          errors,
+          activeDifficultyIds,
+          status: isDone ? 'completed' : 'active',
+          completedAt: isDone ? (extMission.completedAt || Date.now()) : null,
+          updatedAt: Math.max(Number(local.updatedAt) || 0, Number(extMission.updatedAt) || 0),
+        };
+
+        if (isDone) {
+          return get().completeActivePracticeMission(merged);
+        }
+        set({ activePracticeMission: merged });
+        return true;
+      },
+
+      completeActivePracticeMission: (missionOverride = null, { allowPartial = false } = {}) => {
+        const mission = missionOverride || get().activePracticeMission;
+        if (!mission || !mission.id) return false;
+        const completedIds = Array.isArray(get().completedMissionIds) ? get().completedMissionIds : [];
+        if (completedIds.includes(mission.id)) return false;
+
+        const answeredCount = Array.isArray(mission.answeredQuestionIds) ? mission.answeredQuestionIds.length : 0;
+        const targetCount = Math.max(1, Number(mission.targetCount) || 1);
+        if (!allowPartial && answeredCount < targetCount && mission.status !== 'completed') {
+          return false;
+        }
+
+        const todayStr = get().getLocalDateStr();
+        const nextCompletedIds = [mission.id, ...completedIds.filter((id) => id !== mission.id)].slice(0, 100);
+        set({
+          activePracticeMission: null,
+          completedMissionIds: nextCompletedIds,
+        });
+
+        const hits = Number(mission.hits) || 0;
+        const total = Math.max(answeredCount, hits + (Number(mission.errors) || 0));
+
+        if (mission.type === 'lesson_fixation') {
+          const ctx = mission.lessonContext;
+          if (ctx && ctx.subjectId) {
+            get().watchClass(
+              ctx.subjectId,
+              ctx.slotIndex ?? null,
+              ctx.amountWatched || 1,
+              ctx.speed ?? null,
+              ctx.studyDateStr || todayStr,
+              ctx.plannedBlockCount ?? null
+            );
+            if (typeof ctx.onConfirmed === 'function') {
+              try { ctx.onConfirmed(); } catch (_) {}
+            }
+          }
+
+          const seriesList = Array.isArray(mission.finishedSeries) && mission.finishedSeries.length > 0
+            ? mission.finishedSeries
+            : [{
+                seriesKey: `${mission.subjectId}::${mission.topicName}::${mission.title}`,
+                title: mission.title || mission.topicName,
+                lessonNames: mission.lessonNames || [],
+              }];
+
+          const initialInterval = total > 0 && hits === total && total >= targetCount ? 3 : 1;
+          const nextDateStr = addDaysToLocalDateStr(todayStr, initialInterval);
+          const curProg = Array.isArray(get().progressiveReviews) ? [...get().progressiveReviews] : [];
+
+          seriesList.forEach((s) => {
+            if (!s?.seriesKey) return;
+            const existingIdx = curProg.findIndex((r) => r?.seriesKey === s.seriesKey);
+            const baseCard = {
+              id: existingIdx >= 0 ? curProg[existingIdx].id : `prog_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              seriesKey: s.seriesKey,
+              subjectId: mission.subjectId || '',
+              subjectName: mission.subjectName || '',
+              topicName: mission.topicName || '',
+              title: s.title || mission.title || mission.topicName,
+              lessonNames: Array.isArray(s.lessonNames) && s.lessonNames.length > 0 ? s.lessonNames : (mission.lessonNames || []),
+              subtopics: mission.subtopics || [],
+              rawIndexText: mission.rawIndexText || '',
+              currentDifficultyId: FIRST_REVIEW_DIFFICULTY_ID,
+              targetQuestions: PROGRESSIVE_REVIEW_TARGET,
+              mastered: false,
+              stability: initialInterval,
+              difficulty: 5,
+              interval: initialInterval,
+              nextDateStr,
+              lastReviewDate: todayStr,
+              lastPerformance: total > 0 ? hits / total : 0,
+              history: [
+                {
+                  date: todayStr,
+                  difficultyId: mission.baseDifficultyId || INITIAL_FIXATION_DIFFICULTY_ID,
+                  hits,
+                  total,
+                  passed: total > 0 && hits === total,
+                },
+              ],
+              createdAt: existingIdx >= 0 ? curProg[existingIdx].createdAt : todayStr,
+              updatedAt: Date.now(),
+            };
+            if (existingIdx >= 0) curProg[existingIdx] = baseCard;
+            else curProg.unshift(baseCard);
+          });
+
+          set({ progressiveReviews: curProg });
+          get().addXP?.(50, `Fixação concluída: ${mission.title}`);
+          get().setCoins?.((c) => c + 15);
+          get().playSound?.('levelUp');
+          toast.success(
+            `🎯 Fixação concluída (${hits}/${total})! Aula registrada e 1ª revisão (Fácil · 5q) agendada para ${initialInterval === 3 ? 'daqui a 3 dias' : 'amanhã'}.`
+          );
+        } else if (mission.type === 'progressive_review') {
+          const curProg = Array.isArray(get().progressiveReviews) ? [...get().progressiveReviews] : [];
+          const rIdx = curProg.findIndex((r) => r?.id === mission.reviewId);
+          if (rIdx >= 0) {
+            const outcome = computeNextProgressiveReviewState(curProg[rIdx], {
+              hits,
+              total,
+              todayDateStr: todayStr,
+              updateFsrsCardFn: get().updateFsrsCard,
+            });
+            curProg[rIdx] = outcome.updatedReview;
+            set({ progressiveReviews: curProg });
+
+            get().setReviewStats?.((prev) => ({
+              totalDone: prev.totalDone + 1,
+              correct: outcome.passed ? prev.correct + 1 : prev.correct,
+              streak: outcome.passed ? prev.streak + 1 : 0,
+            }));
+            set((state) => {
+              const dailyReviewStats = state.dailyReviewStats || {};
+              const todayStats = dailyReviewStats[todayStr] || { total: 0, correct: 0 };
+              return {
+                dailyReviewStats: {
+                  ...dailyReviewStats,
+                  [todayStr]: {
+                    total: todayStats.total + 1,
+                    correct: outcome.passed ? todayStats.correct + 1 : todayStats.correct,
+                  },
+                },
+              };
+            });
+            get().registerStudyActivity?.(todayStr);
+            get().updateMissionProgress?.('review', 1);
+
+            const nextDiffLabel = formatDifficultyIdsLabel([outcome.nextDifficultyId]) || 'Fácil';
+            if (outcome.newlyMastered) {
+              get().addXP?.(100, `Conteúdo blindado: ${mission.title}`);
+              get().setCoins?.((c) => c + 25);
+              get().playSound?.('levelUp');
+              toast.success(`🏆 100% no nível Muito difícil! "${mission.title}" foi BLINDADO (${hits}/${total}).`);
+            } else if (outcome.leveledUp) {
+              get().addXP?.(60, `Revisão 100%: ${mission.title}`);
+              get().setCoins?.((c) => c + 15);
+              get().playSound?.('levelUp');
+              toast.success(`🔥 100% (${hits}/${total})! Próxima revisão sobe para ${nextDiffLabel} em ${outcome.nextInterval}d.`);
+            } else if (outcome.passed) {
+              get().addXP?.(50, `Revisão 100%: ${mission.title}`);
+              get().setCoins?.((c) => c + 12);
+              get().playSound?.('coin');
+              toast.success(`✅ 100% (${hits}/${total}) no nível máximo! Próxima manutenção em ${outcome.nextInterval}d.`);
+            } else {
+              get().addXP?.(20, `Revisão concluída: ${mission.title}`);
+              get().setCoins?.((c) => c + 5);
+              get().playSound?.('coin');
+              toast.info(`🔁 ${hits}/${total} acertos — faltou 100%. Mantido em ${nextDiffLabel} com 5 questões novas amanhã.`);
+            }
+          }
+        }
+
+        try {
+          window.postMessage(
+            {
+              source: 'QG_WEB_APP',
+              type: 'QG_PRF_MISSION_FINALIZED',
+              payload: { missionId: mission.id },
+            },
+            window.location.origin
+          );
+        } catch (_) {}
+
+        return true;
+      },
+
+      completeLessonBypassFixation: ({
+        subjectId,
+        slotIndex = null,
+        amountWatched = 1,
+        speed = null,
+        studyDateStr = null,
+        plannedBlockCount = null,
+        finishedSeries = [],
+        topicName = '',
+        subjectName = '',
+        subtopics = [],
+        rawIndexText = '',
+        scheduleReview = true,
+      } = {}) => {
+        if (!subjectId) return false;
+        const todayStr = get().getLocalDateStr();
+        get().watchClass(subjectId, slotIndex, amountWatched, speed, studyDateStr || todayStr, plannedBlockCount);
+
+        if (scheduleReview && Array.isArray(finishedSeries) && finishedSeries.length > 0) {
+          const nextDateStr = addDaysToLocalDateStr(todayStr, 1);
+          const curProg = Array.isArray(get().progressiveReviews) ? [...get().progressiveReviews] : [];
+          let added = 0;
+          finishedSeries.forEach((s) => {
+            if (!s?.seriesKey || s.alreadyFixated) return;
+            if (curProg.some((r) => r?.seriesKey === s.seriesKey)) return;
+            added++;
+            curProg.unshift({
+              id: `prog_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
+              seriesKey: s.seriesKey,
+              subjectId,
+              subjectName: subjectName || get().subjects?.[subjectId]?.name || '',
+              topicName: topicName || '',
+              title: s.title || topicName || 'Aula',
+              lessonNames: Array.isArray(s.lessonNames) ? s.lessonNames : [],
+              subtopics: Array.isArray(subtopics) ? subtopics : [],
+              rawIndexText: String(rawIndexText || ''),
+              currentDifficultyId: FIRST_REVIEW_DIFFICULTY_ID,
+              targetQuestions: PROGRESSIVE_REVIEW_TARGET,
+              mastered: false,
+              stability: 1,
+              difficulty: 5,
+              interval: 1,
+              nextDateStr,
+              lastReviewDate: todayStr,
+              lastPerformance: 0,
+              history: [],
+              createdAt: todayStr,
+              updatedAt: Date.now(),
+            });
+          });
+          if (added > 0) {
+            set({ progressiveReviews: curProg });
+          }
+        }
+        return true;
+      },
+
+      advanceProgressiveReviewToToday: (reviewId) => {
+        const todayStr = get().getLocalDateStr();
+        const cur = Array.isArray(get().progressiveReviews) ? get().progressiveReviews : [];
+        let changed = false;
+        const updated = cur.map((r) => {
+          if (r && r.id === reviewId && r.nextDateStr > todayStr) {
+            changed = true;
+            return { ...r, nextDateStr: todayStr, updatedAt: Date.now() };
+          }
+          return r;
+        });
+        if (changed) {
+          set({ progressiveReviews: updated });
+          toast.success('Revisão de aula adiantada para hoje!');
+        }
+      },
+
+      deleteProgressiveReview: (reviewId) => {
+        const cur = Array.isArray(get().progressiveReviews) ? get().progressiveReviews : [];
+        const next = cur.filter((r) => r && r.id !== reviewId);
+        if (next.length !== cur.length) {
+          set({ progressiveReviews: next });
+          toast.info('Revisão de aula removida.');
+        }
       },
 
       setCaveiraSessionStats: (sessionStats) => set({ caveiraSessionStats: sessionStats }),

@@ -1,6 +1,8 @@
 import { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import CaveiraReviewQuestionModal from '../components/CaveiraReviewQuestionModal';
+import ActiveMissionBanner from '../components/ActiveMissionBanner';
+import ProgressiveReviewCard from '../components/ProgressiveReviewCard';
 import {
   AlertTriangle, Clock, ChevronLeft, ChevronRight, CalendarDays,
   CheckCircle, TrendingUp, TrendingDown, Zap, Activity, Flame
@@ -12,6 +14,7 @@ export default function Revisoes() {
   const [reviewTypeFilter, setReviewTypeFilter] = useState('ALL');
   const {
     reviews,
+    progressiveReviews = [],
     caveiraQuestions = [],
     reviewStats,
     subjects,
@@ -24,6 +27,9 @@ export default function Revisoes() {
     setReviewModal,
     syncAndRepairCaveiraReviews,
     advanceFutureReviews,
+    startPracticeMission,
+    advanceProgressiveReviewToToday,
+    deleteProgressiveReview,
     todayKey
   } = useStore();
 
@@ -63,6 +69,15 @@ export default function Revisoes() {
 
   const getReviewSubjectMeta = (rev) => {
     const sub = subjects[rev.subjectId];
+    if (rev.isProgressiveReview) {
+      return {
+        id: rev.subjectId || `prog_${rev.subjectName || 'geral'}`,
+        name: sub?.name || rev.subjectName || 'Aula',
+        color: sub?.color || 'bg-sky-500 text-white',
+        isCaveira: false,
+        isProgressive: true,
+      };
+    }
     const caveira = isCaveiraCard(rev);
     if (caveira) {
       const name =
@@ -82,7 +97,12 @@ export default function Revisoes() {
     };
   };
 
-  const allDueToday = getPendingReviews()
+  const dueProgressive = (progressiveReviews || [])
+    .filter((r) => r && r.nextDateStr <= todayStr)
+    .map((r) => ({ ...r, isProgressiveReview: true }))
+    .sort((a, b) => String(a.nextDateStr || '').localeCompare(String(b.nextDateStr || '')));
+
+  const fsrsDueSorted = getPendingReviews()
     .slice()
     .sort((a, b) => {
       const dateA = String(a.nextDateStr || '');
@@ -117,9 +137,12 @@ export default function Revisoes() {
       return String(a.id || '').localeCompare(String(b.id || ''));
     });
 
-  const caveiraDueCount = allDueToday.filter((rev) => isCaveiraCard(rev)).length;
+  const allDueToday = [...dueProgressive, ...fsrsDueSorted];
+  const progressiveDueCount = dueProgressive.length;
+  const caveiraDueCount = fsrsDueSorted.filter((rev) => isCaveiraCard(rev)).length;
 
   const typeFilteredDueToday = allDueToday.filter((rev) => {
+    if (reviewTypeFilter === 'PROGRESSIVE') return Boolean(rev.isProgressiveReview);
     if (reviewTypeFilter === 'CAVEIRA') return isCaveiraCard(rev);
     return true;
   });
@@ -175,6 +198,7 @@ export default function Revisoes() {
     d.setDate(d.getDate() + offset);
     const dateStr = getLocalDateStr(d);
     const dayRevs = reviews.filter((r) => r.nextDateStr === dateStr);
+    const dayProg = (progressiveReviews || []).filter((r) => r && r.nextDateStr === dateStr);
     const caveiraCount = dayRevs.filter((r) => isCaveiraCard(r)).length;
     const dayName = diasSemana[d.getDay()];
     const dayNum = String(d.getDate()).padStart(2, '0');
@@ -184,7 +208,7 @@ export default function Revisoes() {
       dateStr,
       label: offset === 1 ? 'Amanhã' : dayName,
       shortDate: `${dayNum}/${monthNum}`,
-      total: dayRevs.length,
+      total: dayRevs.length + dayProg.length,
       caveiraCount
     };
   });
@@ -262,6 +286,7 @@ export default function Revisoes() {
       </div>
 
       {/* Alerta de acúmulo */}
+      <ActiveMissionBanner />
       {isProcrastinating && (
         <div className="rounded-xl border border-red-200 dark:border-red-900/60 bg-red-50 dark:bg-red-950/30 p-4 flex items-start gap-3">
           <AlertTriangle className="w-5 h-5 text-red-600 dark:text-red-400 shrink-0 mt-0.5" />
@@ -284,6 +309,7 @@ export default function Revisoes() {
             <div className="inline-flex items-center gap-1 p-1 rounded-lg bg-slate-100 dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800">
               {[
                 { id: 'ALL', label: 'Todas', count: allDueToday.length },
+                { id: 'PROGRESSIVE', label: 'Revisões de Aula (5q)', count: progressiveDueCount },
                 { id: 'CAVEIRA', label: 'Questões Caveira', count: caveiraDueCount }
               ].map((tab) => {
                 const isSelected = reviewTypeFilter === tab.id;
@@ -414,6 +440,19 @@ export default function Revisoes() {
 
               {/* Cartão Ativo */}
               {(() => {
+                if (activeRev.isProgressiveReview) {
+                  return (
+                    <ProgressiveReviewCard
+                      key={activeRev.id}
+                      review={activeRev}
+                      subjectColor={subjects?.[activeRev.subjectId]?.color}
+                      todayStr={todayStr}
+                      onStartMission={startPracticeMission}
+                      onAdvanceToToday={advanceProgressiveReviewToToday}
+                      onDelete={deleteProgressiveReview}
+                    />
+                  );
+                }
                 const meta = getReviewSubjectMeta(activeRev);
                 if (meta.isCaveira) {
                   return <CaveiraReviewQuestionModal key={activeRev.id} review={activeRev} inline={true} />;
@@ -519,6 +558,36 @@ export default function Revisoes() {
             100% em dia
           </span>
         </div>
+      )}
+
+      {/* Previsão de 7 Dias + Curva de Esquecimento */}
+      {(progressiveReviews || []).length > 0 && (
+        <section className="bg-white dark:bg-slate-900 rounded-xl border border-slate-200/80 dark:border-slate-800 p-5 space-y-3">
+          <div className="flex flex-wrap items-center justify-between gap-2">
+            <div>
+              <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white">
+                Trilha de Maestria das Aulas (5 níveis · 5q · 100%)
+              </h2>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {(progressiveReviews || []).length} {(progressiveReviews || []).length === 1 ? 'aula monitorada' : 'aulas monitoradas'} · Suba de nível ao gabaritar 5/5 questões inéditas.
+              </p>
+            </div>
+          </div>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+            {(progressiveReviews || []).slice(0, 6).map((progRev) => (
+              <ProgressiveReviewCard
+                key={progRev.id}
+                review={progRev}
+                subjectColor={subjects?.[progRev.subjectId]?.color}
+                todayStr={todayStr}
+                compact
+                onStartMission={startPracticeMission}
+                onAdvanceToToday={advanceProgressiveReviewToToday}
+                onDelete={deleteProgressiveReview}
+              />
+            ))}
+          </div>
+        </section>
       )}
 
       {/* Previsão de 7 Dias + Curva de Esquecimento */}

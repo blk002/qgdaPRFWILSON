@@ -27,6 +27,7 @@ export const DEFAULT_CAVEIRA_QUESTION_PREFS = {
   status: 'not_resolved',
   examBoards: ['cebraspe', 'caveira_ineditas', 'caveira_adaptadas'],
   numberAlternatives: [2],
+  lessonFixationRequired: true,
   updatedAt: 0,
 };
 
@@ -93,6 +94,12 @@ export function sanitizeCaveiraQuestionPrefs(raw, fallback = DEFAULT_CAVEIRA_QUE
       ? Number(base.updatedAt)
       : 0;
 
+  const lessonFixationRequired = typeof src.lessonFixationRequired === 'boolean'
+    ? src.lessonFixationRequired
+    : typeof base.lessonFixationRequired === 'boolean'
+      ? base.lessonFixationRequired
+      : true;
+
   return {
     difficultyMode,
     difficultyIds,
@@ -100,6 +107,7 @@ export function sanitizeCaveiraQuestionPrefs(raw, fallback = DEFAULT_CAVEIRA_QUE
     status,
     examBoards,
     numberAlternatives,
+    lessonFixationRequired,
     updatedAt,
   };
 }

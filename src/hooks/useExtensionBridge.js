@@ -111,6 +111,8 @@ export function useExtensionBridge() {
   const cycleCarryoverOffset = useStore((s) => s.cycleCarryoverOffset);
   const caveiraFilterMemory = useStore((s) => s.caveiraFilterMemory);
   const caveiraQuestionPrefs = useStore((s) => s.caveiraQuestionPrefs);
+  const progressiveReviews = useStore((s) => s.progressiveReviews);
+  const activePracticeMission = useStore((s) => s.activePracticeMission);
   const reviews = useStore((s) => s.reviews);
   const studyHistory = useStore((s) => s.studyHistory);
   const caveiraDailyGoal = useStore((s) => s.caveiraDailyGoal);
@@ -254,6 +256,10 @@ export function useExtensionBridge() {
         }
         if (event.data.type === 'COURSE_LESSON_COMPLETE_REQUEST' && event.data.payload) {
           handleCourseLessonCompleteFromExtension(event.data.payload);
+          return;
+        }
+        if (event.data.type === 'MISSION_PROGRESS_SYNC' && event.data.payload?.mission) {
+          useStore.getState().syncActiveMissionFromExtension?.(event.data.payload.mission);
           return;
         }
         const currentUser = useStore.getState().user;
@@ -528,7 +534,9 @@ export function useExtensionBridge() {
         }
       }
 
-      const pendingReviewsCount = (reviews || []).filter((r) => r && r.nextDateStr <= todayDateStr).length;
+      const dueFsrsCount = (reviews || []).filter((r) => r && r.nextDateStr <= todayDateStr).length;
+      const dueProgCount = (progressiveReviews || []).filter((r) => r && r.nextDateStr <= todayDateStr).length;
+      const pendingReviewsCount = dueFsrsCount + dueProgCount;
       const streakActiveToday = Boolean((studyHistory?.[todayDateStr] || 0) > 0);
       window.postMessage(
         {
@@ -543,6 +551,17 @@ export function useExtensionBridge() {
         },
         window.location.origin
       );
+
+      if (activePracticeMission && activePracticeMission.id && activePracticeMission.status === 'active') {
+        window.postMessage(
+          {
+            source: 'QG_WEB_APP',
+            type: 'QG_PRF_SYNC_ACTIVE_MISSION',
+            payload: { mission: activePracticeMission },
+          },
+          window.location.origin
+        );
+      }
     } catch {}
   }, [
     session,
@@ -559,6 +578,8 @@ export function useExtensionBridge() {
     cycleCarryoverOffset,
     caveiraFilterMemory,
     caveiraQuestionPrefs,
+    progressiveReviews,
+    activePracticeMission,
     courseIndexCache,
     reviews,
     studyHistory,

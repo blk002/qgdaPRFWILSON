@@ -22,6 +22,7 @@ export const PENDING_SIMULADOS_KEY = 'qg_pending_simulados_import';
 export const PENDING_SIMULADOS_QUEUE_KEY = 'qg_pending_simulados_queue';
 export const PENDING_PDF_KEY = 'qg_pending_pdf_study';
 export const LAST_FILTER_DIAG_KEY = 'qg_caveira_last_filter_diag';
+export const ACTIVE_MISSION_KEY = 'qg_active_practice_mission';
 export const DEFAULT_PREFS_KEY = 'qg_caveira_default_prefs';
 export const SUBJECT_TREE_CACHE_KEY = 'qg_caveira_subject_tree_cache';
 export const DIAGNOSTIC_MODE_KEY = 'qg_diagnostic_mode';

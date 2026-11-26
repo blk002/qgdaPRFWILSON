@@ -527,6 +527,7 @@ ${EXTRA_SHADOW_CSS}`;
   var PENDING_SIMULADOS_QUEUE_KEY = "qg_pending_simulados_queue";
   var PENDING_PDF_KEY = "qg_pending_pdf_study";
   var LAST_FILTER_DIAG_KEY = "qg_caveira_last_filter_diag";
+  var ACTIVE_MISSION_KEY = "qg_active_practice_mission";
   var DEFAULT_PREFS_KEY = "qg_caveira_default_prefs";
   var SUBJECT_TREE_CACHE_KEY = "qg_caveira_subject_tree_cache";
   var DIAGNOSTIC_MODE_KEY = "qg_diagnostic_mode";
@@ -1126,7 +1127,7 @@ ${EXTRA_SHADOW_CSS}`;
   // extensao-src/entries/content.entry.js
   (function() {
     if (isExcludedCaveiraHost(window.location.hostname)) return;
-    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.3.1";
+    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.4.0";
     console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
     try {
       window.dispatchEvent(new CustomEvent("qg-caveira-teardown"));
@@ -1137,6 +1138,7 @@ ${EXTRA_SHADOW_CSS}`;
     const HUD_COURSE_DIFF_KEY = "qg_hud_course_difficulty_ids";
     let hudCourseDifficultyIds = [];
     let renderHudCourseDiffBarRef = null;
+    let activePracticeMission = null;
     const MAX_BUCKET_QUESTIONS = 1500;
     const CHANNEL_NONCE = generateChannelNonce();
     let diagnosticModeEnabled = false;
@@ -1445,12 +1447,14 @@ ${EXTRA_SHADOW_CSS}`;
             FILTER_ID_MEMORY_KEY,
             FILTER_MEMORY_CLOUD_KEY,
             DIAGNOSTIC_MODE_KEY,
-            PENDING_SIMULADOS_QUEUE_KEY
+            PENDING_SIMULADOS_QUEUE_KEY,
+            ACTIVE_MISSION_KEY
           ],
           (res) => {
             if (chrome.runtime.lastError || isDestroyed) return;
             cachedActiveUserId = res?.[ACTIVE_USER_KEY] || null;
             cachedActiveUserLabel = res?.[ACTIVE_USER_LABEL_KEY] || "";
+            activePracticeMission = res?.[ACTIVE_MISSION_KEY] || null;
             diagnosticModeEnabled = Boolean(res?.[DIAGNOSTIC_MODE_KEY]);
             postToSniffer("SET_DIAGNOSTIC_MODE", { enabled: diagnosticModeEnabled });
             if (res?.[PENDING_SIMULADOS_QUEUE_KEY]) {
@@ -1477,6 +1481,7 @@ ${EXTRA_SHADOW_CSS}`;
             }
             updateHudUser();
             updateContextualHud();
+            updateHudMission();
             const savedDiag = res?.[LAST_FILTER_DIAG_KEY];
             if (savedDiag && savedDiag.savedAt && Date.now() - savedDiag.savedAt < 25e3) {
               if (savedDiag.diagLog) lastFilterDiagnosticLog = savedDiag.diagLog;
@@ -1626,6 +1631,10 @@ ${EXTRA_SHADOW_CSS}`;
               } catch (_) {
               }
               renderHudCourseDiffBarRef?.();
+            }
+            if (changes[ACTIVE_MISSION_KEY]) {
+              activePracticeMission = changes[ACTIVE_MISSION_KEY].newValue || null;
+              updateHudMission();
             }
           }
         });
@@ -3427,6 +3436,25 @@ ${EXTRA_SHADOW_CSS}`;
           <span class="qg-hud-timer" id="qg-timer">00:00</span>
         </div>
 
+        <div id="qg-hud-mission-box" style="display:none;flex-direction:column;gap:5px;margin-top:8px;padding:7px 9px;border-radius:8px;background:rgba(14,165,233,0.12);border:1px solid rgba(56,189,248,0.35);">
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:6px;">
+            <span id="qg-mission-title" style="font-size:10px;font-weight:900;color:#e0f2fe;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;">🎯 Missão Ativa</span>
+            <span id="qg-mission-counter" style="font-size:10px;font-weight:900;color:#38bdf8;font-family:monospace;flex-shrink:0;">0/10</span>
+          </div>
+          <div id="qg-mission-subtitle" style="font-size:9px;font-weight:700;color:#94a3b8;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;"></div>
+          <div style="width:100%;height:4px;background:rgba(255,255,255,0.1);border-radius:999px;overflow:hidden;">
+            <div id="qg-mission-bar" style="width:0%;height:100%;background:linear-gradient(90deg,#0ea5e9,#10b981);border-radius:999px;transition:width 0.25s ease;"></div>
+          </div>
+          <div style="display:flex;align-items:center;justify-content:space-between;gap:4px;">
+            <span id="qg-mission-score" style="font-size:9px;font-weight:800;color:#cbd5e1;">0C / 0E</span>
+            <div style="display:flex;align-items:center;gap:4px;">
+              <button type="button" id="qg-btn-mission-expand" style="display:none;background:rgba(245,158,11,0.18);color:#fcd34d;border:1px solid rgba(245,158,11,0.4);border-radius:5px;padding:2px 6px;font-size:8.5px;font-weight:800;cursor:pointer;" title="Incluir nível vizinho se faltarem questões">+ Nível vizinho</button>
+              <a id="qg-btn-mission-qg" href="${QG_WEB_URL}" target="_blank" style="display:none;background:#10b981;color:#052e16;border:none;border-radius:5px;padding:2px 7px;font-size:8.5px;font-weight:900;text-decoration:none;cursor:pointer;">Abrir QG</a>
+              <button type="button" id="qg-btn-mission-dismiss" style="background:rgba(255,255,255,0.08);color:#a1a1aa;border:1px solid rgba(255,255,255,0.14);border-radius:5px;padding:2px 5px;font-size:8.5px;font-weight:800;cursor:pointer;" title="Fechar missão">✕</button>
+            </div>
+          </div>
+        </div>
+
         <div id="qg-hud-course-actions" style="display:none;flex-direction:column;gap:5px;margin-top:8px;">
           <span id="qg-hud-speed-badge" style="display:none;align-self:flex-start;background:rgba(14,165,233,0.15);color:#38bdf8;border:1px solid rgba(56,189,248,0.35);border-radius:6px;padding:2px 7px;font-size:9px;font-weight:900;text-transform:uppercase;">⚡ 1.5x</span>
           <div id="qg-hud-course-completed-banner" style="display:none;flex-direction:column;gap:5px;padding:7px 9px;border-radius:8px;background:rgba(16,185,129,0.16);border:1px solid rgba(16,185,129,0.45);font-size:10px;font-weight:800;color:#6ee7b7;">
@@ -3514,7 +3542,56 @@ ${EXTRA_SHADOW_CSS}`;
       const hud = mounted.hud;
       updateHudUser();
       updateHudStats();
+      updateHudMission();
       renderFilterBanner();
+      hud.querySelector("#qg-btn-mission-expand")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        if (!activePracticeMission || activePracticeMission.status !== "active") return;
+        const baseId = Number(activePracticeMission.baseDifficultyId) || 2;
+        const cur = Array.isArray(activePracticeMission.activeDifficultyIds) ? activePracticeMission.activeDifficultyIds.map(Number).filter((n) => n >= 2 && n <= 6) : [baseId];
+        const active = cur.length > 0 ? [...cur] : [baseId];
+        const candidates = baseId === 2 ? [2, 3, 4, 5, 6] : baseId === 6 ? [6, 5, 4, 3, 2] : [baseId - 1, baseId + 1, baseId - 2, baseId + 2, 2, 3, 4, 5, 6].filter((n) => n >= 2 && n <= 6);
+        for (const c of candidates) {
+          if (!active.includes(c)) {
+            active.push(c);
+            break;
+          }
+        }
+        const expanded = Array.from(new Set(active)).sort((a, b) => a - b);
+        activePracticeMission = {
+          ...activePracticeMission,
+          activeDifficultyIds: expanded,
+          updatedAt: Date.now()
+        };
+        try {
+          if (isExtensionContextValid() && chrome?.storage?.local) {
+            chrome.storage.local.set({ [ACTIVE_MISSION_KEY]: activePracticeMission });
+          }
+        } catch (_) {
+        }
+        updateHudMission();
+        applyCaveiraPracticeFilter({
+          subject: activePracticeMission.subjectName || "",
+          topic: activePracticeMission.subtopics && activePracticeMission.subtopics.length > 0 ? activePracticeMission.subtopics.slice(0, 3).join(" • ") : (activePracticeMission.lessonNames || []).join(" • ") || activePracticeMission.topicName || "",
+          fallbackTopic: activePracticeMission.topicName || "",
+          lessons: activePracticeMission.lessonNames || [],
+          subtopics: activePracticeMission.subtopics || [],
+          rawIndexText: activePracticeMission.rawIndexText || "",
+          status: "not_resolved",
+          difficultyIds: expanded
+        });
+      });
+      hud.querySelector("#qg-btn-mission-dismiss")?.addEventListener("click", (e) => {
+        e.stopPropagation();
+        activePracticeMission = null;
+        try {
+          if (isExtensionContextValid() && chrome?.storage?.local) {
+            chrome.storage.local.remove([ACTIVE_MISSION_KEY]);
+          }
+        } catch (_) {
+        }
+        updateHudMission();
+      });
       hud.querySelector("#qg-btn-copy-filter-log")?.addEventListener("click", async (e) => {
         e.stopPropagation();
         const btn = e.currentTarget;
@@ -7607,6 +7684,77 @@ ${EXTRA_SHADOW_CSS}`;
       elNet.className = `qg-hud-stat-value ${rate >= 70 ? "green" : rate >= 50 ? "gold" : sessionStats.total === 0 ? "gold" : "red"}`;
       updateHudGoal();
     }
+    function updateHudMission() {
+      const box = getHudEl("qg-hud-mission-box");
+      if (!box) return;
+      if (!activePracticeMission || !activePracticeMission.id) {
+        box.style.display = "none";
+        return;
+      }
+      const m = activePracticeMission;
+      const count = Array.isArray(m.answeredQuestionIds) ? m.answeredQuestionIds.length : 0;
+      const target = Math.max(1, Number(m.targetCount) || 1);
+      const hits = Number(m.hits) || 0;
+      const errors = Number(m.errors) || 0;
+      const pct = Math.min(100, Math.round(count / target * 100));
+      const isCompleted = m.status === "completed" || count >= target;
+      const diffNames = { 1: "Em definição", 2: "Muito fácil", 3: "Fácil", 4: "Médio", 5: "Difícil", 6: "Muito difícil" };
+      const diffLabel = (Array.isArray(m.activeDifficultyIds) ? m.activeDifficultyIds : []).map((id) => diffNames[Number(id)]).filter(Boolean).join(" + ") || "Muito fácil";
+      const titleEl = getHudEl("qg-mission-title");
+      const counterEl = getHudEl("qg-mission-counter");
+      const subEl = getHudEl("qg-mission-subtitle");
+      const barEl = getHudEl("qg-mission-bar");
+      const scoreEl = getHudEl("qg-mission-score");
+      const expandBtn = getHudEl("qg-btn-mission-expand");
+      const qgBtn = getHudEl("qg-btn-mission-qg");
+      box.style.display = "flex";
+      if (isCompleted) {
+        box.style.background = "rgba(16,185,129,0.16)";
+        box.style.borderColor = "rgba(16,185,129,0.45)";
+        if (titleEl) {
+          if (m.type === "progressive_review") {
+            titleEl.textContent = hits === target ? "🏆 Revisão 100%! Subiu de nível!" : `🔁 Revisão ${hits}/${target} — Mesmo nível`;
+          } else {
+            titleEl.textContent = `✅ Fixação ${count}/${target} concluída!`;
+          }
+          titleEl.style.color = "#6ee7b7";
+        }
+        if (subEl) subEl.textContent = `${m.title || m.topicName || "Aula"} • Sincronizado com o QG`;
+        if (counterEl) {
+          counterEl.textContent = `${count}/${target}`;
+          counterEl.style.color = "#6ee7b7";
+        }
+        if (barEl) {
+          barEl.style.width = "100%";
+          barEl.style.background = "#10b981";
+        }
+        if (scoreEl) scoreEl.textContent = `${hits}C / ${errors}E`;
+        if (expandBtn) expandBtn.style.display = "none";
+        if (qgBtn) qgBtn.style.display = "inline-block";
+      } else {
+        box.style.background = "rgba(14,165,233,0.12)";
+        box.style.borderColor = "rgba(56,189,248,0.35)";
+        if (titleEl) {
+          titleEl.textContent = m.type === "progressive_review" ? `🔁 Revisão · ${diffLabel}` : `🎯 Fixação · ${diffLabel}`;
+          titleEl.style.color = "#e0f2fe";
+        }
+        if (subEl) {
+          const goalNote = m.type === "progressive_review" ? " • Meta: 100%" : "";
+          subEl.textContent = `${m.title || m.topicName || "Aula"}${goalNote}`;
+        }
+        if (counterEl) {
+          counterEl.textContent = `${count}/${target}`;
+          counterEl.style.color = "#38bdf8";
+        }
+        if (barEl) {
+          barEl.style.width = `${pct}%`;
+          barEl.style.background = "linear-gradient(90deg,#0ea5e9,#10b981)";
+        }
+        if (scoreEl) scoreEl.textContent = `${hits}C / ${errors}E`;
+        if (expandBtn) expandBtn.style.display = "inline-block";
+        if (qgBtn) qgBtn.style.display = "none";
+      }
+    }
     function getQuestionCards() {
       const allCards = document.querySelectorAll(".q-card");
       return Array.from(allCards).filter((card) => {
@@ -8032,6 +8180,32 @@ ${EXTRA_SHADOW_CSS}`;
         hits: sessionStats.hits,
         errors: sessionStats.errors
       };
+      if (!isMetadataUpdateOnly && activePracticeMission && activePracticeMission.status === "active" && question?.id) {
+        const qKey = String(question.id);
+        const answered = Array.isArray(activePracticeMission.answeredQuestionIds) ? [...activePracticeMission.answeredQuestionIds] : [];
+        if (!answered.includes(qKey)) {
+          answered.push(qKey);
+          const nextHits = (Number(activePracticeMission.hits) || 0) + (question.hit ? 1 : 0);
+          const nextErrors = (Number(activePracticeMission.errors) || 0) + (question.hit ? 0 : 1);
+          const targetCount = Math.max(1, Number(activePracticeMission.targetCount) || 1);
+          const isDone = answered.length >= targetCount;
+          activePracticeMission = {
+            ...activePracticeMission,
+            answeredQuestionIds: answered,
+            hits: nextHits,
+            errors: nextErrors,
+            status: isDone ? "completed" : "active",
+            completedAt: isDone ? Date.now() : null,
+            finalizedInQg: false,
+            updatedAt: Date.now()
+          };
+          try {
+            chrome.storage.local.set({ [ACTIVE_MISSION_KEY]: activePracticeMission });
+          } catch (_) {
+          }
+          updateHudMission();
+        }
+      }
       const fullQuestionForDb = existingIdx >= 0 ? questionsCache[existingIdx] : questionsCache[0];
       if (fullQuestionForDb && fullQuestionForDb.id) {
         try {

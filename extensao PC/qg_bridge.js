@@ -1,6 +1,7 @@
 (() => {
   // extensao-src/content/utils.js
   var PENDING_SIMULADOS_QUEUE_KEY = "qg_pending_simulados_queue";
+  var ACTIVE_MISSION_KEY = "qg_active_practice_mission";
   var DEFAULT_PREFS_KEY = "qg_caveira_default_prefs";
   var PERFORMANCE_SNAPSHOT_KEY = "qg_caveira_performance_snapshot";
   var SIMULADO_QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
@@ -290,7 +291,7 @@
       if (isBridgeDestroyed || !isExtensionContextValid() || !activeUserId) return;
       try {
         chrome.storage.local.get(
-          [PENDING_CATALOG_KEY, PENDING_SIMULADOS_KEY, PENDING_SIMULADOS_QUEUE_KEY, PENDING_PDF_KEY, FILTER_ID_MEMORY_KEY, PERFORMANCE_SNAPSHOT_KEY],
+          [PENDING_CATALOG_KEY, PENDING_SIMULADOS_KEY, PENDING_SIMULADOS_QUEUE_KEY, PENDING_PDF_KEY, FILTER_ID_MEMORY_KEY, PERFORMANCE_SNAPSHOT_KEY, ACTIVE_MISSION_KEY],
           (res) => {
             if (chrome.runtime.lastError || isBridgeDestroyed) return;
             const keysToRemove = [];
@@ -411,6 +412,14 @@
                 source: "QG_CAVEIRA_EXTENSION",
                 type: "PDF_STUDY_LOG",
                 payload: { ...pendingPdf, userId: activeUserId }
+              }, getTargetOrigin());
+            }
+            const storedMission = res?.[ACTIVE_MISSION_KEY];
+            if (hasWebAppReadySignal && storedMission && storedMission.id && !storedMission.finalizedInQg) {
+              window.postMessage({
+                source: "QG_CAVEIRA_EXTENSION",
+                type: "MISSION_PROGRESS_SYNC",
+                payload: { mission: storedMission, userId: activeUserId }
               }, getTargetOrigin());
             }
             const immediateKeys = keysToRemove.filter((k) => k !== PENDING_SIMULADOS_KEY);
@@ -808,6 +817,67 @@
           } catch (_) {
           }
         }
+        if (event.data.type === "QG_PRF_SYNC_ACTIVE_MISSION" && event.data.payload?.mission) {
+          try {
+            const incoming = event.data.payload.mission;
+            if (!incoming || !incoming.id) return;
+            chrome.storage.local.get([ACTIVE_MISSION_KEY], (res) => {
+              if (chrome.runtime.lastError || isBridgeDestroyed) return;
+              const prev = res?.[ACTIVE_MISSION_KEY];
+              if (prev && prev.id === incoming.id) {
+                const prevIds = Array.isArray(prev.answeredQuestionIds) ? prev.answeredQuestionIds.map(String) : [];
+                const incIds = Array.isArray(incoming.answeredQuestionIds) ? incoming.answeredQuestionIds.map(String) : [];
+                const unionIds = Array.from(/* @__PURE__ */ new Set([...prevIds, ...incIds]));
+                const usePrevCounts = prevIds.length >= incIds.length;
+                const targetCount = Math.max(1, Number(incoming.targetCount) || Number(prev.targetCount) || 1);
+                const isDone = prev.status === "completed" || incoming.status === "completed" || unionIds.length >= targetCount;
+                chrome.storage.local.set({
+                  [ACTIVE_MISSION_KEY]: {
+                    ...prev,
+                    ...incoming,
+                    answeredQuestionIds: unionIds,
+                    hits: usePrevCounts ? Number(prev.hits) || 0 : Number(incoming.hits) || 0,
+                    errors: usePrevCounts ? Number(prev.errors) || 0 : Number(incoming.errors) || 0,
+                    status: isDone ? "completed" : "active",
+                    finalizedInQg: Boolean(prev.finalizedInQg),
+                    updatedAt: Math.max(Number(prev.updatedAt) || 0, Number(incoming.updatedAt) || 0)
+                  }
+                });
+              } else {
+                chrome.storage.local.set({
+                  [ACTIVE_MISSION_KEY]: { ...incoming, finalizedInQg: false }
+                });
+              }
+            });
+          } catch (_) {
+          }
+        }
+        if (event.data.type === "QG_PRF_CLEAR_ACTIVE_MISSION") {
+          try {
+            chrome.storage.local.remove([ACTIVE_MISSION_KEY]);
+          } catch (_) {
+          }
+        }
+        if (event.data.type === "QG_PRF_MISSION_FINALIZED" && event.data.payload?.missionId) {
+          try {
+            const mId = String(event.data.payload.missionId);
+            chrome.storage.local.get([ACTIVE_MISSION_KEY], (res) => {
+              if (chrome.runtime.lastError || isBridgeDestroyed) return;
+              const cur = res?.[ACTIVE_MISSION_KEY];
+              if (cur && String(cur.id) === mId) {
+                chrome.storage.local.set({
+                  [ACTIVE_MISSION_KEY]: {
+                    ...cur,
+                    status: "completed",
+                    finalizedInQg: true,
+                    updatedAt: Date.now()
+                  }
+                });
+              }
+            });
+          } catch (_) {
+          }
+        }
         if (event.data.type === "OPEN_CAVEIRA_PRACTICE") {
           const subject = event.data.payload?.subject || "";
           const topic = event.data.payload?.topic || "";
@@ -1106,6 +1176,16 @@
                   source: "QG_CAVEIRA_EXTENSION",
                   type: "PERFORMANCE_SNAPSHOT_SYNC",
                   payload: { ...perfSnap, userId: cachedActiveUserId }
+                }, getTargetOrigin());
+              }
+            }
+            if (changes[ACTIVE_MISSION_KEY]) {
+              const missionVal = changes[ACTIVE_MISSION_KEY].newValue;
+              if (missionVal && missionVal.id && !missionVal.finalizedInQg) {
+                window.postMessage({
+                  source: "QG_CAVEIRA_EXTENSION",
+                  type: "MISSION_PROGRESS_SYNC",
+                  payload: { mission: missionVal, userId: cachedActiveUserId || null }
                 }, getTargetOrigin());
               }
             }

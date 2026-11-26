@@ -22,6 +22,11 @@ import {
   resolveEffectiveDifficultyIds,
   sanitizeDifficultyIds,
 } from '../../lib/caveiraDifficulty';
+import {
+  analyzeLessonFixationRequirement,
+  INITIAL_FIXATION_DIFFICULTY_ID,
+  INITIAL_FIXATION_TARGET,
+} from '../../lib/lessonMastery';
 import { toast } from 'sonner';
 
 const DIFF_TONE_ACTIVE = {
@@ -75,6 +80,10 @@ export default function GlobalAppModals({
   const caveiraQuestions = useStore((s) => s.caveiraQuestions);
   const caveiraQuestionPrefs = useStore((s) => s.caveiraQuestionPrefs || DEFAULT_CAVEIRA_QUESTION_PREFS);
   const setCaveiraQuestionPrefs = useStore((s) => s.setCaveiraQuestionPrefs);
+  const progressiveReviews = useStore((s) => s.progressiveReviews);
+  const activePracticeMission = useStore((s) => s.activePracticeMission);
+  const startPracticeMission = useStore((s) => s.startPracticeMission);
+  const completeLessonBypassFixation = useStore((s) => s.completeLessonBypassFixation);
 
   const [reviewInputs, setReviewInputs] = useState({ total: 10, correct: 0 });
   const [dismissedPrePromptModalRef, setDismissedPrePromptModalRef] = useState(null);
@@ -104,6 +113,39 @@ export default function GlobalAppModals({
       classConfirmModal.lessonNames || []
     );
   }, [classConfirmModal, caveiraQuestions, subjects]);
+
+  const activeTopicObj = useMemo(() => {
+    if (!classConfirmModal) return null;
+    const sub = subjects?.[classConfirmModal.subjectId];
+    const topics = sub?.topics || [];
+    if (classConfirmModal.topicId) {
+      const byId = topics.find((t) => t && t.id === classConfirmModal.topicId);
+      if (byId) return byId;
+    }
+    return topics.find((t) => t && t.name === classConfirmModal.topicName) || null;
+  }, [classConfirmModal, subjects]);
+
+  const prePromptFixation = useMemo(() => {
+    if (!classConfirmModal || !activeTopicObj) {
+      return { requiresFixation: false, isIntermediatePartOnly: false, intermediateInfo: null, finishedSeries: [], primarySeries: null };
+    }
+    return analyzeLessonFixationRequirement(
+      activeTopicObj,
+      activeTopicObj.completed || 0,
+      classConfirmModal.suggestedClasses || 1,
+      progressiveReviews || [],
+      classConfirmModal.subjectId || ''
+    );
+  }, [classConfirmModal, activeTopicObj, progressiveReviews]);
+
+  const todayStrForModal = getLocalDateStr ? getLocalDateStr() : '';
+  const isPrePromptRetroactive = Boolean(
+    classConfirmModal?.initialStudyDate && todayStrForModal && classConfirmModal.initialStudyDate < todayStrForModal
+  );
+  const fixationEnabled = caveiraQuestionPrefs?.lessonFixationRequired !== false;
+  const mustPrePromptFixate = Boolean(
+    fixationEnabled && !isPrePromptRetroactive && prePromptFixation.requiresFixation
+  );
 
   if (prevPrePromptModalRef !== classConfirmModal) {
     setPrevPrePromptModalRef(classConfirmModal);
@@ -400,6 +442,16 @@ export default function GlobalAppModals({
                   <p className="text-xs text-slate-500 dark:text-slate-400 leading-relaxed mt-1">
                     Ajuste os filtros abaixo para praticar no Projeto Caveira antes de registrar a aula.
                   </p>
+                  {fixationEnabled && !isPrePromptRetroactive && prePromptFixation.isIntermediatePartOnly && prePromptFixation.intermediateInfo && (
+                    <div className="mt-2.5 px-3 py-2 rounded-lg bg-sky-50/90 dark:bg-sky-950/35 border border-sky-200/80 dark:border-sky-800/70 text-[11px] text-sky-800 dark:text-sky-200">
+                      <strong>Parte {prePromptFixation.intermediateInfo.currentPart} de {prePromptFixation.intermediateInfo.totalParts}</strong> — a fixação obrigatória de {INITIAL_FIXATION_TARGET} questões será cobrada apenas ao concluir a última parte.
+                    </div>
+                  )}
+                  {mustPrePromptFixate && (
+                    <div className="mt-2.5 px-3 py-2 rounded-lg bg-amber-50/90 dark:bg-amber-950/35 border border-amber-200/80 dark:border-amber-800/70 text-[11px] text-amber-800 dark:text-amber-200">
+                      <strong>Fixação inicial ({INITIAL_FIXATION_TARGET}q · Muito fácil):</strong> conclua {INITIAL_FIXATION_TARGET} questões inéditas para registrar esta aula automaticamente e agendar a 1ª revisão (Fácil · 5q).
+                    </div>
+                  )}
                 </div>
 
                 {/* Subassuntos do Índice da Aula */}
@@ -653,33 +705,75 @@ export default function GlobalAppModals({
               </div>
 
               <div className="px-5 py-3.5 border-t border-slate-100 dark:border-slate-800/90 bg-slate-50/60 dark:bg-slate-950/40 flex flex-col gap-2 shrink-0">
-                <button
-                  type="button"
-                  onClick={() => {
-                    const subjectName = subjects?.[classConfirmModal.subjectId]?.name || '';
-                    const lessonNames = classConfirmModal.lessonNames || [];
-                    const topicName = classConfirmModal.topicName || '';
-                    triggerCaveiraPractice(
-                      subjectName,
-                      lessonNames,
-                      topicName,
-                      prePromptSubtopics,
-                      prePromptIndexText,
-                      prePromptQuestionStatus,
-                      prePromptDifficultyIds
-                    );
-                    setClassConfirmModal(null);
-                  }}
-                  className="w-full h-10 px-4 bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer"
-                >
-                  <Skull className="w-4 h-4" />
-                  <span>
-                    {prePromptSubtopics.length > 0
-                      ? `Filtrar ${prePromptSubtopics.length} subassuntos no Caveira`
-                      : 'Abrir questões no Caveira'}
-                  </span>
-                  <ArrowRight className="w-4 h-4" />
-                </button>
+                {mustPrePromptFixate ? (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const subjectName = subjects?.[classConfirmModal.subjectId]?.name || '';
+                      const lessonNames = classConfirmModal.lessonNames || [];
+                      const topicName = classConfirmModal.topicName || '';
+                      startPracticeMission?.({
+                        type: 'lesson_fixation',
+                        subjectId: classConfirmModal.subjectId,
+                        subjectName,
+                        topicName,
+                        title: prePromptFixation.primarySeries?.title || lessonNames[0] || topicName,
+                        lessonNames: prePromptFixation.primarySeries?.lessonNames?.length
+                          ? prePromptFixation.primarySeries.lessonNames
+                          : lessonNames,
+                        subtopics: prePromptSubtopics,
+                        rawIndexText: prePromptIndexText,
+                        baseDifficultyId: INITIAL_FIXATION_DIFFICULTY_ID,
+                        difficultyIds: [INITIAL_FIXATION_DIFFICULTY_ID],
+                        targetCount: INITIAL_FIXATION_TARGET,
+                        finishedSeries: prePromptFixation.finishedSeries,
+                        lessonContext: {
+                          subjectId: classConfirmModal.subjectId,
+                          slotIndex: classConfirmModal.slotIndex ?? null,
+                          amountWatched: classConfirmModal.suggestedClasses || 1,
+                          speed: subjects?.[classConfirmModal.subjectId]?.speed || 1,
+                          studyDateStr: classConfirmModal.initialStudyDate || todayStrForModal,
+                          plannedBlockCount: classConfirmModal.plannedBlockCount ?? null,
+                          onConfirmed: classConfirmModal.onConfirmed,
+                        },
+                      });
+                      setClassConfirmModal(null);
+                    }}
+                    className="w-full h-10 px-4 bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Skull className="w-4 h-4" />
+                    <span>Iniciar Fixação Obrigatória ({INITIAL_FIXATION_TARGET}q · Muito fácil)</span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                ) : (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      const subjectName = subjects?.[classConfirmModal.subjectId]?.name || '';
+                      const lessonNames = classConfirmModal.lessonNames || [];
+                      const topicName = classConfirmModal.topicName || '';
+                      triggerCaveiraPractice(
+                        subjectName,
+                        lessonNames,
+                        topicName,
+                        prePromptSubtopics,
+                        prePromptIndexText,
+                        prePromptQuestionStatus,
+                        prePromptDifficultyIds
+                      );
+                      setClassConfirmModal(null);
+                    }}
+                    className="w-full h-10 px-4 bg-sky-600 hover:bg-sky-700 text-white dark:bg-sky-500 dark:hover:bg-sky-400 dark:text-slate-950 rounded-xl text-xs font-semibold transition-colors flex items-center justify-center gap-2 cursor-pointer"
+                  >
+                    <Skull className="w-4 h-4" />
+                    <span>
+                      {prePromptSubtopics.length > 0
+                        ? `Filtrar ${prePromptSubtopics.length} subassuntos no Caveira`
+                        : 'Abrir questões no Caveira'}
+                    </span>
+                    <ArrowRight className="w-4 h-4" />
+                  </button>
+                )}
 
                 <button
                   type="button"
@@ -725,6 +819,65 @@ export default function GlobalAppModals({
         selectedDifficultyIds={prePromptDifficultyIds}
         onChangeDifficultyIds={setPrePromptDifficultyIds}
         difficultyRecommendation={difficultyRecommendation}
+        subjectId={classConfirmModal?.subjectId || ''}
+        subjectName={subjects?.[classConfirmModal?.subjectId]?.name || ''}
+        topicObj={activeTopicObj}
+        progressiveReviews={progressiveReviews}
+        activePracticeMission={activePracticeMission}
+        lessonFixationRequired={fixationEnabled}
+        onStartFixationMission={(amount, speed, studyDate, subtopics = [], rawIndexText = '', analysis = null) => {
+          const subjectName = subjects?.[classConfirmModal?.subjectId]?.name || '';
+          const allRem = classConfirmModal?.allRemainingLessonNames || [];
+          const count = Math.max(1, Number(amount) || 1);
+          const chosenLessons = allRem.length > 0 ? allRem.slice(0, count) : classConfirmModal?.lessonNames || [];
+          const topicName = classConfirmModal?.topicName || '';
+          startPracticeMission?.({
+            type: 'lesson_fixation',
+            subjectId: classConfirmModal.subjectId,
+            subjectName,
+            topicName,
+            title: analysis?.primarySeries?.title || chosenLessons[0] || topicName,
+            lessonNames: analysis?.primarySeries?.lessonNames?.length
+              ? analysis.primarySeries.lessonNames
+              : chosenLessons,
+            subtopics,
+            rawIndexText,
+            baseDifficultyId: INITIAL_FIXATION_DIFFICULTY_ID,
+            difficultyIds: [INITIAL_FIXATION_DIFFICULTY_ID],
+            targetCount: INITIAL_FIXATION_TARGET,
+            finishedSeries: analysis?.finishedSeries || [],
+            lessonContext: {
+              subjectId: classConfirmModal.subjectId,
+              slotIndex: classConfirmModal.slotIndex ?? null,
+              amountWatched: count,
+              speed,
+              studyDateStr: studyDate,
+              plannedBlockCount: classConfirmModal.plannedBlockCount ?? null,
+              onConfirmed: classConfirmModal.onConfirmed,
+            },
+          });
+          setClassConfirmModal(null);
+        }}
+        onBypassFixation={(amount, speed, studyDate, subtopics = [], rawIndexText = '', analysis = null) => {
+          completeLessonBypassFixation?.({
+            subjectId: classConfirmModal.subjectId,
+            slotIndex: classConfirmModal.slotIndex ?? null,
+            amountWatched: amount,
+            speed,
+            studyDateStr: studyDate,
+            plannedBlockCount: classConfirmModal.plannedBlockCount ?? null,
+            finishedSeries: analysis?.finishedSeries || [],
+            topicName: classConfirmModal?.topicName || '',
+            subjectName: subjects?.[classConfirmModal?.subjectId]?.name || '',
+            subtopics,
+            rawIndexText,
+            scheduleReview: true,
+          });
+          if (typeof classConfirmModal.onConfirmed === 'function') {
+            classConfirmModal.onConfirmed();
+          }
+          setClassConfirmModal(null);
+        }}
         onSaveLessonIndex={saveManualLessonIndex}
         onPracticeQuestions={(selectedCount, subtopics = [], rawIndexText = '') => {
           const subjectName = subjects?.[classConfirmModal?.subjectId]?.name || '';

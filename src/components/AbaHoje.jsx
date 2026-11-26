@@ -2,6 +2,8 @@ import React, { useState, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import CaveiraReviewQuestionModal from './CaveiraReviewQuestionModal';
 import StudyConsistencyHeatmap from './StudyConsistencyHeatmap';
+import ActiveMissionBanner from './ActiveMissionBanner';
+import ProgressiveReviewCard from './ProgressiveReviewCard';
 import {
   parseDurationToSeconds,
   formatSecondsToClock,
@@ -73,12 +75,16 @@ export default function AbaHoje({ onGoToTab }) {
     futureScheduleRules = [],
     subjectTimeGoal = {},
     reviews = [],
+    progressiveReviews = [],
     caveiraQuestions = [],
     caveiraDailyGoal = 50,
     caveiraQuestionPrefs = DEFAULT_CAVEIRA_QUESTION_PREFS,
     caveiraSessionStats = null,
     caveiraCourseIndexMap = {},
     setCaveiraDailyGoal,
+    startPracticeMission,
+    advanceProgressiveReviewToToday,
+    deleteProgressiveReview,
     getLocalDateStr,
     getCycleIndexForDate,
     setClassConfirmModal,
@@ -456,6 +462,11 @@ export default function AbaHoje({ onGoToTab }) {
 
   const safeReviewIdx = dueReviews.length > 0 ? Math.min(reviewIdx, dueReviews.length - 1) : 0;
   const activeReview = dueReviews[safeReviewIdx] || null;
+  const dueProgressiveReviews = useMemo(
+    () => (progressiveReviews || []).filter((r) => r && (!todayDateStr || r.nextDateStr <= todayDateStr)),
+    [progressiveReviews, todayDateStr]
+  );
+  const totalDueCount = dueProgressiveReviews.length + dueReviews.length;
   const completedSlotsCount = theoryBlocks.filter((b) => b.isSlotCompleted).length;
   const totalTheoryAccelSec = useMemo(
     () =>
@@ -504,6 +515,7 @@ export default function AbaHoje({ onGoToTab }) {
     setClassConfirmModal({
       subjectId,
       slotIndex,
+      topicId: activeTopic.id,
       topicName: activeTopic.name,
       lessonNames: blockLessonNames.length > 0 ? blockLessonNames : firstName ? [firstName] : [],
       allRemainingLessonNames: remainingLessons.map((l) => l?.name).filter(Boolean),
@@ -520,6 +532,7 @@ export default function AbaHoje({ onGoToTab }) {
 
   return (
     <div className="fade-in w-full pb-6 space-y-5">
+      <ActiveMissionBanner />
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-5 items-stretch">
         {/* COLUNA ESQUERDA: TEORIA */}
         <section
@@ -902,25 +915,51 @@ export default function AbaHoje({ onGoToTab }) {
                 </button>
               </div>
             ) : (
-              <span className={`text-xs font-medium ${dueReviews.length > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
-                {dueReviews.length > 0 ? '1 pendente' : 'Em dia'}
+              <span className={`text-xs font-medium ${totalDueCount > 0 ? 'text-amber-600 dark:text-amber-400' : 'text-emerald-600 dark:text-emerald-400'}`}>
+                {totalDueCount > 0 ? `${totalDueCount} ${totalDueCount === 1 ? 'pendente' : 'pendentes'}` : 'Em dia'}
               </span>
             )}
           </div>
 
           {/* Status de pendências */}
-          {dueReviews.length > 0 ? (
+          {totalDueCount > 0 ? (
             <div className="px-3.5 py-2.5 rounded-lg bg-red-500/10 border border-red-500/25 flex items-center gap-2 text-xs font-medium text-red-600 dark:text-red-400">
               <AlertTriangle className="w-4 h-4 shrink-0" />
               <span>
-                Você tem <strong className="font-mono font-bold tabular-nums">{dueReviews.length}</strong>{' '}
-                {dueReviews.length === 1 ? 'item agendado' : 'itens agendados'} para revisar hoje.
+                Você tem <strong className="font-mono font-bold tabular-nums">{totalDueCount}</strong>{' '}
+                {totalDueCount === 1 ? 'item agendado' : 'itens agendados'} para revisar hoje.
               </span>
             </div>
           ) : (
             <div className="px-3.5 py-2.5 rounded-lg bg-emerald-500/8 border border-emerald-500/20 flex items-center gap-2 text-xs font-medium text-emerald-700 dark:text-emerald-400">
               <CheckCircle className="w-4 h-4 shrink-0" />
               <span>Nenhuma revisão pendente para hoje.</span>
+            </div>
+          )}
+
+          {dueProgressiveReviews.length > 0 && (
+            <div className="space-y-2.5">
+              {dueProgressiveReviews.slice(0, 3).map((progRev) => (
+                <ProgressiveReviewCard
+                  key={progRev.id}
+                  review={progRev}
+                  subjectColor={subjects?.[progRev.subjectId]?.color}
+                  todayStr={todayDateStr}
+                  compact
+                  onStartMission={startPracticeMission}
+                  onAdvanceToToday={advanceProgressiveReviewToToday}
+                  onDelete={deleteProgressiveReview}
+                />
+              ))}
+              {dueProgressiveReviews.length > 3 && (
+                <button
+                  type="button"
+                  onClick={() => onGoToTab?.('revisoes')}
+                  className="text-xs font-semibold text-sky-600 dark:text-sky-400 hover:underline cursor-pointer"
+                >
+                  +{dueProgressiveReviews.length - 3} revisões de aula pendentes →
+                </button>
+              )}
             </div>
           )}
 
@@ -953,7 +992,7 @@ export default function AbaHoje({ onGoToTab }) {
                 </button>
               </div>
             )
-          ) : (
+          ) : dueProgressiveReviews.length === 0 ? (
             <div className="my-auto py-8 px-4 text-center space-y-2">
               <div className="w-10 h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/20 flex items-center justify-center mx-auto">
                 <CheckCircle className="w-5 h-5 text-emerald-500" />
@@ -965,7 +1004,7 @@ export default function AbaHoje({ onGoToTab }) {
                 Novas questões do Raio-X Caveira e revisões de aulas concluídas aparecerão aqui automaticamente.
               </p>
             </div>
-          )}
+          ) : null}
         </section>
       </div>
 

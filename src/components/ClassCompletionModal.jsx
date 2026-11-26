@@ -25,6 +25,10 @@ import {
 } from '../lib/durationHelpers';
 import { parseCourseIndexSubtopics } from '../lib/courseIndexParser';
 import CaveiraDifficultySelector from './CaveiraDifficultySelector';
+import {
+  analyzeLessonFixationRequirement,
+  INITIAL_FIXATION_TARGET,
+} from '../lib/lessonMastery';
 
 const shiftDateStr = (baseStr, offsetDays) => {
   const base =
@@ -66,8 +70,17 @@ export default function ClassCompletionModal({
   onPracticeQuestions = null,
   selectedDifficultyIds = [],
   onChangeDifficultyIds = null,
-  difficultyRecommendation = null
+  difficultyRecommendation = null,
+  subjectId = '',
+  subjectName = '',
+  topicObj = null,
+  progressiveReviews = [],
+  activePracticeMission = null,
+  lessonFixationRequired = true,
+  onStartFixationMission = null,
+  onBypassFixation = null,
 }) {
+  void subjectName;
   const todayStr = todayDateStr || shiftDateStr('', 0);
   const yesterdayStr = shiftDateStr(todayStr, -1);
   const resolvedInitialDate =
@@ -79,6 +92,7 @@ export default function ClassCompletionModal({
   const [studyDate, setStudyDate] = useState(resolvedInitialDate);
   const [indexText, setIndexText] = useState(initialIndexText || '');
   const [showIndexEditor, setShowIndexEditor] = useState(Boolean(initialIndexText));
+  const [confirmBypass, setConfirmBypass] = useState(false);
   const [prevProps, setPrevProps] = useState({
     subjectSpeed,
     suggestedClasses,
@@ -142,6 +156,18 @@ export default function ClassCompletionModal({
     [indexText, topicName, activeLessons]
   );
 
+  const fixationAnalysis = useMemo(
+    () =>
+      analyzeLessonFixationRequirement(
+        topicObj,
+        topicObj?.completed || 0,
+        currentNum,
+        progressiveReviews,
+        subjectId
+      ),
+    [topicObj, currentNum, progressiveReviews, subjectId]
+  );
+
   const handleSpeedChange = (newSpeed) => {
     setSpeed(newSpeed);
     if (timeGoalMinutes && allLessonsDurations && allLessonsDurations.length > 0) {
@@ -181,6 +207,22 @@ export default function ClassCompletionModal({
   const overGoal = goalSec > 0 && comparison.acceleratedSeconds > goalSec;
   const isRetroactive = studyDate < todayStr;
   const shortSelectedDate = formatShortBrDate(studyDate);
+  const mustFixate = Boolean(
+    lessonFixationRequired &&
+      !isRetroactive &&
+      fixationAnalysis.requiresFixation &&
+      typeof onStartFixationMission === 'function'
+  );
+  const activeMissionMatchesThisLesson = Boolean(
+    activePracticeMission &&
+      activePracticeMission.status === 'active' &&
+      activePracticeMission.type === 'lesson_fixation' &&
+      activePracticeMission.subjectId === subjectId &&
+      activePracticeMission.topicName === topicName
+  );
+  const activeMissionCount = Array.isArray(activePracticeMission?.answeredQuestionIds)
+    ? activePracticeMission.answeredQuestionIds.length
+    : 0;
 
   return createPortal(
     <div
@@ -228,6 +270,36 @@ export default function ClassCompletionModal({
 
         {/* Corpo com rolagem */}
         <div className="p-5 overflow-y-auto custom-scrollbar flex-1 space-y-4">
+          {lessonFixationRequired && !isRetroactive && fixationAnalysis.isIntermediatePartOnly && fixationAnalysis.intermediateInfo && (
+            <div className="px-3.5 py-2.5 rounded-xl border bg-sky-50/70 dark:bg-sky-500/[0.08] border-sky-200/80 dark:border-sky-500/25 flex items-start gap-2.5 text-xs text-sky-800 dark:text-sky-200">
+              <CheckCircle2 className="w-4 h-4 text-sky-600 dark:text-sky-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">
+                  Parte {fixationAnalysis.intermediateInfo.currentPart} de {fixationAnalysis.intermediateInfo.totalParts} detectada
+                </p>
+                <p className="text-[11px] opacity-90 mt-0.5">
+                  Você pode concluir esta parte normalmente. A fixação obrigatória de {INITIAL_FIXATION_TARGET} questões (Muito fácil) será cobrada apenas ao concluir a última parte.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {mustFixate && (
+            <div className="px-3.5 py-2.5 rounded-xl border bg-amber-50/75 dark:bg-amber-500/[0.08] border-amber-200/80 dark:border-amber-500/25 flex items-start gap-2.5 text-xs text-amber-800 dark:text-amber-200">
+              <Target className="w-4 h-4 text-amber-600 dark:text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-semibold">
+                  1ª conclusão: Fixação obrigatória ({INITIAL_FIXATION_TARGET}q · Muito fácil)
+                </p>
+                <p className="text-[11px] opacity-90 mt-0.5">
+                  {activeMissionMatchesThisLesson
+                    ? `Missão em andamento: ${activeMissionCount}/${INITIAL_FIXATION_TARGET} questões respondidas. Complete no Caveira para concluir a aula automaticamente.`
+                    : `Responda ${INITIAL_FIXATION_TARGET} questões no nível Muito fácil para concluir a aula automaticamente e agendar a 1ª revisão (Fácil · 5q).`}
+                </p>
+              </div>
+            </div>
+          )}
+
           {/* Banner de meta por bloco */}
           {timeGoalMinutes && suggestedClasses && (
             <div
@@ -607,7 +679,30 @@ export default function ClassCompletionModal({
             <div />
           )}
 
-          <div className="flex items-center justify-end gap-2">
+          <div className="flex items-center justify-end gap-2 flex-wrap">
+            {mustFixate && typeof onBypassFixation === 'function' && (
+              confirmBypass ? (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setConfirmBypass(false);
+                    onBypassFixation(currentNum, speed, studyDate, parsedSubtopics, indexText, fixationAnalysis);
+                  }}
+                  className="h-10 px-3 rounded-xl text-xs font-semibold bg-amber-600 hover:bg-amber-700 text-white transition-colors cursor-pointer"
+                >
+                  Confirmar sem fixação
+                </button>
+              ) : (
+                <button
+                  type="button"
+                  onClick={() => setConfirmBypass(true)}
+                  title="Use apenas se não houver questões suficientes no banco"
+                  className="h-10 px-3 rounded-xl text-[11px] font-medium text-slate-500 hover:text-slate-800 dark:text-slate-400 dark:hover:text-slate-200 transition-colors cursor-pointer"
+                >
+                  Sem questões? Concluir
+                </button>
+              )
+            )}
             <button
               type="button"
               onClick={onClose}
@@ -615,20 +710,36 @@ export default function ClassCompletionModal({
             >
               Cancelar
             </button>
-            <button
-              type="button"
-              onClick={() => onConfirm(currentNum, speed, studyDate)}
-              disabled={!numClasses}
-              className="h-10 px-4 bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 text-xs cursor-pointer"
-            >
-              <span>
-                Confirmar {currentNum} {currentNum === 1 ? 'aula' : 'aulas'}
-              </span>
-              <span className="font-mono opacity-85">
-                · {comparison.acceleratedFriendly}
-                {isRetroactive ? ` (${shortSelectedDate})` : ''}
-              </span>
-            </button>
+            {mustFixate ? (
+              <button
+                type="button"
+                onClick={() => onStartFixationMission(currentNum, speed, studyDate, parsedSubtopics, indexText, fixationAnalysis)}
+                disabled={!numClasses}
+                className="h-10 px-4 bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 text-xs cursor-pointer"
+              >
+                <Target className="w-3.5 h-3.5" />
+                <span>
+                  {activeMissionMatchesThisLesson
+                    ? `Continuar Fixação (${activeMissionCount}/${INITIAL_FIXATION_TARGET})`
+                    : `Iniciar Fixação (${INITIAL_FIXATION_TARGET}q · Muito fácil)`}
+                </span>
+              </button>
+            ) : (
+              <button
+                type="button"
+                onClick={() => onConfirm(currentNum, speed, studyDate)}
+                disabled={!numClasses}
+                className="h-10 px-4 bg-sky-600 hover:bg-sky-700 dark:bg-sky-500 dark:hover:bg-sky-400 text-white dark:text-slate-950 font-semibold rounded-xl transition-colors disabled:opacity-50 flex items-center justify-center gap-1.5 text-xs cursor-pointer"
+              >
+                <span>
+                  Confirmar {currentNum} {currentNum === 1 ? 'aula' : 'aulas'}
+                </span>
+                <span className="font-mono opacity-85">
+                  · {comparison.acceleratedFriendly}
+                  {isRetroactive ? ` (${shortSelectedDate})` : ''}
+                </span>
+              </button>
+            )}
           </div>
         </div>
       </div>

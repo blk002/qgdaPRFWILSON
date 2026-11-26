@@ -200,8 +200,12 @@ export const getCleanInitialState = () => ({
     status: 'not_resolved',
     examBoards: ['cebraspe', 'caveira_ineditas', 'caveira_adaptadas'],
     numberAlternatives: [2],
+    lessonFixationRequired: true,
     updatedAt: 0,
   },
+  progressiveReviews: [],
+  activePracticeMission: null,
+  completedMissionIds: [],
   caveiraSessionStats: null,
   caveiraFilterMemory: {},
   caveiraCourseIndexMap: {},
@@ -243,5 +247,5 @@ export const PERSISTED_KEYS = [
   'unlockedAvatars', 'dailyMissions', 'lastDailyResetDate', 'pushEnabled', 'pushTime',
   'enableSounds', 'activeBoosts', 'dailyReviewStats', 'syntaxLevel',
   'activeTheme', 'unlockedThemes', 'dailyGoalMinutes', 'subjectGoals', 'subjectTimeGoal', 'pushSettings',
-  'cycleScheduleType', 'cycleWeekStart', 'cycleDayNames', 'cycleSlotCounts', 'cycleCarryoverOffset', 'lastCarryoverCheckDate', 'calendarOverrides', 'calendarOverrideCounts', 'futureScheduleRules', 'xpHistory', 'petData', 'caveiraQuestions', 'caveiraDailyGoal', 'caveiraQuestionPrefs', 'caveiraFilterMemory', 'caveiraCourseIndexMap', 'lifeRoutine', 'discursivaData'
+  'cycleScheduleType', 'cycleWeekStart', 'cycleDayNames', 'cycleSlotCounts', 'cycleCarryoverOffset', 'lastCarryoverCheckDate', 'calendarOverrides', 'calendarOverrideCounts', 'futureScheduleRules', 'xpHistory', 'petData', 'caveiraQuestions', 'caveiraDailyGoal', 'caveiraQuestionPrefs', 'progressiveReviews', 'activePracticeMission', 'completedMissionIds', 'caveiraFilterMemory', 'caveiraCourseIndexMap', 'lifeRoutine', 'discursivaData'
 ];

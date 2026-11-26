@@ -32,15 +32,17 @@ export default function AppNavigation({
   const setIsDarkMode = useStore((s) => s.setIsDarkMode);
   const isSyncing = useStore((s) => s.isSyncing);
   const reviews = useStore((s) => s.reviews);
+  const progressiveReviews = useStore((s) => s.progressiveReviews);
   const getCurrentPatente = useStore((s) => s.getCurrentPatente);
   const getLocalDateStr = useStore((s) => s.getLocalDateStr);
   const signOut = useStore((s) => s.signOut);
 
   const todayStr = getLocalDateStr();
-  const dueReviewsCount = useMemo(
-    () => (reviews || []).filter((r) => r && r.nextDateStr <= todayStr).length,
-    [reviews, todayStr]
-  );
+  const dueReviewsCount = useMemo(() => {
+    const dueFsrs = (reviews || []).filter((r) => r && r.nextDateStr <= todayStr).length;
+    const dueProg = (progressiveReviews || []).filter((r) => r && r.nextDateStr <= todayStr).length;
+    return dueFsrs + dueProg;
+  }, [reviews, progressiveReviews, todayStr]);
 
   const subjectsList = useMemo(() => Object.values(subjects || {}), [subjects]);
   const { totalLessons, completedLessons, completionPct } = useMemo(() => {

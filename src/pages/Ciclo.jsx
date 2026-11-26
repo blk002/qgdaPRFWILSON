@@ -627,6 +627,7 @@ export default function Ciclo() {
     setClassConfirmModal({
       subjectId,
       slotIndex,
+      topicId: activeTopic.id,
       topicName: activeTopic.name,
       lessonNames: blockLessonNames.length > 0 ? blockLessonNames : (activeLessonName ? [activeLessonName] : []),
       allRemainingLessonNames: remainingLessons.map((l) => l?.name).filter(Boolean),
@@ -657,6 +658,7 @@ export default function Ciclo() {
     setClassConfirmModal({
       subjectId,
       slotIndex,
+      topicId: pastActiveTopic.id,
       topicName: pastActiveTopic.name,
       lessonNames: pastLessonNames,
       allRemainingLessonNames: remLessons.map((l) => l?.name).filter(Boolean),
