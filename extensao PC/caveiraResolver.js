@@ -7,7 +7,7 @@
   const { canon, filterAndRankBizusSubtopics } = TM;
 
   const SUBJECT_ALIASES = {
-    'ctb': 8199, 'codigo de transito brasileiro': 8199, 'codigo de transito': 8199, 'legislacao de transito': 8199, 'legislacao de transito ctb': 8199, 'transito': 8199,
+    'ctb': 8199, 'codigo de transito brasileiro': 8199, 'codigo de transito': 8199, 'legislacao de transito': 8199, 'transito': 8199,
     'legislacao especial': 17254, 'legislacao penal especial': 17254, 'leis especiais': 17254,
     'leis penais especiais': 17254, 'legislacao extravagante': 17254,
     'portugues': 4899, 'lingua portuguesa': 4899,
@@ -15,13 +15,24 @@
     'rlm': 6209, 'raciocinio logico': 6209, 'raciocinio logico matematico': 6209,
     'matematica': 5718, 'direito administrativo': 1, 'direito constitucional': 1010, 'direito penal': 1490,
     'processo penal': 2373, 'direito processual penal': 2373, 'direitos humanos': 13781,
-    'etica': 15444, 'etica e conduta profissional': 15444, 'etica no servico publico': 15444, 'etica e cidadania': 15444, 'etica profissional': 15444,
-    'fisica': 15926, 'geografia': 16375, 'geopolitica': 16375, 'geopolitica brasileira': 16375,
+    'etica': 15444, 'etica e conduta profissional': 15444,
+    'fisica': 15926, 'geografia': 16375,
     'historia': 16767, 'ingles': 17701, 'lingua inglesa': 17701, 'espanhol': 17647,
     'atualidades': 8054, 'legislacao institucional': 17253, 'medicina legal': 18155,
     'criminologia': 11631, 'redacao oficial': 18321, 'redacao': 18321, 'arquivologia': 7741,
     'administracao geral': 6611, 'administracao publica': 7310, 'estatistica': 15050,
     'tecnologia da informacao': 18746, 'resolucoes do contran': 20363
+  };
+
+  // Aliases adicionais (nomes de matérias no QG/editais PRF que também existem como tópicos dentro da árvore)
+  // Mantidos fora de `exclude` em `resolveLesson` para não remover palavras-chave de tópicos reais.
+  const SUBJECT_TOPIC_SAFE_ALIASES = {
+    'legislacao de transito ctb': 8199,
+    'etica no servico publico': 15444,
+    'etica e cidadania': 15444,
+    'etica profissional': 15444,
+    'geopolitica': 16375,
+    'geopolitica brasileira': 16375
   };
 
   const LEAF_RX = /^\s*(?:art\.?\s*\d|§|par[aá]grafo|inciso|al[ií]nea|[ivxlcdm]+\s*$|[a-z]\)\s*$|\d+[.)]?\s*$)/i;
@@ -51,7 +62,8 @@
     const cands = [subjectName, ...hintTexts].filter(Boolean);
     for (const c of cands) {
       const k = norm(c);
-      if (SUBJECT_ALIASES[k] && tree.subjects.has(SUBJECT_ALIASES[k])) return tree.subjects.get(SUBJECT_ALIASES[k]);
+      const aliasId = SUBJECT_ALIASES[k] || SUBJECT_TOPIC_SAFE_ALIASES[k];
+      if (aliasId && tree.subjects.has(aliasId)) return tree.subjects.get(aliasId);
     }
     // casamento por nome oficial (tokens)
     for (const c of cands) {

@@ -4038,7 +4038,9 @@ export const useStore = create(
           const topics = Array.isArray(rawEntry.topics) && rawEntry.topics.length > 0
             ? rawEntry.topics
             : parseTimestampTopics(rawText);
-          const scopedKey = (courseId && !String(key).includes('::')) ? `${courseId}::${key}` : key;
+          const initialUrl = rawEntry.url || prev[key]?.url || '';
+          const initialCourseId = String(rawEntry.courseId || extractCourseIdFromUrl(initialUrl) || prev[key]?.courseId || '');
+          const scopedKey = (initialCourseId && !String(key).includes('::')) ? `${initialCourseId}::${key}` : key;
           const prevScoped = prev[scopedKey] || prev[key];
           const url = rawEntry.url || prevScoped?.url || '';
           const courseId = String(rawEntry.courseId || extractCourseIdFromUrl(url) || prevScoped?.courseId || '');
