@@ -2403,16 +2403,13 @@ ${EXTRA_SHADOW_CSS}`;
     function extractCleanTitleFromVideoMainTitle(rawTitle) {
       const raw = String(rawTitle || "").replace(/\s+/g, " ").trim();
       if (!raw || raw.length < 4 || raw.length > 240) return "";
-      const stripped = stripSubjectFromLessonTitle(raw);
-      if (stripped && stripped !== raw && stripped.length >= 4) {
-        return stripped;
-      }
-      if (raw.includes(" - ")) {
-        const parts = raw.split(" - ");
-        const left = parts[0].trim();
-        const right = parts.slice(1).join(" - ").trim();
+      const sepMatch = raw.match(/\s+[-–—]\s+/);
+      if (sepMatch) {
+        const idx = sepMatch.index;
+        const left = raw.slice(0, idx).trim();
+        const right = raw.slice(idx + sepMatch[0].length).trim();
         if (right.length >= 4 && !/^(?:parte|pt|aula|bloco|m[oó]dulo)\s*(?:\d+|[ivx]+)$/i.test(right)) {
-          const leftHasSubject = Boolean(extractSubjectFromLessonTitle(left).subject);
+          const leftHasSubject = Boolean(matchExactSubjectRule(left));
           const courseMainEl = document.querySelector(".course-main-title");
           const courseNorm = normalizeFilterText(courseMainEl?.innerText || courseMainEl?.textContent || "");
           const leftNorm = normalizeFilterText(left);
@@ -2421,6 +2418,10 @@ ${EXTRA_SHADOW_CSS}`;
             return right;
           }
         }
+      }
+      const stripped = stripSubjectFromLessonTitle(raw);
+      if (stripped && stripped !== raw && stripped.length >= 4) {
+        return stripped;
       }
       return raw;
     }
