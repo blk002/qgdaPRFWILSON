@@ -200,7 +200,7 @@ export default function Dashboard() {
 
   const caveiraTotal = Array.isArray(caveiraQuestions) ? caveiraQuestions.length : 0;
   const caveiraCorrect = Array.isArray(caveiraQuestions)
-    ? caveiraQuestions.filter(q => q && (q.isCorrect === true || q.acertou === true || q.result === 'correct' || q.status === 'correct')).length
+    ? caveiraQuestions.filter(q => q && (q.hit === true || q.correct === true || q.isCorrect === true || q.acertou === true || q.result === 'correct' || q.status === 'correct')).length
     : 0;
   const combinedTotalAnswered = (Number(reviewStats.totalDone) || 0) + caveiraTotal;
   const combinedTotalCorrect = (Number(reviewStats.correct) || 0) + caveiraCorrect;
@@ -252,14 +252,12 @@ export default function Dashboard() {
       return sanitize(calendarOverrides[todayDateStr]);
     }
 
-    const baseCycleIdx = cycleScheduleType === 'weekly'
-      ? (getCycleIndexForDate ? getCycleIndexForDate(todayObj, todayObj) : ((cycleWeekStart === 'monday') ? (todayDow + 6) % 7 : todayDow))
-      : (currentDayIndex || 0);
-
     const shouldShiftCarryover = cycleScheduleType === 'weekly' && (cycleCarryoverOffset || 0) > 0;
-    const effectiveCycleIdx = shouldShiftCarryover
-      ? ((baseCycleIdx - cycleCarryoverOffset) % 7 + 7) % 7
-      : baseCycleIdx;
+    const effectiveCycleIdx = cycleScheduleType === 'weekly'
+      ? (getCycleIndexForDate
+          ? getCycleIndexForDate(todayObj, todayObj)
+          : ((((cycleWeekStart === 'monday' ? (todayDow + 6) % 7 : todayDow) - (shouldShiftCarryover ? cycleCarryoverOffset : 0)) % 7) + 7) % 7)
+      : (currentDayIndex || 0);
 
     const effectiveDateObj = shouldShiftCarryover
       ? new Date(todayObj.getFullYear(), todayObj.getMonth(), todayObj.getDate() - cycleCarryoverOffset)

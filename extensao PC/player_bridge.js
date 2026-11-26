@@ -44,7 +44,8 @@
             video.currentTime = safeSec;
             pendingSeekSec = 0;
             if (isContextValid()) {
-              chrome.storage.local.remove([SEEK_KEY]);
+              chrome.storage.local.remove([SEEK_KEY]).catch(() => {
+              });
             }
           }
         }
@@ -66,7 +67,8 @@
           const map = res?.[RESUME_KEY] && typeof res[RESUME_KEY] === "object" ? { ...res[RESUME_KEY] } : {};
           map[key] = { currentTime: cur, duration: dur, updatedAt: now };
           const entries = Object.entries(map).sort((a, b) => (b[1]?.updatedAt || 0) - (a[1]?.updatedAt || 0)).slice(0, 80);
-          chrome.storage.local.set({ [RESUME_KEY]: Object.fromEntries(entries) });
+          chrome.storage.local.set({ [RESUME_KEY]: Object.fromEntries(entries) }).catch(() => {
+          });
         });
       } catch (_) {
       }
@@ -115,8 +117,19 @@
         }
       });
     }
+    let scanIntervalId = null;
     function scanForVideo() {
-      if (!isContextValid()) return;
+      if (!isContextValid()) {
+        try {
+          observer.disconnect();
+        } catch (_) {
+        }
+        if (scanIntervalId) {
+          clearInterval(scanIntervalId);
+          scanIntervalId = null;
+        }
+        return;
+      }
       const vid = document.querySelector("video");
       if (vid) bindVideo(vid);
     }
@@ -156,6 +169,9 @@
         }
         if (changes[SEEK_KEY]?.newValue) {
           const s = changes[SEEK_KEY].newValue;
+          const refCourseId = String(document.referrer || "").match(/\/courses\/(\d+)/i)?.[1] || "";
+          const seekCourseId = s?.courseId ? String(s.courseId) : "";
+          if (seekCourseId && refCourseId && seekCourseId !== refCourseId) return;
           if (Number(s.seconds) > 0 && Date.now() - (Number(s.savedAt) || 0) < 9e4) {
             pendingSeekSec = Number(s.seconds);
             if (currentVideo) tryApplyPendingSeek(currentVideo);
@@ -182,6 +198,6 @@
       observer.observe(document.documentElement, { childList: true, subtree: true });
     }
     scanForVideo();
-    setInterval(scanForVideo, 1500);
+    scanIntervalId = setInterval(scanForVideo, 1500);
   })();
 })();

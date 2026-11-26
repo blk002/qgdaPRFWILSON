@@ -36,6 +36,27 @@ export {
 
 const CAVEIRA_OWNER_KEY = 'prf_caveira_owner_id';
 
+const parseIsoMs = (ts) => {
+  const n = Date.parse(String(ts || ''));
+  return Number.isFinite(n) ? n : 0;
+};
+
+const toSortableIsoDate = (raw) => {
+  const s = String(raw || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const m = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : '';
+};
+
+const matchesCaveiraReview = (r, targetId) =>
+  Boolean(
+    r &&
+      targetId &&
+      (r.caveiraQuestionId === targetId ||
+        r.id === `rev_caveira_${targetId}` ||
+        String(r.topicName || '').startsWith(`[Caveira ${targetId}]`))
+  );
+
 const mergeAttempts = (prev = null, incoming = {}) => {
   const list = [];
   const pushUnique = (entry) => {
@@ -836,7 +857,7 @@ export const useStore = create(
       saveToCloud: async (options = {}) => {
         const { allowEmptyOverwrite = false } = options || {};
         const { user, isLoadingFromCloud, isSavingToCloud, hasCompletedInitialCloudSync, lastSyncedAt, ...state } = get();
-        if (!user || isLoadingFromCloud) return;
+        if (!user || isLoadingFromCloud) return false;
         if (isLocalTestUser(user)) {
           const nowIso = new Date().toISOString();
           writeLocalSnapshot(get(), { dirty: false, savedAt: nowIso });
@@ -854,14 +875,14 @@ export const useStore = create(
         }
         if (!hasCompletedInitialCloudSync && !allowEmptyOverwrite) {
           console.warn('🛑 [Nuvem] Auto-save bloqueado antes da sincronização inicial concluir.');
-          return;
+          return false;
         }
 
         // A2: Se um save já está em andamento, não descarta: marca savePending para rodar logo após o término
         if (isSavingToCloud) {
           useStore._savePending = true;
           set({ savePending: true, hasUnsyncedChanges: true });
-          return;
+          return false;
         }
 
         clearTimeout(useStore._localDebounceTimer);
@@ -972,6 +993,9 @@ export const useStore = create(
                 }
                 const { data: conflictData, error: conflictErr } = await conflictUpdateQuery.select('updated_at');
                 if (conflictErr) throw conflictErr;
+                if (!conflictData || conflictData.length === 0) {
+                  throw new Error('Conflito concorrente durante merge na nuvem');
+                }
                 if (conflictData?.[0]?.updated_at) finalSyncedAt = conflictData[0].updated_at;
 
                 set({ ...normalizedMerged });
@@ -999,6 +1023,7 @@ export const useStore = create(
           appendLocalBackup(dataToSave, 'cloud_sync');
 
           toast.success("Nuvem atualizada!", { id: 'cloud-sync-toast', duration: 1200 });
+          return true;
         } catch (error) {
           clearTimeout(timeoutId);
           // A3: Em caso de timeout/abort, relê o updated_at remoto para checar se o servidor concluiu a gravação
@@ -1055,7 +1080,9 @@ export const useStore = create(
             useStore._retryTimer = setTimeout(() => {
               get().saveToCloud();
             }, delayMs);
+            return false;
           }
+          return true;
         } finally {
           set({ isSavingToCloud: false });
           // A2: Se houve alteração enquanto salvava, dispara novo save imediatamente
@@ -1102,7 +1129,7 @@ export const useStore = create(
             .eq('id', session.user.id)
             .maybeSingle();
 
-          if (!error && data?.updated_at && (!lastSyncedAt || data.updated_at > lastSyncedAt)) {
+          if (!error && data?.updated_at && (!lastSyncedAt || parseIsoMs(data.updated_at) > parseIsoMs(lastSyncedAt))) {
             await get().loadFromCloud();
             return true;
           }
@@ -1128,7 +1155,7 @@ export const useStore = create(
                 const st = useStore.getState();
                 if (st.isLoadingFromCloud || st.isSavingToCloud) return;
                 const remoteTs = payload?.new?.updated_at;
-                if (remoteTs && (!st.lastSyncedAt || remoteTs > st.lastSyncedAt)) {
+                if (remoteTs && (!st.lastSyncedAt || parseIsoMs(remoteTs) > parseIsoMs(st.lastSyncedAt))) {
                   clearTimeout(useStore._realtimeDebounce);
                   useStore._realtimeDebounce = setTimeout(() => {
                     const latest = useStore.getState();
@@ -1996,7 +2023,7 @@ export const useStore = create(
       deleteCaveiraQuestion: (id) => {
         const { caveiraQuestions = [], reviews = [] } = get();
         const updated = caveiraQuestions.filter(q => q.id !== id);
-        const filteredReviews = reviews.filter(r => !(r.caveiraQuestionId === id || String(r.id || '').includes(id) || String(r.topicName || '').includes(id)));
+        const filteredReviews = reviews.filter(r => !matchesCaveiraReview(r, id));
         set({ caveiraQuestions: updated, reviews: filteredReviews });
         try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updated)); } catch (_) {}
         try { window.postMessage({ source: 'QG_WEB_APP', type: 'DELETE_CAVEIRA_QUESTION', payload: { id } }, '*'); } catch (_) {}
@@ -2071,11 +2098,7 @@ export const useStore = create(
           : (question.topic || customSubjectName);
 
         // Verifica se já existe um card ativo desta questão no FSRS
-        const existingMatches = reviews.filter(r =>
-          r.caveiraQuestionId === question.id ||
-          String(r.id || '').includes(question.id) ||
-          String(r.topicName || '').includes(question.id)
-        );
+        const existingMatches = reviews.filter(r => matchesCaveiraReview(r, question.id));
 
         if (existingMatches.length > 0) {
           // Atualiza o primeiro card existente com os metadados completos e remove duplicatas
@@ -2698,7 +2721,7 @@ export const useStore = create(
       },
 
       // Nota: tanto PomodoroTimer (via addStudyMinutes) quanto watchClass somam minutos em studyHistory e weeklySprint.
-      addStudyMinutes: (minutes, dateStrOverride = null) => {
+      addStudyMinutes: (minutes, dateStrOverride = null, { skipXp = false } = {}) => {
         const { getLocalDateStr, setUserStats, setWeeklySprint, addXP } = get();
         if (minutes <= 0) return;
         
@@ -2707,7 +2730,9 @@ export const useStore = create(
         setWeeklySprint(prev => ({ ...prev, currentMinutes: (prev.currentMinutes || 0) + minutes }));
         
         // XP reward for using pomodoro (2 XP per minute)
-        addXP(minutes * 2, "Sessão Pomodoro Concluída", targetDateStr);
+        if (!skipXp) {
+          addXP(minutes * 2, "Sessão Pomodoro Concluída", targetDateStr);
+        }
         
         set(state => ({
           studyHistory: {
@@ -2893,7 +2918,10 @@ export const useStore = create(
         set(state => {
           const newSubjects = { ...state.subjects };
           if (newSubjects[subjectId]) {
-            newSubjects[subjectId].topics = [...newSubjects[subjectId].topics, ...topics];
+            newSubjects[subjectId] = {
+              ...newSubjects[subjectId],
+              topics: [...(newSubjects[subjectId].topics || []), ...topics]
+            };
           }
           return { subjects: newSubjects };
         });
@@ -3208,12 +3236,13 @@ export const useStore = create(
         set(cleanState);
 
         // 2. Força sobrescrita na nuvem (Supabase) como fonte da verdade
-        if (user) {
+        if (user && !isLocalTestUser(user)) {
+          const persistedCleanState = extractPersistedData(cleanState);
           try {
             const { data: updateData, error: updateError } = await supabase
               .from('profiles')
               .update({ 
-                full_data: cleanState, 
+                full_data: persistedCleanState, 
                 updated_at: new Date().toISOString() 
               })
               .eq('id', user.id)
@@ -3226,7 +3255,7 @@ export const useStore = create(
                 .from('profiles')
                 .insert({
                   id: user.id,
-                  full_data: cleanState,
+                  full_data: persistedCleanState,
                   updated_at: new Date().toISOString()
                 });
                 
@@ -4009,13 +4038,13 @@ export const useStore = create(
           const topics = Array.isArray(rawEntry.topics) && rawEntry.topics.length > 0
             ? rawEntry.topics
             : parseTimestampTopics(rawText);
-          const url = rawEntry.url || prev[key]?.url || '';
-          const courseId = String(rawEntry.courseId || extractCourseIdFromUrl(url) || prev[key]?.courseId || '');
-          const courseName = String(rawEntry.courseName || prev[key]?.courseName || '');
           const scopedKey = (courseId && !String(key).includes('::')) ? `${courseId}::${key}` : key;
           const prevScoped = prev[scopedKey] || prev[key];
+          const url = rawEntry.url || prevScoped?.url || '';
+          const courseId = String(rawEntry.courseId || extractCourseIdFromUrl(url) || prevScoped?.courseId || '');
+          const courseName = String(rawEntry.courseName || prevScoped?.courseName || '');
           const candidate = {
-            url: url || prevScoped?.url || '',
+            url,
             courseId,
             courseName,
             title: rawEntry.lessonTitle || rawEntry.title || prevScoped?.title || key,
@@ -4023,7 +4052,7 @@ export const useStore = create(
             moduleName: rawEntry.moduleName || prevScoped?.moduleName || '',
             topics: topics.length > 0 ? topics : (prevScoped?.topics || []),
             subtopics: Array.isArray(rawEntry.subtopics) ? rawEntry.subtopics : (prevScoped?.subtopics || []),
-            updatedAt: rawEntry.updatedAt || Date.now()
+            updatedAt: rawEntry.updatedAt || prevScoped?.updatedAt || Date.now()
           };
           if (JSON.stringify(prev[scopedKey]) !== JSON.stringify(candidate)) {
             next[scopedKey] = candidate;
@@ -4197,7 +4226,7 @@ export const useStore = create(
         });
 
         if (addedCount === 0 && updatedCount === 0) return 0;
-        const sorted = nextSimulados.sort((a, b) => String(a.data || '').localeCompare(String(b.data || '')));
+        const sorted = nextSimulados.sort((a, b) => toSortableIsoDate(a.data).localeCompare(toSortableIsoDate(b.data)));
         set({ simulados: sorted });
         if (addedCount > 0) {
           addXP(150 * addedCount, `${addedCount} Simulado(s) do Caveira importado(s)`);
@@ -4209,7 +4238,7 @@ export const useStore = create(
       logCaveiraPdfStudy: ({ title = 'PDF Interativo', subject = '', minutes = 5 } = {}) => {
         const mins = Math.max(1, Math.min(480, Math.round(Number(minutes) || 1)));
         const { addStudyMinutes, setCoins, addXP, boostPetWithStudy } = get();
-        addStudyMinutes(mins);
+        addStudyMinutes(mins, null, { skipXp: true });
         addXP(Math.min(200, mins * 2), `Leitura de PDF (${subject || title}): ${mins} min`);
         setCoins(c => c + Math.min(25, Math.max(2, Math.ceil(mins / 3))));
         boostPetWithStudy?.('study');

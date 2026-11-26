@@ -1142,7 +1142,7 @@ export default function Config({
                               setIsRestoringPoint(true);
                               try {
                                 const res = await restoreFromLocalPoint?.(pt.id);
-                                if (res?.ok) {
+                                if (res === true || res?.ok) {
                                   setRestoreVersion(v => v + 1);
                                   toast.success('Ponto restaurado com sucesso.');
                                 } else {

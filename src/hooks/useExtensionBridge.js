@@ -183,9 +183,30 @@ export function useExtensionBridge() {
         const currentCompleted = Math.min(Number(matchedTopic.total) || 0, Number(matchedTopic.completed) || 0);
         const remLessons = (matchedTopic.lessons || []).slice(currentCompleted, matchedTopic.total);
         const firstLesson = remLessons[0];
+
+        const todayObj = new Date();
+        const todayStr = st.getLocalDateStr ? st.getLocalDateStr(todayObj) : '';
+        const completedTodayArr = st.completedTodayDate === todayStr && Array.isArray(st.completedToday) ? st.completedToday : [];
+        let todaySubjectsList = [];
+        if (st.calendarOverrides && Array.isArray(st.calendarOverrides[todayStr])) {
+          todaySubjectsList = st.calendarOverrides[todayStr];
+        } else {
+          const idx =
+            st.cycleScheduleType === 'weekly'
+              ? st.getCycleIndexForDate
+                ? st.getCycleIndexForDate(todayObj, todayObj)
+                : ((st.cycleWeekStart === 'monday' ? (todayObj.getDay() + 6) % 7 : todayObj.getDay()) - ((st.cycleCarryoverOffset || 0) > 0 ? st.cycleCarryoverOffset : 0) + 7) % 7
+              : st.currentDayIndex || 0;
+          todaySubjectsList = Array.isArray(st.cycle?.[idx]) ? st.cycle[idx] : [];
+        }
+        const matchedSlotIndex = todaySubjectsList.findIndex(
+          (sid, sIdx) => sid === matchedSub.id && !completedTodayArr.includes(sIdx)
+        );
+        const resolvedSlotIndex = matchedSlotIndex >= 0 ? matchedSlotIndex : null;
+
         st.setClassConfirmModal({
           subjectId: matchedSub.id,
-          slotIndex: 0,
+          slotIndex: resolvedSlotIndex,
           topicName: matchedTopic.name,
           lessonNames: rawTitle ? [rawTitle] : firstLesson?.name ? [firstLesson.name] : [matchedTopic.name],
           allRemainingLessonNames: remLessons.map((l) => l?.name).filter(Boolean),
@@ -339,12 +360,17 @@ export function useExtensionBridge() {
     };
   }, [session, saveManualLessonIndex]);
 
-  // Ponte de envio: QG -> Extensão
+  // Sincroniza índice de aulas do Caveira apenas quando o cache ou sync inicial muda
   useEffect(() => {
     if (!session || !hasCompletedInitialCloudSync) return;
     if (courseIndexCache && (courseIndexCache.latest || Object.keys(courseIndexCache.byLesson || {}).length > 0)) {
       useStore.getState().setCaveiraCourseIndexMap?.(courseIndexCache);
     }
+  }, [session, hasCompletedInitialCloudSync, courseIndexCache]);
+
+  // Ponte de envio: QG -> Extensão
+  useEffect(() => {
+    if (!session || !hasCompletedInitialCloudSync) return;
 
     try {
       const todayDateStr = getLocalDateStr ? getLocalDateStr() : '';
@@ -354,16 +380,13 @@ export function useExtensionBridge() {
       if (calendarOverrides && Array.isArray(calendarOverrides[todayDateStr])) {
         rawDaySubjects = calendarOverrides[todayDateStr];
       } else {
-        const baseIdx =
+        const shouldShift = cycleScheduleType === 'weekly' && (cycleCarryoverOffset || 0) > 0;
+        const effIdx =
           cycleScheduleType === 'weekly'
             ? getCycleIndexForDate
               ? getCycleIndexForDate(todayObj, todayObj)
-              : cycleWeekStart === 'monday'
-              ? (todayObj.getDay() + 6) % 7
-              : todayObj.getDay()
+              : ((((cycleWeekStart === 'monday' ? (todayObj.getDay() + 6) % 7 : todayObj.getDay()) - (shouldShift ? cycleCarryoverOffset : 0)) % 7) + 7) % 7
             : currentDayIndex || 0;
-        const shouldShift = cycleScheduleType === 'weekly' && (cycleCarryoverOffset || 0) > 0;
-        const effIdx = shouldShift ? (((baseIdx - cycleCarryoverOffset) % 7) + 7) % 7 : baseIdx;
         const effDateObj = shouldShift
           ? new Date(todayObj.getFullYear(), todayObj.getMonth(), todayObj.getDate() - cycleCarryoverOffset)
           : todayObj;

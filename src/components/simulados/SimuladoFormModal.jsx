@@ -8,9 +8,21 @@ import {
   TOTAL_QUESTOES_PRF
 } from './simuladoUtils';
 
+const normalizeSimuladoDateToIso = (raw) => {
+  const s = String(raw || '').trim();
+  if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+  const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+  if (br) return `${br[3]}-${br[2]}-${br[1]}`;
+  const now = new Date();
+  const y = now.getFullYear();
+  const m = String(now.getMonth() + 1).padStart(2, '0');
+  const d = String(now.getDate()).padStart(2, '0');
+  return `${y}-${m}-${d}`;
+};
+
 export default function SimuladoFormModal({ isOpen, editingSimulado, onClose, onSubmit }) {
   const [dataVal, setDataVal] = useState(
-    editingSimulado ? editingSimulado.data : new Date().toLocaleDateString('pt-BR')
+    editingSimulado ? normalizeSimuladoDateToIso(editingSimulado.data) : normalizeSimuladoDateToIso('')
   );
   const [titleVal, setTitleVal] = useState(editingSimulado?.title || '');
   const [scores, setScores] = useState({
@@ -81,7 +93,7 @@ export default function SimuladoFormModal({ isOpen, editingSimulado, onClose, on
     e.preventDefault();
     if (hasBlockOverflow) return;
     onSubmit({
-      data: dataVal.trim() || new Date().toLocaleDateString('pt-BR'),
+      data: normalizeSimuladoDateToIso(dataVal),
       title: titleVal.trim(),
       b1C,
       b1E,

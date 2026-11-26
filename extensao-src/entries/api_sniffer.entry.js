@@ -1,6 +1,6 @@
 import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
 
-// Sniffer passivo da API do Projeto Caveira (MAIN world — somente leitura de respostas JSON) — v3.2.4
+// Sniffer passivo da API do Projeto Caveira (MAIN world — somente leitura de respostas JSON) — v3.2.5
 (function () {
   if (/^(?:loja|checkout|blog|pay|pagamentos?|www)\./i.test(window.location.hostname || '')) return;
   if (window.__qgCaveiraApiSnifferInstalled) return;
@@ -268,7 +268,18 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       });
     }
 
-    if (!apiId && !explicitCode && !commentText && !hasPct && !noteRaw && !banca && !ano && !subjectStr && !subtopicPathStr) {
+    const hasQuestionSignal = Boolean(
+      explicitCode ||
+      contentText ||
+      subtopicPathStr ||
+      alternatives.length > 0 ||
+      commentText ||
+      banca ||
+      hasPct ||
+      item.last_answer_status !== undefined ||
+      item.question_code
+    );
+    if (!hasQuestionSignal) {
       return null;
     }
 
@@ -433,7 +444,10 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
         courseIdMatch?.[1] ||
         ''
       );
-      const courseName = String((!Array.isArray(root) ? (root.course?.name || root.course?.title || root.name || root.title) : '') || 'Curso Caveira').trim();
+      const isSingleModulePayload = Boolean(!Array.isArray(multiModulesCandidate) || Array.isArray(root));
+      const courseName = isSingleModulePayload
+        ? String((!Array.isArray(root) ? (root.course?.name || root.course?.title) : '') || '').trim()
+        : String((!Array.isArray(root) ? (root.course?.name || root.course?.title || root.name || root.title) : '') || '').trim();
       const currentUrlVideoId = (() => {
         try {
           return new URLSearchParams(window.location.search || '').get('course_video_id') || '';
@@ -999,7 +1013,10 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       }
     }
 
-    // 3. Detectar questão isolada ou lista de questões (inclui data.data paginado Laravel)
+    // 3. Detectar questão isolada ou lista de questões (ignora endpoints não-questão)
+    if (/(?:^|\/)(?:courses|teams|notifications|auth|me|subjects|subtopics)(?:\/|\?|$)/i.test(urlStr)) {
+      return;
+    }
     const candidates = Array.isArray(root)
       ? root
       : Array.isArray(root.data)
@@ -1030,16 +1047,30 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       }
     } catch (_) {}
 
+    const hasField = (v) => v !== undefined && v !== null;
+    const parseBoolVal = (v) => {
+      if (typeof v === 'boolean') return v;
+      if (typeof v === 'number') return v === 1;
+      const s = String(v ?? '').trim().toLowerCase();
+      if (/^(?:true|1|correct|hit|acerto|acertou)$/.test(s)) return true;
+      if (/^(?:false|0|wrong|incorrect|error|erro|errou)$/.test(s)) return false;
+      return Boolean(v);
+    };
+
     const urlQuestionIdMatch = urlStr.match(/\/question-database\/(\d+)(?:[?#]|$)/i);
     const recognizedAnswer = Boolean(
       /(?:question|answer|resol|respond|attempt|alternative)/i.test(urlStr) &&
-      (root?.answer_status !== undefined || root?.is_correct !== undefined || root?.correct !== undefined || root?.hit !== undefined || root?.acertou !== undefined)
+      (hasField(root?.answer_status) || hasField(root?.is_correct) || hasField(root?.correct) || hasField(root?.hit) || hasField(root?.acertou))
     );
     if (recognizedAnswer) {
       const qApiId = Number(urlQuestionIdMatch?.[1] || root.question_id || root.id || parsedReq?.question_id || parsedReq?.id);
-      const hitVal = root.answer_status !== undefined
+      const hitVal = hasField(root.answer_status)
         ? /^(?:correct|hit|acerto|acertou|1|true)$/i.test(String(root.answer_status))
-        : (root.is_correct !== undefined ? Boolean(root.is_correct) : (root.correct !== undefined ? Boolean(root.correct) : Boolean(root.hit ?? root.acertou)));
+        : (hasField(root.is_correct)
+            ? parseBoolVal(root.is_correct)
+            : (hasField(root.correct)
+                ? parseBoolVal(root.correct)
+                : parseBoolVal(hasField(root.hit) ? root.hit : root.acertou)));
       const genStats = root.general_stats && typeof root.general_stats === 'object' ? root.general_stats : null;
       const gCorr = Number(genStats?.correct);
       const gErr = Number(genStats?.incorrect);
@@ -1133,6 +1164,7 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
     const reqMethod = this.__qgMethod || 'GET';
     if (shouldInspectUrl(this.__qgUrl)) {
       this.addEventListener('load', () => {
+        if (this.status < 200 || this.status >= 300) return;
         try {
           let json = null;
           if ((this.responseType === 'json' || !this.responseType) && this.response && typeof this.response === 'object') {
@@ -1151,7 +1183,7 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
             inspectAnswerMutation(reqMethod, this.__qgUrl, body, json);
           }
         } catch (_) {}
-      });
+      }, { once: true });
     }
     return origSend.call(this, body, ...rest);
   };
@@ -1193,7 +1225,12 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
     const scanResult = (urlTarget, jsonObj) => {
       if (!jsonObj || typeof jsonObj !== 'object') return;
       inspectApiPayload(urlTarget, jsonObj);
-      const rootData = (jsonObj.data && typeof jsonObj.data === 'object') ? jsonObj.data : jsonObj;
+      let rootData = (jsonObj.data && typeof jsonObj.data === 'object') ? jsonObj.data : jsonObj;
+      if (examId && /\/teams\/\d+\/?$/i.test(urlTarget) && Array.isArray(rootData.practice_exams)) {
+        const matchedExam = rootData.practice_exams.find((s) => String(s?.id) === String(examId));
+        if (!matchedExam) return;
+        rootData = { ...rootData, practice_exams: [matchedExam] };
+      }
       // Usa walker local leve reaproveitando regras de data
       const visitedNodes = new Set();
       const isAttemptUrl = /\/(?:enjoyment|revision|result|attempt)/i.test(urlTarget);
@@ -1231,15 +1268,18 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
     };
 
     try {
+      const results = new Array(urls.length).fill(null);
       await Promise.allSettled(
-        urls.map(async (u) => {
+        urls.map(async (u, i) => {
           const res = await fetchFn(u, { method: 'GET', headers, credentials: 'include' });
           if (res && res.ok) {
-            const json = await res.json();
-            scanResult(u, json);
+            results[i] = await res.json();
           }
         })
       );
+      results.forEach((json, i) => {
+        if (json) scanResult(urls[i], json);
+      });
     } catch (_) {}
 
     postVerifiedMessage('FETCH_SIMULADO_DATES_RESULT', {

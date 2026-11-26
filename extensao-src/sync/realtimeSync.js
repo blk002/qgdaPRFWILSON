@@ -139,10 +139,13 @@ async function detectIncrementalTable(supabase) {
       hasIncrementalTable = true;
       return true;
     }
-    hasIncrementalTable = false;
+    const code = String(error.code || '');
+    const msg = String(error.message || '').toLowerCase();
+    if (code === '42P01' || code === 'PGRST205' || msg.includes('does not exist') || msg.includes('could not find the table')) {
+      hasIncrementalTable = false;
+    }
     return false;
   } catch (_) {
-    hasIncrementalTable = false;
     return false;
   }
 }
@@ -300,15 +303,16 @@ export async function flushOutboxToSupabase({ onlyWhenQgClosed = true } = {}) {
     if (row.updated_at) {
       patchQ = patchQ.eq('updated_at', row.updated_at);
     }
-    const { error: patchErr } = await patchQ;
-    if (patchErr) {
+    const { data: updatedRows, error: patchErr } = await patchQ.select('updated_at');
+    if (patchErr || !Array.isArray(updatedRows) || updatedRows.length === 0) {
       return { flushed: 0, mode: 'patch-conflict' };
     }
+    const confirmedIso = updatedRows[0]?.updated_at || nowIso;
 
     if (pending.length > 0) {
       await clearOutboxSeqs(pending.map((r) => r.seq));
     }
-    await setMeta('lastPulledUpdatedAt', nowIso);
+    await setMeta('lastPulledUpdatedAt', confirmedIso);
     const syncMode = incrementalOk ? 'incremental+profile' : 'profile-delta';
     await chrome.storage.local.set({
       [DIRECT_SYNC_LAST_KEY]: Date.now(),
@@ -339,7 +343,9 @@ export async function pullDeltaFromSupabase() {
 
     const remoteTs = metaRows[0].updated_at;
     const lastPulled = await getMeta('lastPulledUpdatedAt');
-    if (lastPulled && remoteTs <= lastPulled) {
+    const remoteMs = Date.parse(String(remoteTs || ''));
+    const lastMs = Date.parse(String(lastPulled || ''));
+    if (lastPulled && Number.isFinite(remoteMs) && Number.isFinite(lastMs) && remoteMs <= lastMs) {
       return { pulled: 0 };
     }
 

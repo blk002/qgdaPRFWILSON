@@ -9,7 +9,7 @@ import {
 export function isRankingTitleOrRow(rowText = '', titleText = '', allowLoose = false) {
   const tNorm = normalizeCourseIndexKey(titleText);
   if (!tNorm) return !allowLoose;
-  if (/^\d{1,5}\s*[oaa]?$/.test(tNorm) || /^caveira\s+\d{3,}$/.test(tNorm)) return true;
+  if (/^#?\d{1,5}\s*[º°ªoa]?$/.test(tNorm) || /^caveira\s+\d{3,}$/.test(tNorm)) return true;
   if (/\b(?:classificacao|ranking|posicao|colocacao|podium)\b/.test(tNorm)) return true;
   const rNorm = normalizeCourseIndexKey(rowText);
   if (/\b(?:colocacao|classificacao geral)\b/.test(rNorm) && !/simulado/.test(tNorm)) return true;

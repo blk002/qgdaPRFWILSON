@@ -1,4 +1,4 @@
-const CACHE_NAME = 'qg-prf-cache-v144-2';
+const CACHE_NAME = 'qg-prf-cache-v144-3';
 // Base derivada da localização do próprio SW (ex.: '/qgdaPRFWILSON/')
 const BASE = self.location.pathname.replace(/sw\.js$/, '');
 
@@ -53,12 +53,17 @@ self.addEventListener('fetch', (event) => {
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const clone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+            event.waitUntil(
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, clone)).catch(() => {})
+            );
           }
           return networkResponse;
         })
         .catch(async () => {
-          const cached = (await caches.match(request)) || (await caches.match(BASE));
+          const cached =
+            (await caches.match(request)) ||
+            (await caches.match(BASE)) ||
+            (await caches.match(BASE + 'index.html'));
           return cached || new Response('Offline', { status: 503, headers: { 'Content-Type': 'text/plain; charset=utf-8' } });
         })
     );
@@ -72,7 +77,9 @@ self.addEventListener('fetch', (event) => {
         .then((networkResponse) => {
           if (networkResponse && networkResponse.status === 200) {
             const clone = networkResponse.clone();
-            caches.open(CACHE_NAME).then((cache) => cache.put(request, clone));
+            event.waitUntil(
+              caches.open(CACHE_NAME).then((cache) => cache.put(request, clone)).catch(() => {})
+            );
           }
           return networkResponse;
         })
@@ -124,9 +131,10 @@ self.addEventListener('notificationclick', (event) => {
 
   event.waitUntil(
     self.clients.matchAll({ type: 'window', includeUncontrolled: true }).then((windowClients) => {
+      const appBaseUrl = new URL(BASE, self.location.origin).href;
       // Se houver uma aba aberta da plataforma, foca nela
       for (const client of windowClients) {
-        if (client.url.includes(self.location.origin) && 'focus' in client) {
+        if (client.url.startsWith(appBaseUrl) && 'focus' in client) {
           return client.focus().then((focusedClient) => {
             if (focusedClient && focusedClient.url !== resolvedUrl && 'navigate' in focusedClient) {
               return focusedClient.navigate(resolvedUrl);

@@ -8189,7 +8189,7 @@
       ...base.banca || prev?.banca ? { banca: incoming.banca || prev?.banca || base.banca } : {},
       ...base.ano || prev?.ano ? { ano: incoming.ano || prev?.ano || base.ano } : {},
       ...base.data || prev?.data ? { data: incoming.data || prev?.data || base.data } : {},
-      acertou: incoming.acertou !== void 0 ? Boolean(incoming.acertou) : prev?.acertou !== void 0 ? Boolean(prev.acertou) : hitVal,
+      acertou: incoming.acertou !== void 0 ? Boolean(incoming.acertou) : incoming.hit !== void 0 ? Boolean(incoming.hit) : prev?.acertou !== void 0 ? Boolean(prev.acertou) : hitVal,
       ...content ? { content } : {},
       attempts,
       teacherComment,
@@ -8607,7 +8607,7 @@
     }
   }
   document.addEventListener("DOMContentLoaded", () => {
-    const manifestVer = chrome.runtime?.getManifest?.().version || "3.2.4";
+    const manifestVer = chrome.runtime?.getManifest?.().version || "3.2.5";
     const verEl = document.getElementById("ext-version");
     if (verEl) verEl.textContent = `v${manifestVer}`;
     let currentUserId = null;
@@ -8657,67 +8657,71 @@
           PERFORMANCE_SNAPSHOT_KEY
         ],
         async (r) => {
-          const queue = pruneAndNormalizeQueue(r[PENDING_SIMULADOS_QUEUE_KEY]);
-          const delivery = formatSimuladoDeliveryStatus(queue);
-          const queueEl = document.getElementById("simulados-queue-status");
-          if (queueEl) {
-            queueEl.textContent = delivery.label || "📊 Simulados: fila vazia (nenhum pendente)";
-            queueEl.style.color = delivery.isDone ? "#6ee7b7" : queue.items.length > 0 ? "#fbbf24" : "#94a3b8";
-          }
-          const badgeEl = document.getElementById("diag-pending-badge");
-          if (badgeEl) {
-            badgeEl.textContent = `${queue.items.length} pendente(s)`;
-            badgeEl.style.color = queue.items.length > 0 ? "#fbbf24" : "#6ee7b7";
-          }
-          const diagCb2 = document.getElementById("pref-diagnostic-mode");
-          if (diagCb2) {
-            diagCb2.checked = Boolean(r[DIAGNOSTIC_MODE_KEY]);
-          }
-          const snifferEvents = Array.isArray(r[SNIFFER_RECENT_EVENTS_KEY]) ? r[SNIFFER_RECENT_EVENTS_KEY] : [];
-          const diagShapes = Array.isArray(r[DIAGNOSTIC_EVENTS_KEY]) ? r[DIAGNOSTIC_EVENTS_KEY] : [];
-          const perfSnap = r[PERFORMANCE_SNAPSHOT_KEY];
-          const perfSubjCount = perfSnap?.subjectsAndTopicsPerformance ? Object.keys(perfSnap.subjectsAndTopicsPerformance).length : 0;
-          const snifferSummaryEl = document.getElementById("diag-sniffer-summary");
-          if (snifferSummaryEl) {
-            const lastEv = snifferEvents[snifferEvents.length - 1];
-            const lastEvStr = lastEv ? `${lastEv.type}` : "nenhum ainda";
-            const perfPart = perfSubjCount > 0 ? ` • Desempenho: ${perfSubjCount} disc.` : "";
-            snifferSummaryEl.textContent = `Sniffer: ${snifferEvents.length} evento(s) (${lastEvStr}) • ${diagShapes.length} forma(s)${perfPart}`;
-          }
-          const lastFilter = r[LAST_FILTER_DIAG_KEY];
-          const resolverSummaryEl = document.getElementById("diag-resolver-summary");
-          if (resolverSummaryEl) {
-            if (lastFilter?.diagLog) {
-              const d = lastFilter.diagLog;
-              const idsCount = Array.isArray(d.ids) ? d.ids.length : Array.isArray(lastFilter.expectedFilter?.ids) ? lastFilter.expectedFilter.ids.length : 0;
-              resolverSummaryEl.textContent = `Resolver: ${d.method || "auto"} • ${d.confidence || "-"} • ${idsCount} ID(s) • ${lastFilter.activePracticeFilter?.subject || ""}`.trim();
-            } else {
-              resolverSummaryEl.textContent = "Resolver: sem filtro recente";
+          if (chrome.runtime?.lastError) return;
+          try {
+            const queue = pruneAndNormalizeQueue(r?.[PENDING_SIMULADOS_QUEUE_KEY]);
+            const delivery = formatSimuladoDeliveryStatus(queue);
+            const queueEl = document.getElementById("simulados-queue-status");
+            if (queueEl) {
+              queueEl.textContent = delivery.label || "📊 Simulados: fila vazia (nenhum pendente)";
+              queueEl.style.color = delivery.isDone ? "#6ee7b7" : queue.items.length > 0 ? "#fbbf24" : "#94a3b8";
             }
-          }
-          const treeEl = document.getElementById("tree-meta-status");
-          if (treeEl) {
-            const meta = r[TREE_META_KEY] || {};
-            let dateRaw = meta.mergedDate || meta.baselineDate || "";
-            if (!dateRaw) {
-              dateRaw = await getBaselineTreeDateFallback();
+            const badgeEl = document.getElementById("diag-pending-badge");
+            if (badgeEl) {
+              badgeEl.textContent = `${queue.items.length} pendente(s)`;
+              badgeEl.style.color = queue.items.length > 0 ? "#fbbf24" : "#6ee7b7";
             }
-            const parsed = formatBrDate(dateRaw);
-            const dynCount = Number(meta.dynamicNodeCount) || 0;
-            const dynSuffix = dynCount > 0 ? ` (+${dynCount} din.)` : "";
-            if (parsed) {
-              const ageDays = Math.floor((Date.now() - parsed.ms) / 864e5);
-              if (ageDays > TREE_STALE_DAYS) {
-                treeEl.textContent = `⚠️ Árvore Caveira: ${parsed.formatted} (${ageDays}d atrás — atualize)${dynSuffix}`;
-                treeEl.style.color = "#fbbf24";
+            const diagCb2 = document.getElementById("pref-diagnostic-mode");
+            if (diagCb2) {
+              diagCb2.checked = Boolean(r[DIAGNOSTIC_MODE_KEY]);
+            }
+            const snifferEvents = Array.isArray(r[SNIFFER_RECENT_EVENTS_KEY]) ? r[SNIFFER_RECENT_EVENTS_KEY] : [];
+            const diagShapes = Array.isArray(r[DIAGNOSTIC_EVENTS_KEY]) ? r[DIAGNOSTIC_EVENTS_KEY] : [];
+            const perfSnap = r[PERFORMANCE_SNAPSHOT_KEY];
+            const perfSubjCount = perfSnap?.subjectsAndTopicsPerformance ? Object.keys(perfSnap.subjectsAndTopicsPerformance).length : 0;
+            const snifferSummaryEl = document.getElementById("diag-sniffer-summary");
+            if (snifferSummaryEl) {
+              const lastEv = snifferEvents[snifferEvents.length - 1];
+              const lastEvStr = lastEv ? `${lastEv.type}` : "nenhum ainda";
+              const perfPart = perfSubjCount > 0 ? ` • Desempenho: ${perfSubjCount} disc.` : "";
+              snifferSummaryEl.textContent = `Sniffer: ${snifferEvents.length} evento(s) (${lastEvStr}) • ${diagShapes.length} forma(s)${perfPart}`;
+            }
+            const lastFilter = r[LAST_FILTER_DIAG_KEY];
+            const resolverSummaryEl = document.getElementById("diag-resolver-summary");
+            if (resolverSummaryEl) {
+              if (lastFilter?.diagLog) {
+                const d = lastFilter.diagLog;
+                const idsCount = Array.isArray(d.ids) ? d.ids.length : Array.isArray(lastFilter.expectedFilter?.ids) ? lastFilter.expectedFilter.ids.length : 0;
+                resolverSummaryEl.textContent = `Resolver: ${d.method || "auto"} • ${d.confidence || "-"} • ${idsCount} ID(s) • ${lastFilter.activePracticeFilter?.subject || ""}`.trim();
               } else {
-                treeEl.textContent = `🌳 Árvore Caveira: ${parsed.formatted}${dynSuffix}`;
-                treeEl.style.color = "#94a3b8";
+                resolverSummaryEl.textContent = "Resolver: sem filtro recente";
               }
-            } else {
-              treeEl.textContent = `⚠️ Árvore Caveira: data desconhecida${dynSuffix}`;
-              treeEl.style.color = "#fbbf24";
             }
+            const treeEl = document.getElementById("tree-meta-status");
+            if (treeEl) {
+              const meta = r[TREE_META_KEY] || {};
+              let dateRaw = meta.mergedDate || meta.baselineDate || "";
+              if (!dateRaw) {
+                dateRaw = await getBaselineTreeDateFallback();
+              }
+              const parsed = formatBrDate(dateRaw);
+              const dynCount = Number(meta.dynamicNodeCount) || 0;
+              const dynSuffix = dynCount > 0 ? ` (+${dynCount} din.)` : "";
+              if (parsed) {
+                const ageDays = Math.floor((Date.now() - parsed.ms) / 864e5);
+                if (ageDays > TREE_STALE_DAYS) {
+                  treeEl.textContent = `⚠️ Árvore Caveira: ${parsed.formatted} (${ageDays}d atrás — atualize)${dynSuffix}`;
+                  treeEl.style.color = "#fbbf24";
+                } else {
+                  treeEl.textContent = `🌳 Árvore Caveira: ${parsed.formatted}${dynSuffix}`;
+                  treeEl.style.color = "#94a3b8";
+                }
+              } else {
+                treeEl.textContent = `⚠️ Árvore Caveira: data desconhecida${dynSuffix}`;
+                treeEl.style.color = "#fbbf24";
+              }
+            }
+          } catch (_) {
           }
         }
       );
@@ -8763,33 +8767,36 @@
           return;
         }
         searchTimer = setTimeout(async () => {
-          const rows = await searchQuestionsOffline(q, currentUserId, 8);
-          searchResultsEl.style.display = "flex";
-          searchResultsEl.textContent = "";
-          if (!rows || rows.length === 0) {
-            const empty = document.createElement("div");
-            empty.style.cssText = "font-size:10px;color:#71717a;padding:4px;";
-            empty.textContent = "Nenhuma questão encontrada no IndexedDB.";
-            searchResultsEl.appendChild(empty);
-            return;
+          try {
+            const rows = await searchQuestionsOffline(q, currentUserId, 8);
+            searchResultsEl.style.display = "flex";
+            searchResultsEl.textContent = "";
+            if (!rows || rows.length === 0) {
+              const empty = document.createElement("div");
+              empty.style.cssText = "font-size:10px;color:#71717a;padding:4px;";
+              empty.textContent = "Nenhuma questão encontrada no IndexedDB.";
+              searchResultsEl.appendChild(empty);
+              return;
+            }
+            rows.forEach((r) => {
+              const item = document.createElement("div");
+              item.style.cssText = "padding:6px 8px;border-radius:7px;background:#18181f;border:1px solid rgba(255,255,255,0.06);font-size:10px;line-height:1.35;";
+              const head = document.createElement("div");
+              head.style.cssText = "display:flex;justify-content:space-between;font-weight:800;margin-bottom:2px;";
+              const left = document.createElement("span");
+              left.style.color = r.hit ? "#10b981" : "#ef4444";
+              left.textContent = `${r.hit ? "✓" : "✗"} ${r.id} • ${r.canonicalSubject || r.subject || "PRF"}`;
+              head.appendChild(left);
+              const body = document.createElement("div");
+              body.style.color = "#d4d4d8";
+              const preview = r.userNote ? `💡 ${r.userNote}` : String(r.content || "").slice(0, 110);
+              body.textContent = preview + (preview.length >= 110 ? "..." : "");
+              item.appendChild(head);
+              item.appendChild(body);
+              searchResultsEl.appendChild(item);
+            });
+          } catch (_) {
           }
-          rows.forEach((r) => {
-            const item = document.createElement("div");
-            item.style.cssText = "padding:6px 8px;border-radius:7px;background:#18181f;border:1px solid rgba(255,255,255,0.06);font-size:10px;line-height:1.35;";
-            const head = document.createElement("div");
-            head.style.cssText = "display:flex;justify-content:space-between;font-weight:800;margin-bottom:2px;";
-            const left = document.createElement("span");
-            left.style.color = r.hit ? "#10b981" : "#ef4444";
-            left.textContent = `${r.hit ? "✓" : "✗"} ${r.id} • ${r.canonicalSubject || r.subject || "PRF"}`;
-            head.appendChild(left);
-            const body = document.createElement("div");
-            body.style.color = "#d4d4d8";
-            const preview = r.userNote ? `💡 ${r.userNote}` : String(r.content || "").slice(0, 110);
-            body.textContent = preview + (preview.length >= 110 ? "..." : "");
-            item.appendChild(head);
-            item.appendChild(body);
-            searchResultsEl.appendChild(item);
-          });
         }, 140);
       });
     }
@@ -8916,39 +8923,43 @@
       });
     });
     document.getElementById("btn-copy-diagnostic")?.addEventListener("click", async () => {
-      const rawStore = await new Promise((resolve) => {
-        chrome.storage.local.get([
-          PENDING_SIMULADOS_QUEUE_KEY,
-          DIAGNOSTIC_MODE_KEY,
-          DIAGNOSTIC_EVENTS_KEY,
-          SNIFFER_RECENT_EVENTS_KEY,
-          LAST_FILTER_DIAG_KEY,
-          TREE_META_KEY,
-          PERFORMANCE_SNAPSHOT_KEY,
-          "qg_cloud_auth_meta"
-        ], resolve);
-      });
-      const dbStats = await getDbStats(currentUserId).catch(() => null);
-      const perfSnap = rawStore?.[PERFORMANCE_SNAPSHOT_KEY];
-      const payload = sanitizeDiagnosticData({
-        version: manifestVer,
-        capturedAt: (/* @__PURE__ */ new Date()).toISOString(),
-        diagnosticMode: Boolean(rawStore?.[DIAGNOSTIC_MODE_KEY]),
-        treeMeta: rawStore?.[TREE_META_KEY] || null,
-        authMeta: rawStore?.qg_cloud_auth_meta || null,
-        performanceSnapshotSummary: perfSnap ? {
-          capturedAt: perfSnap.capturedAt || null,
-          rangeDays: perfSnap.rangeDays || null,
-          subjectsCount: perfSnap.subjectsAndTopicsPerformance ? Object.keys(perfSnap.subjectsAndTopicsPerformance).length : 0
-        } : null,
-        dbStats,
-        pendingSimuladosQueue: pruneAndNormalizeQueue(rawStore?.[PENDING_SIMULADOS_QUEUE_KEY]),
-        recentSnifferEvents: (rawStore?.[SNIFFER_RECENT_EVENTS_KEY] || []).slice(-20),
-        diagnosticShapes: (rawStore?.[DIAGNOSTIC_EVENTS_KEY] || []).slice(-30),
-        lastFilterDiag: rawStore?.[LAST_FILTER_DIAG_KEY] || null
-      });
-      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-      setBackupStatus("Diagnóstico copiado (tokens/credenciais removidos).", "#6ee7b7");
+      try {
+        const rawStore = await new Promise((resolve) => {
+          chrome.storage.local.get([
+            PENDING_SIMULADOS_QUEUE_KEY,
+            DIAGNOSTIC_MODE_KEY,
+            DIAGNOSTIC_EVENTS_KEY,
+            SNIFFER_RECENT_EVENTS_KEY,
+            LAST_FILTER_DIAG_KEY,
+            TREE_META_KEY,
+            PERFORMANCE_SNAPSHOT_KEY,
+            "qg_cloud_auth_meta"
+          ], resolve);
+        });
+        const dbStats = await getDbStats(currentUserId).catch(() => null);
+        const perfSnap = rawStore?.[PERFORMANCE_SNAPSHOT_KEY];
+        const payload = sanitizeDiagnosticData({
+          version: manifestVer,
+          capturedAt: (/* @__PURE__ */ new Date()).toISOString(),
+          diagnosticMode: Boolean(rawStore?.[DIAGNOSTIC_MODE_KEY]),
+          treeMeta: rawStore?.[TREE_META_KEY] || null,
+          authMeta: rawStore?.qg_cloud_auth_meta || null,
+          performanceSnapshotSummary: perfSnap ? {
+            capturedAt: perfSnap.capturedAt || null,
+            rangeDays: perfSnap.rangeDays || null,
+            subjectsCount: perfSnap.subjectsAndTopicsPerformance ? Object.keys(perfSnap.subjectsAndTopicsPerformance).length : 0
+          } : null,
+          dbStats,
+          pendingSimuladosQueue: pruneAndNormalizeQueue(rawStore?.[PENDING_SIMULADOS_QUEUE_KEY]),
+          recentSnifferEvents: (rawStore?.[SNIFFER_RECENT_EVENTS_KEY] || []).slice(-20),
+          diagnosticShapes: (rawStore?.[DIAGNOSTIC_EVENTS_KEY] || []).slice(-30),
+          lastFilterDiag: rawStore?.[LAST_FILTER_DIAG_KEY] || null
+        });
+        await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+        setBackupStatus("Diagnóstico copiado (tokens/credenciais removidos).", "#6ee7b7");
+      } catch (err) {
+        setBackupStatus(`Erro ao copiar diagnóstico: ${err?.message || "permissão negada"}`, "#f87171");
+      }
     });
     document.getElementById("btn-export-backup")?.addEventListener("click", async () => {
       try {
@@ -8999,29 +9010,33 @@
           if (tabs && tabs.length > 0 && tabs[0].id) {
             await chrome.tabs.update(tabs[0].id, { active: true });
             if (tabs[0].windowId && chrome.windows) {
-              chrome.windows.update(tabs[0].windowId, { focused: true });
+              await chrome.windows.update(tabs[0].windowId, { focused: true }).catch(() => {
+              });
             }
             return;
           }
         }
       } catch (_) {
       }
-      chrome.tabs.create({ url: targetUrl });
+      chrome.tabs.create({ url: targetUrl }).catch(() => {
+      });
     });
     document.getElementById("btn-copy-json").addEventListener("click", async () => {
-      const questions = await getAllQuestionsFull(currentUserId);
-      const fallback = await new Promise((resolve) => {
-        chrome.storage.local.get([STORAGE_KEY], (r) => resolve(Array.isArray(r[STORAGE_KEY]) ? r[STORAGE_KEY] : []));
-      });
-      const finalList = questions.length > 0 ? questions : fallback;
-      navigator.clipboard.writeText(JSON.stringify(finalList, null, 2)).then(() => {
+      try {
+        const questions = await getAllQuestionsFull(currentUserId);
+        const fallback = await new Promise((resolve) => {
+          chrome.storage.local.get([STORAGE_KEY], (r) => resolve(Array.isArray(r?.[STORAGE_KEY]) ? r[STORAGE_KEY] : []));
+        });
+        const finalList = questions.length > 0 ? questions : fallback;
+        await navigator.clipboard.writeText(JSON.stringify(finalList, null, 2));
         const btn = document.getElementById("btn-copy-json");
         const orig = btn.textContent;
         btn.textContent = "Copiado com Sucesso! ✓";
         setTimeout(() => {
           btn.textContent = orig;
         }, 1800);
-      });
+      } catch (_) {
+      }
     });
     document.getElementById("btn-reset-session").addEventListener("click", () => {
       const today = getTodaySessionDate();

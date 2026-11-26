@@ -204,7 +204,7 @@ export default function DueloFPS() {
             timestamp: nowIso,
             date: nowIso,
             confidence: playerChoice === null ? 'duvida' : 'sabia',
-            errorReason: reason === 'TIMEOUT' ? 'atencao' : 'conteudo',
+            errorReason: isHit ? null : (reason === 'TIMEOUT' ? 'atencao' : 'conteudo'),
             explanation: `${question.explanation} [Base Legal: ${question.legalBasis}]`,
             teacherComment: question.explanation,
             source: 'Duelo FPS (Alvo Legal)',
@@ -463,9 +463,16 @@ export default function DueloFPS() {
     }
   }, []);
 
+  useEffect(() => {
+    const onFsChange = () => setIsFullscreen(Boolean(document.fullscreenElement));
+    document.addEventListener('fullscreenchange', onFsChange);
+    return () => document.removeEventListener('fullscreenchange', onFsChange);
+  }, []);
+
   // Teclas de atalho para atirar
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
       const target = e.target as HTMLElement | null;
       if (target && (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.tagName === 'SELECT' || target.isContentEditable)) {
         return;
@@ -742,9 +749,6 @@ export default function DueloFPS() {
               currentQuestion={currentQuestion}
               timeLeft={timeLeft}
               roundNumber={roundNumber}
-              isExecuting={gameState === 'executing'}
-              isPlayerAlive={gameState !== 'gameover'}
-              hoveredTarget={hoveredTarget}
               onShootTarget={handleShootTarget}
               onHoverTargetChange={setHoveredTarget}
               externalShotCommand={externalShotCommand}

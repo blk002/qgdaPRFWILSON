@@ -8189,7 +8189,7 @@
       ...base.banca || prev?.banca ? { banca: incoming.banca || prev?.banca || base.banca } : {},
       ...base.ano || prev?.ano ? { ano: incoming.ano || prev?.ano || base.ano } : {},
       ...base.data || prev?.data ? { data: incoming.data || prev?.data || base.data } : {},
-      acertou: incoming.acertou !== void 0 ? Boolean(incoming.acertou) : prev?.acertou !== void 0 ? Boolean(prev.acertou) : hitVal,
+      acertou: incoming.acertou !== void 0 ? Boolean(incoming.acertou) : incoming.hit !== void 0 ? Boolean(incoming.hit) : prev?.acertou !== void 0 ? Boolean(prev.acertou) : hitVal,
       ...content ? { content } : {},
       attempts,
       teacherComment,
@@ -8271,6 +8271,45 @@
       await enqueueOutboxEvent("question_delete", id, userId || prev?.ownerUserId || null, { id });
     }
     return true;
+  }
+  async function clearUserQuestions(userId = null) {
+    await db.transaction("rw", db.questions, db.outbox, async () => {
+      if (userId) {
+        const all = await db.questions.toArray();
+        const ids = all.filter((q) => q && (!q.ownerUserId || q.ownerUserId === userId)).map((q) => q.id);
+        if (ids.length > 0) await db.questions.bulkDelete(ids);
+        const out = await db.outbox.toArray();
+        const outSeqs = out.filter((o) => o && (o.entityType === "question_upsert" || o.entityType === "question_delete") && (!o.userId || o.userId === userId)).map((o) => o.seq);
+        if (outSeqs.length > 0) await db.outbox.bulkDelete(outSeqs);
+      } else {
+        await db.questions.clear();
+        const out = await db.outbox.toArray();
+        const outSeqs = out.filter((o) => o && (o.entityType === "question_upsert" || o.entityType === "question_delete")).map((o) => o.seq);
+        if (outSeqs.length > 0) await db.outbox.bulkDelete(outSeqs);
+      }
+    });
+    miniIndex = null;
+    indexedUserId = null;
+    return true;
+  }
+  async function replaceUserQuestions(userId = null, questions = []) {
+    const valid = (Array.isArray(questions) ? questions : []).filter((q) => q && q.id);
+    await db.transaction("rw", db.questions, async () => {
+      if (userId) {
+        const all = await db.questions.toArray();
+        const ids = all.filter((q) => q && (!q.ownerUserId || q.ownerUserId === userId)).map((q) => q.id);
+        if (ids.length > 0) await db.questions.bulkDelete(ids);
+      } else {
+        await db.questions.clear();
+      }
+      if (valid.length > 0) {
+        const normalized = valid.map((q) => mergeQuestionRecords(null, { ...q, ...userId && !q.ownerUserId ? { ownerUserId: userId } : {} }));
+        await db.questions.bulkPut(normalized);
+      }
+    });
+    miniIndex = null;
+    indexedUserId = null;
+    return valid.length;
   }
   async function getAllQuestionsFull(userId = null) {
     const all = await db.questions.toArray();
@@ -28373,10 +28412,13 @@ ${suffix}`;
         hasIncrementalTable = true;
         return true;
       }
-      hasIncrementalTable = false;
+      const code = String(error.code || "");
+      const msg = String(error.message || "").toLowerCase();
+      if (code === "42P01" || code === "PGRST205" || msg.includes("does not exist") || msg.includes("could not find the table")) {
+        hasIncrementalTable = false;
+      }
       return false;
     } catch (_) {
-      hasIncrementalTable = false;
       return false;
     }
   }
@@ -28494,14 +28536,15 @@ ${suffix}`;
       if (row.updated_at) {
         patchQ = patchQ.eq("updated_at", row.updated_at);
       }
-      const { error: patchErr } = await patchQ;
-      if (patchErr) {
+      const { data: updatedRows, error: patchErr } = await patchQ.select("updated_at");
+      if (patchErr || !Array.isArray(updatedRows) || updatedRows.length === 0) {
         return { flushed: 0, mode: "patch-conflict" };
       }
+      const confirmedIso = updatedRows[0]?.updated_at || nowIso;
       if (pending.length > 0) {
         await clearOutboxSeqs(pending.map((r) => r.seq));
       }
-      await setMeta("lastPulledUpdatedAt", nowIso);
+      await setMeta("lastPulledUpdatedAt", confirmedIso);
       const syncMode = incrementalOk ? "incremental+profile" : "profile-delta";
       await chrome.storage.local.set({
         [DIRECT_SYNC_LAST_KEY]: Date.now(),
@@ -28525,7 +28568,9 @@ ${suffix}`;
       if (metaErr || !Array.isArray(metaRows) || !metaRows[0]?.updated_at) return { pulled: 0 };
       const remoteTs = metaRows[0].updated_at;
       const lastPulled = await getMeta("lastPulledUpdatedAt");
-      if (lastPulled && remoteTs <= lastPulled) {
+      const remoteMs = Date.parse(String(remoteTs || ""));
+      const lastMs = Date.parse(String(lastPulled || ""));
+      if (lastPulled && Number.isFinite(remoteMs) && Number.isFinite(lastMs) && remoteMs <= lastMs) {
         return { pulled: 0 };
       }
       const { data: rows, error } = await supabase.from("profiles").select("full_data, updated_at").eq("id", userId).limit(1);
@@ -28573,6 +28618,16 @@ ${suffix}`;
   var NOTIF_ENABLED_KEY = "qg_notifications_enabled";
   var LAST_NOTIF_META_KEY = "qg_last_notification_meta";
   var PERIODIC_ALARM_NAME = "qg_periodic_check";
+  var OUTBOX_FLUSH_ALARM_NAME = "qg_outbox_flush";
+  var EXCLUDED_CAVEIRA_HOST_RX = /^(?:loja|checkout|blog|pay|pagamentos?|www)\./i;
+  function isExcludedCaveiraUrl(urlStr = "") {
+    try {
+      const u = new URL(String(urlStr || ""));
+      return EXCLUDED_CAVEIRA_HOST_RX.test(u.hostname || "");
+    } catch (_) {
+      return false;
+    }
+  }
   var directSyncDebounceTimer = null;
   var CAVEIRA_URL_PATTERNS = [
     "*://*.caveira.com/*",
@@ -28662,7 +28717,7 @@ ${suffix}`;
       }
       const caveiraTabs = await chrome.tabs.query({ url: CAVEIRA_URL_PATTERNS });
       for (const tab of caveiraTabs) {
-        if (tab.id && !tab.discarded && tab.status === "complete") {
+        if (tab.id && !tab.discarded && tab.status === "complete" && !isExcludedCaveiraUrl(tab.url)) {
           try {
             await chrome.scripting.executeScript({
               target: { tabId: tab.id },
@@ -28684,6 +28739,7 @@ ${suffix}`;
     if (!chrome.alarms) return;
     try {
       chrome.alarms.get(PERIODIC_ALARM_NAME, (existing) => {
+        if (chrome.runtime?.lastError) return;
         if (!existing) {
           chrome.alarms.create(PERIODIC_ALARM_NAME, { delayInMinutes: 5, periodInMinutes: 30 });
         }
@@ -28697,6 +28753,12 @@ ${suffix}`;
       flushOutboxToSupabase({ onlyWhenQgClosed: true }).catch(() => {
       });
     }, 4e3);
+    if (chrome.alarms) {
+      try {
+        chrome.alarms.create(OUTBOX_FLUSH_ALARM_NAME, { delayInMinutes: 0.5 });
+      } catch (_) {
+      }
+    }
   }
   async function broadcastToQgTabs(questions, session, dailyGoal = 50) {
     if (!chrome.tabs) return;
@@ -28769,6 +28831,11 @@ ${suffix}`;
   }
   if (chrome.alarms?.onAlarm) {
     chrome.alarms.onAlarm.addListener((alarm) => {
+      if (alarm && alarm.name === OUTBOX_FLUSH_ALARM_NAME) {
+        flushOutboxToSupabase({ onlyWhenQgClosed: true }).catch(() => {
+        });
+        return;
+      }
       if (alarm && alarm.name === PERIODIC_ALARM_NAME) {
         flushOutboxToSupabase({ onlyWhenQgClosed: true }).then(() => pullDeltaFromSupabase()).then(() => checkAndNotifyUser()).catch(() => {
         });
@@ -28794,25 +28861,31 @@ ${suffix}`;
     });
   }
   chrome.runtime.onInstalled.addListener(async () => {
-    await migrateCloudAuthToSession();
-    const res = await chrome.storage.local.get([STORAGE_KEY2, SESSION_KEY]);
-    if (!res[STORAGE_KEY2]) {
-      await chrome.storage.local.set({ [STORAGE_KEY2]: [] });
+    try {
+      await migrateCloudAuthToSession();
+      const res = await chrome.storage.local.get([STORAGE_KEY2, SESSION_KEY]);
+      if (!res[STORAGE_KEY2]) {
+        await chrome.storage.local.set({ [STORAGE_KEY2]: [] });
+      }
+      const session = normalizeSession(res[SESSION_KEY]);
+      await chrome.storage.local.set({ [SESSION_KEY]: session });
+      await ensureMigratedFromLegacyStorage();
+      ensurePeriodicAlarm();
+      reinjectOpenTabs();
+    } catch (_) {
     }
-    const session = normalizeSession(res[SESSION_KEY]);
-    await chrome.storage.local.set({ [SESSION_KEY]: session });
-    await ensureMigratedFromLegacyStorage();
-    ensurePeriodicAlarm();
-    reinjectOpenTabs();
   });
   if (chrome.runtime?.onStartup) {
     chrome.runtime.onStartup.addListener(async () => {
-      await migrateCloudAuthToSession();
-      await ensureMigratedFromLegacyStorage();
-      ensurePeriodicAlarm();
-      await flushOutboxToSupabase({ onlyWhenQgClosed: true });
-      await pullDeltaFromSupabase();
-      checkAndNotifyUser();
+      try {
+        await migrateCloudAuthToSession();
+        await ensureMigratedFromLegacyStorage();
+        ensurePeriodicAlarm();
+        await flushOutboxToSupabase({ onlyWhenQgClosed: true });
+        await pullDeltaFromSupabase();
+        await checkAndNotifyUser();
+      } catch (_) {
+      }
     });
   }
   if (chrome.commands?.onCommand) {
@@ -28820,8 +28893,9 @@ ${suffix}`;
       if (command !== "mark-doubt" && command !== "mark-guess") return;
       const tag = command === "mark-doubt" ? "duvida" : "chute";
       try {
-        const activeTabs = await chrome.tabs.query({ active: true, currentWindow: true, url: CAVEIRA_URL_PATTERNS });
-        const targetTab = activeTabs?.[0] || (await chrome.tabs.query({ url: CAVEIRA_URL_PATTERNS }))?.[0];
+        const activeTabs = (await chrome.tabs.query({ active: true, currentWindow: true, url: CAVEIRA_URL_PATTERNS })).filter((t) => t?.id && !isExcludedCaveiraUrl(t.url));
+        const allTabs = (await chrome.tabs.query({ url: CAVEIRA_URL_PATTERNS })).filter((t) => t?.id && !isExcludedCaveiraUrl(t.url));
+        const targetTab = activeTabs[0] || allTabs[0];
         if (targetTab?.id) {
           chrome.tabs.sendMessage(targetTab.id, { type: "HUD_QUICK_TAG", payload: { tag } }).catch(() => {
           });
@@ -28848,16 +28922,20 @@ ${suffix}`;
     }
     if (changes[STORAGE_KEY2] || changes[SESSION_KEY] || changes[GOAL_KEY]) {
       chrome.storage.local.get([STORAGE_KEY2, SESSION_KEY, GOAL_KEY, ACTIVE_USER_KEY], async (res) => {
-        const session = normalizeSession(res[SESSION_KEY]);
-        const dailyGoal = Number(res[GOAL_KEY]) || 50;
-        const activeId = res[ACTIVE_USER_KEY] || null;
-        let fullQuestions = [];
+        if (chrome.runtime?.lastError) return;
         try {
-          fullQuestions = await getAllQuestionsFull(activeId);
+          const session = normalizeSession(res?.[SESSION_KEY]);
+          const dailyGoal = Number(res?.[GOAL_KEY]) || 50;
+          const activeId = res?.[ACTIVE_USER_KEY] || null;
+          let fullQuestions = [];
+          try {
+            fullQuestions = await getAllQuestionsFull(activeId);
+          } catch (_) {
+          }
+          const listToPush = fullQuestions.length > 0 ? fullQuestions : res?.[STORAGE_KEY2] || [];
+          broadcastToQgTabs(listToPush, session, dailyGoal);
         } catch (_) {
         }
-        const listToPush = fullQuestions.length > 0 ? fullQuestions : res[STORAGE_KEY2] || [];
-        broadcastToQgTabs(listToPush, session, dailyGoal);
       });
     }
     if (changes[FILTER_ID_MEMORY_KEY2]) {
@@ -28896,6 +28974,23 @@ ${suffix}`;
         scheduleOutboxFlush();
         sendResponse({ ok: true });
       })().catch(() => sendResponse({ ok: false }));
+      return true;
+    }
+    if (message.type === "DB_CLEAR_USER_QUESTIONS") {
+      (async () => {
+        await clearUserQuestions(message.payload?.userId || null);
+        sendResponse({ ok: true });
+      })().catch(() => sendResponse({ ok: false }));
+      return true;
+    }
+    if (message.type === "DB_REPLACE_USER_QUESTIONS") {
+      (async () => {
+        const count = await replaceUserQuestions(
+          message.payload?.userId || null,
+          message.payload?.questions || []
+        );
+        sendResponse({ ok: true, count });
+      })().catch(() => sendResponse({ ok: false, count: 0 }));
       return true;
     }
     if (message.type === "DB_GET_ALL_QUESTIONS") {
@@ -28975,7 +29070,7 @@ ${suffix}`;
       if (chrome.tabs) {
         chrome.tabs.query({ url: CAVEIRA_URL_PATTERNS }).then((tabs) => {
           for (const t of tabs) {
-            if (t.id && !t.discarded) {
+            if (t.id && !t.discarded && !isExcludedCaveiraUrl(t.url)) {
               chrome.tabs.sendMessage(t.id, { type: "FORCE_SCAN_NOW" }).catch(() => {
               });
             }
@@ -28984,19 +29079,28 @@ ${suffix}`;
         });
       }
       setTimeout(async () => {
-        const res = await chrome.storage.local.get([STORAGE_KEY2, SESSION_KEY, GOAL_KEY, ACTIVE_USER_KEY]);
-        const session = normalizeSession(res[SESSION_KEY]);
-        const dailyGoal = Number(res[GOAL_KEY]) || 50;
-        if (res[SESSION_KEY]?.date !== session.date) {
-          chrome.storage.local.set({ [SESSION_KEY]: session });
+        try {
+          const res = await chrome.storage.local.get([STORAGE_KEY2, SESSION_KEY, GOAL_KEY, ACTIVE_USER_KEY]);
+          const session = normalizeSession(res?.[SESSION_KEY]);
+          const dailyGoal = Number(res?.[GOAL_KEY]) || 50;
+          if (res?.[SESSION_KEY]?.date !== session.date) {
+            chrome.storage.local.set({ [SESSION_KEY]: session }).catch(() => {
+            });
+          }
+          await ensureMigratedFromLegacyStorage();
+          const dbQuestions = await getAllQuestionsFull(res?.[ACTIVE_USER_KEY] || null);
+          sendResponse({
+            questions: dbQuestions.length > 0 ? dbQuestions : res?.[STORAGE_KEY2] || [],
+            session,
+            dailyGoal
+          });
+        } catch (_) {
+          sendResponse({
+            questions: [],
+            session: normalizeSession(null),
+            dailyGoal: 50
+          });
         }
-        await ensureMigratedFromLegacyStorage();
-        const dbQuestions = await getAllQuestionsFull(res[ACTIVE_USER_KEY] || null);
-        sendResponse({
-          questions: dbQuestions.length > 0 ? dbQuestions : res[STORAGE_KEY2] || [],
-          session,
-          dailyGoal
-        });
       }, 150);
       return true;
     }
@@ -29004,6 +29108,10 @@ ${suffix}`;
       const today = getTodaySessionDate();
       const cleanSession = { date: today, hits: 0, errors: 0, total: 0, wasExplicitlyReset: true };
       chrome.storage.local.get([ACTIVE_USER_KEY, USER_BUCKETS_KEY], (res) => {
+        if (chrome.runtime?.lastError) {
+          sendResponse({ success: false });
+          return;
+        }
         const activeUserId = res?.[ACTIVE_USER_KEY] || null;
         const payload = { [SESSION_KEY]: cleanSession };
         if (activeUserId && res?.[USER_BUCKETS_KEY] && typeof res[USER_BUCKETS_KEY] === "object") {
@@ -29015,7 +29123,7 @@ ${suffix}`;
         }
         chrome.storage.local.set(payload, () => {
           chrome.action.setBadgeText({ text: "" });
-          sendResponse({ success: true });
+          sendResponse({ success: !chrome.runtime?.lastError });
         });
       });
       return true;
@@ -29023,8 +29131,9 @@ ${suffix}`;
     if (message.type === "OPEN_CAVEIRA_PRACTICE") {
       (async () => {
         try {
-          const tabs = chrome.tabs ? await chrome.tabs.query({ url: CAVEIRA_URL_PATTERNS }) : [];
-          const nonCourseTabs = (tabs || []).filter((t) => t && t.id && !String(t.url || "").includes("/courses"));
+          const rawTabs = chrome.tabs ? await chrome.tabs.query({ url: CAVEIRA_URL_PATTERNS }) : [];
+          const tabs = (rawTabs || []).filter((t) => t && t.id && !isExcludedCaveiraUrl(t.url));
+          const nonCourseTabs = tabs.filter((t) => !String(t.url || "").includes("/courses"));
           const preferredTab = nonCourseTabs.find((t) => /quest/i.test(t.url || "")) || nonCourseTabs[0] || null;
           if (preferredTab && preferredTab.id) {
             await chrome.tabs.update(preferredTab.id, { active: true });

@@ -29,8 +29,19 @@ const ROMAN_PART_MAP = {
   viii: '8',
 };
 
+function stripLeadingIndexPrefix(txt = '') {
+  return String(txt || '')
+    .replace(/^\s*(?:aula|bloco|parte|m[oó]dulo)\s*\d+\s*[-–—:|.]*\s*/i, '')
+    .replace(/^\s*\d{1,3}\s*[-–—:|.]+\s*/, '')
+    .trim();
+}
+
+function stripLawYearSuffixes(txt = '') {
+  return String(txt || '').replace(/\b(\d{1,5}(?:\.\d{3})*)\/\d{2,4}\b/g, '$1');
+}
+
 export function extractLessonPartNum(txt = '') {
-  const clean = normalizeCourseIndexKey(stripCaveiraLessonUiNoise(txt));
+  const clean = normalizeCourseIndexKey(stripLawYearSuffixes(stripCaveiraLessonUiNoise(txt)));
   if (!clean) return '';
 
   const mNum = clean.match(/\b(?:parte|pt)\s*0*(\d{1,2})\b/);
@@ -39,19 +50,20 @@ export function extractLessonPartNum(txt = '') {
   const mRom = clean.match(/\b(?:parte|pt)\s*(viii|vii|vi|iv|v|iii|ii|i)\b/);
   if (mRom && ROMAN_PART_MAP[mRom[1]]) return ROMAN_PART_MAP[mRom[1]];
 
-  const stripped = clean
-    .replace(/^\s*(?:aula|bloco|parte|m[oó]dulo)\s*\d+\s*[-–—:|.]*\s*/i, '')
-    .replace(/^\s*\d{1,3}\s*[-–—:|.]+\s*/, '')
-    .trim();
+  const stripped = normalizeCourseIndexKey(
+    stripLeadingIndexPrefix(stripLawYearSuffixes(stripCaveiraLessonUiNoise(txt)))
+  );
   if (!stripped) return '';
 
-  if (!/\b(?:art|artigo|lei|decreto|aula|bloco|modulo)\s+\d{1,2}$/.test(stripped)) {
+  const protectedPrefixRx = /\b(?:art|artigo|lei|decreto|aula|bloco|modulo|anexo|capitulo|titulo)\s+(?:\d{1,2}|viii|vii|vi|iv|v|iii|ii|i)$/;
+  if (!protectedPrefixRx.test(stripped)) {
     const mEnd = stripped.match(/\b0*(\d{1,2})$/);
     if (mEnd) return String(Number(mEnd[1]));
+    const mEndRom = stripped.match(/\b(viii|vii|vi|iv|v|iii|ii|i)$/);
+    if (mEndRom && ROMAN_PART_MAP[mEndRom[1]]) return ROMAN_PART_MAP[mEndRom[1]];
   }
 
-  const mEndRom = stripped.match(/\b(viii|vii|vi|iv|v|iii|ii|i)$/);
-  return mEndRom && ROMAN_PART_MAP[mEndRom[1]] ? ROMAN_PART_MAP[mEndRom[1]] : '';
+  return '';
 }
 
 export function stemPtToken(w = '') {
@@ -62,9 +74,7 @@ export function stemPtToken(w = '') {
 }
 
 export function canonicalizeLessonText(txt = '') {
-  const norm = normalizeCourseIndexKey(stripCaveiraLessonUiNoise(txt))
-    .replace(/^\s*(?:aula|bloco|parte|m[oó]dulo)\s*\d+\s*[-–—:|.]*\s*/i, '')
-    .replace(/^\s*\d{1,3}\s*[-–—:|.]+\s*/, '')
+  const norm = normalizeCourseIndexKey(stripLeadingIndexPrefix(stripCaveiraLessonUiNoise(txt)))
     .replace(/\b0+(\d+)\b/g, '$1')
     .trim();
   if (!norm) return '';
@@ -88,19 +98,19 @@ export function scoreCaveiraLessonCandidate(candidateText = '', targetLesson = '
 
   const canonCand = canonicalizeLessonText(candidateText);
   const canonTarget = canonicalizeLessonText(targetLesson);
-  if (canonCand && canonTarget && canonCand === canonTarget) return 95;
+  if (!canonCand || !canonTarget) return 0;
+  if (canonCand === canonTarget) return 95;
 
   if (
-    (canonTarget && canonCand && ((canonTarget.length >= 6 && canonCand.includes(canonTarget)) || (canonCand.length >= 6 && canonTarget.includes(canonCand)))) ||
-    (cleanTarget.length >= 6 && cleanCand.includes(cleanTarget)) ||
-    (cleanCand.length >= 6 && cleanTarget.includes(cleanCand))
+    (canonTarget.length >= 6 && canonCand.includes(canonTarget)) ||
+    (canonCand.length >= 6 && canonTarget.includes(canonCand))
   ) {
     return 80;
   }
 
   const tok = (s) => s.split(' ').filter((w) => w.length >= 3 || /^\d+$/.test(w));
-  const tTgt = tok(canonTarget || cleanTarget);
-  const tCand = new Set(tok(canonCand || cleanCand));
+  const tTgt = tok(canonTarget);
+  const tCand = new Set(tok(canonCand));
   if (tTgt.length === 0 || tCand.size === 0) return 0;
   const hits = tTgt.filter((w) => tCand.has(w)).length;
   const ratio = hits / Math.max(tTgt.length, tCand.size);

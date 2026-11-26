@@ -238,11 +238,14 @@ export default function App() {
     if (currentP.id !== lastPatenteId.current) {
       const oldIdx = PATENTES.findIndex((p) => p.id === lastPatenteId.current);
       const newIdx = PATENTES.findIndex((p) => p.id === currentP.id);
-      if (newIdx > oldIdx) {
-        setPromotionModal(currentP);
-        useStore.getState().playSound('levelUp');
-      }
       lastPatenteId.current = currentP.id;
+      if (newIdx > oldIdx) {
+        const timer = setTimeout(() => {
+          setPromotionModal(currentP);
+          useStore.getState().playSound('levelUp');
+        }, 0);
+        return () => clearTimeout(timer);
+      }
     }
   }, [userXp, isSyncing, session]);
 

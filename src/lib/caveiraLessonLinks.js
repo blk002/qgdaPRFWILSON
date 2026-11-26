@@ -196,7 +196,16 @@ export function resolveCaveiraLessonHref({
 } = {}) {
   const topicCourseId = String(topic?.caveiraCourseId || extractCourseIdFromUrl(topic?.caveiraModuleUrl) || '');
   const subjectCourseId = String(subject?.caveiraCourseId || extractCourseIdFromUrl(subject?.caveiraModuleUrl) || '');
-  const boundCourseId = topicCourseId || subjectCourseId;
+  const topicLooksLikeStandaloneCourse = Boolean(
+    topic?.name &&
+    /\b(?:iniciantes?|nivelamento|curso\s+isolado|isolado|extensivo|intensivo|combo)\b/i.test(
+      normalizeLessonTitleKey(topic.name)
+    ) &&
+    !normalizeLessonTitleKey(subject?.caveiraCourseName || '').includes(
+      normalizeLessonTitleKey(topic.name).match(/\b(?:iniciantes?|nivelamento|curso\s+isolado|isolado|extensivo|intensivo|combo)\b/i)?.[0] || ''
+    )
+  );
+  const boundCourseId = topicCourseId || (topicLooksLikeStandaloneCourse ? '' : subjectCourseId);
   const courseHintName = String(topic?.caveiraCourseName || subject?.caveiraCourseName || '').trim();
 
   // 1. Direct URL stored on the lesson itself (reject only if topic is explicitly bound to a different course)
@@ -269,15 +278,6 @@ export function resolveCaveiraLessonHref({
   }
 
   // 4. Subject-level Caveira binding (skip if topic explicitly names a standalone track/course like "Iniciantes")
-  const topicLooksLikeStandaloneCourse = Boolean(
-    topic?.name &&
-    /\b(?:iniciantes?|nivelamento|curso\s+isolado|isolado|extensivo|intensivo|combo)\b/i.test(
-      normalizeLessonTitleKey(topic.name)
-    ) &&
-    !normalizeLessonTitleKey(subject?.caveiraCourseName || '').includes(
-      normalizeLessonTitleKey(topic.name).match(/\b(?:iniciantes?|nivelamento|curso\s+isolado|isolado|extensivo|intensivo|combo)\b/i)?.[0] || ''
-    )
-  );
   if (!chosenUrl && !topicLooksLikeStandaloneCourse) {
     if (subject?.caveiraModuleUrl) {
       chosenUrl = subject.caveiraModuleUrl;

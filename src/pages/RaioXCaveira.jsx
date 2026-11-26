@@ -480,20 +480,23 @@ export default function RaioXCaveira() {
       .sort((a, b) => b.errors - a.errors || b.guessesOrDoubts - a.guessesOrDoubts || b.total - a.total);
   }, [blockScopedQuestions]);
 
+  const getQuestionTopicLabel = (q) =>
+    (q?.topic && q.topic !== q.subject && q.topic !== q.canonicalSubject)
+      ? q.topic
+      : (q?.topic || q?.canonicalSubject || q?.subject || 'Geral');
+
   // Relatório Tático de Assuntos Mais Errados vs Mais Acertados
   const topicRankings = useMemo(() => {
-    let source = enrichedQuestions;
+    let source = blockScopedQuestions;
     if (topicReportScope === 'fps') {
-      source = enrichedQuestions.filter(q => q.source?.includes('Duelo FPS') || q.origin?.includes('FPS') || q.id?.startsWith('fps-'));
+      source = blockScopedQuestions.filter(q => q.source?.includes('Duelo FPS') || q.origin?.includes('FPS') || q.id?.startsWith('fps-'));
     } else if (topicReportScope === 'bloco2') {
-      source = enrichedQuestions.filter(q => q.bloco === 'Bloco II');
+      source = blockScopedQuestions.filter(q => q.bloco === 'Bloco II');
     }
 
     const map = {};
     source.forEach(q => {
-      const topicLabel = (q.topic && q.topic !== q.subject && q.topic !== q.canonicalSubject)
-        ? q.topic
-        : (q.topic || q.canonicalSubject || q.subject || 'Geral');
+      const topicLabel = getQuestionTopicLabel(q);
 
       const key = `${q.canonicalSubject || q.subject || 'Outras'}|||${topicLabel}`;
       if (!map[key]) {
@@ -555,7 +558,7 @@ export default function RaioXCaveira() {
       criticalCount,
       shieldedCount
     };
-  }, [enrichedQuestions, topicReportScope]);
+  }, [blockScopedQuestions, enrichedQuestions, topicReportScope]);
 
   // Estatísticas derivadas: Superação (#73), Erros Evitáveis & Pegadinhas (#12), Mapa de Esquecimento (#63), Tabela Decoreba (#74)
   const overcomingStats = useMemo(() => computeOvercomingStats(blockScopedQuestions), [blockScopedQuestions]);
@@ -594,9 +597,7 @@ export default function RaioXCaveira() {
       if (selectedLegalDevice && !selectedLegalDevice.questionIds.includes(q.id)) return false;
       if (selectedSubject !== 'all' && q.canonicalSubject !== selectedSubject) return false;
       if (selectedTopic !== 'all') {
-        const topicLabel = (q.topic && q.topic !== q.subject)
-          ? q.topic
-          : (q.topic || q.subject || 'Geral');
+        const topicLabel = getQuestionTopicLabel(q);
         if (topicLabel !== selectedTopic) return false;
       }
 
@@ -606,6 +607,7 @@ export default function RaioXCaveira() {
       if (filterType === 'avoidable' && !(q.isAvoidableError || (!q.hit && Number(q.communityCorrectPct) >= 65))) return false;
       if (filterType === 'pegadinha' && !(q.isPegadinha || Number(q.communityErrorPct) >= 65)) return false;
       if (filterType === 'attention' && (q.hit || q.errorReason !== 'atencao')) return false;
+      if (filterType === 'interpretation' && (q.hit || q.errorReason !== 'interpretacao')) return false;
       if (filterType === 'theory' && (q.hit || (q.errorReason && q.errorReason !== 'conteudo'))) return false;
 
       if (query) {

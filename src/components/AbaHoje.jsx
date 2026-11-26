@@ -227,19 +227,13 @@ export default function AbaHoje({ onGoToTab }) {
     }
 
     const todayObj = new Date();
-    const baseIdx =
+    const shouldShiftCarryover = cycleScheduleType === 'weekly' && (cycleCarryoverOffset || 0) > 0;
+    const effectiveCycleIdx =
       cycleScheduleType === 'weekly'
         ? getCycleIndexForDate
           ? getCycleIndexForDate(todayObj, todayObj)
-          : cycleWeekStart === 'monday'
-            ? (todayObj.getDay() + 6) % 7
-            : todayObj.getDay()
+          : ((((cycleWeekStart === 'monday' ? (todayObj.getDay() + 6) % 7 : todayObj.getDay()) - (shouldShiftCarryover ? cycleCarryoverOffset : 0)) % 7) + 7) % 7
         : currentDayIndex || 0;
-
-    const shouldShiftCarryover = cycleScheduleType === 'weekly' && (cycleCarryoverOffset || 0) > 0;
-    const effectiveCycleIdx = shouldShiftCarryover
-      ? ((baseIdx - cycleCarryoverOffset) % 7 + 7) % 7
-      : baseIdx;
 
     const effectiveDateObj = shouldShiftCarryover
       ? new Date(todayObj.getFullYear(), todayObj.getMonth(), todayObj.getDate() - cycleCarryoverOffset)

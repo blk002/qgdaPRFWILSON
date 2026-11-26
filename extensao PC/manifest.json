@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "QG da PRF — Rastreador Caveira",
-  "version": "3.2.4",
+  "version": "3.2.5",
   "description": "Rastreia e diagnostica cada questão resolvida no Projeto Caveira, sincronizando pontos fortes e fracos no QG da PRF.",
   "icons": {
     "16": "icons/icon16.png",
@@ -72,8 +72,15 @@
         "*://checkout.caveira.com/*",
         "*://blog.caveira.com/*",
         "*://www.caveira.com/*",
+        "*://pay.caveira.com/*",
+        "*://pagamento.caveira.com/*",
+        "*://pagamentos.caveira.com/*",
+        "*://loja.caveira.com.br/*",
+        "*://checkout.caveira.com.br/*",
         "*://loja.projetocaveira.com.br/*",
-        "*://checkout.projetocaveira.com.br/*"
+        "*://checkout.projetocaveira.com.br/*",
+        "*://www.projetocaveira.com.br/*",
+        "*://blog.projetocaveira.com.br/*"
       ],
       "js": ["api_sniffer.js"],
       "run_at": "document_start",
@@ -96,8 +103,15 @@
         "*://checkout.caveira.com/*",
         "*://blog.caveira.com/*",
         "*://www.caveira.com/*",
+        "*://pay.caveira.com/*",
+        "*://pagamento.caveira.com/*",
+        "*://pagamentos.caveira.com/*",
+        "*://loja.caveira.com.br/*",
+        "*://checkout.caveira.com.br/*",
         "*://loja.projetocaveira.com.br/*",
-        "*://checkout.projetocaveira.com.br/*"
+        "*://checkout.projetocaveira.com.br/*",
+        "*://www.projetocaveira.com.br/*",
+        "*://blog.projetocaveira.com.br/*"
       ],
       "js": ["treeMatcher.js", "caveiraResolver.js", "content.js"],
       "run_at": "document_idle"

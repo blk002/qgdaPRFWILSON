@@ -17,9 +17,10 @@ import {
 // --- TAF Calculation Helpers (Tabelas oficiais PRF) ---
 const calcBarra = (val, isM) => {
   if (isM) {
-    if (val < 3) return 0; if (val === 3) return 2; if (val === 4) return 2.5;
-    if (val === 5) return 3; if (val === 6) return 3.5; if (val === 7) return 4;
-    if (val === 8) return 4.5; return 5;
+    const reps = Math.floor(val);
+    if (reps < 3) return 0; if (reps === 3) return 2; if (reps === 4) return 2.5;
+    if (reps === 5) return 3; if (reps === 6) return 3.5; if (reps === 7) return 4;
+    if (reps === 8) return 4.5; return 5;
   } else {
     if (val < 10) return 0; if (val < 13) return 2; if (val < 16) return 2.5;
     if (val < 19) return 3; if (val < 22) return 3.5; if (val < 25) return 4;

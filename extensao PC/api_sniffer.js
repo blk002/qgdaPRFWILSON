@@ -41,7 +41,8 @@
     list.forEach((item) => {
       if (!item || typeof item !== "object") return;
       const hasChildrenTree = Array.isArray(item.subtopics || item.topics || item.children);
-      const looksLikeSubject = hasChildrenTree || Boolean(item.discipline_id === void 0 && !item.subject_id && /subject|discipline/i.test(lowerUrl));
+      const hasExplicitSubjectOwner = Boolean(urlSubjectId || item.subject_id || item.discipline_id);
+      const looksLikeSubject = !hasExplicitSubjectOwner && (hasChildrenTree || /subject|discipline/i.test(lowerUrl));
       if (looksLikeSubject) {
         const sId = Number(item.id || item.subject_id);
         const sName = String(item.name || item.title || "").trim();
@@ -267,7 +268,10 @@
           preview: String(lastStatus).slice(0, 60)
         });
       }
-      if (!apiId && !explicitCode && !commentText && !hasPct && !noteRaw && !banca && !ano && !subjectStr && !subtopicPathStr) {
+      const hasQuestionSignal = Boolean(
+        explicitCode || contentText || subtopicPathStr || alternatives.length > 0 || commentText || banca || hasPct || item.last_answer_status !== void 0 || item.question_code
+      );
+      if (!hasQuestionSignal) {
         return null;
       }
       return {
@@ -362,7 +366,8 @@
         const courseId = String(
           (!Array.isArray(root) ? root.course_id || root.course?.id || (Array.isArray(root.modules) || Array.isArray(root.course_modules) ? root.id : "") : "") || courseIdMatch?.[1] || ""
         );
-        const courseName = String((!Array.isArray(root) ? root.course?.name || root.course?.title || root.name || root.title : "") || "Curso Caveira").trim();
+        const isSingleModulePayload = Boolean(!Array.isArray(multiModulesCandidate) || Array.isArray(root));
+        const courseName = isSingleModulePayload ? String((!Array.isArray(root) ? root.course?.name || root.course?.title : "") || "").trim() : String((!Array.isArray(root) ? root.course?.name || root.course?.title || root.name || root.title : "") || "").trim();
         const currentUrlVideoId = (() => {
           try {
             return new URLSearchParams(window.location.search || "").get("course_video_id") || "";
@@ -816,6 +821,9 @@
           return;
         }
       }
+      if (/(?:^|\/)(?:courses|teams|notifications|auth|me|subjects|subtopics)(?:\/|\?|$)/i.test(urlStr)) {
+        return;
+      }
       const candidates = Array.isArray(root) ? root : Array.isArray(root.data) ? root.data : Array.isArray(root.questions) ? root.questions : Array.isArray(root.items) ? root.items : [root];
       const parsedQuestions = candidates.map(normalizeQuestionNode).filter(Boolean);
       if (parsedQuestions.length > 0) {
@@ -836,13 +844,22 @@
         }
       } catch (_) {
       }
+      const hasField = (v) => v !== void 0 && v !== null;
+      const parseBoolVal = (v) => {
+        if (typeof v === "boolean") return v;
+        if (typeof v === "number") return v === 1;
+        const s = String(v ?? "").trim().toLowerCase();
+        if (/^(?:true|1|correct|hit|acerto|acertou)$/.test(s)) return true;
+        if (/^(?:false|0|wrong|incorrect|error|erro|errou)$/.test(s)) return false;
+        return Boolean(v);
+      };
       const urlQuestionIdMatch = urlStr.match(/\/question-database\/(\d+)(?:[?#]|$)/i);
       const recognizedAnswer = Boolean(
-        /(?:question|answer|resol|respond|attempt|alternative)/i.test(urlStr) && (root?.answer_status !== void 0 || root?.is_correct !== void 0 || root?.correct !== void 0 || root?.hit !== void 0 || root?.acertou !== void 0)
+        /(?:question|answer|resol|respond|attempt|alternative)/i.test(urlStr) && (hasField(root?.answer_status) || hasField(root?.is_correct) || hasField(root?.correct) || hasField(root?.hit) || hasField(root?.acertou))
       );
       if (recognizedAnswer) {
         const qApiId = Number(urlQuestionIdMatch?.[1] || root.question_id || root.id || parsedReq?.question_id || parsedReq?.id);
-        const hitVal = root.answer_status !== void 0 ? /^(?:correct|hit|acerto|acertou|1|true)$/i.test(String(root.answer_status)) : root.is_correct !== void 0 ? Boolean(root.is_correct) : root.correct !== void 0 ? Boolean(root.correct) : Boolean(root.hit ?? root.acertou);
+        const hitVal = hasField(root.answer_status) ? /^(?:correct|hit|acerto|acertou|1|true)$/i.test(String(root.answer_status)) : hasField(root.is_correct) ? parseBoolVal(root.is_correct) : hasField(root.correct) ? parseBoolVal(root.correct) : parseBoolVal(hasField(root.hit) ? root.hit : root.acertou);
         const genStats = root.general_stats && typeof root.general_stats === "object" ? root.general_stats : null;
         const gCorr = Number(genStats?.correct);
         const gErr = Number(genStats?.incorrect);
@@ -935,6 +952,7 @@
       const reqMethod = this.__qgMethod || "GET";
       if (shouldInspectUrl(this.__qgUrl)) {
         this.addEventListener("load", () => {
+          if (this.status < 200 || this.status >= 300) return;
           try {
             let json = null;
             if ((this.responseType === "json" || !this.responseType) && this.response && typeof this.response === "object") {
@@ -954,7 +972,7 @@
             }
           } catch (_) {
           }
-        });
+        }, { once: true });
       }
       return origSend.call(this, body, ...rest);
     };
@@ -983,7 +1001,12 @@
       const scanResult = (urlTarget, jsonObj) => {
         if (!jsonObj || typeof jsonObj !== "object") return;
         inspectApiPayload(urlTarget, jsonObj);
-        const rootData = jsonObj.data && typeof jsonObj.data === "object" ? jsonObj.data : jsonObj;
+        let rootData = jsonObj.data && typeof jsonObj.data === "object" ? jsonObj.data : jsonObj;
+        if (examId && /\/teams\/\d+\/?$/i.test(urlTarget) && Array.isArray(rootData.practice_exams)) {
+          const matchedExam = rootData.practice_exams.find((s) => String(s?.id) === String(examId));
+          if (!matchedExam) return;
+          rootData = { ...rootData, practice_exams: [matchedExam] };
+        }
         const visitedNodes = /* @__PURE__ */ new Set();
         const isAttemptUrl = /\/(?:enjoyment|revision|result|attempt)/i.test(urlTarget);
         const walkDate = (node, depth = 0, parentCtx = "") => {
@@ -1025,15 +1048,18 @@
         walkDate(rootData, 0, "");
       };
       try {
+        const results = new Array(urls.length).fill(null);
         await Promise.allSettled(
-          urls.map(async (u) => {
+          urls.map(async (u, i) => {
             const res = await fetchFn(u, { method: "GET", headers, credentials: "include" });
             if (res && res.ok) {
-              const json = await res.json();
-              scanResult(u, json);
+              results[i] = await res.json();
             }
           })
         );
+        results.forEach((json, i) => {
+          if (json) scanResult(urls[i], json);
+        });
       } catch (_) {
       }
       postVerifiedMessage("FETCH_SIMULADO_DATES_RESULT", {

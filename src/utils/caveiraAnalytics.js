@@ -360,7 +360,7 @@ export function computeForgettingCurveByDiscipline(questions = []) {
         .map((k) => row.buckets[k].pct)
         .filter((v) => v !== null);
       const decayDelta = orderedPcts.length >= 2
-        ? orderedPcts[orderedPcts.length - 1] - orderedPcts[0]
+        ? orderedPcts[0] - orderedPcts[orderedPcts.length - 1]
         : null;
       const overallPct = row.total > 0 ? Math.round((row.hits / row.total) * 100) : 0;
       return { ...row, overallPct, decayDelta };

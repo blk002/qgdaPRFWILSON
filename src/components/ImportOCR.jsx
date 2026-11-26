@@ -325,6 +325,16 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
   const handleConfirm = () => {
     const selected = extractedLessons.filter(l => l.selected);
     if (!selected.length) { toast.error('Selecione pelo menos uma aula.'); return; }
+    if (createNew && !newSubjectName.trim()) {
+      toast.error('Digite o nome da nova disciplina antes de importar.');
+      setStep('upload');
+      return;
+    }
+    if (!createNew && (!selectedSubjectId || !subjects?.[selectedSubjectId])) {
+      toast.error('Selecione uma disciplina de destino antes de importar.');
+      setStep('upload');
+      return;
+    }
 
     const newTopics = selected.map((lesson, idx) => ({
       id: 't' + Date.now() + '_' + idx,

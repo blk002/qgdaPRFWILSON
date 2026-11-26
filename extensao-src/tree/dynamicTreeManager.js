@@ -143,7 +143,8 @@ export function extractTreeNodesFromApiJson(url = '', data = null) {
   list.forEach((item) => {
     if (!item || typeof item !== 'object') return;
     const hasChildrenTree = Array.isArray(item.subtopics || item.topics || item.children);
-    const looksLikeSubject = hasChildrenTree || Boolean(item.discipline_id === undefined && !item.subject_id && /subject|discipline/i.test(lowerUrl));
+    const hasExplicitSubjectOwner = Boolean(urlSubjectId || item.subject_id || item.discipline_id);
+    const looksLikeSubject = !hasExplicitSubjectOwner && (hasChildrenTree || /subject|discipline/i.test(lowerUrl));
 
     if (looksLikeSubject) {
       const sId = Number(item.id || item.subject_id);

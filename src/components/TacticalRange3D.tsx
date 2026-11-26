@@ -176,7 +176,10 @@ export const TacticalRange3D: React.FC<TacticalRange3DProps> = ({
 
     // Studio Environment Reflection (RoomEnvironment)
     const pmremGenerator = new THREE.PMREMGenerator(renderer);
-    scene.environment = pmremGenerator.fromScene(new RoomEnvironment(), 0.04).texture;
+    const roomEnv = new RoomEnvironment();
+    const envRT = pmremGenerator.fromScene(roomEnv, 0.04);
+    scene.environment = envRT.texture;
+    roomEnv.dispose();
     pmremGenerator.dispose();
 
     // Camera (First-Person CS2 FOV Perspective)
@@ -761,10 +764,6 @@ export const TacticalRange3D: React.FC<TacticalRange3DProps> = ({
       const elapsed = clock.getElapsedTime();
       const st = stateRef.current;
 
-      if (st.gameState === 'playing' && updateBoardCanvasRef.current) {
-        updateBoardCanvasRef.current();
-      }
-
       // 1. Sculpted NPC tension, breathing, and head/rifle tracking (NO LASER)
       const urgency = st.gameState === 'playing' ? Math.max(0, 1 - st.timeLeft / 24) : 0;
       const breathSpeed = 2.2 + urgency * 7.5;
@@ -924,6 +923,21 @@ export const TacticalRange3D: React.FC<TacticalRange3DProps> = ({
       window.removeEventListener('resize', handleResize);
       domElem.removeEventListener('pointermove', handlePointerMove);
       domElem.removeEventListener('pointerdown', handlePointerDown);
+      scene.traverse((obj) => {
+        const mesh = obj as THREE.Mesh;
+        if (mesh.geometry) mesh.geometry.dispose();
+        const mats = Array.isArray(mesh.material) ? mesh.material : [mesh.material];
+        mats.forEach((mat) => {
+          if (!mat) return;
+          const std = mat as THREE.MeshStandardMaterial;
+          if (std.map) std.map.dispose();
+          if (std.roughnessMap) std.roughnessMap.dispose();
+          if (std.metalnessMap) std.metalnessMap.dispose();
+          if (std.normalMap) std.normalMap.dispose();
+          mat.dispose();
+        });
+      });
+      envRT.dispose();
       renderer.dispose();
       if (domElem.parentNode === container) {
         container.removeChild(domElem);

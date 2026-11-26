@@ -198,6 +198,7 @@
     }
     document.documentElement.setAttribute("data-qg-caveira-extension-installed", "true");
     window.postMessage({ source: "QG_CAVEIRA_EXTENSION", type: "EXTENSION_DETECTED" }, getTargetOrigin());
+    let hasWebAppReadySignal = false;
     function deliverCourseIndexCache(explicitCache = null) {
       if (isBridgeDestroyed || !isExtensionContextValid()) return;
       if (explicitCache && typeof explicitCache === "object") {
@@ -219,18 +220,21 @@
               payload: cache
             }, getTargetOrigin());
           }
-          const pendingCourse = res?.qg_pending_course_completion;
-          if (pendingCourse && pendingCourse.requestedAt && Date.now() - pendingCourse.requestedAt < 12e4) {
-            chrome.storage.local.remove(["qg_pending_course_completion"]);
-            setTimeout(() => {
-              if (!isBridgeDestroyed) {
-                window.postMessage({
-                  source: "QG_CAVEIRA_EXTENSION",
-                  type: "COURSE_LESSON_COMPLETE_REQUEST",
-                  payload: pendingCourse
-                }, getTargetOrigin());
-              }
-            }, 900);
+          if (hasWebAppReadySignal) {
+            const pendingCourse = res?.qg_pending_course_completion;
+            if (pendingCourse && pendingCourse.requestedAt && Date.now() - pendingCourse.requestedAt < 12e4) {
+              chrome.storage.local.remove(["qg_pending_course_completion"]).catch(() => {
+              });
+              setTimeout(() => {
+                if (!isBridgeDestroyed) {
+                  window.postMessage({
+                    source: "QG_CAVEIRA_EXTENSION",
+                    type: "COURSE_LESSON_COMPLETE_REQUEST",
+                    payload: pendingCourse
+                  }, getTargetOrigin());
+                }
+              }, 300);
+            }
           }
         });
       } catch (_) {
@@ -290,7 +294,7 @@
             if (chrome.runtime.lastError || isBridgeDestroyed) return;
             const keysToRemove = [];
             const catalog = res?.[PENDING_CATALOG_KEY];
-            if (catalog && typeof catalog === "object" && Array.isArray(catalog.modules)) {
+            if (hasWebAppReadySignal && catalog && typeof catalog === "object" && Array.isArray(catalog.modules)) {
               keysToRemove.push(PENDING_CATALOG_KEY);
               window.postMessage({
                 source: "QG_CAVEIRA_EXTENSION",
@@ -300,8 +304,10 @@
             }
             let simQueue = pruneAndNormalizeQueue(res?.[PENDING_SIMULADOS_QUEUE_KEY]);
             const legacyImport = res?.[PENDING_SIMULADOS_KEY];
+            let legacyMerged = false;
             if (legacyImport && Array.isArray(legacyImport.simulados) && legacyImport.simulados.length > 0) {
               simQueue = enqueueSimuladosIntoQueue(simQueue, legacyImport.simulados);
+              legacyMerged = true;
               keysToRemove.push(PENDING_SIMULADOS_KEY);
             }
             if (forceRetry) {
@@ -321,7 +327,12 @@
                 lastDeliveryId: deliveryId,
                 updatedAt: Date.now()
               };
-              chrome.storage.local.set({ [PENDING_SIMULADOS_QUEUE_KEY]: updatedQueue });
+              chrome.storage.local.set({ [PENDING_SIMULADOS_QUEUE_KEY]: updatedQueue }, () => {
+                if (!chrome.runtime?.lastError && keysToRemove.includes(PENDING_SIMULADOS_KEY)) {
+                  chrome.storage.local.remove([PENDING_SIMULADOS_KEY]).catch(() => {
+                  });
+                }
+              });
               activeSimDelivery = { deliveryId, keys: deliveryKeys, sentAt: Date.now() };
               window.postMessage({
                 source: "QG_CAVEIRA_EXTENSION",
@@ -373,9 +384,16 @@
                   }
                 });
               }, SIM_ACK_TIMEOUT_MS);
+            } else if (legacyMerged) {
+              chrome.storage.local.set({ [PENDING_SIMULADOS_QUEUE_KEY]: { ...simQueue, updatedAt: Date.now() } }, () => {
+                if (!chrome.runtime?.lastError) {
+                  chrome.storage.local.remove([PENDING_SIMULADOS_KEY]).catch(() => {
+                  });
+                }
+              });
             }
             const pendingPdf = res?.[PENDING_PDF_KEY];
-            if (Array.isArray(pendingPdf) && pendingPdf.length > 0) {
+            if (hasWebAppReadySignal && Array.isArray(pendingPdf) && pendingPdf.length > 0) {
               keysToRemove.push(PENDING_PDF_KEY);
               pendingPdf.forEach((pdfEntry) => {
                 if (pdfEntry) {
@@ -386,7 +404,7 @@
                   }, getTargetOrigin());
                 }
               });
-            } else if (pendingPdf && typeof pendingPdf === "object" && pendingPdf.minutes) {
+            } else if (hasWebAppReadySignal && pendingPdf && typeof pendingPdf === "object" && pendingPdf.minutes) {
               keysToRemove.push(PENDING_PDF_KEY);
               window.postMessage({
                 source: "QG_CAVEIRA_EXTENSION",
@@ -394,8 +412,10 @@
                 payload: { ...pendingPdf, userId: activeUserId }
               }, getTargetOrigin());
             }
-            if (keysToRemove.length > 0) {
-              chrome.storage.local.remove(keysToRemove);
+            const immediateKeys = keysToRemove.filter((k) => k !== PENDING_SIMULADOS_KEY);
+            if (immediateKeys.length > 0) {
+              chrome.storage.local.remove(immediateKeys).catch(() => {
+              });
             }
             const filterMem = res?.[FILTER_ID_MEMORY_KEY];
             if (filterMem && typeof filterMem === "object" && Object.keys(filterMem).length > 0) {
@@ -686,8 +706,10 @@
           return;
         }
         if (event.data.type === "SET_ACTIVE_USER") {
+          hasWebAppReadySignal = true;
           const nextUserId = event.data.payload?.userId || null;
           const nextUserLabel = event.data.payload?.userLabel || event.data.payload?.userEmail || "";
+          deliverCourseIndexCache();
           switchUserBucket(nextUserId, ({ userId }) => {
             if (userId) deliverDataForActiveUser(userId);
           }, nextUserLabel);
@@ -721,6 +743,7 @@
           }
         }
         if (event.data.type === "FETCH_CAVEIRA_DATA") {
+          hasWebAppReadySignal = true;
           sendStoredData(event.data.payload?.userId || null);
         }
         if (event.data.type === "QG_PRF_SYNC_TODAY_MISSION" && event.data.payload) {
@@ -841,13 +864,6 @@
               const list = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
               const filtered = list.filter((q) => q && q.id !== targetId);
               const activeUserId = res?.[ACTIVE_USER_KEY] || cachedActiveUserId;
-              if (chrome.runtime?.sendMessage) {
-                chrome.runtime.sendMessage({
-                  type: "DB_DELETE_QUESTION",
-                  payload: { id: targetId, userId: activeUserId || null, enqueueOutbox: false }
-                }).catch(() => {
-                });
-              }
               const payload = { [STORAGE_KEY]: filtered };
               if (activeUserId && res?.[USER_BUCKETS_KEY] && typeof res[USER_BUCKETS_KEY] === "object") {
                 const buckets = { ...res[USER_BUCKETS_KEY] };
@@ -859,7 +875,21 @@
                 };
                 payload[USER_BUCKETS_KEY] = buckets;
               }
-              chrome.storage.local.set(payload);
+              const persistAfterDelete = () => {
+                if (!isBridgeDestroyed) chrome.storage.local.set(payload).catch(() => {
+                });
+              };
+              if (chrome.runtime?.sendMessage) {
+                chrome.runtime.sendMessage({
+                  type: "DB_DELETE_QUESTION",
+                  payload: { id: targetId, userId: activeUserId || null, enqueueOutbox: false }
+                }, () => {
+                  void chrome.runtime?.lastError;
+                  persistAfterDelete();
+                });
+              } else {
+                persistAfterDelete();
+              }
             });
           } catch (_) {
           }
@@ -873,17 +903,8 @@
           const nextSession = { date: today, total: rawQuestions.length, hits, errors };
           try {
             chrome.storage.local.get([ACTIVE_USER_KEY, USER_BUCKETS_KEY], (res) => {
+              if (chrome.runtime?.lastError || isBridgeDestroyed) return;
               const activeUserId = res?.[ACTIVE_USER_KEY] || cachedActiveUserId;
-              if (chrome.runtime?.sendMessage) {
-                chrome.runtime.sendMessage({
-                  type: "DB_BULK_UPSERT_QUESTIONS",
-                  payload: {
-                    questions: rawQuestions.map((q) => q && !q.ownerUserId && activeUserId ? { ...q, ownerUserId: activeUserId } : q),
-                    enqueueOutbox: false
-                  }
-                }).catch(() => {
-                });
-              }
               const payload = {
                 [STORAGE_KEY]: newQuestions,
                 [SESSION_KEY]: nextSession
@@ -897,7 +918,24 @@
                 };
                 payload[USER_BUCKETS_KEY] = buckets;
               }
-              chrome.storage.local.set(payload);
+              const persistAfterReplace = () => {
+                if (!isBridgeDestroyed) chrome.storage.local.set(payload).catch(() => {
+                });
+              };
+              if (chrome.runtime?.sendMessage) {
+                chrome.runtime.sendMessage({
+                  type: "DB_REPLACE_USER_QUESTIONS",
+                  payload: {
+                    userId: activeUserId || null,
+                    questions: rawQuestions.map((q) => q && !q.ownerUserId && activeUserId ? { ...q, ownerUserId: activeUserId } : q)
+                  }
+                }, () => {
+                  void chrome.runtime?.lastError;
+                  persistAfterReplace();
+                });
+              } else {
+                persistAfterReplace();
+              }
             });
           } catch (_) {
           }
@@ -920,9 +958,10 @@
         }
         if (event.data.type === "CLEAR_SESSION") {
           const today = getTodaySessionDate();
-          const cleanSession = { date: today, hits: 0, errors: 0, total: 0 };
+          const cleanSession = { date: today, hits: 0, errors: 0, total: 0, wasExplicitlyReset: true };
           try {
             chrome.storage.local.get([ACTIVE_USER_KEY, USER_BUCKETS_KEY], (res) => {
+              if (chrome.runtime?.lastError || isBridgeDestroyed) return;
               const activeUserId = res?.[ACTIVE_USER_KEY] || cachedActiveUserId;
               const payload = {
                 [STORAGE_KEY]: [],
@@ -937,12 +976,26 @@
                 };
                 payload[USER_BUCKETS_KEY] = buckets;
               }
-              chrome.storage.local.set(payload, () => {
-                window.postMessage({
-                  source: "QG_CAVEIRA_EXTENSION",
-                  type: "SESSION_CLEARED"
-                }, getTargetOrigin());
-              });
+              const persistClear = () => {
+                if (isBridgeDestroyed) return;
+                chrome.storage.local.set(payload, () => {
+                  window.postMessage({
+                    source: "QG_CAVEIRA_EXTENSION",
+                    type: "SESSION_CLEARED"
+                  }, getTargetOrigin());
+                });
+              };
+              if (chrome.runtime?.sendMessage) {
+                chrome.runtime.sendMessage({
+                  type: "DB_CLEAR_USER_QUESTIONS",
+                  payload: { userId: activeUserId || null }
+                }, () => {
+                  void chrome.runtime?.lastError;
+                  persistClear();
+                });
+              } else {
+                persistClear();
+              }
             });
           } catch (_) {
           }
@@ -1058,6 +1111,11 @@
             });
           }
           if (msg && msg.type === "PUSH_COURSE_LESSON_COMPLETE" && msg.payload) {
+            try {
+              chrome.storage.local.remove(["qg_pending_course_completion"]).catch(() => {
+              });
+            } catch (_) {
+            }
             window.postMessage({
               source: "QG_CAVEIRA_EXTENSION",
               type: "COURSE_LESSON_COMPLETE_REQUEST",

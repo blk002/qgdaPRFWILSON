@@ -113,7 +113,7 @@ export default function Loja() {
         message: `Você resgatou "${rew.title}". ${rew.isGameplay ? 'O bônus já está ativo no seu perfil.' : 'Aproveite sua recompensa.'}`,
         isAlert: true
       });
-    } else {
+    } else if (coins < rew.cost) {
       setGlobalModal({
         title: 'Saldo insuficiente',
         message: `Você precisa de mais ${rew.cost - coins} moedas para resgatar "${rew.title}".`,

@@ -127,7 +127,7 @@ async function getBaselineTreeDateFallback() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const manifestVer = chrome.runtime?.getManifest?.().version || '3.2.4';
+  const manifestVer = chrome.runtime?.getManifest?.().version || '3.2.5';
   const verEl = document.getElementById('ext-version');
   if (verEl) verEl.textContent = `v${manifestVer}`;
 
@@ -185,7 +185,9 @@ document.addEventListener('DOMContentLoaded', () => {
         PERFORMANCE_SNAPSHOT_KEY,
       ],
       async (r) => {
-        const queue = pruneAndNormalizeQueue(r[PENDING_SIMULADOS_QUEUE_KEY]);
+        if (chrome.runtime?.lastError) return;
+        try {
+          const queue = pruneAndNormalizeQueue(r?.[PENDING_SIMULADOS_QUEUE_KEY]);
         const delivery = formatSimuladoDeliveryStatus(queue);
 
         const queueEl = document.getElementById('simulados-queue-status');
@@ -257,6 +259,7 @@ document.addEventListener('DOMContentLoaded', () => {
             treeEl.style.color = '#fbbf24';
           }
         }
+        } catch (_) {}
       }
     );
   };
@@ -307,16 +310,17 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
       }
       searchTimer = setTimeout(async () => {
-        const rows = await searchQuestionsOffline(q, currentUserId, 8);
-        searchResultsEl.style.display = 'flex';
-        searchResultsEl.textContent = '';
-        if (!rows || rows.length === 0) {
-          const empty = document.createElement('div');
-          empty.style.cssText = 'font-size:10px;color:#71717a;padding:4px;';
-          empty.textContent = 'Nenhuma questão encontrada no IndexedDB.';
-          searchResultsEl.appendChild(empty);
-          return;
-        }
+        try {
+          const rows = await searchQuestionsOffline(q, currentUserId, 8);
+          searchResultsEl.style.display = 'flex';
+          searchResultsEl.textContent = '';
+          if (!rows || rows.length === 0) {
+            const empty = document.createElement('div');
+            empty.style.cssText = 'font-size:10px;color:#71717a;padding:4px;';
+            empty.textContent = 'Nenhuma questão encontrada no IndexedDB.';
+            searchResultsEl.appendChild(empty);
+            return;
+          }
         rows.forEach((r) => {
           const item = document.createElement('div');
           item.style.cssText = 'padding:6px 8px;border-radius:7px;background:#18181f;border:1px solid rgba(255,255,255,0.06);font-size:10px;line-height:1.35;';
@@ -334,6 +338,7 @@ document.addEventListener('DOMContentLoaded', () => {
           item.appendChild(body);
           searchResultsEl.appendChild(item);
         });
+        } catch (_) {}
       }, 140);
     });
   }
@@ -476,39 +481,43 @@ document.addEventListener('DOMContentLoaded', () => {
   });
 
   document.getElementById('btn-copy-diagnostic')?.addEventListener('click', async () => {
-    const rawStore = await new Promise((resolve) => {
-      chrome.storage.local.get([
-        PENDING_SIMULADOS_QUEUE_KEY,
-        DIAGNOSTIC_MODE_KEY,
-        DIAGNOSTIC_EVENTS_KEY,
-        SNIFFER_RECENT_EVENTS_KEY,
-        LAST_FILTER_DIAG_KEY,
-        TREE_META_KEY,
-        PERFORMANCE_SNAPSHOT_KEY,
-        'qg_cloud_auth_meta',
-      ], resolve);
-    });
-    const dbStats = await getDbStats(currentUserId).catch(() => null);
-    const perfSnap = rawStore?.[PERFORMANCE_SNAPSHOT_KEY];
-    const payload = sanitizeDiagnosticData({
-      version: manifestVer,
-      capturedAt: new Date().toISOString(),
-      diagnosticMode: Boolean(rawStore?.[DIAGNOSTIC_MODE_KEY]),
-      treeMeta: rawStore?.[TREE_META_KEY] || null,
-      authMeta: rawStore?.qg_cloud_auth_meta || null,
-      performanceSnapshotSummary: perfSnap ? {
-        capturedAt: perfSnap.capturedAt || null,
-        rangeDays: perfSnap.rangeDays || null,
-        subjectsCount: perfSnap.subjectsAndTopicsPerformance ? Object.keys(perfSnap.subjectsAndTopicsPerformance).length : 0,
-      } : null,
-      dbStats,
-      pendingSimuladosQueue: pruneAndNormalizeQueue(rawStore?.[PENDING_SIMULADOS_QUEUE_KEY]),
-      recentSnifferEvents: (rawStore?.[SNIFFER_RECENT_EVENTS_KEY] || []).slice(-20),
-      diagnosticShapes: (rawStore?.[DIAGNOSTIC_EVENTS_KEY] || []).slice(-30),
-      lastFilterDiag: rawStore?.[LAST_FILTER_DIAG_KEY] || null,
-    });
-    await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
-    setBackupStatus('Diagnóstico copiado (tokens/credenciais removidos).', '#6ee7b7');
+    try {
+      const rawStore = await new Promise((resolve) => {
+        chrome.storage.local.get([
+          PENDING_SIMULADOS_QUEUE_KEY,
+          DIAGNOSTIC_MODE_KEY,
+          DIAGNOSTIC_EVENTS_KEY,
+          SNIFFER_RECENT_EVENTS_KEY,
+          LAST_FILTER_DIAG_KEY,
+          TREE_META_KEY,
+          PERFORMANCE_SNAPSHOT_KEY,
+          'qg_cloud_auth_meta',
+        ], resolve);
+      });
+      const dbStats = await getDbStats(currentUserId).catch(() => null);
+      const perfSnap = rawStore?.[PERFORMANCE_SNAPSHOT_KEY];
+      const payload = sanitizeDiagnosticData({
+        version: manifestVer,
+        capturedAt: new Date().toISOString(),
+        diagnosticMode: Boolean(rawStore?.[DIAGNOSTIC_MODE_KEY]),
+        treeMeta: rawStore?.[TREE_META_KEY] || null,
+        authMeta: rawStore?.qg_cloud_auth_meta || null,
+        performanceSnapshotSummary: perfSnap ? {
+          capturedAt: perfSnap.capturedAt || null,
+          rangeDays: perfSnap.rangeDays || null,
+          subjectsCount: perfSnap.subjectsAndTopicsPerformance ? Object.keys(perfSnap.subjectsAndTopicsPerformance).length : 0,
+        } : null,
+        dbStats,
+        pendingSimuladosQueue: pruneAndNormalizeQueue(rawStore?.[PENDING_SIMULADOS_QUEUE_KEY]),
+        recentSnifferEvents: (rawStore?.[SNIFFER_RECENT_EVENTS_KEY] || []).slice(-20),
+        diagnosticShapes: (rawStore?.[DIAGNOSTIC_EVENTS_KEY] || []).slice(-30),
+        lastFilterDiag: rawStore?.[LAST_FILTER_DIAG_KEY] || null,
+      });
+      await navigator.clipboard.writeText(JSON.stringify(payload, null, 2));
+      setBackupStatus('Diagnóstico copiado (tokens/credenciais removidos).', '#6ee7b7');
+    } catch (err) {
+      setBackupStatus(`Erro ao copiar diagnóstico: ${err?.message || 'permissão negada'}`, '#f87171');
+    }
   });
 
   document.getElementById('btn-export-backup')?.addEventListener('click', async () => {
@@ -562,27 +571,28 @@ document.addEventListener('DOMContentLoaded', () => {
         if (tabs && tabs.length > 0 && tabs[0].id) {
           await chrome.tabs.update(tabs[0].id, { active: true });
           if (tabs[0].windowId && chrome.windows) {
-            chrome.windows.update(tabs[0].windowId, { focused: true });
+            await chrome.windows.update(tabs[0].windowId, { focused: true }).catch(() => {});
           }
           return;
         }
       }
     } catch (_) {}
-    chrome.tabs.create({ url: targetUrl });
+    chrome.tabs.create({ url: targetUrl }).catch(() => {});
   });
 
   document.getElementById('btn-copy-json').addEventListener('click', async () => {
-    const questions = await getAllQuestionsFull(currentUserId);
-    const fallback = await new Promise((resolve) => {
-      chrome.storage.local.get([STORAGE_KEY], (r) => resolve(Array.isArray(r[STORAGE_KEY]) ? r[STORAGE_KEY] : []));
-    });
-    const finalList = questions.length > 0 ? questions : fallback;
-    navigator.clipboard.writeText(JSON.stringify(finalList, null, 2)).then(() => {
+    try {
+      const questions = await getAllQuestionsFull(currentUserId);
+      const fallback = await new Promise((resolve) => {
+        chrome.storage.local.get([STORAGE_KEY], (r) => resolve(Array.isArray(r?.[STORAGE_KEY]) ? r[STORAGE_KEY] : []));
+      });
+      const finalList = questions.length > 0 ? questions : fallback;
+      await navigator.clipboard.writeText(JSON.stringify(finalList, null, 2));
       const btn = document.getElementById('btn-copy-json');
       const orig = btn.textContent;
       btn.textContent = 'Copiado com Sucesso! ✓';
       setTimeout(() => { btn.textContent = orig; }, 1800);
-    });
+    } catch (_) {}
   });
 
   document.getElementById('btn-reset-session').addEventListener('click', () => {

@@ -61,8 +61,17 @@ export default function Simulados() {
 
   // Lista enriquecida com índice cronológico, delta anterior e status de eliminação
   const enrichedSimulados = useMemo(() => {
-    return (simulados || []).map((sim, index) => {
-      const prev = index > 0 ? simulados[index - 1] : null;
+    const toSortableIsoDate = (raw) => {
+      const s = String(raw || '').trim();
+      if (/^\d{4}-\d{2}-\d{2}$/.test(s)) return s;
+      const br = s.match(/^(\d{2})\/(\d{2})\/(\d{4})$/);
+      return br ? `${br[3]}-${br[2]}-${br[1]}` : s;
+    };
+    const sortedList = [...(simulados || [])].sort((a, b) =>
+      toSortableIsoDate(a?.data).localeCompare(toSortableIsoDate(b?.data))
+    );
+    return sortedList.map((sim, index) => {
+      const prev = index > 0 ? sortedList[index - 1] : null;
       const liquidaNum = Number(sim?.liquida) || 0;
       const delta = prev !== null ? liquidaNum - (Number(prev?.liquida) || 0) : null;
       const elim = getEliminationInfo(sim);

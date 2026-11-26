@@ -33,8 +33,9 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
       String(review.id || '').match(/Q\d+/i) ||
       String(review.topicName || '').match(/Q\d+/i);
     const qId = idMatch ? idMatch[0].toUpperCase() : (review.questionData?.id || review.caveiraQuestionId || review.id);
+    const qIdUpper = String(qId || '').toUpperCase();
 
-    const storeMatch = caveiraQuestions.find(q => String(q.id || '').toUpperCase() === qId);
+    const storeMatch = caveiraQuestions.find(q => String(q.id || '').toUpperCase() === qIdUpper);
 
     let parsedContent = '';
     let parsedCorrect = 'C';
@@ -157,6 +158,8 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
   // Atalhos de teclado (A-E / C-E para selecionar, Enter para confirmar, 1/2/3/Enter para graduar FSRS)
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (e.ctrlKey || e.metaKey || e.altKey) return;
+      if (inline && document.querySelector('[aria-modal="true"]')) return;
       if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
       const key = e.key.toUpperCase();
       if (!hasSubmitted) {
@@ -197,7 +200,7 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hasSubmitted, isCebraspeStyle, selectedChoice, isHit, review.id, handleReviewSubmit, onCompleted, onClose]);
+  }, [hasSubmitted, isCebraspeStyle, selectedChoice, isHit, review.id, handleReviewSubmit, onCompleted, onClose, inline]);
 
   const handleSaveBizu = () => {
     if (qData.id) {

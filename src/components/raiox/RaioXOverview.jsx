@@ -114,7 +114,7 @@ export default function RaioXOverview({
       textClass: 'text-amber-600 dark:text-amber-400'
     },
     {
-      id: 'errors',
+      id: 'interpretation',
       label: 'Interpretação',
       count: stats.errorReasons.interpretacao,
       pct: stats.errors > 0 ? Math.round((stats.errorReasons.interpretacao / totalErrors) * 100) : 0,

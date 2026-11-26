@@ -155,7 +155,7 @@ export function mergeQuestionRecords(prev = null, incoming = {}) {
     ...(base.banca || prev?.banca ? { banca: incoming.banca || prev?.banca || base.banca } : {}),
     ...(base.ano || prev?.ano ? { ano: incoming.ano || prev?.ano || base.ano } : {}),
     ...(base.data || prev?.data ? { data: incoming.data || prev?.data || base.data } : {}),
-    acertou: incoming.acertou !== undefined ? Boolean(incoming.acertou) : (prev?.acertou !== undefined ? Boolean(prev.acertou) : hitVal),
+    acertou: incoming.acertou !== undefined ? Boolean(incoming.acertou) : (incoming.hit !== undefined ? Boolean(incoming.hit) : (prev?.acertou !== undefined ? Boolean(prev.acertou) : hitVal)),
     ...(content ? { content } : {}),
     attempts,
     teacherComment,
@@ -245,6 +245,51 @@ export async function deleteQuestionFull(id, userId = null, { enqueueOutbox = tr
     await enqueueOutboxEvent('question_delete', id, userId || prev?.ownerUserId || null, { id });
   }
   return true;
+}
+
+export async function clearUserQuestions(userId = null) {
+  await db.transaction('rw', db.questions, db.outbox, async () => {
+    if (userId) {
+      const all = await db.questions.toArray();
+      const ids = all.filter((q) => q && (!q.ownerUserId || q.ownerUserId === userId)).map((q) => q.id);
+      if (ids.length > 0) await db.questions.bulkDelete(ids);
+      const out = await db.outbox.toArray();
+      const outSeqs = out
+        .filter((o) => o && (o.entityType === 'question_upsert' || o.entityType === 'question_delete') && (!o.userId || o.userId === userId))
+        .map((o) => o.seq);
+      if (outSeqs.length > 0) await db.outbox.bulkDelete(outSeqs);
+    } else {
+      await db.questions.clear();
+      const out = await db.outbox.toArray();
+      const outSeqs = out
+        .filter((o) => o && (o.entityType === 'question_upsert' || o.entityType === 'question_delete'))
+        .map((o) => o.seq);
+      if (outSeqs.length > 0) await db.outbox.bulkDelete(outSeqs);
+    }
+  });
+  miniIndex = null;
+  indexedUserId = null;
+  return true;
+}
+
+export async function replaceUserQuestions(userId = null, questions = []) {
+  const valid = (Array.isArray(questions) ? questions : []).filter((q) => q && q.id);
+  await db.transaction('rw', db.questions, async () => {
+    if (userId) {
+      const all = await db.questions.toArray();
+      const ids = all.filter((q) => q && (!q.ownerUserId || q.ownerUserId === userId)).map((q) => q.id);
+      if (ids.length > 0) await db.questions.bulkDelete(ids);
+    } else {
+      await db.questions.clear();
+    }
+    if (valid.length > 0) {
+      const normalized = valid.map((q) => mergeQuestionRecords(null, { ...q, ...(userId && !q.ownerUserId ? { ownerUserId: userId } : {}) }));
+      await db.questions.bulkPut(normalized);
+    }
+  });
+  miniIndex = null;
+  indexedUserId = null;
+  return valid.length;
 }
 
 export async function getAllQuestionsFull(userId = null) {
