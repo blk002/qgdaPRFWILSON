@@ -11,6 +11,7 @@ import { useStore } from '../../store/useStore';
 import RankBadge from '../RankBadge';
 import { startInteractiveTour } from '../../lib/interactiveTour';
 import { APP_VERSION } from '../../version';
+import prfBrasaoOficial from '../../assets/images/prf-brasao-oficial.png';
 
 const MOBILE_SECONDARY_IDS = new Set(['/estatisticas', '/taf', '/duelo', '/pet', '/loja', '/config']);
 
@@ -171,11 +172,16 @@ export default function AppNavigation({
             <Link
               to="/"
               onClick={() => setOpenDropdown(null)}
-              className="flex items-center gap-2.5 shrink-0"
+              className="flex items-center gap-2.5 shrink-0 group"
               title="QG da PRF"
             >
-              <div className="w-8 h-8 bg-sky-500/10 dark:bg-sky-500/15 rounded-lg border border-sky-500/25 flex items-center justify-center shrink-0">
-                <Shield className="text-sky-600 dark:text-sky-400 w-4 h-4" />
+              <div className="w-8 h-9 flex items-center justify-center shrink-0 transition-transform duration-150 group-hover:scale-[1.04]">
+                <img
+                  src={prfBrasaoOficial}
+                  alt="Brasão Oficial da PRF"
+                  referrerPolicy="no-referrer"
+                  className="w-full h-full object-contain drop-shadow-xs"
+                />
               </div>
               <div className="flex items-center gap-1.5">
                 <span className="font-display text-base font-bold tracking-wide text-slate-900 dark:text-white leading-none whitespace-nowrap">
