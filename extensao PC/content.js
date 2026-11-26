@@ -1126,7 +1126,8 @@ ${EXTRA_SHADOW_CSS}`;
   // extensao-src/entries/content.entry.js
   (function() {
     if (isExcludedCaveiraHost(window.location.hostname)) return;
-    console.log("💀 [QG da PRF] Rastreador Caveira v3.2.5 ativo em:", window.location.href);
+    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.2.7";
+    console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
     try {
       window.dispatchEvent(new CustomEvent("qg-caveira-teardown"));
       destroyShadowHud();
@@ -2399,8 +2400,37 @@ ${EXTRA_SHADOW_CSS}`;
     }
     let targetLessonPollTimer = null;
     let lastOpenedCourseContext = null;
+    function extractCleanTitleFromVideoMainTitle(rawTitle) {
+      const raw = String(rawTitle || "").replace(/\s+/g, " ").trim();
+      if (!raw || raw.length < 4 || raw.length > 240) return "";
+      const stripped = stripSubjectFromLessonTitle(raw);
+      if (stripped && stripped !== raw && stripped.length >= 4) {
+        return stripped;
+      }
+      if (raw.includes(" - ")) {
+        const parts = raw.split(" - ");
+        const left = parts[0].trim();
+        const right = parts.slice(1).join(" - ").trim();
+        if (right.length >= 4 && !/^(?:parte|pt|aula|bloco|m[oó]dulo)\s*(?:\d+|[ivx]+)$/i.test(right)) {
+          const leftHasSubject = Boolean(extractSubjectFromLessonTitle(left).subject);
+          const courseMainEl = document.querySelector(".course-main-title");
+          const courseNorm = normalizeFilterText(courseMainEl?.innerText || courseMainEl?.textContent || "");
+          const leftNorm = normalizeFilterText(left);
+          const leftMatchesCourse = Boolean(courseNorm && leftNorm && (leftNorm.includes(courseNorm) || courseNorm.includes(leftNorm)));
+          if (leftHasSubject || leftMatchesCourse) {
+            return right;
+          }
+        }
+      }
+      return raw;
+    }
     function extractPlayingVideoTitleFromHeader() {
       try {
+        const videoMainEl = document.querySelector(".video-main-title");
+        if (videoMainEl && !videoMainEl.closest("#qg-caveira-shadow-host, #qg-caveira-hud") && isElementVisible(videoMainEl)) {
+          const cleanedMain = extractCleanTitleFromVideoMainTitle(videoMainEl.innerText || videoMainEl.textContent || "");
+          if (cleanedMain) return cleanedMain;
+        }
         const toggleListBtn = Array.from(document.querySelectorAll("button, .q-btn")).find((el) => !el.closest("#qg-caveira-shadow-host, #qg-caveira-hud") && isElementVisible(el) && /(?:ocultar|mostrar)\s+lista/i.test(el.innerText || el.textContent || ""));
         if (toggleListBtn) {
           const bar = toggleListBtn.parentElement;
@@ -3546,10 +3576,22 @@ ${EXTRA_SHADOW_CSS}`;
       hud.querySelector("#qg-btn-course-practice")?.addEventListener("click", (e) => {
         e.stopPropagation();
         const btn = e.currentTarget;
-        const lessonTitle = currentCourseIndexStatus?.lessonTitle || extractPlayingVideoTitleFromHeader() || extractCourseLessonTitle() || "";
+        let liveTitle = extractPlayingVideoTitleFromHeader() || extractCourseLessonTitle() || "";
+        const isMatchingStatus = (st, title) => Boolean(
+          st && title && normalizeCourseIndexKey(st.lessonTitle || "") === normalizeCourseIndexKey(title)
+        );
+        if (liveTitle && !isMatchingStatus(currentCourseIndexStatus, liveTitle)) {
+          try {
+            scanCourseVideoIndex();
+          } catch (_) {
+          }
+          liveTitle = extractPlayingVideoTitleFromHeader() || extractCourseLessonTitle() || liveTitle;
+        }
+        const statusMatchesLive = !liveTitle || isMatchingStatus(currentCourseIndexStatus, liveTitle);
+        const lessonTitle = liveTitle || currentCourseIndexStatus?.lessonTitle || "";
         if (!lessonTitle) return;
-        const subtopics = Array.isArray(currentCourseIndexStatus?.subtopics) ? currentCourseIndexStatus.subtopics : [];
-        const rawIndexText = currentCourseIndexStatus?.rawIndexText || "";
+        const subtopics = statusMatchesLive && Array.isArray(currentCourseIndexStatus?.subtopics) ? currentCourseIndexStatus.subtopics : [];
+        const rawIndexText = statusMatchesLive ? currentCourseIndexStatus?.rawIndexText || "" : "";
         const inferredSubject = extractCourseSubjectFromPage(lessonTitle);
         const topicValue = lastOpenedCourseContext?.topic && normalizeCourseIndexKey(lastOpenedCourseContext.lesson) === normalizeCourseIndexKey(lessonTitle) ? lastOpenedCourseContext.topic : lessonTitle;
         const filterData = {
@@ -3605,9 +3647,21 @@ ${EXTRA_SHADOW_CSS}`;
       hud.querySelector("#qg-btn-course-complete")?.addEventListener("click", (e) => {
         e.stopPropagation();
         const btn = e.currentTarget;
-        const lessonTitle = currentCourseIndexStatus?.lessonTitle || extractCourseLessonTitle() || "";
-        const subtopics = Array.isArray(currentCourseIndexStatus?.subtopics) ? currentCourseIndexStatus.subtopics : [];
-        const rawIndexText = currentCourseIndexStatus?.rawIndexText || "";
+        let liveTitle = extractPlayingVideoTitleFromHeader() || extractCourseLessonTitle() || "";
+        const isMatchingStatus = (st, title) => Boolean(
+          st && title && normalizeCourseIndexKey(st.lessonTitle || "") === normalizeCourseIndexKey(title)
+        );
+        if (liveTitle && !isMatchingStatus(currentCourseIndexStatus, liveTitle)) {
+          try {
+            scanCourseVideoIndex();
+          } catch (_) {
+          }
+          liveTitle = extractPlayingVideoTitleFromHeader() || extractCourseLessonTitle() || liveTitle;
+        }
+        const statusMatchesLive = !liveTitle || isMatchingStatus(currentCourseIndexStatus, liveTitle);
+        const lessonTitle = liveTitle || currentCourseIndexStatus?.lessonTitle || "";
+        const subtopics = statusMatchesLive && Array.isArray(currentCourseIndexStatus?.subtopics) ? currentCourseIndexStatus.subtopics : [];
+        const rawIndexText = statusMatchesLive ? currentCourseIndexStatus?.rawIndexText || "" : "";
         const inferredSubject = extractCourseSubjectFromPage(lessonTitle);
         const payload = {
           subject: inferredSubject,
@@ -6158,6 +6212,10 @@ ${EXTRA_SHADOW_CSS}`;
         `;
         }).join("");
       }
+      const hudEl = getHudEl("qg-caveira-hud");
+      if (hudEl && hudEl.classList.contains("minimized")) {
+        hudEl.classList.remove("minimized");
+      }
       box.style.display = "flex";
     }
     function setupManualFilterCorrectionListener() {
@@ -7943,6 +8001,8 @@ ${EXTRA_SHADOW_CSS}`;
       }, 1e4);
     }
     function extractCourseLessonTitle() {
+      const headerTitle = extractPlayingVideoTitleFromHeader();
+      if (headerTitle) return headerTitle;
       const ignored = /* @__PURE__ */ new Set([
         "indice",
         "charlie",

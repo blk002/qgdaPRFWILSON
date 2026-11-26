@@ -592,7 +592,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         if (questTab && questTab.id && !questTab.discarded) {
           await chrome.tabs.update(questTab.id, { active: true });
           if (questTab.windowId && chrome.windows) {
-            chrome.windows.update(questTab.windowId, { focused: true }).catch(() => {});
+            await chrome.windows.update(questTab.windowId, { focused: true }).catch(() => {});
           }
           let delivered = false;
           try {
@@ -608,7 +608,7 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
         } else if (fallbackTab && fallbackTab.id) {
           await chrome.tabs.update(fallbackTab.id, { active: true, url: `${targetOrigin}/questions` });
           if (fallbackTab.windowId && chrome.windows) {
-            chrome.windows.update(fallbackTab.windowId, { focused: true }).catch(() => {});
+            await chrome.windows.update(fallbackTab.windowId, { focused: true }).catch(() => {});
           }
         } else if (chrome.tabs) {
           await chrome.tabs.create({ url: `${targetOrigin}/questions`, active: true });
