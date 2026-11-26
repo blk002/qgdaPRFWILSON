@@ -3,7 +3,11 @@ import { toast } from 'sonner';
 import { useStore } from '../store/useStore';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabaseClient';
 import { normalizeCourseLookupKey } from '../lib/courseIndexParser';
-import { formatDifficultyIdsLabel, sanitizeDifficultyIds } from '../lib/caveiraDifficulty';
+import {
+  formatDifficultyIdsLabel,
+  resolveEffectiveDifficultyIds,
+  sanitizeDifficultyIds,
+} from '../lib/caveiraDifficulty';
 
 export function triggerCaveiraPractice(
   subjectName = '',
@@ -54,6 +58,8 @@ export function triggerCaveiraPractice(
   if (hasExt) {
     const cleanDifficultyIds = sanitizeDifficultyIds(difficultyIds);
     const diffLabel = formatDifficultyIdsLabel(cleanDifficultyIds);
+    const savedPrefs = useStore.getState().caveiraQuestionPrefs;
+    const hasCustomQgPrefs = Boolean(savedPrefs && Number(savedPrefs.updatedAt) > 0);
     window.postMessage(
       {
         source: 'QG_WEB_APP',
@@ -67,6 +73,14 @@ export function triggerCaveiraPractice(
           rawIndexText: String(rawIndexText || ''),
           status: typeof questionStatus === 'string' ? questionStatus : 'not_resolved',
           difficultyIds: cleanDifficultyIds,
+          ...(hasCustomQgPrefs
+            ? {
+                examBoards: Array.isArray(savedPrefs.examBoards) ? savedPrefs.examBoards : [],
+                numberAlternatives: Array.isArray(savedPrefs.numberAlternatives)
+                  ? savedPrefs.numberAlternatives
+                  : [],
+              }
+            : {}),
         },
       },
       window.location.origin
@@ -96,6 +110,7 @@ export function useExtensionBridge() {
   const cycleWeekStart = useStore((s) => s.cycleWeekStart);
   const cycleCarryoverOffset = useStore((s) => s.cycleCarryoverOffset);
   const caveiraFilterMemory = useStore((s) => s.caveiraFilterMemory);
+  const caveiraQuestionPrefs = useStore((s) => s.caveiraQuestionPrefs);
   const reviews = useStore((s) => s.reviews);
   const studyHistory = useStore((s) => s.studyHistory);
   const caveiraDailyGoal = useStore((s) => s.caveiraDailyGoal);
@@ -467,6 +482,32 @@ export function useExtensionBridge() {
         );
       }
 
+      if (caveiraQuestionPrefs && Number(caveiraQuestionPrefs.updatedAt) > 0) {
+        window.postMessage(
+          {
+            source: 'QG_WEB_APP',
+            type: 'QG_PRF_SYNC_DEFAULT_PREFS',
+            payload: {
+              prefs: {
+                examBoards: Array.isArray(caveiraQuestionPrefs.examBoards)
+                  ? caveiraQuestionPrefs.examBoards
+                  : [],
+                numberAlternatives: Array.isArray(caveiraQuestionPrefs.numberAlternatives)
+                  ? caveiraQuestionPrefs.numberAlternatives
+                  : [],
+                status:
+                  typeof caveiraQuestionPrefs.status === 'string'
+                    ? caveiraQuestionPrefs.status
+                    : 'not_resolved',
+                difficultyIds: resolveEffectiveDifficultyIds(caveiraQuestionPrefs),
+                syncBoardsAndAlts: true,
+              },
+            },
+          },
+          window.location.origin
+        );
+      }
+
       if (session?.access_token && session?.user?.id) {
         if (SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_URL.includes('placeholder')) {
           window.postMessage(
@@ -517,6 +558,7 @@ export function useExtensionBridge() {
     cycleWeekStart,
     cycleCarryoverOffset,
     caveiraFilterMemory,
+    caveiraQuestionPrefs,
     courseIndexCache,
     reviews,
     studyHistory,

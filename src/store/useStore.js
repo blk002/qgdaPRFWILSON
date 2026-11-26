@@ -7,6 +7,11 @@ import { parseDurationToSeconds, calculateLessonsForGoal } from '../lib/duration
 import { normalizeCourseLookupKey } from '../lib/courseIndexParser';
 import { extractCourseIdFromUrl, scoreLessonTitleMatch } from '../lib/caveiraLessonLinks';
 import {
+  DEFAULT_CAVEIRA_QUESTION_PREFS,
+  sanitizeCaveiraQuestionPrefs,
+  resolveEffectiveDifficultyIds,
+} from '../lib/caveiraDifficulty';
+import {
   LOCAL_TEST_ACCOUNT,
   createLocalTestSession,
   isLocalTestUser,
@@ -3984,6 +3989,35 @@ export const useStore = create(
             type: 'SET_CAVEIRA_DAILY_GOAL',
             payload: { dailyGoal: safeGoal }
           }, '*');
+        } catch (_) {}
+      },
+
+      setCaveiraQuestionPrefs: (partial) => {
+        const prev = sanitizeCaveiraQuestionPrefs(
+          get().caveiraQuestionPrefs || DEFAULT_CAVEIRA_QUESTION_PREFS
+        );
+        const next = sanitizeCaveiraQuestionPrefs(
+          { ...prev, ...(partial && typeof partial === 'object' ? partial : {}), updatedAt: Date.now() },
+          prev
+        );
+        set({ caveiraQuestionPrefs: next });
+        try {
+          window.postMessage(
+            {
+              source: 'QG_WEB_APP',
+              type: 'QG_PRF_SYNC_DEFAULT_PREFS',
+              payload: {
+                prefs: {
+                  examBoards: next.examBoards,
+                  numberAlternatives: next.numberAlternatives,
+                  status: next.status,
+                  difficultyIds: resolveEffectiveDifficultyIds(next),
+                  syncBoardsAndAlts: true,
+                },
+              },
+            },
+            window.location.origin
+          );
         } catch (_) {}
       },
 

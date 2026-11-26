@@ -1,6 +1,7 @@
 (() => {
   // extensao-src/content/utils.js
   var PENDING_SIMULADOS_QUEUE_KEY = "qg_pending_simulados_queue";
+  var DEFAULT_PREFS_KEY = "qg_caveira_default_prefs";
   var PERFORMANCE_SNAPSHOT_KEY = "qg_caveira_performance_snapshot";
   var SIMULADO_QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
   var SIMULADO_QUEUE_MAX_ATTEMPTS = 10;
@@ -777,6 +778,32 @@
               const payload = { [FILTER_MEMORY_CLOUD_KEY]: cloudMem };
               if (changed) payload[FILTER_ID_MEMORY_KEY] = localMem;
               chrome.storage.local.set(payload);
+            });
+          } catch (_) {
+          }
+        }
+        if (event.data.type === "QG_PRF_SYNC_DEFAULT_PREFS" && event.data.payload?.prefs) {
+          try {
+            const incoming = event.data.payload.prefs;
+            chrome.storage.local.get([DEFAULT_PREFS_KEY], (res) => {
+              if (chrome.runtime.lastError || isBridgeDestroyed) return;
+              const prev = res?.[DEFAULT_PREFS_KEY] && typeof res[DEFAULT_PREFS_KEY] === "object" ? res[DEFAULT_PREFS_KEY] : { examBoards: ["cebraspe", "caveira_ineditas", "caveira_adaptadas"], numberAlternatives: [2], status: "not_resolved", difficultyIds: [] };
+              const allowedBoards = /* @__PURE__ */ new Set(["cebraspe", "caveira_ineditas", "caveira_adaptadas"]);
+              const allowedAlts = /* @__PURE__ */ new Set([2, 4, 5]);
+              const allowedStatuses = /* @__PURE__ */ new Set(["not_resolved", "resolved", "right", "wrong", ""]);
+              const difficultyIds = Array.isArray(incoming.difficultyIds) ? Array.from(new Set(incoming.difficultyIds.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 6))).sort((a, b) => a - b) : Array.isArray(prev.difficultyIds) ? prev.difficultyIds : [];
+              const status = typeof incoming.status === "string" && allowedStatuses.has(incoming.status) ? incoming.status : typeof prev.status === "string" && allowedStatuses.has(prev.status) ? prev.status : "not_resolved";
+              const nextPrefs = incoming.syncBoardsAndAlts ? {
+                examBoards: Array.isArray(incoming.examBoards) ? Array.from(new Set(incoming.examBoards.map(String).filter((b) => allowedBoards.has(b)))) : Array.isArray(prev.examBoards) ? prev.examBoards : [],
+                numberAlternatives: Array.isArray(incoming.numberAlternatives) ? Array.from(new Set(incoming.numberAlternatives.map(Number).filter((n) => allowedAlts.has(n)))).sort((a, b) => a - b) : Array.isArray(prev.numberAlternatives) ? prev.numberAlternatives : [],
+                status,
+                difficultyIds
+              } : {
+                ...prev,
+                status,
+                difficultyIds
+              };
+              chrome.storage.local.set({ [DEFAULT_PREFS_KEY]: nextPrefs });
             });
           } catch (_) {
           }

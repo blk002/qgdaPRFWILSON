@@ -16,6 +16,20 @@ export const CAVEIRA_UNDEFINED_DIFFICULTY = {
   rateLabel: 'Novas',
 };
 
+export const VALID_EXAM_BOARDS = ['cebraspe', 'caveira_ineditas', 'caveira_adaptadas'];
+export const VALID_QUESTION_STATUSES = ['not_resolved', 'wrong', 'right', 'resolved', ''];
+export const VALID_NUMBER_ALTERNATIVES = [2, 4, 5];
+
+export const DEFAULT_CAVEIRA_QUESTION_PREFS = {
+  difficultyMode: 'manual',
+  difficultyIds: [],
+  includeUndefined: false,
+  status: 'not_resolved',
+  examBoards: ['cebraspe', 'caveira_ineditas', 'caveira_adaptadas'],
+  numberAlternatives: [2],
+  updatedAt: 0,
+};
+
 const LEVEL_MAP = new Map([
   ...CAVEIRA_DIFFICULTY_LEVELS.map((l) => [l.id, l]),
   [CAVEIRA_UNDEFINED_DIFFICULTY.id, CAVEIRA_UNDEFINED_DIFFICULTY],
@@ -30,6 +44,104 @@ export function sanitizeDifficultyIds(list) {
     }
   }
   return out.sort((a, b) => a - b);
+}
+
+export function sanitizeCaveiraQuestionPrefs(raw, fallback = DEFAULT_CAVEIRA_QUESTION_PREFS) {
+  const base = fallback && typeof fallback === 'object' ? fallback : DEFAULT_CAVEIRA_QUESTION_PREFS;
+  const src = raw && typeof raw === 'object' ? raw : {};
+
+  const difficultyMode = src.difficultyMode === 'auto'
+    ? 'auto'
+    : src.difficultyMode === 'manual'
+      ? 'manual'
+      : base.difficultyMode === 'auto'
+        ? 'auto'
+        : 'manual';
+
+  const rawDiffs = Array.isArray(src.difficultyIds)
+    ? sanitizeDifficultyIds(src.difficultyIds)
+    : sanitizeDifficultyIds(base.difficultyIds);
+  const difficultyIds = rawDiffs.filter((id) => id >= 2);
+  const includeUndefined = typeof src.includeUndefined === 'boolean'
+    ? src.includeUndefined
+    : rawDiffs.includes(1)
+      ? true
+      : Boolean(base.includeUndefined);
+
+  const status = typeof src.status === 'string' && VALID_QUESTION_STATUSES.includes(src.status)
+    ? src.status
+    : typeof base.status === 'string' && VALID_QUESTION_STATUSES.includes(base.status)
+      ? base.status
+      : 'not_resolved';
+
+  const examBoards = Array.isArray(src.examBoards)
+    ? Array.from(new Set(src.examBoards.map(String).filter((b) => VALID_EXAM_BOARDS.includes(b))))
+    : Array.isArray(base.examBoards)
+      ? Array.from(new Set(base.examBoards.map(String).filter((b) => VALID_EXAM_BOARDS.includes(b))))
+      : [...DEFAULT_CAVEIRA_QUESTION_PREFS.examBoards];
+
+  const numberAlternatives = Array.isArray(src.numberAlternatives)
+    ? Array.from(new Set(src.numberAlternatives.map(Number).filter((n) => VALID_NUMBER_ALTERNATIVES.includes(n)))).sort((a, b) => a - b)
+    : Array.isArray(base.numberAlternatives)
+      ? Array.from(new Set(base.numberAlternatives.map(Number).filter((n) => VALID_NUMBER_ALTERNATIVES.includes(n)))).sort((a, b) => a - b)
+      : [...DEFAULT_CAVEIRA_QUESTION_PREFS.numberAlternatives];
+
+  const rawUpdated = Number(src.updatedAt);
+  const updatedAt = Number.isFinite(rawUpdated) && rawUpdated >= 0
+    ? rawUpdated
+    : Number.isFinite(Number(base.updatedAt)) && Number(base.updatedAt) >= 0
+      ? Number(base.updatedAt)
+      : 0;
+
+  return {
+    difficultyMode,
+    difficultyIds,
+    includeUndefined,
+    status,
+    examBoards,
+    numberAlternatives,
+    updatedAt,
+  };
+}
+
+export function resolveEffectiveDifficultyIds(prefs, recommendation = null) {
+  if (!prefs || typeof prefs !== 'object') return [];
+  if (prefs.difficultyMode === 'auto') {
+    const recId = Number(recommendation?.recommendedId);
+    if (Number.isInteger(recId) && recId >= 2 && recId <= 6) {
+      return sanitizeDifficultyIds(prefs.includeUndefined ? [recId, 1] : [recId]);
+    }
+    return [];
+  }
+  const base = sanitizeDifficultyIds(prefs.difficultyIds).filter((id) => id >= 2);
+  if (base.length === 0) return [];
+  return sanitizeDifficultyIds(prefs.includeUndefined ? [...base, 1] : base);
+}
+
+export function classifyQuestionDifficulty(q) {
+  if (!q || typeof q !== 'object') return null;
+  const explicitId = Number(q.difficultyId ?? q.difficulty_id);
+  if (Number.isInteger(explicitId) && explicitId >= 1 && explicitId <= 6) {
+    return LEVEL_MAP.get(explicitId) || null;
+  }
+  const pct = q.communityCorrectPct;
+  if (pct !== undefined && pct !== null && pct !== '') {
+    const numPct = Number(pct);
+    if (Number.isFinite(numPct) && numPct >= 0 && numPct <= 100) {
+      if (numPct >= 80) return LEVEL_MAP.get(2);
+      if (numPct >= 60) return LEVEL_MAP.get(3);
+      if (numPct >= 40) return LEVEL_MAP.get(4);
+      if (numPct >= 20) return LEVEL_MAP.get(5);
+      return LEVEL_MAP.get(6);
+    }
+  }
+  return null;
+}
+
+export function formatCaveiraPrefsDifficultySummary(prefs) {
+  if (!prefs || typeof prefs !== 'object') return '';
+  if (prefs.difficultyMode === 'auto') return '⚡ Auto';
+  return formatDifficultyIdsLabel(resolveEffectiveDifficultyIds(prefs));
 }
 
 export function formatDifficultyIdsLabel(ids) {

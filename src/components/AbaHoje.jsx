@@ -11,6 +11,10 @@ import {
 import { getSubjectTextColorClass, getSubjectAccentBorderClass } from '../lib/subjectColors';
 import { resolveCaveiraLessonHref } from '../lib/caveiraLessonLinks';
 import {
+  DEFAULT_CAVEIRA_QUESTION_PREFS,
+  formatCaveiraPrefsDifficultySummary,
+} from '../lib/caveiraDifficulty';
+import {
   BookOpen,
   AlertTriangle,
   CheckCircle,
@@ -71,6 +75,7 @@ export default function AbaHoje({ onGoToTab }) {
     reviews = [],
     caveiraQuestions = [],
     caveiraDailyGoal = 50,
+    caveiraQuestionPrefs = DEFAULT_CAVEIRA_QUESTION_PREFS,
     caveiraSessionStats = null,
     caveiraCourseIndexMap = {},
     setCaveiraDailyGoal,
@@ -83,6 +88,7 @@ export default function AbaHoje({ onGoToTab }) {
   const [reviewIdx, setReviewIdx] = useState(0);
   const [isEditingQGoal, setIsEditingQGoal] = useState(false);
   const [qGoalDraft, setQGoalDraft] = useState(caveiraDailyGoal || 50);
+  const activeDiffSummary = formatCaveiraPrefsDifficultySummary(caveiraQuestionPrefs);
 
   const todayDateStr = useMemo(
     () => (getLocalDateStr ? getLocalDateStr() : ''),
@@ -828,10 +834,20 @@ export default function AbaHoje({ onGoToTab }) {
                             <button
                               type="button"
                               onClick={() => openLessonModal(block, false)}
-                              className="h-10 px-3.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200/80 text-slate-800 border border-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700 flex items-center justify-center gap-2 transition-colors cursor-pointer"
+                              title={
+                                activeDiffSummary
+                                  ? `Padrão ativo no QG: ${activeDiffSummary}`
+                                  : 'Abrir prática de questões desta aula no Caveira'
+                              }
+                              className="h-10 px-3.5 rounded-lg text-xs font-semibold bg-slate-100 hover:bg-slate-200/80 text-slate-800 border border-slate-200 dark:bg-slate-850 dark:hover:bg-slate-800 dark:text-slate-100 dark:border-slate-700 flex items-center justify-center gap-2 transition-colors cursor-pointer min-w-0"
                             >
                               <Target className="w-4 h-4 text-sky-500 dark:text-sky-400 shrink-0" />
                               <span className="truncate">Exercícios da Aula</span>
+                              {activeDiffSummary && (
+                                <span className="hidden sm:inline-block shrink-0 px-1.5 py-0.5 rounded bg-sky-500/12 text-sky-700 dark:text-sky-300 text-[10px] font-semibold max-w-[96px] truncate">
+                                  {activeDiffSummary}
+                                </span>
+                              )}
                             </button>
                           </div>
                         </>

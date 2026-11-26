@@ -17,6 +17,15 @@ import RaioXOverview from '../components/raiox/RaioXOverview';
 import RaioXDiagnostics from '../components/raiox/RaioXDiagnostics';
 import RaioXIntelligence from '../components/raiox/RaioXIntelligence';
 import RaioXNotebook from '../components/raiox/RaioXNotebook';
+import CaveiraDifficultySelector from '../components/CaveiraDifficultySelector';
+import {
+  DEFAULT_CAVEIRA_QUESTION_PREFS,
+  classifyQuestionDifficulty,
+  formatDifficultyIdsLabel,
+  recommendDifficultyForTopic,
+  resolveEffectiveDifficultyIds,
+  sanitizeDifficultyIds,
+} from '../lib/caveiraDifficulty';
 
 // Classificador Inteligente para a Estrutura Oficial do Edital PRF (Cebraspe)
 function classifyPRFCategory(subject, topic, content) {
@@ -164,6 +173,8 @@ export default function RaioXCaveira() {
   const {
     caveiraQuestions = [],
     caveiraCourseIndexMap = {},
+    caveiraQuestionPrefs = DEFAULT_CAVEIRA_QUESTION_PREFS,
+    setCaveiraQuestionPrefs,
     importCaveiraQuestions,
     updateCaveiraQuestion,
     deleteCaveiraQuestion,
@@ -179,6 +190,7 @@ export default function RaioXCaveira() {
   const [selectedBloco, setSelectedBloco] = useState('all'); // 'all' | 'Bloco I' | 'Bloco II' | 'Bloco III'
   const [selectedSubject, setSelectedSubject] = useState('all');
   const [selectedTopic, setSelectedTopic] = useState('all');
+  const [selectedDifficulty, setSelectedDifficulty] = useState('all'); // 'all' | '2' | '3' | '4' | '5' | '6'
   const [filterType, setFilterType] = useState('all'); // 'all' | 'errors' | 'hits' | 'guesses' | 'avoidable' | 'pegadinha' | 'attention' | 'theory'
   const [searchQuery, setSearchQuery] = useState('');
   const [editingNoteId, setEditingNoteId] = useState(null);
@@ -600,6 +612,10 @@ export default function RaioXCaveira() {
         const topicLabel = getQuestionTopicLabel(q);
         if (topicLabel !== selectedTopic) return false;
       }
+      if (selectedDifficulty !== 'all') {
+        const diff = classifyQuestionDifficulty(q);
+        if (!diff || String(diff.id) !== String(selectedDifficulty)) return false;
+      }
 
       if (filterType === 'errors' && q.hit) return false;
       if (filterType === 'hits' && !q.hit) return false;
@@ -617,7 +633,7 @@ export default function RaioXCaveira() {
 
       return true;
     });
-  }, [blockScopedQuestions, selectedLegalDevice, selectedSubject, selectedTopic, filterType, searchQuery]);
+  }, [blockScopedQuestions, selectedLegalDevice, selectedSubject, selectedTopic, selectedDifficulty, filterType, searchQuery]);
 
   const handleRequestSync = () => {
     const activeUserId = useStore.getState().user?.id;
@@ -672,18 +688,19 @@ export default function RaioXCaveira() {
     setExpandedComments(prev => ({ ...prev, [qId]: !prev[qId] }));
   };
 
-  const hasActiveFilters = selectedBloco !== 'all' || selectedSubject !== 'all' || selectedTopic !== 'all' || filterType !== 'all' || Boolean(searchQuery) || Boolean(selectedLegalDevice);
+  const hasActiveFilters = selectedBloco !== 'all' || selectedSubject !== 'all' || selectedTopic !== 'all' || selectedDifficulty !== 'all' || filterType !== 'all' || Boolean(searchQuery) || Boolean(selectedLegalDevice);
 
   const resetAllFilters = () => {
     setSelectedBloco('all');
     setSelectedSubject('all');
     setSelectedTopic('all');
+    setSelectedDifficulty('all');
     setFilterType('all');
     setSearchQuery('');
     setSelectedLegalDevice(null);
   };
 
-  const triggerCriticalTopicPractice = (subjectName = '', topicsList = [], questionStatus = 'not_resolved', difficultyIds = []) => {
+  const triggerCriticalTopicPractice = (subjectName = '', topicsList = [], questionStatus = 'not_resolved', difficultyIds = null) => {
     const cleanTopics = (Array.isArray(topicsList) ? topicsList : [topicsList])
       .map(t => String(t || '').trim())
       .filter(Boolean);
@@ -692,9 +709,11 @@ export default function RaioXCaveira() {
       t.split(/\s*(?:➔|->|•|\|)\s*/).map(s => s.trim()).filter(Boolean)
     );
     const uniqueSubtopics = Array.from(new Set(subtopics.length > 0 ? subtopics : cleanTopics));
+    const recommendation = recommendDifficultyForTopic(caveiraQuestions, subjectName, primaryTopic, cleanTopics);
     const cleanDifficultyIds = Array.isArray(difficultyIds)
-      ? Array.from(new Set(difficultyIds.map(Number).filter(n => Number.isInteger(n) && n >= 1 && n <= 6))).sort((a, b) => a - b)
-      : [];
+      ? sanitizeDifficultyIds(difficultyIds)
+      : resolveEffectiveDifficultyIds(caveiraQuestionPrefs, recommendation);
+    const hasCustomQgPrefs = Boolean(caveiraQuestionPrefs && Number(caveiraQuestionPrefs.updatedAt) > 0);
     const hasExt = typeof document !== 'undefined' && document.documentElement.getAttribute('data-qg-caveira-extension-installed') === 'true';
     if (navigator.clipboard && (uniqueSubtopics[0] || primaryTopic || subjectName)) {
       navigator.clipboard.writeText(uniqueSubtopics[0] || primaryTopic || subjectName).catch(() => {});
@@ -711,11 +730,23 @@ export default function RaioXCaveira() {
           subtopics: uniqueSubtopics,
           rawIndexText: uniqueSubtopics.map((s, idx) => `${idx + 1}. ${s}`).join('\n'),
           status: questionStatus,
-          ...(cleanDifficultyIds.length > 0 ? { difficultyIds: cleanDifficultyIds } : {})
+          difficultyIds: cleanDifficultyIds,
+          ...(hasCustomQgPrefs
+            ? {
+                examBoards: Array.isArray(caveiraQuestionPrefs.examBoards) ? caveiraQuestionPrefs.examBoards : [],
+                numberAlternatives: Array.isArray(caveiraQuestionPrefs.numberAlternatives) ? caveiraQuestionPrefs.numberAlternatives : [],
+              }
+            : {})
         }
       }, window.location.origin);
       const statusTag = questionStatus === 'wrong' ? ' (só erradas)' : questionStatus === 'right' ? ' (só certas)' : '';
-      toast.success(`Abrindo Caveira${statusTag} na Zona Crítica: ${cleanTopics.slice(0, 2).join(' • ')}`);
+      const diffLabel = formatDifficultyIdsLabel(cleanDifficultyIds);
+      const diffTag = diffLabel
+        ? caveiraQuestionPrefs?.difficultyMode === 'auto' && !Array.isArray(difficultyIds)
+          ? ` (⚡ Auto: ${diffLabel})`
+          : ` (${diffLabel})`
+        : '';
+      toast.success(`Abrindo Caveira${statusTag}${diffTag} na Zona Crítica: ${cleanTopics.slice(0, 2).join(' • ')}`);
     } else {
       window.open('https://app.caveira.com/questions', '_blank', 'noopener');
       toast.info('Extensão não detectada nesta aba. Assunto crítico copiado para a área de transferência!');
@@ -858,6 +889,32 @@ export default function RaioXCaveira() {
               </button>
             )}
           </div>
+        </div>
+
+        {/* Barra de Nível Padrão do Caveira (5 níveis oficiais + Auto) */}
+        <div className="px-4 sm:px-6 py-2.5 border-t border-slate-100 dark:border-slate-800/80 bg-slate-50/35 dark:bg-slate-950/20 flex flex-col lg:flex-row lg:items-center justify-between gap-2.5">
+          <div className="min-w-0">
+            <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+              Nível padrão para praticar no Caveira
+            </span>
+            <span className="hidden sm:inline text-[11px] text-slate-500 dark:text-slate-400 ml-2">
+              Sincronizado com a extensão e aulas
+            </span>
+          </div>
+          <CaveiraDifficultySelector
+            compact
+            mode={caveiraQuestionPrefs?.difficultyMode || 'manual'}
+            onChangeMode={(nextMode, nextIds) => {
+              setCaveiraQuestionPrefs?.({
+                difficultyMode: nextMode,
+                ...(Array.isArray(nextIds) ? { difficultyIds: nextIds } : {}),
+              });
+            }}
+            selectedIds={caveiraQuestionPrefs?.difficultyIds || []}
+            onChangeIds={(nextIds) => setCaveiraQuestionPrefs?.({ difficultyMode: 'manual', difficultyIds: nextIds })}
+            includeUndefined={Boolean(caveiraQuestionPrefs?.includeUndefined)}
+            onChangeIncludeUndefined={(val) => setCaveiraQuestionPrefs?.({ includeUndefined: val })}
+          />
         </div>
 
         {/* Barra Integrada de Seções + Escopo de Bloco PRF */}
@@ -1101,6 +1158,8 @@ export default function RaioXCaveira() {
                 setSelectedSubject={setSelectedSubject}
                 selectedTopic={selectedTopic}
                 setSelectedTopic={setSelectedTopic}
+                selectedDifficulty={selectedDifficulty}
+                setSelectedDifficulty={setSelectedDifficulty}
                 selectedLegalDevice={selectedLegalDevice}
                 setSelectedLegalDevice={setSelectedLegalDevice}
                 editingNoteId={editingNoteId}

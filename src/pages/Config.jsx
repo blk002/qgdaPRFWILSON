@@ -55,6 +55,8 @@ import {
 } from '../lib/durationHelpers';
 import { extractCourseIdFromUrl } from '../lib/caveiraLessonLinks';
 import { APP_VERSION } from '../version';
+import CaveiraDifficultySelector from '../components/CaveiraDifficultySelector';
+import { DEFAULT_CAVEIRA_QUESTION_PREFS } from '../lib/caveiraDifficulty';
 
 // Lazy-loaded heavy modals (isolates tesseract.js OCR engine from Config bundle)
 const ImportOCR = lazy(() => import('../components/ImportOCR'));
@@ -138,7 +140,9 @@ export default function Config({
     cloudSyncError,
     lastSyncedAt,
     saveToCloud,
-    isSavingToCloud
+    isSavingToCloud,
+    caveiraQuestionPrefs = DEFAULT_CAVEIRA_QUESTION_PREFS,
+    setCaveiraQuestionPrefs
   } = useStore();
 
   void restoreVersion;
@@ -663,6 +667,164 @@ export default function Config({
               </div>
             </section>
           </div>
+
+          {/* Filtros padrão do Projeto Caveira */}
+          <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl p-5 space-y-4">
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
+              <div>
+                <h2 className="font-display text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                  <Target className="w-4 h-4 text-sky-500" />
+                  <span>Filtros padrão do Projeto Caveira</span>
+                </h2>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                  Configure os 5 níveis oficiais do Caveira, status, bancas e alternativas diretamente no QG.
+                </p>
+              </div>
+              <span className="text-[11px] font-medium text-emerald-600 dark:text-emerald-400 shrink-0">
+                Sincronizado com nuvem e extensão
+              </span>
+            </div>
+
+            <div className="space-y-2">
+              <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                Nível de dificuldade (faixas globais do Caveira)
+              </div>
+              <CaveiraDifficultySelector
+                showRateHint
+                mode={caveiraQuestionPrefs?.difficultyMode || 'manual'}
+                onChangeMode={(nextMode, nextIds) => {
+                  setCaveiraQuestionPrefs?.({
+                    difficultyMode: nextMode,
+                    ...(Array.isArray(nextIds) ? { difficultyIds: nextIds } : {}),
+                  });
+                }}
+                selectedIds={caveiraQuestionPrefs?.difficultyIds || []}
+                onChangeIds={(nextIds) =>
+                  setCaveiraQuestionPrefs?.({ difficultyMode: 'manual', difficultyIds: nextIds })
+                }
+                includeUndefined={Boolean(caveiraQuestionPrefs?.includeUndefined)}
+                onChangeIncludeUndefined={(val) =>
+                  setCaveiraQuestionPrefs?.({ includeUndefined: val })
+                }
+              />
+              <p className="text-[11px] text-slate-500 dark:text-slate-400">
+                No modo <strong className="text-sky-600 dark:text-sky-400">⚡ Auto</strong>, o QG escolhe de Muito fácil a Muito difícil automaticamente conforme seu histórico no Raio-X.
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-3 border-t border-slate-100 dark:border-slate-800">
+              <div className="space-y-1.5">
+                <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  Status padrão
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { value: 'not_resolved', label: 'Não resolvidas' },
+                    { value: 'wrong', label: 'Só erradas' },
+                    { value: 'right', label: 'Só certas' },
+                    { value: 'resolved', label: 'Resolvidas' },
+                    { value: '', label: 'Todas' },
+                  ].map((opt) => {
+                    const active = (caveiraQuestionPrefs?.status ?? 'not_resolved') === opt.value;
+                    return (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        onClick={() => setCaveiraQuestionPrefs?.({ status: opt.value })}
+                        className={`h-7 px-2.5 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer ${
+                          active
+                            ? 'bg-sky-600 text-white border-sky-600 dark:bg-sky-500 dark:text-slate-950 dark:border-sky-500'
+                            : 'bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  Bancas padrão
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { value: 'cebraspe', label: 'CEBRASPE' },
+                    { value: 'caveira_ineditas', label: 'Caveira Inéditas' },
+                    { value: 'caveira_adaptadas', label: 'Caveira Adaptadas' },
+                  ].map((b) => {
+                    const currentBoards = Array.isArray(caveiraQuestionPrefs?.examBoards)
+                      ? caveiraQuestionPrefs.examBoards
+                      : [];
+                    const active = currentBoards.includes(b.value);
+                    return (
+                      <button
+                        key={b.value}
+                        type="button"
+                        onClick={() => {
+                          const nextBoards = active
+                            ? currentBoards.filter((x) => x !== b.value)
+                            : [...currentBoards, b.value];
+                          setCaveiraQuestionPrefs?.({ examBoards: nextBoards });
+                        }}
+                        className={`h-7 px-2.5 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer ${
+                          active
+                            ? 'bg-sky-600 text-white border-sky-600 dark:bg-sky-500 dark:text-slate-950 dark:border-sky-500'
+                            : 'bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                        }`}
+                      >
+                        {b.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <div className="text-xs font-semibold text-slate-700 dark:text-slate-200">
+                  Nº de alternativas
+                </div>
+                <div className="flex flex-wrap gap-1.5">
+                  {[
+                    { value: null, label: 'Qualquer' },
+                    { value: 2, label: 'Certo/Errado (2)' },
+                    { value: 4, label: '4 alts' },
+                    { value: 5, label: '5 alts' },
+                  ].map((opt) => {
+                    const currentAlts = Array.isArray(caveiraQuestionPrefs?.numberAlternatives)
+                      ? caveiraQuestionPrefs.numberAlternatives
+                      : [];
+                    const active = opt.value === null
+                      ? currentAlts.length === 0
+                      : currentAlts.includes(opt.value);
+                    return (
+                      <button
+                        key={opt.label}
+                        type="button"
+                        onClick={() =>
+                          setCaveiraQuestionPrefs?.({
+                            numberAlternatives: opt.value === null ? [] : [opt.value],
+                          })
+                        }
+                        className={`h-7 px-2.5 rounded-lg text-[11px] font-medium border transition-colors cursor-pointer ${
+                          active
+                            ? 'bg-sky-600 text-white border-sky-600 dark:bg-sky-500 dark:text-slate-950 dark:border-sky-500'
+                            : 'bg-slate-50 dark:bg-slate-850 text-slate-600 dark:text-slate-300 border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700'
+                        }`}
+                      >
+                        {opt.label}
+                      </button>
+                    );
+                  })}
+                </div>
+              </div>
+            </div>
+
+            <p className="text-[11px] text-slate-500 dark:text-slate-400 pt-1">
+              Salvo na sua conta do QG e sincronizado automaticamente com a extensão.
+            </p>
+          </section>
 
           {/* Aceleração de Videoaulas & Meta por Bloco */}
           <section className="bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-xl overflow-hidden">

@@ -17,9 +17,12 @@ import { triggerCaveiraPractice } from '../../hooks/useExtensionBridge';
 import {
   CAVEIRA_DIFFICULTY_LEVELS,
   CAVEIRA_UNDEFINED_DIFFICULTY,
+  DEFAULT_CAVEIRA_QUESTION_PREFS,
   recommendDifficultyForTopic,
+  resolveEffectiveDifficultyIds,
   sanitizeDifficultyIds,
 } from '../../lib/caveiraDifficulty';
+import { toast } from 'sonner';
 
 const DIFF_TONE_ACTIVE = {
   emerald: {
@@ -70,6 +73,8 @@ export default function GlobalAppModals({
   const handleReplaceSubject = useStore((s) => s.handleReplaceSubject);
   const getLocalDateStr = useStore((s) => s.getLocalDateStr);
   const caveiraQuestions = useStore((s) => s.caveiraQuestions);
+  const caveiraQuestionPrefs = useStore((s) => s.caveiraQuestionPrefs || DEFAULT_CAVEIRA_QUESTION_PREFS);
+  const setCaveiraQuestionPrefs = useStore((s) => s.setCaveiraQuestionPrefs);
 
   const [reviewInputs, setReviewInputs] = useState({ total: 10, correct: 0 });
   const [dismissedPrePromptModalRef, setDismissedPrePromptModalRef] = useState(null);
@@ -89,15 +94,6 @@ export default function GlobalAppModals({
     });
   }, [classConfirmModal, manualLessonIndexMap, courseIndexCache]);
 
-  if (prevPrePromptModalRef !== classConfirmModal) {
-    setPrevPrePromptModalRef(classConfirmModal);
-    const autoText = matchedModalIndexEntry?.rawIndexText || '';
-    setPrePromptIndexText(autoText);
-    setPrePromptQuestionStatus('not_resolved');
-    setPrePromptDifficultyIds([]);
-    setShowPrePromptIndexBox(false);
-  }
-
   const difficultyRecommendation = useMemo(() => {
     if (!classConfirmModal) return null;
     const subjectName = subjects?.[classConfirmModal.subjectId]?.name || '';
@@ -109,6 +105,17 @@ export default function GlobalAppModals({
     );
   }, [classConfirmModal, caveiraQuestions, subjects]);
 
+  if (prevPrePromptModalRef !== classConfirmModal) {
+    setPrevPrePromptModalRef(classConfirmModal);
+    const autoText = matchedModalIndexEntry?.rawIndexText || '';
+    setPrePromptIndexText(autoText);
+    setPrePromptQuestionStatus(
+      typeof caveiraQuestionPrefs?.status === 'string' ? caveiraQuestionPrefs.status : 'not_resolved'
+    );
+    setPrePromptDifficultyIds(resolveEffectiveDifficultyIds(caveiraQuestionPrefs, difficultyRecommendation));
+    setShowPrePromptIndexBox(false);
+  }
+
   const togglePrePromptDifficulty = (id) => {
     setPrePromptDifficultyIds((prev) => {
       const clean = sanitizeDifficultyIds(prev);
@@ -119,6 +126,11 @@ export default function GlobalAppModals({
       return sanitizeDifficultyIds([...clean, id]);
     });
   };
+
+  const defaultModalDiffIds = resolveEffectiveDifficultyIds(caveiraQuestionPrefs, difficultyRecommendation);
+  const isModalDiffDifferentFromDefault =
+    sanitizeDifficultyIds(prePromptDifficultyIds).join(',') !==
+    sanitizeDifficultyIds(defaultModalDiffIds).join(',');
 
   const prePromptSubtopics = useMemo(() => {
     if (!classConfirmModal) return [];
@@ -615,6 +627,27 @@ export default function GlobalAppModals({
                         {CAVEIRA_UNDEFINED_DIFFICULTY.rateLabel}
                       </span>
                     </label>
+                  )}
+
+                  {isModalDiffDifferentFromDefault && (
+                    <div className="mt-2.5 pt-2 border-t border-slate-100 dark:border-slate-800/80 flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const clean = sanitizeDifficultyIds(prePromptDifficultyIds);
+                          setCaveiraQuestionPrefs?.({
+                            difficultyMode: 'manual',
+                            difficultyIds: clean.filter((id) => id >= 2),
+                            includeUndefined: clean.includes(1),
+                            status: prePromptQuestionStatus,
+                          });
+                          toast.success('Nível salvo como padrão no QG!');
+                        }}
+                        className="text-[11px] font-semibold text-emerald-600 dark:text-emerald-400 hover:underline cursor-pointer"
+                      >
+                        Salvar como padrão no QG
+                      </button>
+                    </div>
                   )}
                 </div>
               </div>

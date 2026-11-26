@@ -25,6 +25,15 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getSafeExternalUrl } from '../../lib/safeUrl';
+import { CAVEIRA_DIFFICULTY_LEVELS, classifyQuestionDifficulty } from '../../lib/caveiraDifficulty';
+
+const NOTEBOOK_DIFF_BADGE = {
+  emerald: 'text-emerald-600 dark:text-emerald-400',
+  sky: 'text-sky-600 dark:text-sky-400',
+  amber: 'text-amber-600 dark:text-amber-400',
+  orange: 'text-orange-600 dark:text-orange-400',
+  rose: 'text-rose-600 dark:text-rose-400',
+};
 
 export default function RaioXNotebook({
   filteredQuestions,
@@ -44,6 +53,8 @@ export default function RaioXNotebook({
   setSelectedSubject,
   selectedTopic,
   setSelectedTopic,
+  selectedDifficulty = 'all',
+  setSelectedDifficulty,
   selectedLegalDevice,
   setSelectedLegalDevice,
   editingNoteId,
@@ -160,6 +171,26 @@ export default function RaioXNotebook({
               </select>
             )}
 
+            {/* Seletor de Dificuldade */}
+            {typeof setSelectedDifficulty === 'function' && (
+              <select
+                value={selectedDifficulty}
+                onChange={(e) => {
+                  setSelectedDifficulty(e.target.value);
+                  setVisibleCount(30);
+                }}
+                aria-label="Filtrar por dificuldade"
+                className="h-9 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-700 rounded-lg px-2.5 text-xs font-medium text-slate-700 dark:text-slate-200 outline-none focus:border-sky-500 max-w-[195px]"
+              >
+                <option value="all">Todas dificuldades</option>
+                {CAVEIRA_DIFFICULTY_LEVELS.map((lvl) => (
+                  <option key={lvl.id} value={String(lvl.id)}>
+                    {lvl.label} ({lvl.rateLabel})
+                  </option>
+                ))}
+              </select>
+            )}
+
             {/* Toggle Densidade */}
             <button
               type="button"
@@ -200,7 +231,7 @@ export default function RaioXNotebook({
         </div>
 
         {/* Recorte específico ativo */}
-        {(selectedSubject !== 'all' || selectedTopic !== 'all' || selectedLegalDevice) && (
+        {(selectedSubject !== 'all' || selectedTopic !== 'all' || selectedDifficulty !== 'all' || selectedLegalDevice) && (
           <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 dark:bg-slate-950/60 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-slate-500 dark:text-slate-400">Filtro ativo:</span>
@@ -224,6 +255,20 @@ export default function RaioXNotebook({
                   className="inline-flex items-center gap-1 font-semibold text-sky-700 dark:text-sky-400 hover:underline cursor-pointer"
                 >
                   <span>· {selectedTopic}</span>
+                  <X className="w-3 h-3" />
+                </button>
+              )}
+              {selectedDifficulty !== 'all' && typeof setSelectedDifficulty === 'function' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedDifficulty('all')}
+                  className="inline-flex items-center gap-1 font-semibold text-sky-700 dark:text-sky-400 hover:underline cursor-pointer"
+                >
+                  <span>
+                    ·{' '}
+                    {CAVEIRA_DIFFICULTY_LEVELS.find((l) => String(l.id) === String(selectedDifficulty))
+                      ?.label || `Nível ${selectedDifficulty}`}
+                  </span>
                   <X className="w-3 h-3" />
                 </button>
               )}
@@ -277,6 +322,7 @@ export default function RaioXNotebook({
             const isAvoidable =
               q.isAvoidableError || (!q.hit && Number(q.communityCorrectPct) >= 65);
             const isPegadinha = q.isPegadinha || Number(q.communityErrorPct) >= 65;
+            const diffInfo = classifyQuestionDifficulty(q);
 
             return (
               <article
@@ -337,6 +383,16 @@ export default function RaioXNotebook({
                     {isPegadinha && (
                       <span className="text-[11px] font-semibold text-red-600 dark:text-red-400">
                         · Pegadinha ({q.communityErrorPct}% erram)
+                      </span>
+                    )}
+
+                    {diffInfo && (
+                      <span
+                        className={`text-[11px] font-semibold ${NOTEBOOK_DIFF_BADGE[diffInfo.tone] || 'text-slate-500 dark:text-slate-400'}`}
+                        title={`Dificuldade Caveira: ${diffInfo.label} (${diffInfo.rateLabel} de acertos)`}
+                      >
+                        · {diffInfo.label}
+                        {typeof q.communityCorrectPct === 'number' ? ` (${q.communityCorrectPct}%)` : ''}
                       </span>
                     )}
 

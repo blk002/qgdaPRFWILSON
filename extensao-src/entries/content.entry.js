@@ -75,7 +75,7 @@ import {
 
 (function() {
   if (isExcludedCaveiraHost(window.location.hostname)) return;
-  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.3.0';
+  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.3.1';
   console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
@@ -87,6 +87,7 @@ import {
   const SCHEMA_VERSION_KEY = 'qg_caveira_schema_version';
   const HUD_COURSE_DIFF_KEY = 'qg_hud_course_difficulty_ids';
   let hudCourseDifficultyIds = [];
+  let renderHudCourseDiffBarRef = null;
   const MAX_BUCKET_QUESTIONS = 1500;
   const CHANNEL_NONCE = generateChannelNonce();
   let diagnosticModeEnabled = false;
@@ -366,6 +367,7 @@ import {
 
   function teardownInstance() {
     isDestroyed = true;
+    renderHudCourseDiffBarRef = null;
     if (timerInterval) clearInterval(timerInterval);
     if (pdfTimerInterval) clearInterval(pdfTimerInterval);
     if (scanIntervalId) clearInterval(scanIntervalId);
@@ -592,6 +594,18 @@ import {
           }
           if (changes[PENDING_SIMULADOS_QUEUE_KEY]) {
             updateSimuladoImportStatusHud(changes[PENDING_SIMULADOS_QUEUE_KEY].newValue);
+          }
+          if (changes[DEFAULT_PREFS_KEY]) {
+            const nextDiffs = Array.isArray(changes[DEFAULT_PREFS_KEY].newValue?.difficultyIds)
+              ? Array.from(new Set(changes[DEFAULT_PREFS_KEY].newValue.difficultyIds.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 6))).sort((a, b) => a - b)
+              : [];
+            hudCourseDifficultyIds = nextDiffs;
+            try {
+              if (isExtensionContextValid() && chrome?.storage?.local) {
+                chrome.storage.local.set({ [HUD_COURSE_DIFF_KEY]: nextDiffs });
+              }
+            } catch (_) {}
+            renderHudCourseDiffBarRef?.();
           }
         }
       });
@@ -2737,12 +2751,16 @@ import {
         }
       });
     };
+    renderHudCourseDiffBarRef = renderCourseDiffBar;
     try {
       if (isExtensionContextValid() && chrome?.storage?.local) {
-        chrome.storage.local.get([HUD_COURSE_DIFF_KEY], (res) => {
+        chrome.storage.local.get([HUD_COURSE_DIFF_KEY, DEFAULT_PREFS_KEY], (res) => {
           if (chrome.runtime?.lastError || isDestroyed) return;
-          const savedDiffs = Array.isArray(res?.[HUD_COURSE_DIFF_KEY])
-            ? Array.from(new Set(res[HUD_COURSE_DIFF_KEY].map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 6))).sort((a, b) => a - b)
+          const rawDiffs = Array.isArray(res?.[HUD_COURSE_DIFF_KEY])
+            ? res[HUD_COURSE_DIFF_KEY]
+            : res?.[DEFAULT_PREFS_KEY]?.difficultyIds;
+          const savedDiffs = Array.isArray(rawDiffs)
+            ? Array.from(new Set(rawDiffs.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 6))).sort((a, b) => a - b)
             : [];
           hudCourseDifficultyIds = savedDiffs;
           renderCourseDiffBar();

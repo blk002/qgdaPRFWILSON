@@ -8607,7 +8607,7 @@
     }
   }
   document.addEventListener("DOMContentLoaded", () => {
-    const manifestVer = chrome.runtime?.getManifest?.().version || "3.3.0";
+    const manifestVer = chrome.runtime?.getManifest?.().version || "3.3.1";
     const verEl = document.getElementById("ext-version");
     if (verEl) verEl.textContent = `v${manifestVer}`;
     let currentUserId = null;
@@ -8834,17 +8834,15 @@
     }
     (function initPrefs() {
       const boxes = Array.from(document.querySelectorAll(".pref-board"));
-      const diffBoxes = Array.from(document.querySelectorAll(".pref-diff"));
       const sel = document.getElementById("pref-alts");
       const statusSel = document.getElementById("pref-status");
       if (!boxes.length || !sel) return;
+      let cachedDifficultyIds = [];
+      const sanitizeDiffs = (list) => Array.isArray(list) ? Array.from(new Set(list.map(Number).filter((n) => Number.isInteger(n) && n >= 1 && n <= 6))).sort((a, b) => a - b) : [];
       const render = (p) => {
+        cachedDifficultyIds = sanitizeDiffs(p?.difficultyIds);
         boxes.forEach((b) => {
           b.checked = (p.examBoards || []).includes(b.value);
-        });
-        const diffs = Array.isArray(p.difficultyIds) ? p.difficultyIds.map(Number) : [];
-        diffBoxes.forEach((b) => {
-          b.checked = diffs.includes(Number(b.value));
         });
         sel.value = p.numberAlternatives && p.numberAlternatives[0] ? String(p.numberAlternatives[0]) : "";
         if (statusSel) {
@@ -8855,14 +8853,20 @@
         const p = {
           examBoards: boxes.filter((b) => b.checked).map((b) => b.value),
           numberAlternatives: sel.value ? [Number(sel.value)] : [],
-          difficultyIds: diffBoxes.filter((b) => b.checked).map((b) => Number(b.value)).sort((a, b) => a - b),
+          difficultyIds: cachedDifficultyIds,
           status: statusSel ? statusSel.value : "not_resolved"
         };
         chrome.storage.local.set({ [DEFAULT_PREFS_KEY]: p });
       };
       chrome.storage.local.get([DEFAULT_PREFS_KEY], (r) => render(r[DEFAULT_PREFS_KEY] || FIRST_PREFS));
+      if (chrome.storage?.onChanged) {
+        chrome.storage.onChanged.addListener((changes, area) => {
+          if (area === "local" && changes[DEFAULT_PREFS_KEY]) {
+            render(changes[DEFAULT_PREFS_KEY].newValue || FIRST_PREFS);
+          }
+        });
+      }
       boxes.forEach((b) => b.addEventListener("change", save));
-      diffBoxes.forEach((b) => b.addEventListener("change", save));
       sel.addEventListener("change", save);
       if (statusSel) statusSel.addEventListener("change", save);
     })();
