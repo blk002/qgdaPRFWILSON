@@ -30,7 +30,7 @@
     }
   }
 
-  function postSettingsToMain(force = false) {
+  function postSettingsToMain(forceSpeed = false) {
     try {
       window.postMessage(
         {
@@ -39,7 +39,7 @@
           payload: {
             speed: clampSpeed(desiredSpeed),
             forceMaxQuality,
-            force: Boolean(force),
+            forceSpeed: Boolean(forceSpeed),
           },
         },
         window.location.origin
@@ -47,9 +47,11 @@
     } catch (_) {}
   }
 
-  function applyTargetSpeed(video, force = false) {
+  function applyTargetSpeed(video, forceSpeed = false) {
     const speed = clampSpeed(desiredSpeed);
-    postSettingsToMain(force);
+    if (forceSpeed) {
+      postSettingsToMain(true);
+    }
     if (!video) return;
     try {
       if (Math.abs((video.defaultPlaybackRate || 1) - speed) > 0.005) {
@@ -159,18 +161,32 @@
     } catch (_) {}
   }
 
+  let observer = null;
+
   function bindVideoElement() {
     const video = document.querySelector('video');
     if (!video || video === lastBoundVideo) return;
     lastBoundVideo = video;
     endedNotified = false;
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
 
     video.addEventListener('loadedmetadata', () => {
       applyTargetSpeed(video, false);
       tryAutoResumePosition(video);
     });
-    video.addEventListener('canplay', () => applyTargetSpeed(video, false));
-    video.addEventListener('playing', () => applyTargetSpeed(video, false));
+    video.addEventListener('canplay', () => {
+      if (Math.abs((video.playbackRate || 1) - clampSpeed(desiredSpeed)) > 0.005) {
+        applyTargetSpeed(video, false);
+      }
+    });
+    video.addEventListener('playing', () => {
+      if (Math.abs((video.playbackRate || 1) - clampSpeed(desiredSpeed)) > 0.005) {
+        applyTargetSpeed(video, false);
+      }
+    });
     video.addEventListener('timeupdate', () => saveResumePosition(video));
     video.addEventListener('pause', () => {
       lastResumeSave = 0;
@@ -260,14 +276,22 @@
     }
   } catch (_) {}
 
-  const observer = new MutationObserver(() => bindVideoElement());
+  observer = new MutationObserver(() => bindVideoElement());
   if (document.documentElement) {
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
   const poll = setInterval(() => {
     bindVideoElement();
-    postSettingsToMain(false);
-    if (lastBoundVideo) clearInterval(poll);
+    if (lastBoundVideo) {
+      postSettingsToMain(false);
+      clearInterval(poll);
+    }
   }, 800);
-  setTimeout(() => clearInterval(poll), 20000);
+  setTimeout(() => {
+    clearInterval(poll);
+    if (observer) {
+      observer.disconnect();
+      observer = null;
+    }
+  }, 10000);
 })();
