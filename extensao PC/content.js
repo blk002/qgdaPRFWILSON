@@ -1684,7 +1684,7 @@ ${EXTRA_SHADOW_CSS}`;
   // extensao-src/entries/content.entry.js
   (function() {
     if (isExcludedCaveiraHost(window.location.hostname)) return;
-    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.4.9";
+    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.5.0";
     console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
     try {
       window.dispatchEvent(new CustomEvent("qg-caveira-teardown"));
@@ -7033,6 +7033,9 @@ ${EXTRA_SHADOW_CSS}`;
         return null;
       }
     }
+    function stripLessonPartSuffixForMemory(txt) {
+      return String(txt || "").replace(/\s*[-–—|:]\s*(?:parte|pt|aula|bloco)\s*0*\d+(?:\s*[-–—|:]\s*(?:exercicios?|teoria|revisao|resolucao))?\s*$/i, "").replace(/\s+(?:parte|pt)\s*0*\d+\s*$/i, "").trim();
+    }
     function buildFilterIdMemoryKey(subject, lessonsList, fallbackTopic) {
       const subjNorm = normalizeCourseIndexKey(subject || "");
       const lessonsNorm = (Array.isArray(lessonsList) ? lessonsList : []).map(normalizeCourseIndexKey).filter(Boolean).join("|");
@@ -7046,17 +7049,30 @@ ${EXTRA_SHADOW_CSS}`;
             resolve(null);
             return;
           }
-          const primaryKey = buildFilterIdMemoryKey(subject, lessonsList, fallbackTopic);
-          const fallbackKey = buildFilterIdMemoryKey(subject, lessonsList, "");
+          const rawLessons = Array.isArray(lessonsList) ? lessonsList : [];
+          const baseLessons = rawLessons.map(stripLessonPartSuffixForMemory).filter(Boolean);
+          const primaryKey = buildFilterIdMemoryKey(subject, rawLessons, fallbackTopic);
+          const basePrimaryKey = buildFilterIdMemoryKey(subject, baseLessons, fallbackTopic);
+          const fallbackKey = buildFilterIdMemoryKey(subject, rawLessons, "");
+          const baseFallbackKey = buildFilterIdMemoryKey(subject, baseLessons, "");
           chrome.storage.local.get([FILTER_ID_MEMORY_KEY], (res) => {
             if (chrome.runtime?.lastError) {
               resolve(null);
               return;
             }
             const store = res && res[FILTER_ID_MEMORY_KEY] && typeof res[FILTER_ID_MEMORY_KEY] === "object" ? res[FILTER_ID_MEMORY_KEY] : {};
-            const entry = store[primaryKey] || store[fallbackKey] || null;
-            if (entry && entry.subjectId && Array.isArray(entry.ids) && entry.ids.length > 0) {
-              resolve({ key: store[primaryKey] ? primaryKey : fallbackKey, ...entry });
+            const candidateKeys = [primaryKey, basePrimaryKey, fallbackKey, baseFallbackKey].filter(Boolean);
+            let matchedKey = null;
+            let entry = null;
+            for (const k of candidateKeys) {
+              if (store[k] && store[k].subjectId && Array.isArray(store[k].ids) && store[k].ids.length > 0) {
+                matchedKey = k;
+                entry = store[k];
+                break;
+              }
+            }
+            if (entry) {
+              resolve({ key: matchedKey, ...entry });
               return;
             }
             resolve(null);
@@ -7072,15 +7088,22 @@ ${EXTRA_SHADOW_CSS}`;
         const subjectId = Number(data.subjectId);
         const ids = Array.isArray(data.ids) ? data.ids.map(Number).filter((n) => Number.isFinite(n) && n > 0) : [];
         if (!subjectId || ids.length === 0) return;
+        const rawLessons = filterCtx.lessons || [];
+        const baseLessons = rawLessons.map(stripLessonPartSuffixForMemory).filter(Boolean);
         const key = buildFilterIdMemoryKey(
           filterCtx.subject || data.subjectName || "",
-          filterCtx.lessons || [],
+          rawLessons,
+          filterCtx.fallbackTopic || ""
+        );
+        const baseKey = buildFilterIdMemoryKey(
+          filterCtx.subject || data.subjectName || "",
+          baseLessons,
           filterCtx.fallbackTopic || ""
         );
         chrome.storage.local.get([FILTER_ID_MEMORY_KEY], (res) => {
           if (chrome.runtime?.lastError) return;
           const store = res && res[FILTER_ID_MEMORY_KEY] && typeof res[FILTER_ID_MEMORY_KEY] === "object" ? { ...res[FILTER_ID_MEMORY_KEY] } : {};
-          store[key] = {
+          const entryObj = {
             subjectId,
             subjectName: data.subjectName || filterCtx.subject || "",
             ids,
@@ -7088,6 +7111,10 @@ ${EXTRA_SHADOW_CSS}`;
             lessonTitle: filterCtx.topic || filterCtx.fallbackTopic || "",
             updatedAt: Date.now()
           };
+          store[key] = entryObj;
+          if (baseKey && baseKey !== key) {
+            store[baseKey] = entryObj;
+          }
           const entries = Object.entries(store);
           const payload = entries.length > 400 ? Object.fromEntries(entries.sort((a, b) => (b[1]?.updatedAt || 0) - (a[1]?.updatedAt || 0)).slice(0, 400)) : store;
           chrome.storage.local.set({ [FILTER_ID_MEMORY_KEY]: payload }, () => {

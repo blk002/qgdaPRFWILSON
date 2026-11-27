@@ -74,6 +74,8 @@
   function canon(text) {
     let s = stripAccentsLower(text);
     s = s
+      .replace(/\b(\d{1,2})\.(\d{3})\b/g, '$1$2')
+      .replace(/\/(?:19|20)(\d{2})\b/g, ' $1')
       .replace(/\bn[º°.]?\s*(?=\d)/g, '')
       .replace(/(\d+)\s*[º°ª]/g, '$1')
       .replace(/[_|/\\–—-]+/g, ' ')
