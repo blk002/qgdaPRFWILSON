@@ -182,7 +182,7 @@ export default function Config({
         : undefined;
       const matchingRules = (futureScheduleRules || [])
         .filter(r => {
-          if (!r || r.v !== 2 || !Array.isArray(r.daySlots) || r.daySlots.length === 0) return false;
+          if (!r || r.v !== 2 || !Array.isArray(r.daySlots)) return false;
           if (fullDateStr && r.fromDate && r.fromDate > fullDateStr) return false;
           if (isWeekly && r.dayOfWeek !== undefined && dayOfWeek !== undefined) {
             return r.dayOfWeek === dayOfWeek;

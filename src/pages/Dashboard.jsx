@@ -168,12 +168,14 @@ export default function Dashboard() {
     );
   }
 
+  const userXp = Number(userStats?.xp) || 0;
+  const userMedals = Array.isArray(userStats?.medals) ? userStats.medals : [];
   const enrollmentId = `PRF-${(user?.id || 'ANON').slice(-6).toUpperCase()}`;
   const patenteAtual = getCurrentPatente();
   const currentLevelIndex = PATENTES.findIndex(p => p.id === patenteAtual.id);
   const nextPatente = PATENTES[currentLevelIndex + 1] || null;
   const progressToNext = nextPatente
-    ? Math.max(0, Math.min(100, ((userStats.xp - patenteAtual.minXp) / (nextPatente.minXp - patenteAtual.minXp)) * 100))
+    ? Math.max(0, Math.min(100, ((userXp - patenteAtual.minXp) / (nextPatente.minXp - patenteAtual.minXp)) * 100))
     : 100;
 
   const estimatedDate = getEstimatedCompletionDate();
@@ -309,7 +311,7 @@ export default function Dashboard() {
             Carreira
           </h1>
           <p className="mt-1 text-xs text-slate-500 dark:text-slate-400 tabular-nums">
-            {patenteAtual.name} · {userStats.xp.toLocaleString()} XP · {completionPercent}% do edital concluído
+            {patenteAtual.name} · {userXp.toLocaleString()} XP · {completionPercent}% do edital concluído
           </p>
         </div>
       </header>
@@ -405,11 +407,11 @@ export default function Dashboard() {
                 <div className="flex items-baseline justify-between gap-2 text-xs">
                   <span className="text-slate-500 dark:text-slate-400 font-medium">
                     {nextPatente
-                      ? `Faltam ${(nextPatente.minXp - userStats.xp).toLocaleString()} XP para ${nextPatente.name}`
+                      ? `Faltam ${(nextPatente.minXp - userXp).toLocaleString()} XP para ${nextPatente.name}`
                       : 'Patente máxima alcançada'}
                   </span>
                   <span className="font-mono font-semibold tabular-nums text-slate-800 dark:text-slate-100 shrink-0">
-                    {userStats.xp.toLocaleString()} XP
+                    {userXp.toLocaleString()} XP
                   </span>
                 </div>
                 <div className="w-full bg-slate-100 dark:bg-slate-850 rounded-full h-2 overflow-hidden">
@@ -634,8 +636,8 @@ export default function Dashboard() {
               <div className="relative flex justify-between items-center min-w-[460px] px-2 pt-4 pb-8">
                 <div className="absolute top-10 left-4 right-4 h-0.5 bg-slate-200 dark:bg-slate-800 z-0" />
                 {PATENTES.map((p, idx) => {
-                  const isCompleted = userStats.xp >= p.minXp;
-                  const isNext = !isCompleted && PATENTES[idx - 1] && userStats.xp >= PATENTES[idx - 1].minXp;
+                  const isCompleted = userXp >= p.minXp;
+                  const isNext = !isCompleted && PATENTES[idx - 1] && userXp >= PATENTES[idx - 1].minXp;
                   const isActive = patenteAtual.id === p.id;
                   return (
                     <div key={p.id} className="relative z-10 flex flex-col items-center">
@@ -864,12 +866,12 @@ export default function Dashboard() {
                 <span>Conquistas</span>
               </h2>
               <span className="text-xs font-mono text-slate-500 dark:text-slate-400 tabular-nums">
-                {userStats.medals.length}/{MEDALHAS.length}
+                {userMedals.length}/{MEDALHAS.length}
               </span>
             </div>
             <div className="grid grid-cols-2 gap-3">
               {MEDALHAS.map(medal => {
-                const isUnlocked = userStats.medals.includes(medal.id);
+                const isUnlocked = userMedals.includes(medal.id);
                 return (
                   <div
                     key={medal.id}

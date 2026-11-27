@@ -412,10 +412,11 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
 
   if (message.type === 'DB_DELETE_QUESTION') {
     (async () => {
+      const shouldEnqueue = message.payload?.enqueueOutbox !== false;
       await deleteQuestionFull(message.payload?.id, message.payload?.userId || null, {
-        enqueueOutbox: message.payload?.enqueueOutbox !== false,
+        enqueueOutbox: shouldEnqueue,
       });
-      scheduleOutboxFlush();
+      if (shouldEnqueue) scheduleOutboxFlush();
       sendResponse({ ok: true });
     })().catch(() => sendResponse({ ok: false }));
     return true;

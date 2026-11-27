@@ -442,7 +442,7 @@ export function useExtensionBridge() {
         );
       }
     } catch {}
-  }, [session?.user?.id, session?.user?.email, session?.access_token, session?.refresh_token, session?.expires_at]);
+  }, [session?.user?.id, session?.user?.email, session?.user?.user_metadata?.display_name, session?.access_token, session?.refresh_token, session?.expires_at]);
 
   // Sincroniza índice de aulas do Caveira apenas quando o cache ou sync inicial muda
   useEffect(() => {

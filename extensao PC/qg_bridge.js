@@ -164,6 +164,7 @@
       ].join("|");
     }
     let cachedActiveUserId = null;
+    let bucketSwitchPromise = Promise.resolve();
     let lastSyncPayloadJson = "";
     let lastSyncPayloadTime = 0;
     let pendingSimAckTimer = null;
@@ -792,52 +793,94 @@
           hasWebAppReadySignal = true;
           const nextUserId = event.data.payload?.userId || null;
           const nextUserLabel = event.data.payload?.userLabel || event.data.payload?.userEmail || "";
+          cachedActiveUserId = nextUserId;
           deliverCourseIndexCache();
-          switchUserBucket(nextUserId, ({ userId }) => {
-            if (userId) deliverDataForActiveUser(userId);
-          }, nextUserLabel);
+          bucketSwitchPromise = bucketSwitchPromise.then(
+            () => new Promise((resolve) => {
+              switchUserBucket(
+                nextUserId,
+                ({ userId }) => {
+                  if (userId) deliverDataForActiveUser(userId);
+                  resolve();
+                },
+                nextUserLabel
+              );
+            })
+          ).catch(() => {
+          });
         }
         if (event.data.type === "USER_SIGNED_OUT") {
-          switchUserBucket(null, () => {
-            if (isBridgeDestroyed) return;
-            window.postMessage({
-              source: "QG_CAVEIRA_EXTENSION",
-              type: "USER_SIGNED_OUT_ACK"
-            }, getTargetOrigin());
+          cachedActiveUserId = null;
+          hasWebAppReadySignal = false;
+          bucketSwitchPromise = bucketSwitchPromise.then(
+            () => new Promise((resolve) => {
+              switchUserBucket(null, () => {
+                if (!isBridgeDestroyed) {
+                  window.postMessage(
+                    {
+                      source: "QG_CAVEIRA_EXTENSION",
+                      type: "USER_SIGNED_OUT_ACK"
+                    },
+                    getTargetOrigin()
+                  );
+                }
+                resolve();
+              });
+            })
+          ).catch(() => {
           });
         }
         if (event.data.type === "QG_PRF_SYNC_CLOUD_CREDS" && event.data.payload?.userId) {
-          if (cachedActiveUserId && event.data.payload.userId !== cachedActiveUserId) return;
-          try {
-            chrome.runtime?.sendMessage?.({
-              type: "SET_CLOUD_AUTH",
-              payload: { ...event.data.payload, updatedAt: Date.now() }
-            }).catch(() => {
-            });
-          } catch (_) {
-          }
+          const credsPayload = { ...event.data.payload, updatedAt: Date.now() };
+          if (cachedActiveUserId && credsPayload.userId !== cachedActiveUserId) return;
+          bucketSwitchPromise.then(() => {
+            if (isBridgeDestroyed || cachedActiveUserId && credsPayload.userId !== cachedActiveUserId) return;
+            try {
+              chrome.runtime?.sendMessage?.({
+                type: "SET_CLOUD_AUTH",
+                payload: credsPayload
+              }).catch(() => {
+              });
+            } catch (_) {
+            }
+          });
         }
         if (event.data.type === "QG_PRF_SYNC_REMINDER_STATE" && event.data.payload) {
-          try {
-            chrome.storage.local.set({ [REMINDER_STATE_KEY]: { ...event.data.payload, updatedAt: Date.now() } });
-          } catch (_) {
-          }
+          const reminderPayload = { ...event.data.payload, updatedAt: Date.now() };
+          bucketSwitchPromise.then(() => {
+            if (isBridgeDestroyed || !cachedActiveUserId) return;
+            try {
+              chrome.storage.local.set({ [REMINDER_STATE_KEY]: reminderPayload });
+            } catch (_) {
+            }
+          });
         }
         if (event.data.type === "FETCH_CAVEIRA_DATA") {
           hasWebAppReadySignal = true;
-          sendStoredData(event.data.payload?.userId || null);
+          const reqUid = event.data.payload?.userId || null;
+          bucketSwitchPromise.then(() => {
+            if (!isBridgeDestroyed) sendStoredData(reqUid);
+          });
         }
         if (event.data.type === "QG_PRF_SYNC_TODAY_MISSION" && event.data.payload) {
-          try {
-            chrome.storage.local.set({ [TODAY_MISSION_KEY]: event.data.payload });
-          } catch (_) {
-          }
+          const todayMissionPayload = event.data.payload;
+          bucketSwitchPromise.then(() => {
+            if (isBridgeDestroyed || !cachedActiveUserId) return;
+            try {
+              chrome.storage.local.set({ [TODAY_MISSION_KEY]: todayMissionPayload });
+            } catch (_) {
+            }
+          });
         }
         if (event.data.type === "QG_PRF_SYNC_SUBJECT_SPEEDS" && event.data.payload?.speeds) {
-          try {
-            chrome.storage.local.set({ [SUBJECT_SPEEDS_KEY]: event.data.payload.speeds });
-          } catch (_) {
-          }
+          const speedsPayload = event.data.payload.speeds;
+          bucketSwitchPromise.then(() => {
+            if (isBridgeDestroyed || !cachedActiveUserId) return;
+            try {
+              chrome.storage.local.set({ [SUBJECT_SPEEDS_KEY]: speedsPayload });
+            } catch (_) {
+            }
+          });
         }
         if (event.data.type === "QG_PRF_SYNC_FILTER_MEMORY" && event.data.payload?.memory) {
           try {
@@ -1098,6 +1141,7 @@
         }
         if (event.data.type === "DELETE_CAVEIRA_QUESTION" && event.data.payload?.id) {
           const targetId = event.data.payload.id;
+          const shouldEnqueue = event.data.payload.enqueueOutbox !== false;
           try {
             chrome.storage.local.get([STORAGE_KEY, ACTIVE_USER_KEY, USER_BUCKETS_KEY], (res) => {
               if (chrome.runtime.lastError || isBridgeDestroyed) return;
@@ -1122,7 +1166,7 @@
               if (chrome.runtime?.sendMessage) {
                 chrome.runtime.sendMessage({
                   type: "DB_DELETE_QUESTION",
-                  payload: { id: targetId, userId: activeUserId || null, enqueueOutbox: false }
+                  payload: { id: targetId, userId: activeUserId || null, enqueueOutbox: shouldEnqueue }
                 }, () => {
                   void chrome.runtime?.lastError;
                   persistAfterDelete();

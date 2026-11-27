@@ -1,4 +1,4 @@
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useCallback } from 'react';
 import { useStore } from '../store/useStore';
 import CaveiraReviewQuestionModal from './CaveiraReviewQuestionModal';
 import StudyConsistencyHeatmap from './StudyConsistencyHeatmap';
@@ -146,7 +146,7 @@ export default function AbaHoje({ onGoToTab }) {
     });
   };
 
-  const clearCheckedLessonsForSlot = (subjectId, slotIndex) => {
+  const clearCheckedLessonsForSlot = useCallback((subjectId, slotIndex) => {
     const prefix = `${subjectId}:${slotIndex}:`;
     setCheckedLessonsMap((prev) => {
       let changed = false;
@@ -166,7 +166,7 @@ export default function AbaHoje({ onGoToTab }) {
       }
       return next;
     });
-  };
+  }, [todayDateStr]);
 
   useEffect(() => {
     const handleCleared = (e) => {
@@ -177,7 +177,7 @@ export default function AbaHoje({ onGoToTab }) {
     };
     window.addEventListener('qg-checked-lessons-cleared', handleCleared);
     return () => window.removeEventListener('qg-checked-lessons-cleared', handleCleared);
-  }, [todayDateStr]);
+  }, [clearCheckedLessonsForSlot]);
 
   const caveiraStats = useMemo(() => {
     const list = Array.isArray(caveiraQuestions) ? caveiraQuestions.filter(Boolean) : [];

@@ -8,6 +8,12 @@ import { APP_VERSION } from './version'
 
 // Auto-recuperação contra chunk cache antigo (Failed to fetch dynamically imported module)
 window.addEventListener('vite:preloadError', (event) => {
+  if (typeof navigator !== 'undefined' && navigator.onLine === false) return;
+  try {
+    const lastReloadAt = Number(sessionStorage.getItem('qg_preload_reload_at') || 0);
+    if (Date.now() - lastReloadAt < 30000) return;
+    sessionStorage.setItem('qg_preload_reload_at', String(Date.now()));
+  } catch (_) {}
   console.warn('🔄 Novo deploy detectado! Recarregando para buscar a versão mais recente dos arquivos...');
   event.preventDefault();
   window.location.reload();
@@ -41,7 +47,7 @@ if ('serviceWorker' in navigator) {
     }
   } else {
     // Limpa caches antigos mantendo apenas o cache da versão atual
-    const expectedCache = `qg-prf-cache-${APP_VERSION.replace('.', '-')}`;
+    const expectedCache = `qg-prf-cache-${APP_VERSION.replaceAll('.', '-')}`;
     if ('caches' in window) {
       caches.keys().then(names => {
         names.forEach(name => {

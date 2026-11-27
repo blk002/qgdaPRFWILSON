@@ -76,7 +76,7 @@ import {
 
 (function() {
   if (isExcludedCaveiraHost(window.location.hostname)) return;
-  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.4.3';
+  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.4.4';
   console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
@@ -1785,7 +1785,9 @@ import {
       };
     } catch (_) {}
 
+    let finished = false;
     const clearTargetPending = () => {
+      finished = true;
       if (targetLessonPollTimer) {
         clearInterval(targetLessonPollTimer);
         targetLessonPollTimer = null;
@@ -1887,6 +1889,7 @@ import {
               });
               if (bestCachedUrl) {
                 const targetDirectUrl = `${bestCachedUrl}${window.location.hash}`;
+                finished = true;
                 navigatedToModuleUrl = targetDirectUrl;
                 if (targetLessonPollTimer) {
                   clearInterval(targetLessonPollTimer);
@@ -1901,6 +1904,7 @@ import {
         if (apiCoursesListCache.length === 1 && !queryIsStandalone && apiCoursesListCache[0]?.id) {
           const singleCourseUrl = `${window.location.origin}/courses/${apiCoursesListCache[0].id}${window.location.hash}`;
           if (navigatedToModuleUrl !== singleCourseUrl) {
+            finished = true;
             navigatedToModuleUrl = singleCourseUrl;
             if (targetLessonPollTimer) {
               clearInterval(targetLessonPollTimer);
@@ -1924,6 +1928,7 @@ import {
           if (bestApiCourse && bestApiCourseScore >= 60) {
             const targetCourseUrl = `${window.location.origin}/courses/${bestApiCourse.id}${window.location.hash}`;
             if (navigatedToModuleUrl !== targetCourseUrl) {
+              finished = true;
               navigatedToModuleUrl = targetCourseUrl;
               if (targetLessonPollTimer) {
                 clearInterval(targetLessonPollTimer);
@@ -2164,6 +2169,7 @@ import {
             }
           }
           if (targetUrl !== currentNoHash && navigatedToModuleUrl !== targetUrl) {
+            finished = true;
             navigatedToModuleUrl = targetUrl;
             if (targetLessonPollTimer) {
               clearInterval(targetLessonPollTimer);
@@ -2181,7 +2187,12 @@ import {
           navigatedToModuleUrl !== bestFallbackModuleUrl &&
           bestFallbackModuleUrl !== window.location.href.split('#')[0]
         ) {
+          finished = true;
           navigatedToModuleUrl = bestFallbackModuleUrl;
+          if (targetLessonPollTimer) {
+            clearInterval(targetLessonPollTimer);
+            targetLessonPollTimer = null;
+          }
           window.location.href = bestFallbackModuleUrl;
           return;
         }
@@ -2194,7 +2205,9 @@ import {
     };
 
     tryNavigate();
-    targetLessonPollTimer = setInterval(tryNavigate, 500);
+    if (!finished && !isDestroyed) {
+      targetLessonPollTimer = setInterval(tryNavigate, 500);
+    }
   }
 
   function parseEnjoymentDialogData() {
@@ -9204,6 +9217,7 @@ import {
 
   // --- 7. VARREDURA DE CARDS E DETECÇÃO DE VIEWPORT ---
   function scanCards() {
+    if (isDestroyed) return;
     if (!isExtensionContextValid()) {
       teardownInstance();
       return;
@@ -9292,20 +9306,20 @@ import {
         if (!observedLiveAnswer) {
           preAnsweredIgnoredQIds.add(qId);
         } else if (!processedInSession.has(qId)) {
-          processedInSession.add(qId);
-          pendingAnswerQIds.delete(qId);
-          unansweredObservedQIds.delete(qId);
-          preAnsweredIgnoredQIds.delete(qId);
-
-          pauseTimer();
-
-          const currentQEl = getHudEl('qg-current-q-id');
-          if (currentQEl) {
-            currentQEl.textContent = `${qId} ✓`;
-          }
-
           const questionData = extractQuestionData(card, qId);
           if (questionData) {
+            processedInSession.add(qId);
+            pendingAnswerQIds.delete(qId);
+            unansweredObservedQIds.delete(qId);
+            preAnsweredIgnoredQIds.delete(qId);
+
+            pauseTimer();
+
+            const currentQEl = getHudEl('qg-current-q-id');
+            if (currentQEl) {
+              currentQEl.textContent = `${qId} ✓`;
+            }
+
             activeQuestionData = questionData;
             saveQuestion(questionData, false);
             renderQuestionHistory(qId, true);

@@ -182,7 +182,6 @@ const normalizeHydratedState = (raw, currentCaveira = []) => {
   const { isSyncing: _s, lastSyncedAt: _l, _keyTimestamps: _kt, ...cleanData } = raw || {};
   delete cleanData.calendarDate;
   delete cleanData.reviewCalendarDate;
-  delete cleanData.reviewCalendarDate;
 
   if (cleanData.completedTodayDate === undefined) cleanData.completedTodayDate = null;
   if (!Array.isArray(cleanData.completedToday)) cleanData.completedToday = [];
@@ -195,12 +194,25 @@ const normalizeHydratedState = (raw, currentCaveira = []) => {
   }
   if (!cleanData.dailyMissions) cleanData.dailyMissions = [];
   if (!cleanData.lastDailyResetDate) cleanData.lastDailyResetDate = null;
-  if (cleanData.userStats && !cleanData.userStats.avatar) {
+  cleanData.userStats = {
+    ...defaults.userStats,
+    ...(cleanData.userStats && typeof cleanData.userStats === 'object' ? cleanData.userStats : {}),
+    medals: Array.isArray(cleanData.userStats?.medals) ? cleanData.userStats.medals : [],
+  };
+  if (!cleanData.userStats.avatar) {
     cleanData.userStats.avatar = '/assets/gamification/avatar_male.png';
   }
-  if (cleanData.userStats && cleanData.userStats.totalPurchases === undefined) {
+  if (cleanData.userStats.totalPurchases === undefined) {
     cleanData.userStats.totalPurchases = 0;
   }
+  cleanData.streakData = {
+    ...defaults.streakData,
+    ...(cleanData.streakData && typeof cleanData.streakData === 'object' ? cleanData.streakData : {}),
+  };
+  cleanData.reviewStats = {
+    ...defaults.reviewStats,
+    ...(cleanData.reviewStats && typeof cleanData.reviewStats === 'object' ? cleanData.reviewStats : {}),
+  };
   if (!cleanData.activeBoosts) {
     cleanData.activeBoosts = { xpBoostActions: 0, streakShieldActive: false };
   }
@@ -792,6 +804,7 @@ export const useStore = create(
           }
           const { data, error } = await Promise.race([fetchQuery, timeoutPromise]).finally(() => clearTimeout(timerId));
 
+          if (get().user?.id !== user.id) return false;
           if (error) throw error;
 
           if (data && data.length > 0 && data[0].full_data) {
@@ -802,6 +815,7 @@ export const useStore = create(
           // A4: Segurança contra falso "nova conta" (ex.: sessão expirada ou RLS retornando [] sem erro)
           // 1) Verifica se a sessão de autenticação está realmente válida
           const { data: sessionCheck, error: sessionErr } = await supabase.auth.getSession();
+          if (get().user?.id !== user.id) return false;
           const activeSession = sessionCheck?.session;
           if (sessionErr || !activeSession || activeSession.user?.id !== user.id) {
             throw new Error("Sessão expirada ou inválida durante leitura do perfil.");
@@ -813,6 +827,7 @@ export const useStore = create(
             .select('full_data, updated_at')
             .eq('id', user.id)
             .limit(1);
+          if (get().user?.id !== user.id) return false;
           if (confirmErr) throw confirmErr;
 
           if (confirmData && confirmData.length > 0 && confirmData[0].full_data) {
@@ -989,6 +1004,7 @@ export const useStore = create(
         // A2: Se um save já está em andamento, não descarta: marca savePending para rodar logo após o término
         if (isSavingToCloud) {
           useStore._savePending = true;
+          useStore._savePendingAllowEmpty = Boolean(useStore._savePendingAllowEmpty || allowEmptyOverwrite);
           set({ savePending: true, hasUnsyncedChanges: true });
           return false;
         }
@@ -1106,13 +1122,19 @@ export const useStore = create(
                 }
                 if (conflictData?.[0]?.updated_at) finalSyncedAt = conflictData[0].updated_at;
 
-                set({ ...normalizedMerged });
+                useStore._suppressSubscribeStamp = true;
+                try {
+                  set({ ...normalizedMerged });
+                } finally {
+                  useStore._suppressSubscribeStamp = false;
+                }
                 toast.info('🔄 Sincronizado com outro dispositivo preservando suas alterações locais.', { id: 'sync-merge-toast' });
               }
             }
           })();
 
           await Promise.race([savePromise, timeoutPromise]).finally(() => clearTimeout(timeoutId));
+          if (get().user?.id !== user.id) return false;
 
           // Atualiza a baseline de sincronização após gravação bem-sucedida
           useStore._retryCount = 0;
@@ -1120,9 +1142,10 @@ export const useStore = create(
           if (hasMeaningfulUserData(dataToSave)) {
             useStore._lastKnownCloudWasMeaningful = true;
           }
-          set({ lastSyncedAt: finalSyncedAt, hasUnsyncedChanges: false, cloudSyncError: null });
+          const stillDirty = Boolean(useStore._savePending);
+          set({ lastSyncedAt: finalSyncedAt, hasUnsyncedChanges: stillDirty, cloudSyncError: null });
           writeLocalSnapshot(get(), {
-            dirty: false,
+            dirty: stillDirty,
             savedAt: finalSyncedAt,
             keyTimestamps: useStore._keyTimestamps || {}
           });
@@ -1144,14 +1167,15 @@ export const useStore = create(
               .limit(1);
             const verifyTs = verifyData?.[0]?.updated_at ? new Date(verifyData[0].updated_at).getTime() : 0;
             const sentTs = newUpdatedAt ? new Date(newUpdatedAt).getTime() : 0;
-            if (verifyTs > 0 && sentTs > 0 && verifyTs === sentTs) {
+            if (verifyTs > 0 && sentTs > 0 && verifyTs === sentTs && get().user?.id === user.id) {
               finalSyncedAt = verifyData[0].updated_at;
               recoveredFromTimeout = true;
               useStore._retryCount = 0;
               useStore._unsyncedToastShown = false;
-              set({ lastSyncedAt: finalSyncedAt, hasUnsyncedChanges: false, cloudSyncError: null });
+              const stillDirty = Boolean(useStore._savePending);
+              set({ lastSyncedAt: finalSyncedAt, hasUnsyncedChanges: stillDirty, cloudSyncError: null });
               writeLocalSnapshot(get(), {
-                dirty: false,
+                dirty: stillDirty,
                 savedAt: finalSyncedAt,
                 keyTimestamps: useStore._keyTimestamps || {}
               });
@@ -1159,6 +1183,7 @@ export const useStore = create(
           } catch (_) {}
 
           if (!recoveredFromTimeout) {
+            if (get().user?.id !== user.id) return false;
             console.error('❌ [Nuvem] Erro no Upload:', error.message);
             set({
               hasUnsyncedChanges: true,
@@ -1196,10 +1221,12 @@ export const useStore = create(
           // A2: Se houve alteração enquanto salvava, dispara novo save imediatamente
           if (useStore._savePending) {
             useStore._savePending = false;
+            const retryAllowEmpty = Boolean(useStore._savePendingAllowEmpty);
+            useStore._savePendingAllowEmpty = false;
             set({ savePending: false });
             clearTimeout(useStore._debounceTimer);
             useStore._debounceTimer = setTimeout(() => {
-              get().saveToCloud();
+              get().saveToCloud({ allowEmptyOverwrite: retryAllowEmpty });
             }, 100);
           }
         }
@@ -1280,7 +1307,7 @@ export const useStore = create(
               (payload) => {
                 const st = useStore.getState();
                 if (payload?.eventType === 'DELETE' && payload?.old?.question_id) {
-                  st.deleteCaveiraQuestion?.(payload.old.question_id);
+                  st.deleteCaveiraQuestion?.(payload.old.question_id, { fromRemote: true });
                 } else if (payload?.new?.payload?.id) {
                   st.importCaveiraQuestions?.([payload.new.payload], true);
                 }
@@ -2167,14 +2194,21 @@ export const useStore = create(
         get().syncAndRepairCaveiraReviews?.();
       },
 
-      deleteCaveiraQuestion: (id) => {
+      deleteCaveiraQuestion: (id, { fromRemote = false } = {}) => {
         const { caveiraQuestions = [], reviews = [] } = get();
         const updated = caveiraQuestions.filter(q => q.id !== id);
         const filteredReviews = reviews.filter(r => !matchesCaveiraReview(r, id));
         set({ caveiraQuestions: updated, reviews: filteredReviews });
         try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updated)); } catch (_) {}
-        try { window.postMessage({ source: 'QG_WEB_APP', type: 'DELETE_CAVEIRA_QUESTION', payload: { id } }, '*'); } catch (_) {}
-        toast.success('Questão removida do histórico.');
+        try {
+          window.postMessage(
+            { source: 'QG_WEB_APP', type: 'DELETE_CAVEIRA_QUESTION', payload: { id, enqueueOutbox: !fromRemote } },
+            window.location.origin
+          );
+        } catch (_) {}
+        if (!fromRemote) {
+          toast.success('Questão removida do histórico.');
+        }
       },
 
       clearCaveiraQuestions: () => {
@@ -2187,18 +2221,25 @@ export const useStore = create(
       },
 
       advanceFutureReviews: (targetDateStr) => {
-        const { reviews = [], getLocalDateStr, playSound } = get();
+        const { reviews = [], progressiveReviews = [], getLocalDateStr, playSound } = get();
         const todayStr = getLocalDateStr();
         let movedCount = 0;
         const updatedReviews = reviews.map(r => {
-          if (r.nextDateStr === targetDateStr && r.nextDateStr > todayStr) {
+          if (r && r.nextDateStr === targetDateStr && r.nextDateStr > todayStr) {
             movedCount++;
             return { ...r, nextDateStr: todayStr };
           }
           return r;
         });
+        const updatedProgressive = progressiveReviews.map(pr => {
+          if (pr && pr.nextDateStr === targetDateStr && pr.nextDateStr > todayStr) {
+            movedCount++;
+            return { ...pr, nextDateStr: todayStr, updatedAt: Date.now() };
+          }
+          return pr;
+        });
         if (movedCount > 0) {
-          set({ reviews: updatedReviews });
+          set({ reviews: updatedReviews, progressiveReviews: updatedProgressive });
           playSound?.('coin');
           const [y, m, d] = targetDateStr.split('-');
           toast.success(`⚡ ${movedCount} ${movedCount === 1 ? 'revisão adiantada' : 'revisões adiantadas'} de ${d}/${m}/${y} para hoje!`);
@@ -2264,7 +2305,7 @@ export const useStore = create(
               questionData: { ...(r.questionData || {}), ...qDataPayload }
             } : r);
 
-          const updatedQuestions = caveiraQuestions.map(q => q.id === question.id ? { ...q, fsrsCreated: true } : q);
+          const updatedQuestions = caveiraQuestions.map(q => q.id === question.id ? { ...q, fsrsCreated: true, fsrsDismissed: false } : q);
           set({ reviews: repairedReviews, caveiraQuestions: updatedQuestions });
           try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updatedQuestions)); } catch (_) {}
           if (!silent) {
@@ -2297,7 +2338,7 @@ export const useStore = create(
           lastPerformance: undefined
         };
 
-        const updatedQuestions = caveiraQuestions.map(q => q.id === question.id ? { ...q, fsrsCreated: true } : q);
+        const updatedQuestions = caveiraQuestions.map(q => q.id === question.id ? { ...q, fsrsCreated: true, fsrsDismissed: false } : q);
         set({ reviews: [newReview, ...reviews], caveiraQuestions: updatedQuestions });
         try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updatedQuestions)); } catch (_) {}
         if (!silent) {
@@ -2468,7 +2509,7 @@ export const useStore = create(
             questionsChanged = true;
           }
 
-          const needsFsrs = !q.hit || q.confidence === 'chute' || q.confidence === 'duvida' || q.fsrsRequested || q.fsrsCreated;
+          const needsFsrs = !q.fsrsDismissed && (!q.hit || q.confidence === 'chute' || q.confidence === 'duvida' || q.fsrsRequested || q.fsrsCreated);
           const normQKey = String(q.id).trim().toUpperCase();
 
           if (needsFsrs && !seenCaveiraIds.has(normQKey)) {
@@ -2906,9 +2947,17 @@ export const useStore = create(
         const currentWeekStartStr = getLocalDateStr(getStartOfWeek(todayObj));
         const isInCurrentWeek = targetDateStr >= currentWeekStartStr;
 
-        const effectiveSpeed = (speed !== null && speed !== undefined && !isNaN(speed)) 
-          ? Number(speed) 
-          : (Number(subjects[subjectId]?.speed) || 1);
+        const parsedSpeed = Number(speed);
+        const fallbackSpeed = Number(subjects[subjectId]?.speed);
+        const effectiveSpeed = (
+          speed !== null &&
+          speed !== undefined &&
+          speed !== '' &&
+          Number.isFinite(parsedSpeed) &&
+          parsedSpeed > 0
+        )
+          ? parsedSpeed
+          : (Number.isFinite(fallbackSpeed) && fallbackSpeed > 0 ? fallbackSpeed : 1);
 
         const newSubjects = { ...subjects };
         const subject = { ...newSubjects[subjectId] };
@@ -3207,11 +3256,17 @@ export const useStore = create(
         // 3. Apagar somente as revisões FSRS
         if (fsrs) {
           changes.reviews = [];
+          changes.progressiveReviews = [];
           changes.reviewStats = { totalDone: 0, correct: 0, streak: 0 };
           changes.dailyReviewStats = {};
           if (!raioXCaveira) {
             const currentCaveira = changes.caveiraQuestions !== undefined ? changes.caveiraQuestions : (get().caveiraQuestions || []);
-            changes.caveiraQuestions = currentCaveira.map(q => ({ ...q, fsrsCreated: false }));
+            changes.caveiraQuestions = currentCaveira.map(q => ({
+              ...q,
+              fsrsCreated: false,
+              fsrsRequested: false,
+              fsrsDismissed: true,
+            }));
           }
           summary.push('Revisões FSRS');
         }
@@ -5358,8 +5413,8 @@ window.addEventListener('beforeunload', (e) => {
 });
 
 useStore.subscribe((state, prevState) => {
-  // Não grava snapshot nem agenda upload enquanto o carregamento inicial da nuvem está em curso
-  if (state.isLoadingFromCloud || state.isSyncing) return;
+  // Não grava snapshot nem agenda upload enquanto o carregamento inicial ou merge está em curso
+  if (state.isLoadingFromCloud || state.isSyncing || useStore._suppressSubscribeStamp) return;
 
   const changedKeys = PERSISTED_KEYS.filter(key => state[key] !== prevState[key]);
   if (changedKeys.length === 0) return;

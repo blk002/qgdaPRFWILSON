@@ -125,6 +125,7 @@ export default function ClassCompletionModal({
     setStudyDate(resolvedInitialDate);
     setIndexText(initialIndexText || '');
     setShowIndexEditor(Boolean(initialIndexText));
+    setConfirmBypass(false);
   } else if (prevProps.initialIndexText !== initialIndexText && !indexText && initialIndexText) {
     setPrevProps({ ...prevProps, initialIndexText });
     setIndexText(initialIndexText);

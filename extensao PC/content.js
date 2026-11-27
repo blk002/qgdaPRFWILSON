@@ -1130,7 +1130,7 @@ ${EXTRA_SHADOW_CSS}`;
   // extensao-src/entries/content.entry.js
   (function() {
     if (isExcludedCaveiraHost(window.location.hostname)) return;
-    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.4.3";
+    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.4.4";
     console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
     try {
       window.dispatchEvent(new CustomEvent("qg-caveira-teardown"));
@@ -2722,7 +2722,9 @@ ${EXTRA_SHADOW_CSS}`;
         };
       } catch (_) {
       }
+      let finished = false;
       const clearTargetPending = () => {
+        finished = true;
         if (targetLessonPollTimer) {
           clearInterval(targetLessonPollTimer);
           targetLessonPollTimer = null;
@@ -2822,6 +2824,7 @@ ${EXTRA_SHADOW_CSS}`;
                 });
                 if (bestCachedUrl) {
                   const targetDirectUrl = `${bestCachedUrl}${window.location.hash}`;
+                  finished = true;
                   navigatedToModuleUrl = targetDirectUrl;
                   if (targetLessonPollTimer) {
                     clearInterval(targetLessonPollTimer);
@@ -2836,6 +2839,7 @@ ${EXTRA_SHADOW_CSS}`;
           if (apiCoursesListCache.length === 1 && !queryIsStandalone && apiCoursesListCache[0]?.id) {
             const singleCourseUrl = `${window.location.origin}/courses/${apiCoursesListCache[0].id}${window.location.hash}`;
             if (navigatedToModuleUrl !== singleCourseUrl) {
+              finished = true;
               navigatedToModuleUrl = singleCourseUrl;
               if (targetLessonPollTimer) {
                 clearInterval(targetLessonPollTimer);
@@ -2858,6 +2862,7 @@ ${EXTRA_SHADOW_CSS}`;
             if (bestApiCourse && bestApiCourseScore >= 60) {
               const targetCourseUrl = `${window.location.origin}/courses/${bestApiCourse.id}${window.location.hash}`;
               if (navigatedToModuleUrl !== targetCourseUrl) {
+                finished = true;
                 navigatedToModuleUrl = targetCourseUrl;
                 if (targetLessonPollTimer) {
                   clearInterval(targetLessonPollTimer);
@@ -3091,6 +3096,7 @@ ${EXTRA_SHADOW_CSS}`;
               }
             }
             if (targetUrl !== currentNoHash && navigatedToModuleUrl !== targetUrl) {
+              finished = true;
               navigatedToModuleUrl = targetUrl;
               if (targetLessonPollTimer) {
                 clearInterval(targetLessonPollTimer);
@@ -3101,7 +3107,12 @@ ${EXTRA_SHADOW_CSS}`;
             return;
           }
           if (!isCoursePlaygroundPage() && attempts >= 8 && bestFallbackModuleUrl && navigatedToModuleUrl !== bestFallbackModuleUrl && bestFallbackModuleUrl !== window.location.href.split("#")[0]) {
+            finished = true;
             navigatedToModuleUrl = bestFallbackModuleUrl;
+            if (targetLessonPollTimer) {
+              clearInterval(targetLessonPollTimer);
+              targetLessonPollTimer = null;
+            }
             window.location.href = bestFallbackModuleUrl;
             return;
           }
@@ -3111,7 +3122,9 @@ ${EXTRA_SHADOW_CSS}`;
         }
       };
       tryNavigate();
-      targetLessonPollTimer = setInterval(tryNavigate, 500);
+      if (!finished && !isDestroyed) {
+        targetLessonPollTimer = setInterval(tryNavigate, 500);
+      }
     }
     function parseEnjoymentDialogData() {
       const tables = Array.from(document.querySelectorAll(".q-dialog table, .q-card table")).filter((t) => !t.closest("#qg-caveira-shadow-host, #qg-caveira-hud, .ranking-table-wrap") && isElementVisible(t));
@@ -9059,6 +9072,7 @@ ${EXTRA_SHADOW_CSS}`;
       })();
     }
     function scanCards() {
+      if (isDestroyed) return;
       if (!isExtensionContextValid()) {
         teardownInstance();
         return;
@@ -9135,17 +9149,17 @@ ${EXTRA_SHADOW_CSS}`;
           if (!observedLiveAnswer) {
             preAnsweredIgnoredQIds.add(qId);
           } else if (!processedInSession.has(qId)) {
-            processedInSession.add(qId);
-            pendingAnswerQIds.delete(qId);
-            unansweredObservedQIds.delete(qId);
-            preAnsweredIgnoredQIds.delete(qId);
-            pauseTimer();
-            const currentQEl = getHudEl("qg-current-q-id");
-            if (currentQEl) {
-              currentQEl.textContent = `${qId} ✓`;
-            }
             const questionData = extractQuestionData(card, qId);
             if (questionData) {
+              processedInSession.add(qId);
+              pendingAnswerQIds.delete(qId);
+              unansweredObservedQIds.delete(qId);
+              preAnsweredIgnoredQIds.delete(qId);
+              pauseTimer();
+              const currentQEl = getHudEl("qg-current-q-id");
+              if (currentQEl) {
+                currentQEl.textContent = `${qId} ✓`;
+              }
               activeQuestionData = questionData;
               saveQuestion(questionData, false);
               renderQuestionHistory(qId, true);

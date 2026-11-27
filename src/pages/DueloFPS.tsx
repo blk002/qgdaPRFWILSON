@@ -78,7 +78,7 @@ export default function DueloFPS() {
   const [currentQuestion, setCurrentQuestion] = useState<ActiveRoundQuestion | null>(null);
   const [timeLeft, setTimeLeft] = useState<number>(24.0);
   const [hoveredTarget, setHoveredTarget] = useState<'CERTO' | 'ERRADO' | null>(null);
-  const [isMuted, setIsMuted] = useState<boolean>(false);
+  const [isMuted, setIsMuted] = useState<boolean>(() => soundFX.muted);
   const [dockCollapsed, setDockCollapsed] = useState<boolean>(false);
   const [externalShotCommand, setExternalShotCommand] = useState<ShotTriggerCommand | null>(null);
   const [lastFeedbackBanner, setLastFeedbackBanner] = useState<{

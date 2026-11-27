@@ -35,9 +35,13 @@ function getInitialUrlFeedback() {
   if (typeof window === 'undefined') return null;
   const hash = window.location.hash || '';
   const search = window.location.search || '';
-  if (hash.includes('error_description=') || search.includes('error_description=')) {
-    const params = new URLSearchParams(hash.replace('#', '?') || search);
-    const desc = decodeURIComponent(params.get('error_description') || 'O link de confirmação expirou ou é inválido.');
+  const hashQueryPart = hash.includes('?') ? hash.slice(hash.indexOf('?')) : (hash.includes('=') ? `?${hash.replace(/^#\/?/, '')}` : '');
+  const searchParams = new URLSearchParams(search);
+  const hashParams = new URLSearchParams(hashQueryPart);
+  const errorDesc = searchParams.get('error_description') || hashParams.get('error_description');
+  const authType = searchParams.get('type') || hashParams.get('type');
+  if (errorDesc || hash.includes('error_description=') || search.includes('error_description=')) {
+    const desc = errorDesc || 'O link de confirmação expirou ou é inválido.';
     return {
       type: 'error',
       title: 'Link de confirmação expirado ou inválido',
@@ -45,7 +49,7 @@ function getInitialUrlFeedback() {
       showResend: true
     };
   }
-  if (hash.includes('type=signup') || search.includes('type=signup')) {
+  if (authType === 'signup' || hash.includes('type=signup') || search.includes('type=signup')) {
     return {
       type: 'success',
       title: 'E-mail confirmado com sucesso!',

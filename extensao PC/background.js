@@ -8289,19 +8289,28 @@
   }
   async function deleteQuestionFull(id, userId = null, { enqueueOutbox = true } = {}) {
     if (!id) return false;
-    const storageKey = makeQuestionStorageKey(userId, id);
+    const qIdStr = String(id);
+    const storageKey = makeQuestionStorageKey(userId, qIdStr);
     const prev = await db.questionsByOwner.get(storageKey);
     await db.questionsByOwner.delete(storageKey);
     if (miniIndex && (!userId || indexedUserId === userId)) {
       try {
-        if (miniIndex.has(id)) miniIndex.discard(id);
+        if (miniIndex.has(qIdStr)) miniIndex.discard(qIdStr);
       } catch (_) {
         miniIndex = null;
       }
     }
     const resolvedOwner = userId || prev?.ownerUserId || null;
+    try {
+      const outRows = await db.outbox.toArray();
+      const staleUpsertSeqs = outRows.filter((o) => o && o.entityType === "question_upsert" && String(o.entityId) === qIdStr && (!resolvedOwner || o.userId === resolvedOwner)).map((o) => o.seq);
+      if (staleUpsertSeqs.length > 0) {
+        await db.outbox.bulkDelete(staleUpsertSeqs);
+      }
+    } catch (_) {
+    }
     if (enqueueOutbox && resolvedOwner) {
-      await enqueueOutboxEvent("question_delete", id, resolvedOwner, { id });
+      await enqueueOutboxEvent("question_delete", qIdStr, resolvedOwner, { id: qIdStr });
     }
     return true;
   }
@@ -29017,10 +29026,11 @@ ${suffix}`;
     }
     if (message.type === "DB_DELETE_QUESTION") {
       (async () => {
+        const shouldEnqueue = message.payload?.enqueueOutbox !== false;
         await deleteQuestionFull(message.payload?.id, message.payload?.userId || null, {
-          enqueueOutbox: message.payload?.enqueueOutbox !== false
+          enqueueOutbox: shouldEnqueue
         });
-        scheduleOutboxFlush();
+        if (shouldEnqueue) scheduleOutboxFlush();
         sendResponse({ ok: true });
       })().catch(() => sendResponse({ ok: false }));
       return true;

@@ -209,7 +209,7 @@ export default function GlobalAppModals({
       {/* 1. Modal de Avaliação de Revisão */}
       {reviewModal && isCaveiraReview
         ? createPortal(
-            <CaveiraReviewQuestionModal review={reviewModal} onClose={() => setReviewModal(null)} />,
+            <CaveiraReviewQuestionModal key={reviewModal.id} review={reviewModal} onClose={() => setReviewModal(null)} />,
             document.body
           )
         : reviewModal &&

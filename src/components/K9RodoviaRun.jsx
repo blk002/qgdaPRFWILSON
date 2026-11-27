@@ -34,7 +34,7 @@ export default function K9RodoviaRun({
   const itemsRef = useRef([]);
   const hasReportedGameOverRef = useRef(false);
 
-  const { setTriggerConfetti } = useConfetti();
+  const { setTriggerConfetti, ConfettiCanvas } = useConfetti();
 
   // Ação de Pular
   const jump = useCallback(() => {
@@ -228,6 +228,7 @@ export default function K9RodoviaRun({
       onClick={jump}
       className="relative w-full max-w-2xl mx-auto h-[380px] bg-gradient-to-b from-slate-900 via-indigo-950 to-slate-900 rounded-3xl overflow-hidden border-4 border-blue-500/30 shadow-2xl flex flex-col justify-between cursor-pointer select-none"
     >
+      <ConfettiCanvas />
       {/* Botão Fechar */}
       <button 
         onClick={(e) => { e.stopPropagation(); onClose(); }}

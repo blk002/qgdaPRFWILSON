@@ -232,7 +232,7 @@ export default function ImportOCR({ subjects, setSubjects, _availableColors, onC
     );
 
     if (!res.ok) {
-      const err = await res.json();
+      const err = await res.json().catch(() => ({}));
       const msg = err?.error?.message || 'Erro desconhecido na API do Gemini';
       throw new Error(msg);
     }

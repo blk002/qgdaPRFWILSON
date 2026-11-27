@@ -15,6 +15,7 @@ import TacticalCountdownBanner from './components/TacticalCountdownBanner';
 import AppNavigation from './components/layout/AppNavigation';
 import SyncStatusBanner from './components/layout/SyncStatusBanner';
 import GlobalAppModals from './components/modals/GlobalAppModals';
+import ErrorBoundary from './components/ErrorBoundary';
 import InteractiveSpotlightTour from './components/InteractiveSpotlightTour';
 import { useConfetti } from './hooks/useConfetti';
 import { useExtensionBridge } from './hooks/useExtensionBridge';
@@ -45,6 +46,7 @@ export default function App() {
   const isDarkMode = useStore((s) => s.isDarkMode);
   const activeTheme = useStore((s) => s.activeTheme);
   const isSyncing = useStore((s) => s.isSyncing);
+  const hasCompletedInitialCloudSync = useStore((s) => s.hasCompletedInitialCloudSync);
   const userXp = useStore((s) => s.userStats?.xp);
   const pushSettings = useStore((s) => s.pushSettings);
   const pushTime = useStore((s) => s.pushTime);
@@ -98,7 +100,7 @@ export default function App() {
         if (typeof Notification !== 'undefined' && Notification.permission === 'granted') {
           new Notification('Hora de estudar!', {
             body: 'Seu bloco de estudos está aguardando. Vamos bater a meta de hoje?',
-            icon: '/favicon.ico',
+            icon: `${import.meta.env.BASE_URL}favicon.svg`,
           });
         } else {
           toast('Hora de estudar!', {
@@ -198,8 +200,7 @@ export default function App() {
   useEffect(() => {
     const userId = session?.user?.id;
     const isLocalTest = isLocalTestUser(useStore.getState().user);
-    const ready = useStore.getState().hasCompletedInitialCloudSync;
-    if (!userId || isLocalTest || isSyncing || !ready) {
+    if (!userId || isLocalTest || isSyncing || !hasCompletedInitialCloudSync) {
       if (!userId) {
         useStore.getState().unsubscribeFromCloudRealtime?.();
       }
@@ -221,12 +222,11 @@ export default function App() {
       window.removeEventListener('focus', triggerDeltaCheck);
       document.removeEventListener('visibilitychange', onVisibility);
     };
-  }, [session?.user?.id, isSyncing]);
+  }, [session?.user?.id, isSyncing, hasCompletedInitialCloudSync]);
 
   // Monitor de Promoção de Patente
   useEffect(() => {
-    const ready = useStore.getState().hasCompletedInitialCloudSync;
-    if (isSyncing || (session && !ready)) {
+    if (isSyncing || (session && !hasCompletedInitialCloudSync)) {
       lastPatenteId.current = null;
       return;
     }
@@ -250,7 +250,7 @@ export default function App() {
         return () => clearTimeout(timer);
       }
     }
-  }, [userXp, isSyncing, session]);
+  }, [userXp, isSyncing, session, hasCompletedInitialCloudSync]);
 
   if (!session) {
     return <Login />;
@@ -286,38 +286,40 @@ export default function App() {
               variants={PAGE_VARIANTS}
               transition={{ duration: 0.16 }}
             >
-              <Suspense
-                fallback={
-                  <div className="flex items-center justify-center py-20">
-                    <div className="flex flex-col items-center gap-2.5">
-                      <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
-                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                        Carregando módulo...
-                      </span>
+              <ErrorBoundary key={`${location.pathname}${location.search}`}>
+                <Suspense
+                  fallback={
+                    <div className="flex items-center justify-center py-20">
+                      <div className="flex flex-col items-center gap-2.5">
+                        <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                          Carregando módulo...
+                        </span>
+                      </div>
                     </div>
-                  </div>
-                }
-              >
-                <Routes location={location}>
-                  <Route path="/" element={<Navigate to="/estudos?tab=hoje" replace />} />
-                  <Route path="/estudos" element={<CentralEstudos />} />
-                  <Route path="/carreira" element={<Dashboard />} />
-                  <Route path="/duelo" element={<DueloFPS />} />
-                  <Route path="/revisoes" element={<Revisoes />} />
-                  <Route path="/ciclo" element={<Navigate to="/estudos?tab=cronograma" replace />} />
-                  <Route path="/calendario" element={<Navigate to="/estudos?tab=calendario" replace />} />
-                  <Route path="/estatisticas" element={<Estatisticas />} />
-                  <Route path="/historico" element={<Navigate to="/estatisticas" replace />} />
-                  <Route path="/edital" element={<Edital />} />
-                  <Route path="/taf" element={<TreinoTAF />} />
-                  <Route path="/simulados" element={<Navigate to="/estudos?tab=simulados" replace />} />
-                  <Route path="/caveira" element={<Navigate to="/estudos?tab=caveira" replace />} />
-                  <Route path="/pet" element={<Pet />} />
-                  <Route path="/loja" element={<Loja />} />
-                  <Route path="/config" element={<Config availableColors={availableColors} />} />
-                  <Route path="*" element={<Navigate to="/estudos?tab=hoje" replace />} />
-                </Routes>
-              </Suspense>
+                  }
+                >
+                  <Routes location={location}>
+                    <Route path="/" element={<Navigate to="/estudos?tab=hoje" replace />} />
+                    <Route path="/estudos" element={<CentralEstudos />} />
+                    <Route path="/carreira" element={<Dashboard />} />
+                    <Route path="/duelo" element={<DueloFPS />} />
+                    <Route path="/revisoes" element={<Revisoes />} />
+                    <Route path="/ciclo" element={<Navigate to="/estudos?tab=cronograma" replace />} />
+                    <Route path="/calendario" element={<Navigate to="/estudos?tab=calendario" replace />} />
+                    <Route path="/estatisticas" element={<Estatisticas />} />
+                    <Route path="/historico" element={<Navigate to="/estatisticas" replace />} />
+                    <Route path="/edital" element={<Edital />} />
+                    <Route path="/taf" element={<TreinoTAF />} />
+                    <Route path="/simulados" element={<Navigate to="/estudos?tab=simulados" replace />} />
+                    <Route path="/caveira" element={<Navigate to="/estudos?tab=caveira" replace />} />
+                    <Route path="/pet" element={<Pet />} />
+                    <Route path="/loja" element={<Loja />} />
+                    <Route path="/config" element={<Config availableColors={availableColors} />} />
+                    <Route path="*" element={<Navigate to="/estudos?tab=hoje" replace />} />
+                  </Routes>
+                </Suspense>
+              </ErrorBoundary>
             </motion.div>
           </AnimatePresence>
         </main>

@@ -163,10 +163,12 @@ export default function Simulados() {
     });
   }, [aggregatedSubjects, subjectBlockFilter, subjectSearch]);
 
+  const orderedSims = useMemo(() => enrichedSimulados.map((e) => e.sim), [enrichedSimulados]);
+
   // Métricas gerais e por bloco
   const metrics = useMemo(() => {
-    const total = simulados.length;
-    const caveiraCount = simulados.filter((s) => s?.source === 'caveira').length;
+    const total = orderedSims.length;
+    const caveiraCount = orderedSims.filter((s) => s?.source === 'caveira').length;
 
     if (total === 0) {
       return {
@@ -191,15 +193,15 @@ export default function Simulados() {
     }
 
     const mediaLiquida = Math.round(
-      simulados.reduce((acc, s) => acc + (Number(s.liquida) || 0), 0) / total
+      orderedSims.reduce((acc, s) => acc + (Number(s.liquida) || 0), 0) / total
     );
-    const ultimoLiquida = Number(simulados[total - 1]?.liquida) || 0;
-    const recorde = Math.max(...simulados.map((s) => Number(s.liquida) || 0));
+    const ultimoLiquida = Number(orderedSims[total - 1]?.liquida) || 0;
+    const recorde = Math.max(...orderedSims.map((s) => Number(s.liquida) || 0));
     const approvedCount = enrichedSimulados.filter((e) => !e.elim.failed).length;
     const approvalRate = Math.round((approvedCount / total) * 100);
     const lastDelta =
       total >= 2
-        ? (Number(simulados[total - 1].liquida) || 0) - (Number(simulados[total - 2].liquida) || 0)
+        ? (Number(orderedSims[total - 1].liquida) || 0) - (Number(orderedSims[total - 2].liquida) || 0)
         : null;
 
     const calcBlockStats = (field) => {
@@ -249,7 +251,7 @@ export default function Simulados() {
       bestHeadroomBlock,
       blocks
     };
-  }, [simulados, enrichedSimulados]);
+  }, [simulados, enrichedSimulados, orderedSims]);
 
   const handleOpenNew = () => {
     setEditingSimulado(null);
@@ -557,7 +559,7 @@ export default function Simulados() {
       <div className="grid grid-cols-1 xl:grid-cols-12 gap-5 items-stretch">
         <div className="xl:col-span-8 min-w-0">
           <SimuladoEvolutionChart
-            simulados={simulados}
+            simulados={orderedSims}
             selectedSimId={effectiveSelectedId}
             onSelectSimulado={(id) => setSelectedSimId(id)}
             seriesKey={chartSeriesKey}
