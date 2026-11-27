@@ -479,3 +479,49 @@ export function getMissionSyncSignature(mission) {
     Number(mission.targetCount) || 0,
   ].join('|');
 }
+
+function normalizeSubjectToken(raw = '') {
+  return String(raw || '')
+    .toLowerCase()
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-z0-9\s]/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+export function getMissionSubjectFamily(raw = '') {
+  const norm = normalizeSubjectToken(raw);
+  if (!norm || norm === 'geral') return '';
+  if (/(?:transito|ctb|contran|9503)/.test(norm)) return 'transito';
+  if (/(?:informatica|redes|computador|internet|seguranca da informacao)/.test(norm)) return 'informatica';
+  if (/(?:portugues|lingua portuguesa|gramatica)/.test(norm)) return 'portugues';
+  if (/redacao/.test(norm)) return 'redacao';
+  if (/(?:raciocinio logico|matematica|\brlm\b)/.test(norm)) return 'rlm';
+  if (/fisica/.test(norm)) return 'fisica';
+  if (/(?:etica|cidadania)/.test(norm)) return 'etica';
+  if (/(?:geopolitica|geografia)/.test(norm)) return 'geopolitica';
+  if (/(?:ingles|espanhol|lingua estrangeira)/.test(norm)) return 'lingua_estrangeira';
+  if (/constitucional/.test(norm)) return 'constitucional';
+  if (/administrativo/.test(norm)) return 'administrativo';
+  if (/processual penal|processo penal/.test(norm)) return 'processual_penal';
+  if (/(?:legislacao especial|penal especial|leis especiais|extravagante|eca)/.test(norm)) return 'legislacao_especial';
+  if (/direitos humanos/.test(norm)) return 'direitos_humanos';
+  if (/(?:direito penal|\bpenal\b)/.test(norm)) return 'penal';
+  return '';
+}
+
+export function doesQuestionMatchMissionSubject(question, mission) {
+  const mRaw = mission?.subjectName || '';
+  const qRaw = question?.canonicalSubject || question?.subject || question?.discipline || '';
+  const mNorm = normalizeSubjectToken(mRaw);
+  const qNorm = normalizeSubjectToken(qRaw);
+  if (!mNorm || !qNorm || qNorm === 'geral') return true;
+
+  const mFam = getMissionSubjectFamily(mRaw);
+  const qFam = getMissionSubjectFamily(qRaw);
+  if (mFam && qFam) return mFam === qFam;
+  if (mFam || qFam) return false;
+
+  return qNorm === mNorm || qNorm.includes(mNorm) || mNorm.includes(qNorm);
+}

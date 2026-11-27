@@ -1130,7 +1130,7 @@ ${EXTRA_SHADOW_CSS}`;
   // extensao-src/entries/content.entry.js
   (function() {
     if (isExcludedCaveiraHost(window.location.hostname)) return;
-    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.4.4";
+    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.4.5";
     console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
     try {
       window.dispatchEvent(new CustomEvent("qg-caveira-teardown"));
@@ -8431,7 +8431,42 @@ ${EXTRA_SHADOW_CSS}`;
         hits: sessionStats.hits,
         errors: sessionStats.errors
       };
-      if (!isMetadataUpdateOnly && activePracticeMission && activePracticeMission.status === "active" && question?.id && (!activePracticeMission.ownerUserId || activePracticeMission.ownerUserId === resolvedOwnerId)) {
+      function normalizeMissionSubjectToken(raw = "") {
+        return String(raw || "").toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/[^a-z0-9\s]/g, " ").replace(/\s+/g, " ").trim();
+      }
+      function getMissionSubjectFamily(raw = "") {
+        const norm = normalizeMissionSubjectToken(raw);
+        if (!norm || norm === "geral") return "";
+        if (/(?:transito|ctb|contran|9503)/.test(norm)) return "transito";
+        if (/(?:informatica|redes|computador|internet|seguranca da informacao)/.test(norm)) return "informatica";
+        if (/(?:portugues|lingua portuguesa|gramatica)/.test(norm)) return "portugues";
+        if (/redacao/.test(norm)) return "redacao";
+        if (/(?:raciocinio logico|matematica|\brlm\b)/.test(norm)) return "rlm";
+        if (/fisica/.test(norm)) return "fisica";
+        if (/(?:etica|cidadania)/.test(norm)) return "etica";
+        if (/(?:geopolitica|geografia)/.test(norm)) return "geopolitica";
+        if (/(?:ingles|espanhol|lingua estrangeira)/.test(norm)) return "lingua_estrangeira";
+        if (/constitucional/.test(norm)) return "constitucional";
+        if (/administrativo/.test(norm)) return "administrativo";
+        if (/processual penal|processo penal/.test(norm)) return "processual_penal";
+        if (/(?:legislacao especial|penal especial|leis especiais|extravagante|eca)/.test(norm)) return "legislacao_especial";
+        if (/direitos humanos/.test(norm)) return "direitos_humanos";
+        if (/(?:direito penal|\bpenal\b)/.test(norm)) return "penal";
+        return "";
+      }
+      function doesQuestionMatchMissionSubject(q, m) {
+        const mRaw = m?.subjectName || "";
+        const qRaw = q?.canonicalSubject || q?.subject || "";
+        const mNorm = normalizeMissionSubjectToken(mRaw);
+        const qNorm = normalizeMissionSubjectToken(qRaw);
+        if (!mNorm || !qNorm || qNorm === "geral") return true;
+        const mFam = getMissionSubjectFamily(mRaw);
+        const qFam = getMissionSubjectFamily(qRaw);
+        if (mFam && qFam) return mFam === qFam;
+        if (mFam || qFam) return false;
+        return qNorm === mNorm || qNorm.includes(mNorm) || mNorm.includes(qNorm);
+      }
+      if (!isMetadataUpdateOnly && activePracticeMission && activePracticeMission.status === "active" && question?.id && doesQuestionMatchMissionSubject(question, activePracticeMission) && (!activePracticeMission.ownerUserId || activePracticeMission.ownerUserId === resolvedOwnerId)) {
         const qKey = String(question.id);
         const answered = Array.isArray(activePracticeMission.answeredQuestionIds) ? [...activePracticeMission.answeredQuestionIds] : [];
         if (!answered.includes(qKey)) {

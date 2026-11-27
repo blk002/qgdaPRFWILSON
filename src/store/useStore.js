@@ -24,6 +24,7 @@ import {
   serializeMissionForBridge,
   isMissionNewerThan,
   getMissionSyncSignature,
+  doesQuestionMatchMissionSubject,
 } from '../lib/lessonMastery';
 import {
   LOCAL_TEST_ACCOUNT,
@@ -2046,7 +2047,7 @@ export const useStore = create(
         }
         const activeMission = get().activePracticeMission;
         if (activeMission && activeMission.status === 'active') {
-          get().recordMissionQuestionAnswer?.(question.id, Boolean(question.hit));
+          get().recordMissionQuestionAnswer?.(question.id, Boolean(question.hit), question);
         }
         return true;
       },
@@ -2146,6 +2147,8 @@ export const useStore = create(
                 newlyAnsweredForMission.push({
                   id: mergedItem.id,
                   hit: Boolean(mergedItem.hit),
+                  subject: mergedItem.subject,
+                  canonicalSubject: mergedItem.canonicalSubject,
                 });
               }
             }
@@ -2177,7 +2180,7 @@ export const useStore = create(
 
         if (newlyAnsweredForMission.length > 0) {
           newlyAnsweredForMission.forEach((item) => {
-            get().recordMissionQuestionAnswer?.(item.id, Boolean(item.hit));
+            get().recordMissionQuestionAnswer?.(item.id, Boolean(item.hit), item);
           });
         }
         return newCount;
@@ -4413,9 +4416,12 @@ export const useStore = create(
         return true;
       },
 
-      recordMissionQuestionAnswer: (questionId, hit) => {
+      recordMissionQuestionAnswer: (questionId, hit, questionMeta = null) => {
         const mission = get().activePracticeMission;
         if (!mission || mission.status !== 'active' || !questionId) return false;
+        if (questionMeta && !doesQuestionMatchMissionSubject(questionMeta, mission)) {
+          return false;
+        }
         const qKey = String(questionId);
         const answered = Array.isArray(mission.answeredQuestionIds) ? [...mission.answeredQuestionIds] : [];
         if (answered.includes(qKey)) return false;

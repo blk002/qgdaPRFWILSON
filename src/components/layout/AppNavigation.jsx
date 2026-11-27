@@ -168,9 +168,9 @@ export default function AppNavigation({
     <>
       {/* MENU SUPERIOR COMPACTO (DESKTOP) */}
       <header className="hidden md:block sticky top-0 z-40 w-full h-14 bg-white/95 dark:bg-slate-900/95 backdrop-blur-md border-b border-slate-200/80 dark:border-slate-800">
-        <div className="w-full max-w-[1640px] mx-auto h-full px-4 sm:px-6 lg:px-8 xl:px-10 flex items-center justify-between gap-4">
+        <div className="w-full max-w-[1640px] mx-auto h-full px-3 lg:px-6 xl:px-8 flex items-center justify-between gap-2 xl:gap-4">
           {/* Esquerda: Marca + Navegação Horizontal */}
-          <div className="flex items-center gap-4 min-w-0">
+          <div className="flex items-center gap-2 xl:gap-4 min-w-0 shrink-0">
             <Link
               to="/"
               onClick={() => setOpenDropdown(null)}
@@ -185,7 +185,7 @@ export default function AppNavigation({
                   className="w-full h-full object-contain drop-shadow-xs"
                 />
               </div>
-              <div className="flex items-center gap-1.5">
+              <div className="hidden lg:flex items-center gap-1.5">
                 <span className="font-display text-base font-bold tracking-wide text-slate-900 dark:text-white leading-none whitespace-nowrap">
                   QG DA PRF
                 </span>
@@ -193,7 +193,7 @@ export default function AppNavigation({
               </div>
             </Link>
 
-            <div className="h-5 w-px bg-slate-200 dark:bg-slate-800 shrink-0" />
+            <div className="hidden lg:block h-5 w-px bg-slate-200 dark:bg-slate-800 shrink-0" />
 
             <nav
               ref={desktopNavRef}
@@ -226,7 +226,14 @@ export default function AppNavigation({
                       {({ isActive }) => (
                         <>
                           <tab.icon className={`w-4 h-4 shrink-0 ${isActive ? 'text-sky-400' : 'opacity-80'}`} />
-                          <span>{tab.label}</span>
+                          {tab.id === '/estudos' ? (
+                            <>
+                              <span className="hidden xl:inline">{tab.label}</span>
+                              <span className="xl:hidden">Estudos</span>
+                            </>
+                          ) : (
+                            <span>{tab.label}</span>
+                          )}
                           {tab.count > 0 && (
                             <span className="bg-red-500/15 text-red-600 dark:text-red-400 text-[11px] min-w-[18px] h-4.5 px-1.5 flex items-center justify-center rounded-md font-mono font-semibold tabular-nums">
                               {tab.count}
@@ -261,7 +268,16 @@ export default function AppNavigation({
                           }`}
                         />
                       )}
-                      <span>{group.title}</span>
+                      <span>
+                        {group.key === 'extras' ? (
+                          <>
+                            <span className="hidden xl:inline">{group.title}</span>
+                            <span className="xl:hidden">Carreira</span>
+                          </>
+                        ) : (
+                          group.title
+                        )}
+                      </span>
                       {group.badgeCount > 0 && (
                         <span className="bg-red-500/15 text-red-600 dark:text-red-400 text-[11px] min-w-[18px] h-4.5 px-1.5 flex items-center justify-center rounded-md font-mono font-semibold tabular-nums">
                           {group.badgeCount}
@@ -333,7 +349,7 @@ export default function AppNavigation({
             data-tour="nav-edital-progress"
             onClick={() => setOpenDropdown(null)}
             title={`Edital: ${completionPct}% · ${completedLessons}/${totalLessons} aulas · ${subjectsList.length} ${subjectsList.length === 1 ? 'disciplina' : 'disciplinas'}${estimatedDate?.short ? ` · Previsão: ${estimatedDate.short}` : ''}`}
-            className="hidden md:flex flex-col justify-center ml-auto flex-1 min-w-0 max-w-[225px] h-9 px-3 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-850/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors gap-1 overflow-hidden"
+            className="hidden xl:flex flex-col justify-center ml-auto flex-1 min-w-0 max-w-[225px] h-9 px-3 rounded-lg border border-slate-200/80 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-850/60 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors gap-1 overflow-hidden"
           >
             <div className="flex items-center justify-between gap-2 text-[11px] leading-none min-w-0">
               <div className="flex items-center gap-1.5 shrink-0">
@@ -372,7 +388,7 @@ export default function AppNavigation({
           </Link>
 
           {/* Direita: Patente, Moedas, Tutorial, Atualização, Tema, Sair e Ajustes */}
-          <div className="flex items-center gap-1.5 shrink-0">
+          <div className="flex items-center gap-1 xl:gap-1.5 shrink-0">
             <Link
               to="/carreira"
               data-tour="nav-rank-coins"
@@ -446,9 +462,11 @@ export default function AppNavigation({
             <NavLink
               to="/config"
               data-tour="nav-ajustes"
+              title="Ajustes"
+              aria-label="Ajustes"
               onClick={() => setOpenDropdown(null)}
               className={({ isActive }) =>
-                `h-9 px-3 rounded-lg flex items-center gap-2 text-sm font-medium whitespace-nowrap transition-colors duration-150 cursor-pointer ${
+                `h-9 px-2.5 xl:px-3 rounded-lg flex items-center gap-2 text-sm font-medium whitespace-nowrap transition-colors duration-150 cursor-pointer ${
                   isActive
                     ? 'bg-slate-900 text-white dark:bg-slate-800 dark:text-white'
                     : 'text-slate-600 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/70 hover:text-slate-900 dark:hover:text-white'
@@ -458,7 +476,7 @@ export default function AppNavigation({
               {({ isActive }) => (
                 <>
                   <Settings className={`w-4 h-4 shrink-0 ${isActive ? 'text-sky-400' : 'opacity-80'}`} />
-                  <span>Ajustes</span>
+                  <span className="hidden xl:inline">Ajustes</span>
                 </>
               )}
             </NavLink>
