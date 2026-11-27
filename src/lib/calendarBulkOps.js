@@ -17,20 +17,50 @@ export function getWeekIndexForDayOfWeek(dayOfWeek, cycleWeekStart = 'sunday') {
   return cycleWeekStart === 'monday' ? (dow + 6) % 7 : dow;
 }
 
-function removeSubjectFromSlotPair(slots = [], counts = [], subjectId) {
+function getRuleDayOfWeek(rule, cycleWeekStart = 'sunday') {
+  if (!rule || typeof rule !== 'object') return null;
+  if (rule.dayOfWeek !== undefined && rule.dayOfWeek !== null && Number.isFinite(Number(rule.dayOfWeek))) {
+    return ((Number(rule.dayOfWeek) % 7) + 7) % 7;
+  }
+  if (rule.cycleIndex !== undefined && rule.cycleIndex !== null && Number.isFinite(Number(rule.cycleIndex))) {
+    const idx = ((Number(rule.cycleIndex) % 7) + 7) % 7;
+    return cycleWeekStart === 'monday' ? (idx + 1) % 7 : idx;
+  }
+  return null;
+}
+
+function upsertSubjectInSlotPair(slots = [], counts = [], subjectId, include = false, normalizedCount = 0) {
+  const targetIdStr = String(subjectId);
   const nextSlots = [];
   const nextCounts = [];
+  let keptOnce = false;
+
   for (let i = 0; i < slots.length; i++) {
-    if (slots[i] === subjectId) continue;
+    const matches = String(slots[i]) === targetIdStr;
+    if (matches) {
+      if (include && !keptOnce) {
+        nextSlots.push(slots[i]);
+        nextCounts.push(normalizedCount);
+        keptOnce = true;
+      }
+      continue;
+    }
     nextSlots.push(slots[i]);
-    nextCounts.push(Array.isArray(counts) ? (Number(counts[i]) || 0) : 0);
+    nextCounts.push(Array.isArray(counts) ? Math.max(0, Math.floor(Number(counts[i]) || 0)) : 0);
   }
+
+  if (include && !keptOnce) {
+    nextSlots.push(subjectId);
+    nextCounts.push(normalizedCount);
+  }
+
   return { slots: nextSlots, counts: nextCounts };
 }
 
 export function getScheduledDaysForSubject(state, subjectId) {
   if (!state || !subjectId) return { days: [], slotCount: 0 };
 
+  const targetIdStr = String(subjectId);
   const cycle = Array.isArray(state.cycle) ? state.cycle : [];
   const cycleSlotCounts = Array.isArray(state.cycleSlotCounts) ? state.cycleSlotCounts : [];
   const cycleWeekStart = state.cycleWeekStart || 'sunday';
@@ -39,10 +69,13 @@ export function getScheduledDaysForSubject(state, subjectId) {
   // Regra v2 mais recente por dia da semana, se existir
   const latestRuleByDow = new Map();
   rules.forEach((rule) => {
-    if (!rule || rule.v !== 2 || !Number.isFinite(Number(rule.dayOfWeek))) return;
-    const dow = Number(rule.dayOfWeek);
+    if (!rule || rule.v !== 2) return;
+    const dow = getRuleDayOfWeek(rule, cycleWeekStart);
+    if (dow === null) return;
     const prev = latestRuleByDow.get(dow);
-    if (!prev || String(rule.effectiveFrom || '') >= String(prev.effectiveFrom || '')) {
+    const ruleDate = String(rule.fromDate || rule.effectiveFrom || '');
+    const prevDate = String(prev?.fromDate || prev?.effectiveFrom || '');
+    if (!prev || ruleDate >= prevDate) {
       latestRuleByDow.set(dow, rule);
     }
   });
@@ -56,15 +89,17 @@ export function getScheduledDaysForSubject(state, subjectId) {
     const slots = rule && Array.isArray(rule.daySlots)
       ? rule.daySlots
       : (Array.isArray(cycle[idx]) ? cycle[idx] : []);
-    const counts = rule && Array.isArray(rule.daySlotCounts)
-      ? rule.daySlotCounts
-      : (Array.isArray(cycleSlotCounts[idx]) ? cycleSlotCounts[idx] : []);
+    const counts = rule && Array.isArray(rule.slotCounts)
+      ? rule.slotCounts
+      : (rule && Array.isArray(rule.daySlotCounts)
+        ? rule.daySlotCounts
+        : (Array.isArray(cycleSlotCounts[idx]) ? cycleSlotCounts[idx] : []));
 
-    const pos = slots.indexOf(subjectId);
+    const pos = slots.findIndex((sId) => String(sId) === targetIdStr);
     if (pos !== -1) {
       days.push(dow);
       if (detectedSlotCount === 0 && Number(counts[pos]) > 0) {
-        detectedSlotCount = Number(counts[pos]);
+        detectedSlotCount = Math.floor(Number(counts[pos]));
       }
     }
   });
@@ -73,6 +108,7 @@ export function getScheduledDaysForSubject(state, subjectId) {
 }
 
 export function applySubjectDaysToSchedule(state, subjectId, selectedDaysOfWeek = [], slotCount = 0, todayStr = '') {
+  const targetIdStr = String(subjectId);
   const cycleWeekStart = state?.cycleWeekStart || 'sunday';
   const selectedSet = new Set(
     (Array.isArray(selectedDaysOfWeek) ? selectedDaysOfWeek : [])
@@ -90,33 +126,39 @@ export function applySubjectDaysToSchedule(state, subjectId, selectedDaysOfWeek 
 
   for (let dow = 0; dow < 7; dow++) {
     const idx = getWeekIndexForDayOfWeek(dow, cycleWeekStart);
-    const cleaned = removeSubjectFromSlotPair(nextCycle[idx], nextCycleSlotCounts[idx], subjectId);
-    if (selectedSet.has(dow)) {
-      cleaned.slots.push(subjectId);
-      cleaned.counts.push(normalizedCount);
-    }
-    nextCycle[idx] = cleaned.slots;
-    nextCycleSlotCounts[idx] = cleaned.counts;
+    const updated = upsertSubjectInSlotPair(
+      nextCycle[idx],
+      nextCycleSlotCounts[idx],
+      subjectId,
+      selectedSet.has(dow),
+      normalizedCount
+    );
+    nextCycle[idx] = updated.slots;
+    nextCycleSlotCounts[idx] = updated.counts;
   }
 
   const prevRules = Array.isArray(state?.futureScheduleRules) ? state.futureScheduleRules : [];
   const nextRules = prevRules.map((rule) => {
-    if (!rule || rule.v !== 2 || !Number.isFinite(Number(rule.dayOfWeek))) return rule;
-    const dow = Number(rule.dayOfWeek);
-    const cleaned = removeSubjectFromSlotPair(
+    if (!rule || rule.v !== 2) return rule;
+    const dow = getRuleDayOfWeek(rule, cycleWeekStart);
+    if (dow === null) return rule;
+    const rawCounts = Array.isArray(rule.slotCounts)
+      ? rule.slotCounts
+      : (Array.isArray(rule.daySlotCounts) ? rule.daySlotCounts : []);
+    const updated = upsertSubjectInSlotPair(
       Array.isArray(rule.daySlots) ? rule.daySlots : [],
-      Array.isArray(rule.daySlotCounts) ? rule.daySlotCounts : [],
-      subjectId
+      rawCounts,
+      subjectId,
+      selectedSet.has(dow),
+      normalizedCount
     );
-    if (selectedSet.has(dow)) {
-      cleaned.slots.push(subjectId);
-      cleaned.counts.push(normalizedCount);
-    }
-    return {
+    const cleanRule = {
       ...rule,
-      daySlots: cleaned.slots,
-      daySlotCounts: cleaned.counts,
+      daySlots: updated.slots,
+      slotCounts: updated.counts,
     };
+    delete cleanRule.daySlotCounts;
+    return cleanRule;
   });
 
   const prevOverrides = (state?.calendarOverrides && typeof state.calendarOverrides === 'object')
@@ -134,17 +176,17 @@ export function applySubjectDaysToSchedule(state, subjectId, selectedDaysOfWeek 
     const dObj = new Date(`${dateKey}T12:00:00`);
     if (Number.isNaN(dObj.getTime())) return;
     const dow = dObj.getDay();
-    const cleaned = removeSubjectFromSlotPair(
+    const hadSubject = slots.some((sId) => String(sId) === targetIdStr);
+    const shouldInclude = selectedSet.has(dow) && (slots.length > 0 || hadSubject);
+    const updated = upsertSubjectInSlotPair(
       slots,
       Array.isArray(prevOverrideCounts[dateKey]) ? prevOverrideCounts[dateKey] : [],
-      subjectId
+      subjectId,
+      shouldInclude,
+      normalizedCount
     );
-    if (selectedSet.has(dow) && slots.length > 0) {
-      cleaned.slots.push(subjectId);
-      cleaned.counts.push(normalizedCount);
-    }
-    nextOverrides[dateKey] = cleaned.slots;
-    nextOverrideCounts[dateKey] = cleaned.counts;
+    nextOverrides[dateKey] = updated.slots;
+    nextOverrideCounts[dateKey] = updated.counts;
   });
 
   return {

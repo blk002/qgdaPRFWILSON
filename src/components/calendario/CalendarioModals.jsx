@@ -1033,10 +1033,10 @@ function BulkScheduleModalContent({
             <div className="flex items-center justify-between gap-3 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5">
               <div>
                 <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
-                  Aulas por dia (opcional)
+                  Aulas por dia (padrão no calendário)
                 </span>
                 <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                  0 usa a meta/padrão da disciplina
+                  Define a quantidade exata em todos os dias escolhidos (0 usa a meta da matéria)
                 </span>
               </div>
               <input
