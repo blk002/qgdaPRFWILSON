@@ -1,4 +1,4 @@
-// QG da PRF — Resolver hierárquico por ids (v3.5.0)
+// QG da PRF — Resolver hierárquico por ids (v3.5.1)
 // Entrada: {subjectName, lessons[], topic, subtopics[]}  ->  Saída: {subject, ids[], picks[], confidence, alternatives[]}
 // Usa a árvore oficial do Caveira (caveira_arvore.json). Sem DOM, sem digitar, sem scroll.
 (function (root) {
@@ -19,7 +19,7 @@
     'fisica': 15926, 'geografia': 16375,
     'historia': 16767, 'ingles': 17701, 'lingua inglesa': 17701, 'espanhol': 17647,
     'atualidades': 8054, 'legislacao institucional': 17253, 'medicina legal': 18155,
-    'criminologia': 11631, 'redacao oficial': 18321, 'redacao': 18321, 'arquivologia': 7741,
+    'criminologia': 11631, 'redacao oficial': 18321, 'arquivologia': 7741,
     'administracao geral': 6611, 'administracao publica': 7310, 'estatistica': 15050,
     'tecnologia da informacao': 18746, 'resolucoes do contran': 20363, 'resolucoes contran': 20363
   };
@@ -53,6 +53,7 @@
     return String(name || '')
       .replace(/^(?:cap[ií]tulo|se[cç][aã]o|subse[cç][aã]o|t[ií]tulo|livro)\s+[\dIVXLC]+(?:\s*-\s*[A-Z])?\s*[-–:]\s*/i, '')
       .replace(/^Lei\s+(?:n[º°.]?\s*)?[\d./]+\s*[–-]\s*/i, '')
+      .replace(/^(?:dos|das|do|da|de)\s+/i, '')
       .trim();
   }
 
@@ -99,6 +100,7 @@
     if (/\bconceito\s+iniciais\b/i.test(n)) push('Conceitos Iniciais');
     if (/\bdivisao\s+diretamente\s+proporcional\b/i.test(n)) push('Partes Diretamente Proporcionais');
     if (/\bconceitos\s+de\s+operacao\b/i.test(n)) push('Intranet Extranet Internet');
+    if (/\bia\b/i.test(n)) push(base.replace(/\bia\b/gi, 'Inteligencia Artificial'));
 
     return out;
   }
@@ -227,7 +229,11 @@
   // BM25 com stem como fallback; exige termo raro; devolve ordenado
   function score(subject, queryText, opts = {}) {
     const idx = buildIndex(subject);
-    let q = canon(queryText);
+    const rawCanon = canon(queryText);
+    const rawNorm = rawCanon.norm;
+    const rawLawNums = rawNorm.match(/\b\d{4,5}\b/g) || [];
+    const queryMentionsRevoked = /\brevogad[ao]\b/i.test(rawNorm);
+    let q = rawCanon;
     const ex = opts.excludeTokens;
     if (ex && ex.size && q.tokens.length > 1) {
       const keep = q.tokens.map((t, i) => i).filter(i => !ex.has(q.tokens[i]));
@@ -259,9 +265,18 @@
       if (rare.size && !rareHit) continue;
       const cov = matched / q.tokens.length;
       const nodeCov = matched / Math.max(1, n.tokens.length);
-      const exactName = (norm(n.name) === q.norm || (n.strippedNorm && n.strippedNorm === q.norm)) ? 1 : 0;
+      const nNorm = norm(n.name);
+      const exactName = (
+        nNorm === q.norm ||
+        nNorm === rawNorm ||
+        (n.strippedNorm && (n.strippedNorm === q.norm || n.strippedNorm === rawNorm))
+      ) ? 1 : 0;
       const fullNodeBonus = (!exactName && nodeCov >= 0.99 && cov >= 0.5) ? 0.16 : 0;
-      const rel = (bm / maxTheo) * (0.6 + 0.4 * cov) + (exactName ? 0.35 : 0) + fullNodeBonus;
+      const lawNumBonus = (rawLawNums.length > 0 && rawLawNums.some(num => n.tokenSet.has(num))) ? 0.35 : 0;
+      const nodeIsRevoked = /\brevogad[ao]\b/i.test(n.name);
+      const nodeRevokedExplicitInQuery = nodeIsRevoked && (queryMentionsRevoked || (rawLawNums.length > 0 && rawLawNums.some(num => n.tokenSet.has(num))));
+      const revokedPenalty = (nodeIsRevoked && !nodeRevokedExplicitInQuery) ? 0.25 : 0;
+      const rel = Math.max(0, (bm / maxTheo) * (0.6 + 0.4 * cov) + (exactName ? 0.35 : 0) + fullNodeBonus + lawNumBonus - revokedPenalty);
       res.push({ node: n, score: +bm.toFixed(3), rel: +rel.toFixed(3), cov: +cov.toFixed(3), nodeCov: +nodeCov.toFixed(3), exactName });
     }
     res.sort((a, b) => b.rel - a.rel || a.node.depth - b.node.depth);
@@ -402,8 +417,32 @@
           }
           continue;
         }
+        // Desempate por correspondência exata de nome vs parcial
+        if (chosen.exactName && !rival.exactName) {
+          continue;
+        }
+        if (rival.exactName && !chosen.exactName) {
+          chosen = rival;
+          continue;
+        }
+        if (chosen.exactName && rival.exactName) {
+          if (chosen.fromLesson && !chosen.fromTopic && rival.fromTopic && !rival.fromLesson) {
+            continue;
+          }
+          if (rival.fromLesson && !rival.fromTopic && chosen.fromTopic && !chosen.fromLesson) {
+            chosen = rival;
+            continue;
+          }
+        }
         anchorAmbiguous = true;
         break;
+      }
+      if (anchorAmbiguous && top[0] && top[1] && top[0].node.parentId && top[0].node.parentId === top[1].node.parentId && top[0].node.parentId !== subject.id) {
+        const parentNode = subject.byId.get(top[0].node.parentId);
+        if (parentNode && !parentNode.isLeaf) {
+          chosen = { node: parentNode, rel: top[0].rel, cov: top[0].cov, final: top[0].final, fromLesson: top[0].fromLesson, fromTopic: top[0].fromTopic, exactName: 0 };
+          anchorAmbiguous = false;
+        }
       }
       if (!anchorAmbiguous) {
         anchor = chosen;
