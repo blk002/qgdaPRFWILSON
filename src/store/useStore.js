@@ -500,11 +500,22 @@ export const useStore = create(
         const switchedToDifferentOwner = Boolean(
           nextUser?.id && ((state.user?.id && state.user.id !== nextUser.id) || (storedOwner && storedOwner !== nextUser.id))
         );
+        const shouldClearUserData = switchedToDifferentOwner || !nextUser;
         return {
           session,
           user: nextUser,
           ...(userChanged ? { hasCompletedInitialCloudSync: false } : {}),
-          ...(switchedToDifferentOwner ? { caveiraQuestions: [], reviews: [] } : {})
+          ...(shouldClearUserData ? {
+            caveiraQuestions: [],
+            reviews: [],
+            progressiveReviews: [],
+            activePracticeMission: null,
+            completedMissionIds: [],
+            caveiraSessionStats: null,
+            caveiraPerformanceSnapshot: null,
+            caveiraFilterMemory: {},
+            caveiraCourseIndexMap: {},
+          } : {})
         };
       }),
       
@@ -522,13 +533,52 @@ export const useStore = create(
         if (!isLocal) {
           await supabase.auth.signOut();
         }
-        set({ session: null, user: null, caveiraQuestions: [], reviews: [], hasCompletedInitialCloudSync: false });
+        set({
+          session: null,
+          user: null,
+          caveiraQuestions: [],
+          reviews: [],
+          progressiveReviews: [],
+          activePracticeMission: null,
+          completedMissionIds: [],
+          caveiraSessionStats: null,
+          caveiraPerformanceSnapshot: null,
+          caveiraFilterMemory: {},
+          caveiraCourseIndexMap: {},
+          hasCompletedInitialCloudSync: false,
+        });
         localStorage.removeItem('prf-qg-storage');
         localStorage.removeItem('prf_qg_backups');
         localStorage.removeItem('prf_caveira_questions');
+        localStorage.removeItem('qg_lesson_index_map_v1');
         localStorage.removeItem(CAVEIRA_OWNER_KEY);
         localStorage.removeItem(LOCAL_STATE_STORAGE_KEY);
-        try { window.postMessage({ source: 'QG_WEB_APP', type: 'USER_SIGNED_OUT' }, '*'); } catch (_) {}
+        await new Promise((resolve) => {
+          let settled = false;
+          const done = () => {
+            if (settled) return;
+            settled = true;
+            window.removeEventListener('message', onAck);
+            resolve();
+          };
+          const onAck = (event) => {
+            if (
+              event?.source === window &&
+              event?.origin === window.location.origin &&
+              event?.data?.source === 'QG_CAVEIRA_EXTENSION' &&
+              event?.data?.type === 'USER_SIGNED_OUT_ACK'
+            ) {
+              done();
+            }
+          };
+          window.addEventListener('message', onAck);
+          setTimeout(done, 450);
+          try {
+            window.postMessage({ source: 'QG_WEB_APP', type: 'USER_SIGNED_OUT' }, window.location.origin);
+          } catch (_) {
+            done();
+          }
+        });
         window.location.reload();
       },
 
@@ -537,10 +587,10 @@ export const useStore = create(
         if (!user) return false;
         if (isLoadingFromCloud && retryCount === 0) return false;
 
-        // Isolamento por usuário: descarta cache local de Caveira se pertencia a outra conta
+        // Isolamento por usuário: descarta cache local de Caveira se pertencia a outra conta ou sem dono
         let storedCaveiraOwner = null;
         try { storedCaveiraOwner = localStorage.getItem(CAVEIRA_OWNER_KEY); } catch (_) {}
-        const isForeignCaveiraCache = Boolean(storedCaveiraOwner && storedCaveiraOwner !== user.id);
+        const isForeignCaveiraCache = storedCaveiraOwner !== user.id;
         if (isForeignCaveiraCache) {
           try { localStorage.removeItem('prf_caveira_questions'); } catch (_) {}
           set({ caveiraQuestions: [] });
@@ -608,7 +658,7 @@ export const useStore = create(
 
         const findRecoverableLocalBackup = (sameUserId) => {
           const snap = readLocalSnapshot();
-          if (snap && (!snap.userId || snap.userId === sameUserId) && hasMeaningfulUserData(snap.data)) {
+          if (snap && snap.userId === sameUserId && hasMeaningfulUserData(snap.data)) {
             return {
               data: snap.data,
               label: snap.savedAt ? `snapshot local (${new Date(snap.savedAt).toLocaleString()})` : 'snapshot local'
@@ -617,7 +667,7 @@ export const useStore = create(
           try {
             const backupsJson = localStorage.getItem('prf_qg_backups');
             const backups = backupsJson ? JSON.parse(backupsJson) : [];
-            const validBackup = (backups || []).find(b => b?.data && (!b.userId || b.userId === sameUserId) && hasMeaningfulUserData(b.data));
+            const validBackup = (backups || []).find(b => b?.data && b.userId === sameUserId && hasMeaningfulUserData(b.data));
             if (validBackup) {
               return {
                 data: validBackup.data,
@@ -642,14 +692,14 @@ export const useStore = create(
             }
           }
 
-          // A1: Compara snapshot local com a nuvem — só mescla se o snapshot for do mesmo usuário, tiver alterações com timestamp real e não for estado inicial vazio
+          // A1: Compara snapshot local com a nuvem — só mescla se o snapshot for estritamente do mesmo usuário, tiver alterações com timestamp real e não for estado inicial vazio
           const localSnap = readLocalSnapshot();
-          const isSameUserOrAnon = !localSnap?.userId || localSnap.userId === user.id;
+          const isSameUser = Boolean(localSnap?.userId && localSnap.userId === user.id);
           const localHasRealKeyChanges = localSnap?.keyTimestamps && Object.keys(localSnap.keyTimestamps).length > 0;
           const localIsNewerAndDirty = Boolean(
             !recoveredFromBackup &&
             localSnap &&
-            isSameUserOrAnon &&
+            isSameUser &&
             localSnap.dirty &&
             localHasRealKeyChanges &&
             localSnap.savedAt &&
@@ -4130,6 +4180,7 @@ export const useStore = create(
         const now = Date.now();
         const mission = {
           id: missionId,
+          ownerUserId: get().user?.id || null,
           type,
           status: 'active',
           title: String(config.title || config.topicName || config.subjectName || 'Prática Caveira').trim(),
@@ -4350,6 +4401,8 @@ export const useStore = create(
 
       syncActiveMissionFromExtension: (extMission) => {
         if (!extMission || !extMission.id) return false;
+        const curUid = get().user?.id || null;
+        if (!curUid || (extMission.ownerUserId && extMission.ownerUserId !== curUid)) return false;
         const completedIds = Array.isArray(get().completedMissionIds) ? get().completedMissionIds : [];
         if (completedIds.includes(extMission.id)) {
           try {

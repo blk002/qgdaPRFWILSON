@@ -8082,6 +8082,32 @@
     dynamicTreeNodes: "&key, subjectId, nodeId, updatedAt",
     meta: "&key"
   });
+  db.version(3).stores({
+    questions: "&id, apiId, ownerUserId, subject, canonicalSubject, subjectId, subtopicId, banca, ano, bloco, hit, updatedAt, timestamp",
+    questionsByOwner: "&storageKey, id, ownerUserId, apiId, subject, canonicalSubject, subjectId, subtopicId, banca, ano, bloco, hit, updatedAt, timestamp",
+    outbox: "++seq, entityType, entityId, userId, createdAt, status",
+    dynamicTreeNodes: "&key, subjectId, nodeId, updatedAt",
+    meta: "&key"
+  }).upgrade(async (tx) => {
+    const legacyRows = await tx.table("questions").toArray();
+    if (!Array.isArray(legacyRows) || legacyRows.length === 0) return;
+    const migrated = legacyRows.filter((q) => q && q.id).map((q) => ({
+      ...q,
+      storageKey: `${q.ownerUserId || "__anon__"}::${String(q.id)}`
+    }));
+    if (migrated.length > 0) {
+      await tx.table("questionsByOwner").bulkPut(migrated);
+    }
+  });
+  function makeQuestionStorageKey(ownerUserId, id) {
+    return `${ownerUserId || "__anon__"}::${String(id)}`;
+  }
+  function stripStorageKey(row) {
+    if (!row || typeof row !== "object") return row;
+    if (!("storageKey" in row)) return row;
+    const { storageKey: _ignored, ...rest } = row;
+    return rest;
+  }
   var miniIndex = null;
   var indexedUserId = null;
   function normalizeSearchText(str) {
@@ -8217,10 +8243,11 @@
   }
   async function upsertQuestionFull(question, { enqueueOutbox = true } = {}) {
     if (!question || !question.id) return null;
-    const prev = await db.questions.get(question.id);
-    const merged = mergeQuestionRecords(prev, question);
-    await db.questions.put(merged);
-    if (miniIndex && (!indexedUserId || !merged.ownerUserId || merged.ownerUserId === indexedUserId)) {
+    const storageKey = makeQuestionStorageKey(question.ownerUserId, question.id);
+    const prev = await db.questionsByOwner.get(storageKey);
+    const merged = mergeQuestionRecords(prev ? stripStorageKey(prev) : null, question);
+    await db.questionsByOwner.put({ ...merged, storageKey });
+    if (miniIndex && indexedUserId && merged.ownerUserId === indexedUserId) {
       try {
         const doc = toIndexDoc(merged);
         if (miniIndex.has(doc.id)) miniIndex.replace(doc);
@@ -8229,8 +8256,8 @@
         miniIndex = null;
       }
     }
-    if (enqueueOutbox) {
-      await enqueueOutboxEvent("question_upsert", merged.id, merged.ownerUserId || null, merged);
+    if (enqueueOutbox && merged.ownerUserId) {
+      await enqueueOutboxEvent("question_upsert", merged.id, merged.ownerUserId, merged);
     }
     return merged;
   }
@@ -8238,53 +8265,61 @@
     if (!Array.isArray(questions) || questions.length === 0) return [];
     const valid = questions.filter((q) => q && q.id);
     if (valid.length === 0) return [];
-    const existing = await db.questions.bulkGet(valid.map((q) => q.id));
-    const mergedList = valid.map((q, idx) => mergeQuestionRecords(existing[idx] || null, q));
-    await db.questions.bulkPut(mergedList);
+    const keys = valid.map((q) => makeQuestionStorageKey(q.ownerUserId, q.id));
+    const existing = await db.questionsByOwner.bulkGet(keys);
+    const mergedList = valid.map((q, idx) => mergeQuestionRecords(existing[idx] ? stripStorageKey(existing[idx]) : null, q));
+    await db.questionsByOwner.bulkPut(
+      mergedList.map((m, idx) => ({ ...m, storageKey: keys[idx] }))
+    );
     miniIndex = null;
     if (enqueueOutbox) {
-      await db.outbox.bulkAdd(
-        mergedList.map((m) => ({
-          entityType: "question_upsert",
-          entityId: String(m.id),
-          userId: m.ownerUserId || null,
-          payload: m,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-          status: "pending"
-        }))
-      );
+      const outboxRows = mergedList.filter((m) => Boolean(m.ownerUserId)).map((m) => ({
+        entityType: "question_upsert",
+        entityId: String(m.id),
+        userId: m.ownerUserId,
+        payload: m,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        status: "pending"
+      }));
+      if (outboxRows.length > 0) {
+        await db.outbox.bulkAdd(outboxRows);
+      }
     }
     return mergedList;
   }
   async function deleteQuestionFull(id, userId = null, { enqueueOutbox = true } = {}) {
     if (!id) return false;
-    const prev = await db.questions.get(id);
-    await db.questions.delete(id);
-    if (miniIndex) {
+    const storageKey = makeQuestionStorageKey(userId, id);
+    const prev = await db.questionsByOwner.get(storageKey);
+    await db.questionsByOwner.delete(storageKey);
+    if (miniIndex && (!userId || indexedUserId === userId)) {
       try {
         if (miniIndex.has(id)) miniIndex.discard(id);
       } catch (_) {
         miniIndex = null;
       }
     }
-    if (enqueueOutbox) {
-      await enqueueOutboxEvent("question_delete", id, userId || prev?.ownerUserId || null, { id });
+    const resolvedOwner = userId || prev?.ownerUserId || null;
+    if (enqueueOutbox && resolvedOwner) {
+      await enqueueOutboxEvent("question_delete", id, resolvedOwner, { id });
     }
     return true;
   }
   async function clearUserQuestions(userId = null) {
-    await db.transaction("rw", db.questions, db.outbox, async () => {
+    await db.transaction("rw", db.questionsByOwner, db.outbox, async () => {
       if (userId) {
-        const all = await db.questions.toArray();
-        const ids = all.filter((q) => q && (!q.ownerUserId || q.ownerUserId === userId)).map((q) => q.id);
-        if (ids.length > 0) await db.questions.bulkDelete(ids);
+        const owned = await db.questionsByOwner.where("ownerUserId").equals(userId).toArray();
+        const keys = owned.map((q) => q.storageKey).filter(Boolean);
+        if (keys.length > 0) await db.questionsByOwner.bulkDelete(keys);
         const out = await db.outbox.toArray();
-        const outSeqs = out.filter((o) => o && (o.entityType === "question_upsert" || o.entityType === "question_delete") && (!o.userId || o.userId === userId)).map((o) => o.seq);
+        const outSeqs = out.filter((o) => o && (o.entityType === "question_upsert" || o.entityType === "question_delete") && o.userId === userId).map((o) => o.seq);
         if (outSeqs.length > 0) await db.outbox.bulkDelete(outSeqs);
       } else {
-        await db.questions.clear();
+        const all = await db.questionsByOwner.toArray();
+        const anonKeys = all.filter((q) => q && !q.ownerUserId).map((q) => q.storageKey).filter(Boolean);
+        if (anonKeys.length > 0) await db.questionsByOwner.bulkDelete(anonKeys);
         const out = await db.outbox.toArray();
-        const outSeqs = out.filter((o) => o && (o.entityType === "question_upsert" || o.entityType === "question_delete")).map((o) => o.seq);
+        const outSeqs = out.filter((o) => o && (o.entityType === "question_upsert" || o.entityType === "question_delete") && !o.userId).map((o) => o.seq);
         if (outSeqs.length > 0) await db.outbox.bulkDelete(outSeqs);
       }
     });
@@ -8293,18 +8328,18 @@
     return true;
   }
   async function replaceUserQuestions(userId = null, questions = []) {
+    if (!userId) return 0;
     const valid = (Array.isArray(questions) ? questions : []).filter((q) => q && q.id);
-    await db.transaction("rw", db.questions, async () => {
-      if (userId) {
-        const all = await db.questions.toArray();
-        const ids = all.filter((q) => q && (!q.ownerUserId || q.ownerUserId === userId)).map((q) => q.id);
-        if (ids.length > 0) await db.questions.bulkDelete(ids);
-      } else {
-        await db.questions.clear();
-      }
+    await db.transaction("rw", db.questionsByOwner, async () => {
+      const owned = await db.questionsByOwner.where("ownerUserId").equals(userId).toArray();
+      const keys = owned.map((q) => q.storageKey).filter(Boolean);
+      if (keys.length > 0) await db.questionsByOwner.bulkDelete(keys);
       if (valid.length > 0) {
-        const normalized = valid.map((q) => mergeQuestionRecords(null, { ...q, ...userId && !q.ownerUserId ? { ownerUserId: userId } : {} }));
-        await db.questions.bulkPut(normalized);
+        const normalized = valid.map((q) => {
+          const merged = mergeQuestionRecords(null, { ...q, ownerUserId: userId });
+          return { ...merged, storageKey: makeQuestionStorageKey(userId, merged.id) };
+        });
+        await db.questionsByOwner.bulkPut(normalized);
       }
     });
     miniIndex = null;
@@ -8312,9 +8347,9 @@
     return valid.length;
   }
   async function getAllQuestionsFull(userId = null) {
-    const all = await db.questions.toArray();
-    const scoped = userId ? all.filter((q) => q && (!q.ownerUserId || q.ownerUserId === userId)) : all;
-    return scoped.sort((a, b) => new Date(b.timestamp || b.updatedAt || 0) - new Date(a.timestamp || a.updatedAt || 0));
+    if (!userId) return [];
+    const scoped = await db.questionsByOwner.where("ownerUserId").equals(userId).toArray();
+    return scoped.map(stripStorageKey).sort((a, b) => new Date(b.timestamp || b.updatedAt || 0) - new Date(a.timestamp || a.updatedAt || 0));
   }
   async function ensureSearchIndex(userId = null) {
     if (miniIndex && indexedUserId === userId) return miniIndex;
@@ -8343,8 +8378,9 @@
     }).slice(0, limit).map((q) => ({ ...toIndexDoc(q), score: 1 }));
   }
   async function getPendingOutbox(userId = null) {
+    if (!userId) return [];
     const rows = await db.outbox.orderBy("seq").toArray();
-    return userId ? rows.filter((r) => !r.userId || r.userId === userId) : rows;
+    return rows.filter((r) => r && r.userId === userId);
   }
   async function clearOutboxSeqs(seqs = []) {
     if (!Array.isArray(seqs) || seqs.length === 0) return;
@@ -28353,11 +28389,11 @@ ${suffix}`;
       readSessionAuth(),
       chrome.storage.local.get(["qg_active_user_id"])
     ]);
-    const activeUserId = store?.qg_active_user_id || auth?.userId;
+    const activeUserId = store?.qg_active_user_id || null;
     if (!auth || !auth.supabaseUrl || !auth.anonKey || !auth.userId || !auth.accessToken && !auth.refreshToken) {
       return null;
     }
-    if (activeUserId && activeUserId !== auth.userId) return null;
+    if (!activeUserId || activeUserId !== auth.userId) return null;
     let token = auth.accessToken;
     const nowSec = Math.floor(Date.now() / 1e3);
     if ((!token || auth.expiresAt && nowSec >= Number(auth.expiresAt) - 60) && auth.refreshToken) {
@@ -28427,6 +28463,8 @@ ${suffix}`;
     if (!outboxRows || outboxRows.length === 0) return true;
     const latestByQId = /* @__PURE__ */ new Map();
     outboxRows.forEach((row) => {
+      if (!row || row.userId !== userId) return;
+      if (row.payload?.ownerUserId && row.payload.ownerUserId !== userId) return;
       if (row.entityType === "question_upsert" || row.entityType === "question_delete") {
         latestByQId.set(row.entityId, row);
       }
@@ -28481,7 +28519,9 @@ ${suffix}`;
       }
       const filterStore = await chrome.storage.local.get([FILTER_ID_MEMORY_KEY]);
       const localFilterMem = filterStore?.[FILTER_ID_MEMORY_KEY] && typeof filterStore[FILTER_ID_MEMORY_KEY] === "object" ? filterStore[FILTER_ID_MEMORY_KEY] : {};
-      const questionEvents = pending.filter((r) => r.entityType === "question_upsert" || r.entityType === "question_delete");
+      const questionEvents = pending.filter(
+        (r) => r && r.userId === userId && (!r.payload?.ownerUserId || r.payload.ownerUserId === userId) && (r.entityType === "question_upsert" || r.entityType === "question_delete")
+      );
       if (questionEvents.length === 0 && Object.keys(localFilterMem).length === 0) {
         return { flushed: 0, mode: "nothing-pending" };
       }
@@ -28544,7 +28584,8 @@ ${suffix}`;
       if (pending.length > 0) {
         await clearOutboxSeqs(pending.map((r) => r.seq));
       }
-      await setMeta("lastPulledUpdatedAt", confirmedIso);
+      const pulledMetaKey = `lastPulledUpdatedAt:${userId}`;
+      await setMeta(pulledMetaKey, confirmedIso);
       const syncMode = incrementalOk ? "incremental+profile" : "profile-delta";
       await chrome.storage.local.set({
         [DIRECT_SYNC_LAST_KEY]: Date.now(),
@@ -28567,7 +28608,8 @@ ${suffix}`;
       const { data: metaRows, error: metaErr } = await supabase.from("profiles").select("updated_at").eq("id", userId).limit(1);
       if (metaErr || !Array.isArray(metaRows) || !metaRows[0]?.updated_at) return { pulled: 0 };
       const remoteTs = metaRows[0].updated_at;
-      const lastPulled = await getMeta("lastPulledUpdatedAt");
+      const pulledMetaKey = `lastPulledUpdatedAt:${userId}`;
+      const lastPulled = await getMeta(pulledMetaKey);
       const remoteMs = Date.parse(String(remoteTs || ""));
       const lastMs = Date.parse(String(lastPulled || ""));
       if (lastPulled && Number.isFinite(remoteMs) && Number.isFinite(lastMs) && remoteMs <= lastMs) {
@@ -28596,7 +28638,7 @@ ${suffix}`;
           await chrome.storage.local.set({ [FILTER_ID_MEMORY_KEY]: localMem });
         }
       }
-      await setMeta("lastPulledUpdatedAt", rows[0].updated_at || remoteTs);
+      await setMeta(pulledMetaKey, rows[0].updated_at || remoteTs);
       return { pulled: scoped.length };
     } catch (_) {
       return { pulled: 0 };
@@ -28688,8 +28730,12 @@ ${suffix}`;
       const res = await chrome.storage.local.get([STORAGE_KEY2, USER_BUCKETS_KEY, ACTIVE_USER_KEY]);
       const list = Array.isArray(res?.[STORAGE_KEY2]) ? res[STORAGE_KEY2] : [];
       const activeId = res?.[ACTIVE_USER_KEY] || null;
-      const allLegacy = [...list.map((q) => q && !q.ownerUserId && activeId ? { ...q, ownerUserId: activeId } : q)];
       const buckets = res?.[USER_BUCKETS_KEY];
+      const bucketCount = buckets && typeof buckets === "object" ? Object.keys(buckets).length : 0;
+      const canAdoptLegacy = bucketCount <= 1 && Boolean(activeId);
+      const allLegacy = [
+        ...list.filter((q) => q && (q.ownerUserId || canAdoptLegacy)).map((q) => q && !q.ownerUserId && canAdoptLegacy ? { ...q, ownerUserId: activeId } : q)
+      ];
       if (buckets && typeof buckets === "object") {
         Object.entries(buckets).forEach(([uid, b]) => {
           (Array.isArray(b?.questions) ? b.questions : []).forEach((q) => {
@@ -28761,15 +28807,15 @@ ${suffix}`;
       }
     }
   }
-  async function broadcastToQgTabs(questions, session, dailyGoal = 50) {
-    if (!chrome.tabs) return;
+  async function broadcastToQgTabs(questions, session, dailyGoal = 50, ownerUserId = null) {
+    if (!chrome.tabs || !ownerUserId) return;
     try {
       const qgTabs = await chrome.tabs.query({ url: QG_URL_PATTERNS2 });
       for (const tab of qgTabs) {
         if (tab.id && !tab.discarded) {
           chrome.tabs.sendMessage(tab.id, {
             type: "PUSH_CAVEIRA_SYNC",
-            payload: { questions, session, dailyGoal }
+            payload: { questions, session, dailyGoal, ownerUserId }
           }).catch(() => {
           });
         }
@@ -28928,13 +28974,15 @@ ${suffix}`;
           const session = normalizeSession(res?.[SESSION_KEY]);
           const dailyGoal = Number(res?.[GOAL_KEY]) || 50;
           const activeId = res?.[ACTIVE_USER_KEY] || null;
+          if (!activeId) return;
           let fullQuestions = [];
           try {
             fullQuestions = await getAllQuestionsFull(activeId);
           } catch (_) {
           }
-          const listToPush = fullQuestions.length > 0 ? fullQuestions : res?.[STORAGE_KEY2] || [];
-          broadcastToQgTabs(listToPush, session, dailyGoal);
+          const fallbackScoped = (Array.isArray(res?.[STORAGE_KEY2]) ? res[STORAGE_KEY2] : []).filter((q) => q && q.ownerUserId === activeId);
+          const listToPush = fullQuestions.length > 0 ? fullQuestions : fallbackScoped;
+          broadcastToQgTabs(listToPush, session, dailyGoal, activeId);
         } catch (_) {
         }
       });
@@ -29089,11 +29137,23 @@ ${suffix}`;
             });
           }
           await ensureMigratedFromLegacyStorage();
-          const dbQuestions = await getAllQuestionsFull(res?.[ACTIVE_USER_KEY] || null);
+          const activeId = res?.[ACTIVE_USER_KEY] || null;
+          if (!activeId) {
+            sendResponse({
+              questions: [],
+              session: normalizeSession(null),
+              dailyGoal: 50,
+              ownerUserId: null
+            });
+            return;
+          }
+          const dbQuestions = await getAllQuestionsFull(activeId);
+          const fallbackScoped = (Array.isArray(res?.[STORAGE_KEY2]) ? res[STORAGE_KEY2] : []).filter((q) => q && q.ownerUserId === activeId);
           sendResponse({
-            questions: dbQuestions.length > 0 ? dbQuestions : res?.[STORAGE_KEY2] || [],
+            questions: dbQuestions.length > 0 ? dbQuestions : fallbackScoped,
             session,
-            dailyGoal
+            dailyGoal,
+            ownerUserId: activeId
           });
         } catch (_) {
           sendResponse({
@@ -29288,6 +29348,15 @@ ${suffix}`;
     if (message.type === "CLEAR_CLOUD_AUTH") {
       (async () => {
         try {
+          const onlyIfUserIdNot = message.payload?.onlyIfUserIdNot || null;
+          if (onlyIfUserIdNot) {
+            const sess = chrome.storage?.session ? await chrome.storage.session.get([CLOUD_AUTH_KEY2]) : {};
+            const curAuth = sess?.[CLOUD_AUTH_KEY2];
+            if (curAuth?.userId === onlyIfUserIdNot) {
+              sendResponse({ ok: true, skipped: true });
+              return;
+            }
+          }
           if (chrome.storage?.session) {
             await chrome.storage.session.remove([CLOUD_AUTH_KEY2]);
           }

@@ -17,6 +17,37 @@ db.version(2).stores({
   meta: '&key',
 });
 
+db.version(3).stores({
+  questions: '&id, apiId, ownerUserId, subject, canonicalSubject, subjectId, subtopicId, banca, ano, bloco, hit, updatedAt, timestamp',
+  questionsByOwner: '&storageKey, id, ownerUserId, apiId, subject, canonicalSubject, subjectId, subtopicId, banca, ano, bloco, hit, updatedAt, timestamp',
+  outbox: '++seq, entityType, entityId, userId, createdAt, status',
+  dynamicTreeNodes: '&key, subjectId, nodeId, updatedAt',
+  meta: '&key',
+}).upgrade(async (tx) => {
+  const legacyRows = await tx.table('questions').toArray();
+  if (!Array.isArray(legacyRows) || legacyRows.length === 0) return;
+  const migrated = legacyRows
+    .filter((q) => q && q.id)
+    .map((q) => ({
+      ...q,
+      storageKey: `${q.ownerUserId || '__anon__'}::${String(q.id)}`,
+    }));
+  if (migrated.length > 0) {
+    await tx.table('questionsByOwner').bulkPut(migrated);
+  }
+});
+
+function makeQuestionStorageKey(ownerUserId, id) {
+  return `${ownerUserId || '__anon__'}::${String(id)}`;
+}
+
+function stripStorageKey(row) {
+  if (!row || typeof row !== 'object') return row;
+  if (!('storageKey' in row)) return row;
+  const { storageKey: _ignored, ...rest } = row;
+  return rest;
+}
+
 let miniIndex = null;
 let indexedUserId = null;
 
@@ -185,11 +216,12 @@ export async function enqueueOutboxEvent(entityType, entityId, userId, payload) 
 
 export async function upsertQuestionFull(question, { enqueueOutbox = true } = {}) {
   if (!question || !question.id) return null;
-  const prev = await db.questions.get(question.id);
-  const merged = mergeQuestionRecords(prev, question);
-  await db.questions.put(merged);
+  const storageKey = makeQuestionStorageKey(question.ownerUserId, question.id);
+  const prev = await db.questionsByOwner.get(storageKey);
+  const merged = mergeQuestionRecords(prev ? stripStorageKey(prev) : null, question);
+  await db.questionsByOwner.put({ ...merged, storageKey });
 
-  if (miniIndex && (!indexedUserId || !merged.ownerUserId || merged.ownerUserId === indexedUserId)) {
+  if (miniIndex && indexedUserId && merged.ownerUserId === indexedUserId) {
     try {
       const doc = toIndexDoc(merged);
       if (miniIndex.has(doc.id)) miniIndex.replace(doc);
@@ -199,8 +231,8 @@ export async function upsertQuestionFull(question, { enqueueOutbox = true } = {}
     }
   }
 
-  if (enqueueOutbox) {
-    await enqueueOutboxEvent('question_upsert', merged.id, merged.ownerUserId || null, merged);
+  if (enqueueOutbox && merged.ownerUserId) {
+    await enqueueOutboxEvent('question_upsert', merged.id, merged.ownerUserId, merged);
   }
   return merged;
 }
@@ -210,59 +242,69 @@ export async function bulkUpsertQuestionsFull(questions = [], { enqueueOutbox = 
   const valid = questions.filter((q) => q && q.id);
   if (valid.length === 0) return [];
 
-  const existing = await db.questions.bulkGet(valid.map((q) => q.id));
-  const mergedList = valid.map((q, idx) => mergeQuestionRecords(existing[idx] || null, q));
-  await db.questions.bulkPut(mergedList);
+  const keys = valid.map((q) => makeQuestionStorageKey(q.ownerUserId, q.id));
+  const existing = await db.questionsByOwner.bulkGet(keys);
+  const mergedList = valid.map((q, idx) => mergeQuestionRecords(existing[idx] ? stripStorageKey(existing[idx]) : null, q));
+  await db.questionsByOwner.bulkPut(
+    mergedList.map((m, idx) => ({ ...m, storageKey: keys[idx] }))
+  );
   miniIndex = null;
 
   if (enqueueOutbox) {
-    await db.outbox.bulkAdd(
-      mergedList.map((m) => ({
+    const outboxRows = mergedList
+      .filter((m) => Boolean(m.ownerUserId))
+      .map((m) => ({
         entityType: 'question_upsert',
         entityId: String(m.id),
-        userId: m.ownerUserId || null,
+        userId: m.ownerUserId,
         payload: m,
         createdAt: new Date().toISOString(),
         status: 'pending',
-      }))
-    );
+      }));
+    if (outboxRows.length > 0) {
+      await db.outbox.bulkAdd(outboxRows);
+    }
   }
   return mergedList;
 }
 
 export async function deleteQuestionFull(id, userId = null, { enqueueOutbox = true } = {}) {
   if (!id) return false;
-  const prev = await db.questions.get(id);
-  await db.questions.delete(id);
-  if (miniIndex) {
+  const storageKey = makeQuestionStorageKey(userId, id);
+  const prev = await db.questionsByOwner.get(storageKey);
+  await db.questionsByOwner.delete(storageKey);
+  if (miniIndex && (!userId || indexedUserId === userId)) {
     try {
       if (miniIndex.has(id)) miniIndex.discard(id);
     } catch (_) {
       miniIndex = null;
     }
   }
-  if (enqueueOutbox) {
-    await enqueueOutboxEvent('question_delete', id, userId || prev?.ownerUserId || null, { id });
+  const resolvedOwner = userId || prev?.ownerUserId || null;
+  if (enqueueOutbox && resolvedOwner) {
+    await enqueueOutboxEvent('question_delete', id, resolvedOwner, { id });
   }
   return true;
 }
 
 export async function clearUserQuestions(userId = null) {
-  await db.transaction('rw', db.questions, db.outbox, async () => {
+  await db.transaction('rw', db.questionsByOwner, db.outbox, async () => {
     if (userId) {
-      const all = await db.questions.toArray();
-      const ids = all.filter((q) => q && (!q.ownerUserId || q.ownerUserId === userId)).map((q) => q.id);
-      if (ids.length > 0) await db.questions.bulkDelete(ids);
+      const owned = await db.questionsByOwner.where('ownerUserId').equals(userId).toArray();
+      const keys = owned.map((q) => q.storageKey).filter(Boolean);
+      if (keys.length > 0) await db.questionsByOwner.bulkDelete(keys);
       const out = await db.outbox.toArray();
       const outSeqs = out
-        .filter((o) => o && (o.entityType === 'question_upsert' || o.entityType === 'question_delete') && (!o.userId || o.userId === userId))
+        .filter((o) => o && (o.entityType === 'question_upsert' || o.entityType === 'question_delete') && o.userId === userId)
         .map((o) => o.seq);
       if (outSeqs.length > 0) await db.outbox.bulkDelete(outSeqs);
     } else {
-      await db.questions.clear();
+      const all = await db.questionsByOwner.toArray();
+      const anonKeys = all.filter((q) => q && !q.ownerUserId).map((q) => q.storageKey).filter(Boolean);
+      if (anonKeys.length > 0) await db.questionsByOwner.bulkDelete(anonKeys);
       const out = await db.outbox.toArray();
       const outSeqs = out
-        .filter((o) => o && (o.entityType === 'question_upsert' || o.entityType === 'question_delete'))
+        .filter((o) => o && (o.entityType === 'question_upsert' || o.entityType === 'question_delete') && !o.userId)
         .map((o) => o.seq);
       if (outSeqs.length > 0) await db.outbox.bulkDelete(outSeqs);
     }
@@ -273,18 +315,18 @@ export async function clearUserQuestions(userId = null) {
 }
 
 export async function replaceUserQuestions(userId = null, questions = []) {
+  if (!userId) return 0;
   const valid = (Array.isArray(questions) ? questions : []).filter((q) => q && q.id);
-  await db.transaction('rw', db.questions, async () => {
-    if (userId) {
-      const all = await db.questions.toArray();
-      const ids = all.filter((q) => q && (!q.ownerUserId || q.ownerUserId === userId)).map((q) => q.id);
-      if (ids.length > 0) await db.questions.bulkDelete(ids);
-    } else {
-      await db.questions.clear();
-    }
+  await db.transaction('rw', db.questionsByOwner, async () => {
+    const owned = await db.questionsByOwner.where('ownerUserId').equals(userId).toArray();
+    const keys = owned.map((q) => q.storageKey).filter(Boolean);
+    if (keys.length > 0) await db.questionsByOwner.bulkDelete(keys);
     if (valid.length > 0) {
-      const normalized = valid.map((q) => mergeQuestionRecords(null, { ...q, ...(userId && !q.ownerUserId ? { ownerUserId: userId } : {}) }));
-      await db.questions.bulkPut(normalized);
+      const normalized = valid.map((q) => {
+        const merged = mergeQuestionRecords(null, { ...q, ownerUserId: userId });
+        return { ...merged, storageKey: makeQuestionStorageKey(userId, merged.id) };
+      });
+      await db.questionsByOwner.bulkPut(normalized);
     }
   });
   miniIndex = null;
@@ -293,11 +335,11 @@ export async function replaceUserQuestions(userId = null, questions = []) {
 }
 
 export async function getAllQuestionsFull(userId = null) {
-  const all = await db.questions.toArray();
-  const scoped = userId
-    ? all.filter((q) => q && (!q.ownerUserId || q.ownerUserId === userId))
-    : all;
-  return scoped.sort((a, b) => new Date(b.timestamp || b.updatedAt || 0) - new Date(a.timestamp || a.updatedAt || 0));
+  if (!userId) return [];
+  const scoped = await db.questionsByOwner.where('ownerUserId').equals(userId).toArray();
+  return scoped
+    .map(stripStorageKey)
+    .sort((a, b) => new Date(b.timestamp || b.updatedAt || 0) - new Date(a.timestamp || a.updatedAt || 0));
 }
 
 async function ensureSearchIndex(userId = null) {
@@ -333,8 +375,9 @@ export async function searchQuestionsOffline(query, userId = null, limit = 25) {
 }
 
 export async function getPendingOutbox(userId = null) {
+  if (!userId) return [];
   const rows = await db.outbox.orderBy('seq').toArray();
-  return userId ? rows.filter((r) => !r.userId || r.userId === userId) : rows;
+  return rows.filter((r) => r && r.userId === userId);
 }
 
 export async function clearOutboxSeqs(seqs = []) {
@@ -448,7 +491,7 @@ export async function importBackupData(backupObj, userId = null) {
     .map((q) => ({
       ...q,
       id: q.id || `api_${q.apiId}`,
-      ...(userId && !q.ownerUserId ? { ownerUserId: userId } : {}),
+      ...(userId ? { ownerUserId: userId } : {}),
     }));
 
   let importedQuestions = 0;

@@ -1074,6 +1074,9 @@ ${EXTRA_SHADOW_CSS}`;
     if (queryIsStandalone && candNorm.includes("prf") && !candNorm.includes("iniciante")) {
       score -= 40;
     }
+    if (!queryIsStandalone && !courseNorm && /\bprf\b|policia\s+rodoviaria\s+federal/.test(candNorm)) {
+      score += 65;
+    }
     return Math.max(0, score);
   }
   function scoreCaveiraModuleCandidate(moduleText = "", { targetSubject = "", targetTopic = "", targetLesson = "" } = {}) {
@@ -1127,7 +1130,7 @@ ${EXTRA_SHADOW_CSS}`;
   // extensao-src/entries/content.entry.js
   (function() {
     if (isExcludedCaveiraHost(window.location.hostname)) return;
-    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.4.2";
+    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.4.3";
     console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
     try {
       window.dispatchEvent(new CustomEvent("qg-caveira-teardown"));
@@ -1171,6 +1174,8 @@ ${EXTRA_SHADOW_CSS}`;
     const apiQuestionByApiId = /* @__PURE__ */ new Map();
     const apiQuestionByCode = /* @__PURE__ */ new Map();
     const apiAnswerCache = /* @__PURE__ */ new Map();
+    const unansweredObservedQIds = /* @__PURE__ */ new Set();
+    const preAnsweredIgnoredQIds = /* @__PURE__ */ new Set();
     let apiSimuladosCache = [];
     const apiSimuladoEnjoymentByExamId = /* @__PURE__ */ new Map();
     const apiSimuladoDatesByExamId = /* @__PURE__ */ new Map();
@@ -1463,7 +1468,8 @@ ${EXTRA_SHADOW_CSS}`;
             if (chrome.runtime.lastError || isDestroyed) return;
             cachedActiveUserId = res?.[ACTIVE_USER_KEY] || null;
             cachedActiveUserLabel = res?.[ACTIVE_USER_LABEL_KEY] || "";
-            activePracticeMission = res?.[ACTIVE_MISSION_KEY] || null;
+            const rawBootMission = res?.[ACTIVE_MISSION_KEY] || null;
+            activePracticeMission = cachedActiveUserId && rawBootMission && (!rawBootMission.ownerUserId || rawBootMission.ownerUserId === cachedActiveUserId) ? rawBootMission : null;
             diagnosticModeEnabled = Boolean(res?.[DIAGNOSTIC_MODE_KEY]);
             postToSniffer("SET_DIAGNOSTIC_MODE", { enabled: diagnosticModeEnabled });
             if (res?.[PENDING_SIMULADOS_QUEUE_KEY]) {
@@ -1573,13 +1579,14 @@ ${EXTRA_SHADOW_CSS}`;
               cachedDailyGoal = Number(res[GOAL_KEY]) || 50;
             }
             const today = getTodaySessionDate();
-            const questions = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
+            const rawQuestions = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
+            const questions = cachedActiveUserId ? rawQuestions.filter((q) => q && q.ownerUserId === cachedActiveUserId) : [];
             if (res?.[SCHEMA_VERSION_KEY] !== SCHEMA_VERSION || res?.[SCHEMA_KEY] !== "v3_strict_clean") {
               if (questions.length > 0 && chrome.runtime?.sendMessage) {
                 chrome.runtime.sendMessage({
                   type: "DB_BULK_UPSERT_QUESTIONS",
                   payload: {
-                    questions: questions.map((q) => q && !q.ownerUserId && cachedActiveUserId ? { ...q, ownerUserId: cachedActiveUserId } : q),
+                    questions,
                     enqueueOutbox: false
                   }
                 }).catch(() => {
@@ -1625,7 +1632,8 @@ ${EXTRA_SHADOW_CSS}`;
           }
           if (area === "local") {
             if (changes[STORAGE_KEY]) {
-              const updatedList = Array.isArray(changes[STORAGE_KEY].newValue) ? changes[STORAGE_KEY].newValue : [];
+              const rawList = Array.isArray(changes[STORAGE_KEY].newValue) ? changes[STORAGE_KEY].newValue : [];
+              const updatedList = cachedActiveUserId ? rawList.filter((q) => q && q.ownerUserId === cachedActiveUserId) : [];
               questionsCache = [...updatedList];
               savedQuestionIds.clear();
               savedQuestionsMissingAlts.clear();
@@ -1652,7 +1660,42 @@ ${EXTRA_SHADOW_CSS}`;
               updateHudStats();
             }
             if (changes[ACTIVE_USER_KEY]) {
-              cachedActiveUserId = changes[ACTIVE_USER_KEY].newValue || null;
+              const nextUid = changes[ACTIVE_USER_KEY].newValue || null;
+              const prevUid = cachedActiveUserId;
+              cachedActiveUserId = nextUid;
+              if (nextUid !== prevUid) {
+                questionsCache = [];
+                savedQuestionIds.clear();
+                savedQuestionsMissingAlts.clear();
+                processedInSession.clear();
+                pendingAnswerQIds.clear();
+                unansweredObservedQIds.clear();
+                preAnsweredIgnoredQIds.clear();
+                apiAnswerCache.clear();
+                activeQuestionData = null;
+                activePracticeMission = null;
+                dismissPrompt();
+                chrome.storage.local.get([STORAGE_KEY, SESSION_KEY, ACTIVE_MISSION_KEY], (res) => {
+                  if (chrome.runtime?.lastError || isDestroyed) return;
+                  const rawList = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
+                  const scoped = nextUid ? rawList.filter((q) => q && q.ownerUserId === nextUid) : [];
+                  questionsCache = [...scoped];
+                  scoped.forEach((q) => {
+                    if (q && q.id) {
+                      savedQuestionIds.add(q.id);
+                      if (!Array.isArray(q.alternatives) || q.alternatives.length === 0 || q.alternatives.every((a) => !a.text || a.text === a.letter)) {
+                        savedQuestionsMissingAlts.add(q.id);
+                      }
+                    }
+                  });
+                  sessionStats = normalizeSession(res?.[SESSION_KEY]);
+                  const rawM = res?.[ACTIVE_MISSION_KEY] || null;
+                  activePracticeMission = nextUid && rawM && (!rawM.ownerUserId || rawM.ownerUserId === nextUid) ? rawM : null;
+                  updateHudStats();
+                  updateHudUser();
+                  updateHudMission();
+                });
+              }
               updateHudUser();
             }
             if (changes[ACTIVE_USER_LABEL_KEY]) {
@@ -1690,7 +1733,8 @@ ${EXTRA_SHADOW_CSS}`;
               renderHudCourseDiffBarRef?.();
             }
             if (changes[ACTIVE_MISSION_KEY]) {
-              activePracticeMission = changes[ACTIVE_MISSION_KEY].newValue || null;
+              const nextM = changes[ACTIVE_MISSION_KEY].newValue || null;
+              activePracticeMission = cachedActiveUserId && nextM && (!nextM.ownerUserId || nextM.ownerUserId === cachedActiveUserId) ? nextM : null;
               updateHudMission();
             }
           }
@@ -1909,6 +1953,7 @@ ${EXTRA_SHADOW_CSS}`;
               ...communityCorrectPct !== void 0 ? { communityCorrectPct, communityErrorPct } : {}
             }, true);
           }
+          scheduleScan(120);
         }
         return;
       }
@@ -2753,6 +2798,53 @@ ${EXTRA_SHADOW_CSS}`;
         const now = Date.now();
         const currentCourseIdMatch = window.location.pathname.match(/\/courses\/(\d+)/i);
         if (!currentCourseIdMatch) {
+          const queryAllNorm = normalizeCourseIndexKey(`${targetCourse} ${targetTopic} ${targetSubject}`);
+          const queryIsStandalone = /\b(?:iniciante|isolad|nivelamento)\b/.test(queryAllNorm);
+          if (attempts === 1 && isExtensionContextValid() && chrome?.storage?.local) {
+            try {
+              chrome.storage.local.get([COURSE_INDEX_CACHE_KEY], (res) => {
+                if (isDestroyed || navigatedToModuleUrl) return;
+                const byLesson = res?.[COURSE_INDEX_CACHE_KEY]?.byLesson || {};
+                let bestCachedUrl = "";
+                let bestCachedScore = 0;
+                Object.values(byLesson).forEach((entry) => {
+                  if (!entry || !entry.url || !String(entry.url).includes("/courses/")) return;
+                  const entryTitle = entry.lessonTitle || entry.title || "";
+                  const sc = scoreCaveiraLessonCandidate(entryTitle, targetLesson);
+                  if (sc < 85) return;
+                  const entryCName = normalizeCourseIndexKey(`${entry.courseName || ""} ${entry.moduleName || ""}`);
+                  const entryIsStandalone = /\b(?:iniciante|isolad|nivelamento)\b/.test(entryCName);
+                  if (queryIsStandalone !== entryIsStandalone && (targetCourse || queryIsStandalone)) return;
+                  if (sc > bestCachedScore) {
+                    bestCachedScore = sc;
+                    bestCachedUrl = String(entry.url).split("#")[0];
+                  }
+                });
+                if (bestCachedUrl) {
+                  const targetDirectUrl = `${bestCachedUrl}${window.location.hash}`;
+                  navigatedToModuleUrl = targetDirectUrl;
+                  if (targetLessonPollTimer) {
+                    clearInterval(targetLessonPollTimer);
+                    targetLessonPollTimer = null;
+                  }
+                  window.location.href = targetDirectUrl;
+                }
+              });
+            } catch (_) {
+            }
+          }
+          if (apiCoursesListCache.length === 1 && !queryIsStandalone && apiCoursesListCache[0]?.id) {
+            const singleCourseUrl = `${window.location.origin}/courses/${apiCoursesListCache[0].id}${window.location.hash}`;
+            if (navigatedToModuleUrl !== singleCourseUrl) {
+              navigatedToModuleUrl = singleCourseUrl;
+              if (targetLessonPollTimer) {
+                clearInterval(targetLessonPollTimer);
+                targetLessonPollTimer = null;
+              }
+              window.location.href = singleCourseUrl;
+            }
+            return;
+          }
           if (apiCoursesListCache.length > 0) {
             let bestApiCourse = null;
             let bestApiCourseScore = 0;
@@ -2786,9 +2878,9 @@ ${EXTRA_SHADOW_CSS}`;
               }
             }
           }
-          if (!usedCourseSearch) {
+          if (attempts >= 4 && !usedCourseSearch && (Boolean(targetCourse) || queryIsStandalone)) {
             const searchInput = document.querySelector('input[placeholder*="Pesquisar cursos" i]');
-            const courseQuery = targetCourse || targetTopic || targetSubject;
+            const courseQuery = targetCourse || targetTopic;
             if (searchInput && courseQuery && isElementVisible(searchInput)) {
               usedCourseSearch = true;
               try {
@@ -2912,6 +3004,36 @@ ${EXTRA_SHADOW_CSS}`;
             } catch (_) {
             }
             return;
+          }
+          if (!bestModEl) {
+            const fallbackMods = Array.from(document.querySelectorAll('.q-item, [role="tab"], [role="listitem"], a, button')).filter((el) => {
+              if (isInsideExcludedUi(el) || !isElementVisible(el) || !isClickableLike(el)) return false;
+              const txt = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+              return txt.length >= 4 && txt.length <= 120;
+            });
+            let fbModEl = null;
+            let fbModKey = "";
+            let fbModScore = 0;
+            fallbackMods.forEach((el) => {
+              const txt = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+              if (fallbackMods.some((other) => other !== el && el.contains(other))) return;
+              const sc = scoreCaveiraModuleCandidate(txt, { targetSubject, targetTopic, targetLesson });
+              if (sc > fbModScore) {
+                fbModScore = sc;
+                fbModEl = el;
+                fbModKey = normalizeCourseIndexKey(txt);
+              }
+            });
+            if (fbModEl && fbModScore >= 75 && !clickedModules.has(fbModKey) && now - lastClickAt >= 1200) {
+              clickedModules.add(fbModKey);
+              lastClickAt = now;
+              try {
+                fbModEl.scrollIntoView({ behavior: "smooth", block: "center" });
+                fbModEl.click();
+              } catch (_) {
+              }
+              return;
+            }
           }
           if (attempts >= 4 && !usedCourseDetailSearch) {
             const detailSearch = document.querySelector('input[placeholder*="Digite para pesquisar" i]');
@@ -8207,6 +8329,14 @@ ${EXTRA_SHADOW_CSS}`;
         teardownInstance();
         return;
       }
+      const resolvedOwnerId = cachedActiveUserId || null;
+      if (!resolvedOwnerId) {
+        updateHudUser();
+        return;
+      }
+      if (question?.ownerUserId && question.ownerUserId !== resolvedOwnerId) {
+        return;
+      }
       checkDailySessionReset();
       if (!isMetadataUpdateOnly) {
         sessionStats.total += 1;
@@ -8215,7 +8345,6 @@ ${EXTRA_SHADOW_CSS}`;
         updateHudStats();
       }
       const nowIso = (/* @__PURE__ */ new Date()).toISOString();
-      const resolvedOwnerId = cachedActiveUserId || question.ownerUserId || null;
       const buildAttemptsList = (prevObj, nextObj) => {
         const list = [];
         const addAttempt = (a) => {
@@ -8289,7 +8418,7 @@ ${EXTRA_SHADOW_CSS}`;
         hits: sessionStats.hits,
         errors: sessionStats.errors
       };
-      if (!isMetadataUpdateOnly && activePracticeMission && activePracticeMission.status === "active" && question?.id) {
+      if (!isMetadataUpdateOnly && activePracticeMission && activePracticeMission.status === "active" && question?.id && (!activePracticeMission.ownerUserId || activePracticeMission.ownerUserId === resolvedOwnerId)) {
         const qKey = String(question.id);
         const answered = Array.isArray(activePracticeMission.answeredQuestionIds) ? [...activePracticeMission.answeredQuestionIds] : [];
         if (!answered.includes(qKey)) {
@@ -8300,6 +8429,7 @@ ${EXTRA_SHADOW_CSS}`;
           const isDone = answered.length >= targetCount;
           activePracticeMission = {
             ...activePracticeMission,
+            ownerUserId: resolvedOwnerId,
             answeredQuestionIds: answered,
             hits: nextHits,
             errors: nextErrors,
@@ -8993,12 +9123,22 @@ ${EXTRA_SHADOW_CSS}`;
         }
         const answered = isCardAnswered(card);
         if (!answered) {
+          unansweredObservedQIds.add(qId);
+          preAnsweredIgnoredQIds.delete(qId);
           processedInSession.delete(qId);
         } else {
-          const shouldCapture = !savedQuestionIds.has(qId) || pendingAnswerQIds.has(qId);
-          if (shouldCapture && !processedInSession.has(qId)) {
+          const apiMeta = apiQuestionByCode.get(qId) || apiQuestionCache.get(qId);
+          const numericApiId = Number(apiMeta?.apiId) || Number(String(qId || "").replace(/^Q/i, ""));
+          const recentApiAns = Number.isFinite(numericApiId) && numericApiId > 0 ? apiAnswerCache.get(numericApiId) : null;
+          const hasRecentApiAns = Boolean(recentApiAns && Date.now() - (Number(recentApiAns.at) || 0) <= 3e4);
+          const observedLiveAnswer = unansweredObservedQIds.has(qId) || pendingAnswerQIds.has(qId) || hasRecentApiAns;
+          if (!observedLiveAnswer) {
+            preAnsweredIgnoredQIds.add(qId);
+          } else if (!processedInSession.has(qId)) {
             processedInSession.add(qId);
             pendingAnswerQIds.delete(qId);
+            unansweredObservedQIds.delete(qId);
+            preAnsweredIgnoredQIds.delete(qId);
             pauseTimer();
             const currentQEl = getHudEl("qg-current-q-id");
             if (currentQEl) {

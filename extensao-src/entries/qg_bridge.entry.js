@@ -37,6 +37,22 @@ import {
   const PENDING_PDF_KEY = 'qg_pending_pdf_study';
   const REMINDER_STATE_KEY = 'qg_reminder_state';
   const DISMISSED_MISSIONS_KEY = 'qg_dismissed_mission_ids';
+  const CROSS_USER_VOLATILE_KEYS = [
+    ACTIVE_MISSION_KEY,
+    TODAY_MISSION_KEY,
+    SUBJECT_SPEEDS_KEY,
+    PERFORMANCE_SNAPSHOT_KEY,
+    PENDING_FILTER_KEY,
+    'qg_last_filter_diag',
+    PENDING_CATALOG_KEY,
+    PENDING_SIMULADOS_KEY,
+    PENDING_SIMULADOS_QUEUE_KEY,
+    PENDING_PDF_KEY,
+    FILTER_MEMORY_CLOUD_KEY,
+    REMINDER_STATE_KEY,
+    DISMISSED_MISSIONS_KEY,
+    'qg_pending_course_completion',
+  ];
   const MAX_BUCKET_QUESTIONS = 1500;
   const ALLOWED_WEB_HOSTS = new Set(['blk002.github.io', 'localhost', '127.0.0.1']);
   const SIM_ACK_TIMEOUT_MS = 5000;
@@ -132,7 +148,7 @@ import {
 
   function postSyncUpdate(questions, userId, extra = {}) {
     if (isBridgeDestroyed || !Array.isArray(questions) || !userId) return;
-    const scopedQuestions = questions.filter(q => q && (!q.ownerUserId || q.ownerUserId === userId));
+    const scopedQuestions = questions.filter(q => q && q.ownerUserId === userId);
     const now = Date.now();
     let payloadJson = '';
     try {
@@ -490,7 +506,11 @@ import {
         if (!nextUserId) {
           if (prevUserId) {
             buckets[prevUserId] = {
-              questions: compactQuestionsForStorage(currentQuestions.map(q => ({ ...q, ownerUserId: q.ownerUserId || prevUserId }))),
+              questions: compactQuestionsForStorage(
+                currentQuestions
+                  .filter(q => q && q.ownerUserId === prevUserId)
+                  .map(q => ({ ...q, ownerUserId: prevUserId }))
+              ),
               session: currentSession,
               dailyGoal: prevDailyGoal,
               userLabel: prevUserLabel || buckets[prevUserId]?.userLabel || ''
@@ -498,6 +518,11 @@ import {
           }
           const emptySession = normalizeSession(null);
           cachedActiveUserId = null;
+          hasWebAppReadySignal = false;
+          lastMissionBridgeSig = '';
+          lastSyncPayloadJson = '';
+          clearSimTimers();
+          activeSimDelivery = null;
           chrome.storage.local.set({
             [STORAGE_KEY]: [],
             [SESSION_KEY]: emptySession,
@@ -506,10 +531,22 @@ import {
             [GOAL_KEY]: 50,
             [USER_BUCKETS_KEY]: buckets
           }, () => {
-            if (chrome.runtime && chrome.runtime.sendMessage) {
-              chrome.runtime.sendMessage({ type: 'UPDATE_BADGE_ONLY', payload: { session: emptySession } }).catch(() => {});
-            }
-            if (callback) callback({ userId: null, questions: [], session: emptySession });
+            chrome.storage.local.remove(CROSS_USER_VOLATILE_KEYS, () => {
+              const finishSignOut = () => {
+                if (chrome.runtime && chrome.runtime.sendMessage) {
+                  chrome.runtime.sendMessage({ type: 'UPDATE_BADGE_ONLY', payload: { session: emptySession } }).catch(() => {});
+                }
+                if (callback) callback({ userId: null, questions: [], session: emptySession });
+              };
+              if (chrome.runtime && chrome.runtime.sendMessage) {
+                chrome.runtime.sendMessage({ type: 'CLEAR_CLOUD_AUTH' }, () => {
+                  void chrome.runtime?.lastError;
+                  finishSignOut();
+                });
+              } else {
+                finishSignOut();
+              }
+            });
           });
           return;
         }
@@ -519,26 +556,13 @@ import {
           const resolvedLabel = nextUserLabel || prevUserLabel || buckets[nextUserId]?.userLabel || '';
           let changed = resolvedLabel !== prevUserLabel;
           const cleanQuestions = compactQuestionsForStorage(currentQuestions.filter(q => {
-            if (!q) return false;
-            if (q.ownerUserId && q.ownerUserId !== nextUserId) {
+            if (!q || q.ownerUserId !== nextUserId) {
               changed = true;
               return false;
             }
             return true;
-          }).map(q => {
-            if (!q.ownerUserId) {
-              changed = true;
-              return { ...q, ownerUserId: nextUserId };
-            }
-            return q;
           }));
           if (changed) {
-            if (cleanQuestions.length > 0 && chrome.runtime?.sendMessage) {
-              chrome.runtime.sendMessage({
-                type: 'DB_BULK_UPSERT_QUESTIONS',
-                payload: { questions: cleanQuestions, enqueueOutbox: false }
-              }).catch(() => {});
-            }
             chrome.storage.local.set({
               [STORAGE_KEY]: cleanQuestions,
               ...(resolvedLabel ? { [ACTIVE_USER_LABEL_KEY]: resolvedLabel } : {})
@@ -553,7 +577,11 @@ import {
 
         if (prevUserId && prevUserId !== nextUserId) {
           buckets[prevUserId] = {
-            questions: compactQuestionsForStorage(currentQuestions.map(q => ({ ...q, ownerUserId: q.ownerUserId || prevUserId }))),
+            questions: compactQuestionsForStorage(
+              currentQuestions
+                .filter(q => q && q.ownerUserId === prevUserId)
+                .map(q => ({ ...q, ownerUserId: prevUserId }))
+            ),
             session: currentSession,
             dailyGoal: prevDailyGoal,
             userLabel: prevUserLabel || buckets[prevUserId]?.userLabel || ''
@@ -561,12 +589,17 @@ import {
           const targetBucket = buckets[nextUserId] || {};
           const nextQuestions = compactQuestionsForStorage(
             (Array.isArray(targetBucket.questions) ? targetBucket.questions : [])
+              .filter(q => q && q.ownerUserId === nextUserId)
               .map(q => ({ ...q, ownerUserId: nextUserId }))
           );
           const nextSession = normalizeSession(targetBucket.session);
           const nextGoal = Number(targetBucket.dailyGoal) || 50;
           const nextLabel = nextUserLabel || targetBucket.userLabel || '';
           cachedActiveUserId = nextUserId;
+          lastMissionBridgeSig = '';
+          lastSyncPayloadJson = '';
+          clearSimTimers();
+          activeSimDelivery = null;
           chrome.storage.local.set({
             [STORAGE_KEY]: nextQuestions,
             [SESSION_KEY]: nextSession,
@@ -575,10 +608,13 @@ import {
             [GOAL_KEY]: nextGoal,
             [USER_BUCKETS_KEY]: buckets
           }, () => {
-            if (chrome.runtime && chrome.runtime.sendMessage) {
-              chrome.runtime.sendMessage({ type: 'UPDATE_BADGE_ONLY', payload: { session: nextSession } }).catch(() => {});
-            }
-            if (callback) callback({ userId: nextUserId, questions: nextQuestions, session: nextSession });
+            chrome.storage.local.remove(CROSS_USER_VOLATILE_KEYS, () => {
+              if (chrome.runtime && chrome.runtime.sendMessage) {
+                chrome.runtime.sendMessage({ type: 'CLEAR_CLOUD_AUTH', payload: { onlyIfUserIdNot: nextUserId } }).catch(() => {});
+                chrome.runtime.sendMessage({ type: 'UPDATE_BADGE_ONLY', payload: { session: nextSession } }).catch(() => {});
+              }
+              if (callback) callback({ userId: nextUserId, questions: nextQuestions, session: nextSession });
+            });
           });
           return;
         }
@@ -594,27 +630,32 @@ import {
           buckets[owner] = { ...prevOwnerBucket, questions: compactQuestionsForStorage(Array.from(ownerMap.values())) };
         });
 
-        const ownOrOrphan = currentQuestions
-          .filter(q => q && (!q.ownerUserId || q.ownerUserId === nextUserId))
-          .map(q => ({ ...q, ownerUserId: nextUserId }));
+        const ownQuestions = currentQuestions
+          .filter(q => q && q.ownerUserId === nextUserId);
 
         const existingBucket = buckets[nextUserId] || {};
         const mergedMap = new Map();
-        (Array.isArray(existingBucket.questions) ? existingBucket.questions : []).forEach(q => {
-          if (q?.id) mergedMap.set(q.id, { ...q, ownerUserId: nextUserId });
-        });
-        ownOrOrphan.forEach(q => {
+        (Array.isArray(existingBucket.questions) ? existingBucket.questions : [])
+          .filter(q => q && q.ownerUserId === nextUserId)
+          .forEach(q => {
+            if (q?.id) mergedMap.set(q.id, { ...q, ownerUserId: nextUserId });
+          });
+        ownQuestions.forEach(q => {
           if (q?.id) mergedMap.set(q.id, { ...(mergedMap.get(q.id) || {}), ...q, ownerUserId: nextUserId });
         });
 
         const finalQuestions = compactQuestionsForStorage(Array.from(mergedMap.values()));
         const finalSession = existingBucket.session
           ? normalizeSession(existingBucket.session)
-          : (foreignQuestions.length === 0 ? currentSession : normalizeSession(null));
-        const finalGoal = Number(existingBucket.dailyGoal) || prevDailyGoal || 50;
+          : normalizeSession(null);
+        const finalGoal = Number(existingBucket.dailyGoal) || 50;
         const finalLabel = nextUserLabel || existingBucket.userLabel || '';
 
         cachedActiveUserId = nextUserId;
+        lastMissionBridgeSig = '';
+        lastSyncPayloadJson = '';
+        clearSimTimers();
+        activeSimDelivery = null;
         chrome.storage.local.set({
           [STORAGE_KEY]: finalQuestions,
           [SESSION_KEY]: finalSession,
@@ -623,16 +664,19 @@ import {
           [GOAL_KEY]: finalGoal,
           [USER_BUCKETS_KEY]: buckets
         }, () => {
-          if (finalQuestions.length > 0 && chrome.runtime?.sendMessage) {
-            chrome.runtime.sendMessage({
-              type: 'DB_BULK_UPSERT_QUESTIONS',
-              payload: { questions: finalQuestions, enqueueOutbox: false }
-            }).catch(() => {});
-          }
-          if (chrome.runtime && chrome.runtime.sendMessage) {
-            chrome.runtime.sendMessage({ type: 'UPDATE_BADGE_ONLY', payload: { session: finalSession } }).catch(() => {});
-          }
-          if (callback) callback({ userId: nextUserId, questions: finalQuestions, session: finalSession });
+          chrome.storage.local.remove(CROSS_USER_VOLATILE_KEYS, () => {
+            if (chrome.runtime && chrome.runtime.sendMessage) {
+              chrome.runtime.sendMessage({ type: 'CLEAR_CLOUD_AUTH', payload: { onlyIfUserIdNot: nextUserId } }).catch(() => {});
+              if (finalQuestions.length > 0) {
+                chrome.runtime.sendMessage({
+                  type: 'DB_BULK_UPSERT_QUESTIONS',
+                  payload: { questions: finalQuestions, enqueueOutbox: false }
+                }).catch(() => {});
+              }
+              chrome.runtime.sendMessage({ type: 'UPDATE_BADGE_ONLY', payload: { session: finalSession } }).catch(() => {});
+            }
+            if (callback) callback({ userId: nextUserId, questions: finalQuestions, session: finalSession });
+          });
         });
       });
     } catch (_) {}
@@ -643,7 +687,7 @@ import {
     const postFilteredResponse = (rawQuestions, rawSession, rawGoal) => {
       if (isBridgeDestroyed) return;
       const scoped = (Array.isArray(rawQuestions) ? rawQuestions : []).filter(
-        q => q && (!q.ownerUserId || q.ownerUserId === activeUserId)
+        q => q && q.ownerUserId === activeUserId
       );
       window.postMessage({
         source: 'QG_CAVEIRA_EXTENSION',
@@ -738,12 +782,17 @@ import {
       }
 
       if (event.data.type === 'USER_SIGNED_OUT') {
-        switchUserBucket(null);
-        try { chrome.storage.local.remove([REMINDER_STATE_KEY]); } catch (_) {}
-        try { chrome.runtime?.sendMessage?.({ type: 'CLEAR_CLOUD_AUTH' }).catch(() => {}); } catch (_) {}
+        switchUserBucket(null, () => {
+          if (isBridgeDestroyed) return;
+          window.postMessage({
+            source: 'QG_CAVEIRA_EXTENSION',
+            type: 'USER_SIGNED_OUT_ACK',
+          }, getTargetOrigin());
+        });
       }
 
       if (event.data.type === 'QG_PRF_SYNC_CLOUD_CREDS' && event.data.payload?.userId) {
+        if (cachedActiveUserId && event.data.payload.userId !== cachedActiveUserId) return;
         try {
           chrome.runtime?.sendMessage?.({
             type: 'SET_CLOUD_AUTH',
@@ -842,6 +891,9 @@ import {
         try {
           const incoming = event.data.payload.mission;
           if (!incoming || !incoming.id) return;
+          if (cachedActiveUserId && incoming.ownerUserId && incoming.ownerUserId !== cachedActiveUserId) return;
+          const activeUid = cachedActiveUserId || incoming.ownerUserId || null;
+          if (!activeUid) return;
           chrome.storage.local.get([ACTIVE_MISSION_KEY, DISMISSED_MISSIONS_KEY], (res) => {
             if (chrome.runtime.lastError || isBridgeDestroyed) return;
             const nowMs = Date.now();
@@ -856,7 +908,8 @@ import {
               return;
             }
 
-            const prev = res?.[ACTIVE_MISSION_KEY];
+            const rawPrev = res?.[ACTIVE_MISSION_KEY];
+            const prev = rawPrev && (!rawPrev.ownerUserId || rawPrev.ownerUserId === activeUid) ? rawPrev : null;
             if (prev && prev.id === incoming.id) {
               if (prev.finalizedInQg) return;
               const prevIds = Array.isArray(prev.answeredQuestionIds) ? prev.answeredQuestionIds.map(String) : [];
@@ -890,6 +943,7 @@ import {
               const nextMission = {
                 ...prev,
                 ...incoming,
+                ownerUserId: activeUid,
                 answeredQuestionIds: unionIds,
                 hits: nextHits,
                 errors: nextErrors,
@@ -909,17 +963,17 @@ import {
                   window.postMessage({
                     source: 'QG_CAVEIRA_EXTENSION',
                     type: 'MISSION_PROGRESS_SYNC',
-                    payload: { mission: prev, userId: cachedActiveUserId || null },
+                    payload: { mission: { ...prev, ownerUserId: prev.ownerUserId || activeUid }, userId: activeUid },
                   }, getTargetOrigin());
                 }
                 return;
               }
-              const nextMission = { ...incoming, finalizedInQg: false };
+              const nextMission = { ...incoming, ownerUserId: activeUid, finalizedInQg: false };
               suppressMissionEchoUntil = Date.now() + 1200;
               lastMissionBridgeSig = getMissionSig(nextMission);
               chrome.storage.local.set({ [ACTIVE_MISSION_KEY]: nextMission });
             } else {
-              const nextMission = { ...incoming, finalizedInQg: false };
+              const nextMission = { ...incoming, ownerUserId: activeUid, finalizedInQg: false };
               suppressMissionEchoUntil = Date.now() + 1200;
               lastMissionBridgeSig = getMissionSig(nextMission);
               chrome.storage.local.set({ [ACTIVE_MISSION_KEY]: nextMission });
@@ -1094,20 +1148,24 @@ import {
 
       if (event.data.type === 'REPLACE_CAVEIRA_QUESTIONS' && Array.isArray(event.data.payload?.questions)) {
         const rawQuestions = event.data.payload.questions;
-        const newQuestions = compactQuestionsForStorage(rawQuestions);
         const today = getTodaySessionDate();
-        const hits = rawQuestions.filter(q => q && q.hit).length;
-        const errors = rawQuestions.length - hits;
-        const nextSession = { date: today, total: rawQuestions.length, hits, errors };
         try {
           chrome.storage.local.get([ACTIVE_USER_KEY, USER_BUCKETS_KEY], (res) => {
             if (chrome.runtime?.lastError || isBridgeDestroyed) return;
             const activeUserId = res?.[ACTIVE_USER_KEY] || cachedActiveUserId;
+            if (!activeUserId) return;
+            const scopedRaw = rawQuestions
+              .filter(q => q && q.id)
+              .map(q => ({ ...q, ownerUserId: activeUserId }));
+            const newQuestions = compactQuestionsForStorage(scopedRaw);
+            const hits = scopedRaw.filter(q => q && q.hit).length;
+            const errors = scopedRaw.length - hits;
+            const nextSession = { date: today, total: scopedRaw.length, hits, errors };
             const payload = {
               [STORAGE_KEY]: newQuestions,
               [SESSION_KEY]: nextSession
             };
-            if (activeUserId && res?.[USER_BUCKETS_KEY] && typeof res[USER_BUCKETS_KEY] === 'object') {
+            if (res?.[USER_BUCKETS_KEY] && typeof res[USER_BUCKETS_KEY] === 'object') {
               const buckets = { ...res[USER_BUCKETS_KEY] };
               buckets[activeUserId] = {
                 ...(buckets[activeUserId] || {}),
@@ -1123,8 +1181,8 @@ import {
               chrome.runtime.sendMessage({
                 type: 'DB_REPLACE_USER_QUESTIONS',
                 payload: {
-                  userId: activeUserId || null,
-                  questions: rawQuestions.map(q => (q && !q.ownerUserId && activeUserId ? { ...q, ownerUserId: activeUserId } : q)),
+                  userId: activeUserId,
+                  questions: scopedRaw,
                 }
               }, () => {
                 void chrome.runtime?.lastError;
@@ -1289,14 +1347,20 @@ import {
           if (changes[ACTIVE_MISSION_KEY]) {
             if (Date.now() < suppressMissionEchoUntil) return;
             const missionVal = changes[ACTIVE_MISSION_KEY].newValue;
-            if (missionVal && missionVal.id && !missionVal.finalizedInQg) {
+            if (
+              cachedActiveUserId &&
+              missionVal &&
+              missionVal.id &&
+              !missionVal.finalizedInQg &&
+              (!missionVal.ownerUserId || missionVal.ownerUserId === cachedActiveUserId)
+            ) {
               const sig = getMissionSig(missionVal);
               if (sig && sig === lastMissionBridgeSig) return;
               lastMissionBridgeSig = sig;
               window.postMessage({
                 source: 'QG_CAVEIRA_EXTENSION',
                 type: 'MISSION_PROGRESS_SYNC',
-                payload: { mission: missionVal, userId: cachedActiveUserId || null }
+                payload: { mission: { ...missionVal, ownerUserId: missionVal.ownerUserId || cachedActiveUserId }, userId: cachedActiveUserId }
               }, getTargetOrigin());
             } else if (!missionVal && changes[ACTIVE_MISSION_KEY].oldValue?.id) {
               lastMissionBridgeSig = '';
@@ -1332,7 +1396,14 @@ import {
             });
           }
         }
-        if (msg && msg.type === 'PUSH_CAVEIRA_SYNC' && msg.payload && cachedActiveUserId) {
+        if (
+          msg &&
+          msg.type === 'PUSH_CAVEIRA_SYNC' &&
+          msg.payload &&
+          cachedActiveUserId &&
+          msg.payload.ownerUserId &&
+          msg.payload.ownerUserId === cachedActiveUserId
+        ) {
           postSyncUpdate(msg.payload.questions || [], cachedActiveUserId, {
             session: msg.payload.session,
             dailyGoal: msg.payload.dailyGoal

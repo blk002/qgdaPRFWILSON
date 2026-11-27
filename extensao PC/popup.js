@@ -8082,6 +8082,32 @@
     dynamicTreeNodes: "&key, subjectId, nodeId, updatedAt",
     meta: "&key"
   });
+  db.version(3).stores({
+    questions: "&id, apiId, ownerUserId, subject, canonicalSubject, subjectId, subtopicId, banca, ano, bloco, hit, updatedAt, timestamp",
+    questionsByOwner: "&storageKey, id, ownerUserId, apiId, subject, canonicalSubject, subjectId, subtopicId, banca, ano, bloco, hit, updatedAt, timestamp",
+    outbox: "++seq, entityType, entityId, userId, createdAt, status",
+    dynamicTreeNodes: "&key, subjectId, nodeId, updatedAt",
+    meta: "&key"
+  }).upgrade(async (tx) => {
+    const legacyRows = await tx.table("questions").toArray();
+    if (!Array.isArray(legacyRows) || legacyRows.length === 0) return;
+    const migrated = legacyRows.filter((q) => q && q.id).map((q) => ({
+      ...q,
+      storageKey: `${q.ownerUserId || "__anon__"}::${String(q.id)}`
+    }));
+    if (migrated.length > 0) {
+      await tx.table("questionsByOwner").bulkPut(migrated);
+    }
+  });
+  function makeQuestionStorageKey(ownerUserId, id) {
+    return `${ownerUserId || "__anon__"}::${String(id)}`;
+  }
+  function stripStorageKey(row) {
+    if (!row || typeof row !== "object") return row;
+    if (!("storageKey" in row)) return row;
+    const { storageKey: _ignored, ...rest } = row;
+    return rest;
+  }
   var miniIndex = null;
   var indexedUserId = null;
   function normalizeSearchText(str) {
@@ -8208,28 +8234,32 @@
     if (!Array.isArray(questions) || questions.length === 0) return [];
     const valid = questions.filter((q) => q && q.id);
     if (valid.length === 0) return [];
-    const existing = await db.questions.bulkGet(valid.map((q) => q.id));
-    const mergedList = valid.map((q, idx) => mergeQuestionRecords(existing[idx] || null, q));
-    await db.questions.bulkPut(mergedList);
+    const keys = valid.map((q) => makeQuestionStorageKey(q.ownerUserId, q.id));
+    const existing = await db.questionsByOwner.bulkGet(keys);
+    const mergedList = valid.map((q, idx) => mergeQuestionRecords(existing[idx] ? stripStorageKey(existing[idx]) : null, q));
+    await db.questionsByOwner.bulkPut(
+      mergedList.map((m, idx) => ({ ...m, storageKey: keys[idx] }))
+    );
     miniIndex = null;
     if (enqueueOutbox) {
-      await db.outbox.bulkAdd(
-        mergedList.map((m) => ({
-          entityType: "question_upsert",
-          entityId: String(m.id),
-          userId: m.ownerUserId || null,
-          payload: m,
-          createdAt: (/* @__PURE__ */ new Date()).toISOString(),
-          status: "pending"
-        }))
-      );
+      const outboxRows = mergedList.filter((m) => Boolean(m.ownerUserId)).map((m) => ({
+        entityType: "question_upsert",
+        entityId: String(m.id),
+        userId: m.ownerUserId,
+        payload: m,
+        createdAt: (/* @__PURE__ */ new Date()).toISOString(),
+        status: "pending"
+      }));
+      if (outboxRows.length > 0) {
+        await db.outbox.bulkAdd(outboxRows);
+      }
     }
     return mergedList;
   }
   async function getAllQuestionsFull(userId = null) {
-    const all = await db.questions.toArray();
-    const scoped = userId ? all.filter((q) => q && (!q.ownerUserId || q.ownerUserId === userId)) : all;
-    return scoped.sort((a, b) => new Date(b.timestamp || b.updatedAt || 0) - new Date(a.timestamp || a.updatedAt || 0));
+    if (!userId) return [];
+    const scoped = await db.questionsByOwner.where("ownerUserId").equals(userId).toArray();
+    return scoped.map(stripStorageKey).sort((a, b) => new Date(b.timestamp || b.updatedAt || 0) - new Date(a.timestamp || a.updatedAt || 0));
   }
   async function ensureSearchIndex(userId = null) {
     if (miniIndex && indexedUserId === userId) return miniIndex;
@@ -8258,8 +8288,9 @@
     }).slice(0, limit).map((q) => ({ ...toIndexDoc(q), score: 1 }));
   }
   async function getPendingOutbox(userId = null) {
+    if (!userId) return [];
     const rows = await db.outbox.orderBy("seq").toArray();
-    return userId ? rows.filter((r) => !r.userId || r.userId === userId) : rows;
+    return rows.filter((r) => r && r.userId === userId);
   }
   async function mergeDynamicTreeNodes(entries = []) {
     if (!Array.isArray(entries) || entries.length === 0) return 0;
@@ -8331,7 +8362,7 @@
     const validQuestions = questions.filter((q) => q && (q.id || q.apiId)).map((q) => ({
       ...q,
       id: q.id || `api_${q.apiId}`,
-      ...userId && !q.ownerUserId ? { ownerUserId: userId } : {}
+      ...userId ? { ownerUserId: userId } : {}
     }));
     let importedQuestions = 0;
     if (validQuestions.length > 0) {
@@ -8607,7 +8638,7 @@
     }
   }
   document.addEventListener("DOMContentLoaded", () => {
-    const manifestVer = chrome.runtime?.getManifest?.().version || "3.4.2";
+    const manifestVer = chrome.runtime?.getManifest?.().version || "3.4.3";
     const verEl = document.getElementById("ext-version");
     if (verEl) verEl.textContent = `v${manifestVer}`;
     let currentUserId = null;

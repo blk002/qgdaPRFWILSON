@@ -76,11 +76,11 @@ async function getValidCloudContext() {
     readSessionAuth(),
     chrome.storage.local.get(['qg_active_user_id']),
   ]);
-  const activeUserId = store?.qg_active_user_id || auth?.userId;
+  const activeUserId = store?.qg_active_user_id || null;
   if (!auth || !auth.supabaseUrl || !auth.anonKey || !auth.userId || (!auth.accessToken && !auth.refreshToken)) {
     return null;
   }
-  if (activeUserId && activeUserId !== auth.userId) return null;
+  if (!activeUserId || activeUserId !== auth.userId) return null;
 
   let token = auth.accessToken;
   const nowSec = Math.floor(Date.now() / 1000);
@@ -156,6 +156,8 @@ async function syncOutboxIncrementalRows(supabase, userId, outboxRows) {
 
   const latestByQId = new Map();
   outboxRows.forEach((row) => {
+    if (!row || row.userId !== userId) return;
+    if (row.payload?.ownerUserId && row.payload.ownerUserId !== userId) return;
     if (row.entityType === 'question_upsert' || row.entityType === 'question_delete') {
       latestByQId.set(row.entityId, row);
     }
@@ -230,7 +232,13 @@ export async function flushOutboxToSupabase({ onlyWhenQgClosed = true } = {}) {
       ? filterStore[FILTER_ID_MEMORY_KEY]
       : {};
 
-    const questionEvents = pending.filter((r) => r.entityType === 'question_upsert' || r.entityType === 'question_delete');
+    const questionEvents = pending.filter(
+      (r) =>
+        r &&
+        r.userId === userId &&
+        (!r.payload?.ownerUserId || r.payload.ownerUserId === userId) &&
+        (r.entityType === 'question_upsert' || r.entityType === 'question_delete')
+    );
     if (questionEvents.length === 0 && Object.keys(localFilterMem).length === 0) {
       return { flushed: 0, mode: 'nothing-pending' };
     }
@@ -312,7 +320,8 @@ export async function flushOutboxToSupabase({ onlyWhenQgClosed = true } = {}) {
     if (pending.length > 0) {
       await clearOutboxSeqs(pending.map((r) => r.seq));
     }
-    await setMeta('lastPulledUpdatedAt', confirmedIso);
+    const pulledMetaKey = `lastPulledUpdatedAt:${userId}`;
+    await setMeta(pulledMetaKey, confirmedIso);
     const syncMode = incrementalOk ? 'incremental+profile' : 'profile-delta';
     await chrome.storage.local.set({
       [DIRECT_SYNC_LAST_KEY]: Date.now(),
@@ -342,7 +351,8 @@ export async function pullDeltaFromSupabase() {
     if (metaErr || !Array.isArray(metaRows) || !metaRows[0]?.updated_at) return { pulled: 0 };
 
     const remoteTs = metaRows[0].updated_at;
-    const lastPulled = await getMeta('lastPulledUpdatedAt');
+    const pulledMetaKey = `lastPulledUpdatedAt:${userId}`;
+    const lastPulled = await getMeta(pulledMetaKey);
     const remoteMs = Date.parse(String(remoteTs || ''));
     const lastMs = Date.parse(String(lastPulled || ''));
     if (lastPulled && Number.isFinite(remoteMs) && Number.isFinite(lastMs) && remoteMs <= lastMs) {
@@ -384,7 +394,7 @@ export async function pullDeltaFromSupabase() {
       }
     }
 
-    await setMeta('lastPulledUpdatedAt', rows[0].updated_at || remoteTs);
+    await setMeta(pulledMetaKey, rows[0].updated_at || remoteTs);
     return { pulled: scoped.length };
   } catch (_) {
     return { pulled: 0 };

@@ -7,7 +7,17 @@ import {
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatSecondsToFriendly, parseDurationToSeconds } from '../lib/durationHelpers';
+import { getSafeExternalUrl } from '../lib/safeUrl';
 import { useStore } from '../store/useStore';
+
+function cleanCaveiraStr(val) {
+  return val !== undefined && val !== null ? String(val).trim() : '';
+}
+
+function cleanCaveiraUrl(val) {
+  const s = cleanCaveiraStr(val);
+  return s ? getSafeExternalUrl(s, '') : '';
+}
 
 /**
  * Codifica objeto em Base64 seguro para UTF-8 (compatível com acentos em português)
@@ -80,6 +90,9 @@ function normalizeSubjectsData(parsed) {
   Object.entries(rawMap).forEach(([id, sub]) => {
     if (!sub || typeof sub !== 'object' || !sub.name) return;
     const subId = sub.id || id;
+    const subCourseId = cleanCaveiraStr(sub.caveiraCourseId);
+    const subCourseName = cleanCaveiraStr(sub.caveiraCourseName);
+    const subModuleUrl = cleanCaveiraUrl(sub.caveiraModuleUrl);
     sanitized[subId] = {
       id: subId,
       name: String(sub.name || 'Nova Matéria').trim(),
@@ -90,23 +103,42 @@ function normalizeSubjectsData(parsed) {
       lessonsPerBlock: Number(sub.lessonsPerBlock) || 0,
       onCompleteAction: sub.onCompleteAction || 'keep_fixed',
       replacementSubjectId: sub.replacementSubjectId || '',
-      topics: Array.isArray(sub.topics) ? sub.topics.map((t, tIdx) => ({
-        id: t.id || `t_${Date.now()}_${tIdx}`,
-        name: String(t.name || 'Assunto').trim(),
-        total: Number(t.total) || (Array.isArray(t.lessons) ? t.lessons.length : 0),
-        completed: Number(t.completed) || 0,
-        notes: t.notes || '',
-        lessons: Array.isArray(t.lessons) ? t.lessons.map((l, lIdx) => {
-          const lessonName = String(l.name || l.title || `Aula ${lIdx + 1}`).trim();
-          return {
-            id: l.id || `l_${Date.now()}_${lIdx}`,
-            name: lessonName,
-            title: lessonName,
-            duration: l.duration !== undefined && l.duration !== null && String(l.duration).trim() !== '' ? String(l.duration) : '60:00',
-            completed: Boolean(l.completed)
-          };
-        }) : []
-      })) : []
+      ...(subCourseId ? { caveiraCourseId: subCourseId } : {}),
+      ...(subCourseName ? { caveiraCourseName: subCourseName } : {}),
+      ...(subModuleUrl ? { caveiraModuleUrl: subModuleUrl } : {}),
+      topics: Array.isArray(sub.topics) ? sub.topics.map((t, tIdx) => {
+        const topicCourseId = cleanCaveiraStr(t.caveiraCourseId);
+        const topicCourseName = cleanCaveiraStr(t.caveiraCourseName);
+        const topicModuleUrl = cleanCaveiraUrl(t.caveiraModuleUrl);
+        return {
+          id: t.id || `t_${Date.now()}_${tIdx}`,
+          name: String(t.name || 'Assunto').trim(),
+          total: Number(t.total) || (Array.isArray(t.lessons) ? t.lessons.length : 0),
+          completed: Number(t.completed) || 0,
+          notes: t.notes || '',
+          ...(topicCourseId ? { caveiraCourseId: topicCourseId } : {}),
+          ...(topicCourseName ? { caveiraCourseName: topicCourseName } : {}),
+          ...(topicModuleUrl ? { caveiraModuleUrl: topicModuleUrl } : {}),
+          lessons: Array.isArray(t.lessons) ? t.lessons.map((l, lIdx) => {
+            const lessonName = String(l.name || l.title || `Aula ${lIdx + 1}`).trim();
+            const lessonUrl = cleanCaveiraUrl(l.caveiraUrl || l.url);
+            const lessonVideoId = cleanCaveiraStr(l.caveiraVideoId);
+            const lessonCourseId = cleanCaveiraStr(l.caveiraCourseId);
+            const lessonCourseName = cleanCaveiraStr(l.caveiraCourseName);
+            return {
+              id: l.id || `l_${Date.now()}_${lIdx}`,
+              name: lessonName,
+              title: lessonName,
+              duration: l.duration !== undefined && l.duration !== null && String(l.duration).trim() !== '' ? String(l.duration) : '60:00',
+              completed: Boolean(l.completed),
+              ...(lessonUrl ? { caveiraUrl: lessonUrl } : {}),
+              ...(lessonVideoId ? { caveiraVideoId: lessonVideoId } : {}),
+              ...(lessonCourseId ? { caveiraCourseId: lessonCourseId } : {}),
+              ...(lessonCourseName ? { caveiraCourseName: lessonCourseName } : {}),
+            };
+          }) : []
+        };
+      }) : []
     };
   });
 
@@ -428,17 +460,32 @@ ${code}
                 const existingLessons = curTopics[curTopicIdx].lessons || [];
                 const importedLessons = impTopic.lessons || [];
                 
-                // Adiciona apenas aulas que não existem ainda
+                // Adiciona aulas novas e faz backfill de links Caveira em aulas existentes
                 const newLessons = [...existingLessons];
                 importedLessons.forEach(il => {
-                  const ilName = (il.name || il.title || '').toLowerCase();
-                  if (!newLessons.some(el => (el.name || el.title || '').toLowerCase() === ilName)) {
+                  const ilName = (il.name || il.title || '').trim().toLowerCase();
+                  const existingIdx = newLessons.findIndex(
+                    el => (el.name || el.title || '').trim().toLowerCase() === ilName
+                  );
+                  if (existingIdx < 0) {
                     newLessons.push(il);
+                  } else {
+                    const ex = newLessons[existingIdx];
+                    newLessons[existingIdx] = {
+                      ...ex,
+                      ...(!ex.caveiraUrl && il.caveiraUrl ? { caveiraUrl: il.caveiraUrl } : {}),
+                      ...(!ex.caveiraVideoId && il.caveiraVideoId ? { caveiraVideoId: il.caveiraVideoId } : {}),
+                      ...(!ex.caveiraCourseId && il.caveiraCourseId ? { caveiraCourseId: il.caveiraCourseId } : {}),
+                      ...(!ex.caveiraCourseName && il.caveiraCourseName ? { caveiraCourseName: il.caveiraCourseName } : {}),
+                    };
                   }
                 });
 
                 curTopics[curTopicIdx] = {
                   ...curTopics[curTopicIdx],
+                  ...(!curTopics[curTopicIdx].caveiraCourseId && impTopic.caveiraCourseId ? { caveiraCourseId: impTopic.caveiraCourseId } : {}),
+                  ...(!curTopics[curTopicIdx].caveiraCourseName && impTopic.caveiraCourseName ? { caveiraCourseName: impTopic.caveiraCourseName } : {}),
+                  ...(!curTopics[curTopicIdx].caveiraModuleUrl && impTopic.caveiraModuleUrl ? { caveiraModuleUrl: impTopic.caveiraModuleUrl } : {}),
                   lessons: newLessons,
                   total: Math.max(curTopics[curTopicIdx].total || 0, newLessons.length, impTopic.total || 0),
                   notes: curTopics[curTopicIdx].notes || impTopic.notes || ''
@@ -450,6 +497,9 @@ ${code}
 
             merged[existingKey] = {
               ...cur,
+              ...(!cur.caveiraCourseId && importedSub.caveiraCourseId ? { caveiraCourseId: importedSub.caveiraCourseId } : {}),
+              ...(!cur.caveiraCourseName && importedSub.caveiraCourseName ? { caveiraCourseName: importedSub.caveiraCourseName } : {}),
+              ...(!cur.caveiraModuleUrl && importedSub.caveiraModuleUrl ? { caveiraModuleUrl: importedSub.caveiraModuleUrl } : {}),
               topics: curTopics,
               speed: cur.speed || importedSub.speed,
               timeGoalMinutes: cur.timeGoalMinutes || importedSub.timeGoalMinutes

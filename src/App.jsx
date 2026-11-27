@@ -182,6 +182,9 @@ export default function App() {
         useStore.getState().unsubscribeFromCloudRealtime?.();
         setSession(null);
         useStore.setState({ isSyncing: false, isLoadingFromCloud: false });
+        try {
+          window.postMessage({ source: 'QG_WEB_APP', type: 'USER_SIGNED_OUT' }, window.location.origin);
+        } catch {}
       }
     });
 

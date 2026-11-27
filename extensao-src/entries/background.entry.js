@@ -107,8 +107,14 @@ async function ensureMigratedFromLegacyStorage() {
     const res = await chrome.storage.local.get([STORAGE_KEY, USER_BUCKETS_KEY, ACTIVE_USER_KEY]);
     const list = Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [];
     const activeId = res?.[ACTIVE_USER_KEY] || null;
-    const allLegacy = [...list.map((q) => (q && !q.ownerUserId && activeId ? { ...q, ownerUserId: activeId } : q))];
     const buckets = res?.[USER_BUCKETS_KEY];
+    const bucketCount = buckets && typeof buckets === 'object' ? Object.keys(buckets).length : 0;
+    const canAdoptLegacy = bucketCount <= 1 && Boolean(activeId);
+    const allLegacy = [
+      ...list
+        .filter((q) => q && (q.ownerUserId || canAdoptLegacy))
+        .map((q) => (q && !q.ownerUserId && canAdoptLegacy ? { ...q, ownerUserId: activeId } : q)),
+    ];
     if (buckets && typeof buckets === 'object') {
       Object.entries(buckets).forEach(([uid, b]) => {
         (Array.isArray(b?.questions) ? b.questions : []).forEach((q) => {
@@ -179,15 +185,15 @@ function scheduleOutboxFlush() {
   }
 }
 
-async function broadcastToQgTabs(questions, session, dailyGoal = 50) {
-  if (!chrome.tabs) return;
+async function broadcastToQgTabs(questions, session, dailyGoal = 50, ownerUserId = null) {
+  if (!chrome.tabs || !ownerUserId) return;
   try {
     const qgTabs = await chrome.tabs.query({ url: QG_URL_PATTERNS });
     for (const tab of qgTabs) {
       if (tab.id && !tab.discarded) {
         chrome.tabs.sendMessage(tab.id, {
           type: 'PUSH_CAVEIRA_SYNC',
-          payload: { questions, session, dailyGoal },
+          payload: { questions, session, dailyGoal, ownerUserId },
         }).catch(() => {});
       }
     }
@@ -358,12 +364,15 @@ chrome.storage.onChanged.addListener((changes, area) => {
         const session = normalizeSession(res?.[SESSION_KEY]);
         const dailyGoal = Number(res?.[GOAL_KEY]) || 50;
         const activeId = res?.[ACTIVE_USER_KEY] || null;
+        if (!activeId) return;
         let fullQuestions = [];
         try {
           fullQuestions = await getAllQuestionsFull(activeId);
         } catch (_) {}
-        const listToPush = fullQuestions.length > 0 ? fullQuestions : (res?.[STORAGE_KEY] || []);
-        broadcastToQgTabs(listToPush, session, dailyGoal);
+        const fallbackScoped = (Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [])
+          .filter((q) => q && q.ownerUserId === activeId);
+        const listToPush = fullQuestions.length > 0 ? fullQuestions : fallbackScoped;
+        broadcastToQgTabs(listToPush, session, dailyGoal, activeId);
       } catch (_) {}
     });
   }
@@ -532,11 +541,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
           chrome.storage.local.set({ [SESSION_KEY]: session }).catch(() => {});
         }
         await ensureMigratedFromLegacyStorage();
-        const dbQuestions = await getAllQuestionsFull(res?.[ACTIVE_USER_KEY] || null);
+        const activeId = res?.[ACTIVE_USER_KEY] || null;
+        if (!activeId) {
+          sendResponse({
+            questions: [],
+            session: normalizeSession(null),
+            dailyGoal: 50,
+            ownerUserId: null,
+          });
+          return;
+        }
+        const dbQuestions = await getAllQuestionsFull(activeId);
+        const fallbackScoped = (Array.isArray(res?.[STORAGE_KEY]) ? res[STORAGE_KEY] : [])
+          .filter((q) => q && q.ownerUserId === activeId);
         sendResponse({
-          questions: dbQuestions.length > 0 ? dbQuestions : (res?.[STORAGE_KEY] || []),
+          questions: dbQuestions.length > 0 ? dbQuestions : fallbackScoped,
           session,
           dailyGoal,
+          ownerUserId: activeId,
         });
       } catch (_) {
         sendResponse({
@@ -737,6 +759,15 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'CLEAR_CLOUD_AUTH') {
     (async () => {
       try {
+        const onlyIfUserIdNot = message.payload?.onlyIfUserIdNot || null;
+        if (onlyIfUserIdNot) {
+          const sess = chrome.storage?.session ? await chrome.storage.session.get([CLOUD_AUTH_KEY]) : {};
+          const curAuth = sess?.[CLOUD_AUTH_KEY];
+          if (curAuth?.userId === onlyIfUserIdNot) {
+            sendResponse({ ok: true, skipped: true });
+            return;
+          }
+        }
         if (chrome.storage?.session) {
           await chrome.storage.session.remove([CLOUD_AUTH_KEY]);
         }

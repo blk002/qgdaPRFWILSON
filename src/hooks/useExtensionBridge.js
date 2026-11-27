@@ -264,6 +264,10 @@ export function useExtensionBridge() {
           return;
         }
         if (event.data.type === 'MISSION_PROGRESS_SYNC' && event.data.payload?.mission) {
+          const curUid = useStore.getState().user?.id;
+          const cloudReadyNow = useStore.getState().hasCompletedInitialCloudSync;
+          const msgUid = event.data.payload?.userId || event.data.payload?.mission?.ownerUserId;
+          if (!curUid || !cloudReadyNow || (msgUid && msgUid !== curUid)) return;
           lastSyncedMissionSigRef.current = getMissionSyncSignature(event.data.payload.mission);
           useStore.getState().syncActiveMissionFromExtension?.(event.data.payload.mission);
           return;
@@ -328,6 +332,7 @@ export function useExtensionBridge() {
           return;
         }
         if (event.data.type === 'SYNC_UPDATE' && event.data.payload) {
+          if (event.data.payload.userId !== currentUser.id) return;
           const { newQuestion, questions, session: extSession, dailyGoal: extGoal } = event.data.payload;
           if (extSession) useStore.getState().setCaveiraSessionStats?.(extSession);
           if (extGoal && Number(extGoal) >= 5) {
@@ -337,14 +342,15 @@ export function useExtensionBridge() {
             }
           }
           if (newQuestion) {
-            if (newQuestion.ownerUserId && newQuestion.ownerUserId !== currentUser.id) return;
+            if (newQuestion.ownerUserId !== currentUser.id) return;
             useStore.getState().addCaveiraQuestion(newQuestion);
           } else if (Array.isArray(questions) && questions.length > 0) {
-            const scoped = questions.filter((q) => q && (!q.ownerUserId || q.ownerUserId === currentUser.id));
+            const scoped = questions.filter((q) => q && q.ownerUserId === currentUser.id);
             if (scoped.length > 0) useStore.getState().importCaveiraQuestions(scoped, true);
           }
         }
         if (event.data.type === 'CAVEIRA_DATA_RESPONSE' && event.data.payload) {
+          if (event.data.payload.userId !== currentUser.id) return;
           const { questions, session: extSession, dailyGoal: extGoal } = event.data.payload;
           if (extSession) useStore.getState().setCaveiraSessionStats?.(extSession);
           if (extGoal && Number(extGoal) >= 5) {
@@ -354,7 +360,7 @@ export function useExtensionBridge() {
             }
           }
           if (Array.isArray(questions) && questions.length > 0) {
-            const scoped = questions.filter((q) => q && (!q.ownerUserId || q.ownerUserId === currentUser.id));
+            const scoped = questions.filter((q) => q && q.ownerUserId === currentUser.id);
             if (scoped.length > 0) useStore.getState().importCaveiraQuestions(scoped, true);
           }
         }
@@ -395,7 +401,48 @@ export function useExtensionBridge() {
       window.removeEventListener('focus', requestExtensionSync);
       clearTimeout(syncTimer);
     };
-  }, [session, saveManualLessonIndex]);
+  }, [session, hasCompletedInitialCloudSync, saveManualLessonIndex]);
+
+  // Vincula imediatamente o usuário ativo e credenciais na extensão (sem esperar o fim do loadFromCloud)
+  useEffect(() => {
+    const uid = session?.user?.id;
+    if (!uid) return;
+    try {
+      const currentStats = useStore.getState().userStats;
+      const userLabel = (
+        currentStats?.displayName ||
+        session.user.user_metadata?.display_name ||
+        session.user.email?.split('@')[0] ||
+        session.user.email ||
+        ''
+      ).trim();
+      window.postMessage(
+        {
+          source: 'QG_WEB_APP',
+          type: 'SET_ACTIVE_USER',
+          payload: { userId: uid, userEmail: session.user.email || '', userLabel },
+        },
+        window.location.origin
+      );
+      if (session?.access_token && SUPABASE_URL && SUPABASE_ANON_KEY && !SUPABASE_URL.includes('placeholder')) {
+        window.postMessage(
+          {
+            source: 'QG_WEB_APP',
+            type: 'QG_PRF_SYNC_CLOUD_CREDS',
+            payload: {
+              supabaseUrl: SUPABASE_URL,
+              anonKey: SUPABASE_ANON_KEY,
+              accessToken: session.access_token,
+              refreshToken: session.refresh_token || '',
+              expiresAt: session.expires_at || 0,
+              userId: uid,
+            },
+          },
+          window.location.origin
+        );
+      }
+    } catch {}
+  }, [session?.user?.id, session?.user?.email, session?.access_token, session?.refresh_token, session?.expires_at]);
 
   // Sincroniza índice de aulas do Caveira apenas quando o cache ou sync inicial muda
   useEffect(() => {
@@ -575,7 +622,12 @@ export function useExtensionBridge() {
             {
               source: 'QG_WEB_APP',
               type: 'QG_PRF_SYNC_ACTIVE_MISSION',
-              payload: { mission: serializeMissionForBridge(activePracticeMission) },
+              payload: {
+                mission: serializeMissionForBridge({
+                  ...activePracticeMission,
+                  ownerUserId: activePracticeMission.ownerUserId || session?.user?.id || null,
+                }),
+              },
             },
             window.location.origin
           );

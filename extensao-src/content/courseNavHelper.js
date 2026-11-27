@@ -188,6 +188,11 @@ export function scoreCaveiraCourseCandidate(
     score -= 40;
   }
 
+  // Fallback para o curso principal da PRF quando não há targetCourse explícito nem trilha isolada
+  if (!queryIsStandalone && !courseNorm && (/\bprf\b|policia\s+rodoviaria\s+federal/.test(candNorm))) {
+    score += 65;
+  }
+
   return Math.max(0, score);
 }
 
