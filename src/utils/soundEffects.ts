@@ -5,14 +5,21 @@ class SoundManager {
   public muted: boolean = false;
 
   private getContext(): AudioContext | null {
-    if (this.muted) return null;
-    if (!this.ctx && typeof window !== 'undefined') {
+    if (this.muted || typeof window === 'undefined') return null;
+    const ua = (navigator as unknown as { userActivation?: { hasBeenActive?: boolean; isActive?: boolean } }).userActivation;
+    if (!this.ctx && ua && !ua.hasBeenActive) {
+      return null;
+    }
+    if (!this.ctx) {
       const AudioCtx = window.AudioContext || (window as unknown as { webkitAudioContext: typeof AudioContext }).webkitAudioContext;
       if (AudioCtx) {
         this.ctx = new AudioCtx();
       }
     }
     if (this.ctx && this.ctx.state === 'suspended') {
+      if (ua && !ua.isActive) {
+        return null;
+      }
       this.ctx.resume().catch(() => {});
     }
     return this.ctx;
