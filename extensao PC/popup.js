@@ -8638,7 +8638,7 @@
     }
   }
   document.addEventListener("DOMContentLoaded", () => {
-    const manifestVer = chrome.runtime?.getManifest?.().version || "3.4.7";
+    const manifestVer = chrome.runtime?.getManifest?.().version || "3.4.8";
     const verEl = document.getElementById("ext-version");
     if (verEl) verEl.textContent = `v${manifestVer}`;
     let currentUserId = null;

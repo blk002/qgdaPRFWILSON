@@ -1,5 +1,6 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store/useStore';
+import { ERROR_CAUSES, normalizeErrorReason } from '../lib/errorAutopsy';
 import {
   Target, RefreshCw, Download, Upload, Trash2,
   BookOpen, Copy, Check, Skull, Scale, X,
@@ -268,7 +269,7 @@ export default function RaioXCaveira() {
         total: 0, hits: 0, errors: 0, netScore: 0, grossRate: 0, netRate: 0,
         avgTimeSec: 0, avgHitTimeSec: 0, avgErrorTimeSec: 0,
         guessesOrDoubtsTotal: 0,
-        errorReasons: { conteudo: 0, atencao: 0, interpretacao: 0 }
+        errorReasons: { leitura: 0, decoreba: 0, pegadinha: 0, base: 0, cansaco: 0 }
       };
     }
 
@@ -293,10 +294,16 @@ export default function RaioXCaveira() {
     const guessesOrDoubtsTotal = list.filter(q => q.confidence === 'chute' || q.confidence === 'duvida').length;
 
     const errorReasons = {
-      conteudo: errorList.filter(q => !q.errorReason || q.errorReason === 'conteudo').length,
-      atencao: errorList.filter(q => q.errorReason === 'atencao').length,
-      interpretacao: errorList.filter(q => q.errorReason === 'interpretacao').length
+      leitura: 0,
+      decoreba: 0,
+      pegadinha: 0,
+      base: 0,
+      cansaco: 0
     };
+    errorList.forEach(q => {
+      const norm = normalizeErrorReason(q.errorReason);
+      errorReasons[norm] = (errorReasons[norm] || 0) + 1;
+    });
 
     return {
       total, hits, errors, netScore, grossRate, netRate,
@@ -622,9 +629,13 @@ export default function RaioXCaveira() {
       if (filterType === 'guesses' && q.confidence !== 'chute' && q.confidence !== 'duvida') return false;
       if (filterType === 'avoidable' && !(q.isAvoidableError || (!q.hit && Number(q.communityCorrectPct) >= 65))) return false;
       if (filterType === 'pegadinha' && !(q.isPegadinha || Number(q.communityErrorPct) >= 65)) return false;
-      if (filterType === 'attention' && (q.hit || q.errorReason !== 'atencao')) return false;
-      if (filterType === 'interpretation' && (q.hit || q.errorReason !== 'interpretacao')) return false;
-      if (filterType === 'theory' && (q.hit || (q.errorReason && q.errorReason !== 'conteudo'))) return false;
+      if (filterType === 'attention' && (q.hit || normalizeErrorReason(q.errorReason) !== 'leitura')) return false;
+      if (filterType === 'interpretation' && (q.hit || normalizeErrorReason(q.errorReason) !== 'pegadinha')) return false;
+      if (filterType === 'theory' && (q.hit || normalizeErrorReason(q.errorReason) !== 'base')) return false;
+      if (ERROR_CAUSES.some(c => c.filterId === filterType)) {
+        const expectedId = filterType.replace(/^cause_/, '');
+        if (q.hit || normalizeErrorReason(q.errorReason) !== expectedId) return false;
+      }
 
       if (query) {
         const hay = `${q.id} ${q.canonicalSubject} ${q.subject} ${q.topic} ${q.content} ${q.userNote || ''} ${q.teacherComment || ''}`.toLowerCase();

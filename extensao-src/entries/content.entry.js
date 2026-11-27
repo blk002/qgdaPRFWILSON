@@ -5,6 +5,11 @@ import {
   isMutationInsideHud,
   destroyShadowHud,
 } from '../ui/shadowHudHost.js';
+import {
+  mountInlineAutopsyCard,
+  updateInlineAutopsyBadge,
+  destroyAllInlineAutopsyCards,
+} from '../ui/inlineAutopsyCard.js';
 import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
 import {
   QG_WEB_URL,
@@ -77,13 +82,14 @@ import {
 
 (function() {
   if (isExcludedCaveiraHost(window.location.hostname)) return;
-  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.4.7';
+  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.4.8';
   console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
   try {
     window.dispatchEvent(new CustomEvent('qg-caveira-teardown'));
     destroyShadowHud();
+    destroyAllInlineAutopsyCards();
   } catch (_) {}
 
   const SCHEMA_VERSION_KEY = 'qg_caveira_schema_version';
@@ -778,6 +784,7 @@ import {
     targetQ.confidence = tag;
     targetQ.fsrsRequested = (tag === 'chute' || tag === 'duvida');
     saveQuestion(targetQ, true);
+    updateInlineAutopsyBadge(targetQ.id, { hit: Boolean(targetQ.hit), confidence: tag });
     const badge = getHudEl('qg-prompt-status-badge');
     if (badge && targetQ.hit && (tag === 'chute' || tag === 'duvida')) {
       badge.textContent = '🃏 +FSRS AGENDADO';
@@ -2938,11 +2945,13 @@ import {
         </div>
 
         <div id="qg-error-reasons" style="display: none;">
-          <div style="font-size: 10px; color: #ef4444; margin-bottom: 4px; font-weight: 700;">MOTIVO DO ERRO:</div>
+          <div style="font-size: 10px; color: #ef4444; margin-bottom: 4px; font-weight: 700;">AUTÓPSIA DO ERRO:</div>
           <div class="qg-prompt-buttons">
-            <button class="qg-btn-tag" data-reason="conteudo">📚 Teoria</button>
-            <button class="qg-btn-tag" data-reason="atencao">⚠️ Atenção</button>
-            <button class="qg-btn-tag" data-reason="interpretacao">🔍 Enunciado</button>
+            <button class="qg-btn-tag" data-reason="leitura">👀 Leitura</button>
+            <button class="qg-btn-tag" data-reason="decoreba">🧠 Decoreba</button>
+            <button class="qg-btn-tag" data-reason="pegadinha">🪤 Pegadinha</button>
+            <button class="qg-btn-tag" data-reason="base">📚 Falta de base</button>
+            <button class="qg-btn-tag" data-reason="cansaco">😵 Cansaço</button>
           </div>
         </div>
       </div>
@@ -9452,7 +9461,33 @@ import {
             activeQuestionData = questionData;
             saveQuestion(questionData, false);
             renderQuestionHistory(qId, true);
-            showPrompt(questionData);
+
+            const mountedInline = mountInlineAutopsyCard(card, questionData, {
+              onSelectErrorReason: (targetId, reasonId) => {
+                const latest = questionsCache.find((q) => q && q.id === targetId) || questionData;
+                const updated = { ...latest, errorReason: reasonId };
+                if (activeQuestionData && activeQuestionData.id === targetId) {
+                  activeQuestionData = updated;
+                }
+                saveQuestion(updated, true);
+              },
+              onSelectConfidence: (targetId, confId) => {
+                const latest = questionsCache.find((q) => q && q.id === targetId) || questionData;
+                const updated = {
+                  ...latest,
+                  confidence: confId,
+                  fsrsRequested: (confId === 'chute' || confId === 'duvida'),
+                };
+                if (activeQuestionData && activeQuestionData.id === targetId) {
+                  activeQuestionData = updated;
+                }
+                saveQuestion(updated, true);
+              },
+            });
+
+            if (!mountedInline) {
+              showPrompt(questionData);
+            }
             if (!questionData.teacherComment || questionData.communityCorrectPct === undefined || !questionData.userNote) {
               setTimeout(() => triggerSilentTeacherCommentCapture(card, qId), 380);
             }

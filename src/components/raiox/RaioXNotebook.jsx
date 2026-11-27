@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
+import { ERROR_CAUSES, normalizeErrorReason } from '../../lib/errorAutopsy';
 import {
   BookOpen,
   Search,
@@ -82,8 +83,11 @@ export default function RaioXNotebook({
     { id: 'avoidable', label: 'Evitáveis', count: avoidableCount },
     { id: 'pegadinha', label: 'Pegadinhas', count: pegadinhaCount },
     { id: 'guesses', label: 'Chute/Dúvida', count: stats.guessesOrDoubtsTotal },
-    { id: 'theory', label: 'Teoria', count: stats.errorReasons.conteudo },
-    { id: 'attention', label: 'Atenção', count: stats.errorReasons.atencao }
+    ...ERROR_CAUSES.map((c) => ({
+      id: c.filterId,
+      label: `${c.icon} ${c.shortLabel}`,
+      count: Number(stats.errorReasons?.[c.id]) || 0
+    }))
   ];
 
   const displayedQuestions = filteredQuestions.slice(0, visibleCount);
@@ -598,27 +602,24 @@ export default function RaioXNotebook({
                     </div>
 
                     {!q.hit && (
-                      <div className="flex items-center gap-1">
+                      <div className="flex flex-wrap items-center gap-1">
                         <span className="text-[11px] font-medium text-red-500 dark:text-red-400 mr-1">
-                          Causa:
+                          Autópsia:
                         </span>
-                        <div className="inline-flex items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800/80">
-                          {[
-                            { id: 'conteudo', label: 'Teoria' },
-                            { id: 'atencao', label: 'Atenção' },
-                            { id: 'interpretacao', label: 'Interpretação' }
-                          ].map((r) => (
+                        <div className="inline-flex flex-wrap items-center p-0.5 rounded-lg bg-slate-100 dark:bg-slate-800/80 gap-0.5">
+                          {ERROR_CAUSES.map((r) => (
                             <button
                               key={r.id}
                               type="button"
                               onClick={() => updateCaveiraQuestion(q.id, { errorReason: r.id })}
+                              title={r.label}
                               className={`h-6 px-2 rounded-md text-[11px] font-semibold transition-colors cursor-pointer ${
-                                (q.errorReason || 'conteudo') === r.id
+                                normalizeErrorReason(q.errorReason) === r.id
                                   ? 'bg-red-600 text-white shadow-xs'
                                   : 'text-slate-500 dark:text-slate-400 hover:text-slate-900 dark:hover:text-white'
                               }`}
                             >
-                              {r.label}
+                              {r.icon} {r.shortLabel}
                             </button>
                           ))}
                         </div>

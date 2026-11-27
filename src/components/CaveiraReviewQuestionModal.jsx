@@ -2,6 +2,7 @@ import React, { useState, useMemo, useEffect } from 'react';
 import { useStore, cleanAlternativeText } from '../store/useStore';
 import { findCourseVideoMatch } from '../utils/caveiraAnalytics';
 import { getSafeExternalUrl } from '../lib/safeUrl';
+import { getErrorCauseMeta } from '../lib/errorAutopsy';
 import { BrainCircuit, CheckCircle2, XCircle, ArrowRight, ArrowUpRight, Calendar, Save, Video } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
@@ -76,6 +77,7 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
       ano: storeMatch?.ano || review.questionData?.ano || '',
       hit: storeMatch ? Boolean(storeMatch.hit) : Boolean(review.questionData?.hit),
       confidence: storeMatch?.confidence || review.questionData?.confidence || 'sabia',
+      errorReason: storeMatch?.errorReason || review.questionData?.errorReason || '',
       userNote: storeMatch?.userNote || review.questionData?.userNote || '',
       teacherComment: storeMatch?.teacherComment || review.questionData?.teacherComment || '',
       commentSource: storeMatch?.commentSource || review.questionData?.commentSource || '',
@@ -250,9 +252,19 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
                 ✓ Acertou • Revisão Manual
               </span>
             ) : (
-              <span className="text-[11px] font-black uppercase bg-red-500/15 text-red-400 border border-red-500/25 px-2.5 py-1 rounded-lg">
-                ✗ Errou no Caveira
-              </span>
+              <>
+                <span className="text-[11px] font-black uppercase bg-red-500/15 text-red-400 border border-red-500/25 px-2.5 py-1 rounded-lg">
+                  ✗ Errou no Caveira
+                </span>
+                {qData.errorReason && (() => {
+                  const meta = getErrorCauseMeta(qData.errorReason);
+                  return (
+                    <span className={`text-[10px] font-black uppercase border px-2 py-1 rounded-lg ${meta.badgeClass}`} title={`Autópsia do erro: ${meta.label}`}>
+                      {meta.icon} {meta.shortLabel}
+                    </span>
+                  );
+                })()}
+              </>
             )}
             {qData.isAvoidableError && (
               <span className="text-[10px] font-black uppercase bg-amber-500/15 text-amber-300 border border-amber-500/30 px-2 py-1 rounded-lg">

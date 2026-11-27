@@ -7,6 +7,7 @@ import { parseDurationToSeconds, calculateLessonsForGoal } from '../lib/duration
 import { normalizeCourseLookupKey } from '../lib/courseIndexParser';
 import { extractCourseIdFromUrl, scoreLessonTitleMatch } from '../lib/caveiraLessonLinks';
 import { applySubjectDaysToSchedule } from '../lib/calendarBulkOps';
+import { normalizeErrorReason, getErrorCauseMeta } from '../lib/errorAutopsy';
 import {
   DEFAULT_CAVEIRA_QUESTION_PREFS,
   sanitizeCaveiraQuestionPrefs,
@@ -2278,7 +2279,7 @@ export const useStore = create(
           ano: question.ano,
           hit: Boolean(question.hit),
           confidence: question.confidence || (question.hit ? 'sabia' : 'duvida'),
-          errorReason: question.errorReason || 'conteudo',
+          errorReason: normalizeErrorReason(question.errorReason),
           userNote: question.userNote || '',
           teacherComment: question.teacherComment || '',
           timestamp: question.timestamp || null
@@ -2322,7 +2323,7 @@ export const useStore = create(
 
         const reasonLine = question.hit
           ? `Motivo da revisão: ${question.confidence === 'chute' ? 'Acertou no Chute 🎲' : question.confidence === 'duvida' ? 'Acertou com Dúvida 🤔' : 'Revisão Manual 📌'}`
-          : `Motivo do erro: ${question.errorReason || 'Conteúdo'}`;
+          : `Autópsia do erro: ${getErrorCauseMeta(question.errorReason).label}`;
 
         const newReview = {
           id: 'rev_caveira_' + question.id,

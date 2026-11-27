@@ -1,4 +1,5 @@
 import React from 'react';
+import { ERROR_CAUSES } from '../../lib/errorAutopsy';
 import {
   ResponsiveContainer,
   BarChart,
@@ -96,32 +97,17 @@ export default function RaioXOverview({
   const topCritical = topicRankings.mostErrored[0] || null;
   const totalErrors = Math.max(1, stats.errors);
 
-  const errorCauseRows = [
-    {
-      id: 'theory',
-      label: 'Lacuna de teoria',
-      count: stats.errorReasons.conteudo,
-      pct: stats.errors > 0 ? Math.round((stats.errorReasons.conteudo / totalErrors) * 100) : 0,
-      barClass: 'bg-red-500',
-      textClass: 'text-red-600 dark:text-red-400'
-    },
-    {
-      id: 'attention',
-      label: 'Falta de atenção',
-      count: stats.errorReasons.atencao,
-      pct: stats.errors > 0 ? Math.round((stats.errorReasons.atencao / totalErrors) * 100) : 0,
-      barClass: 'bg-amber-500',
-      textClass: 'text-amber-600 dark:text-amber-400'
-    },
-    {
-      id: 'interpretation',
-      label: 'Interpretação',
-      count: stats.errorReasons.interpretacao,
-      pct: stats.errors > 0 ? Math.round((stats.errorReasons.interpretacao / totalErrors) * 100) : 0,
-      barClass: 'bg-sky-500',
-      textClass: 'text-sky-600 dark:text-sky-400'
-    }
-  ];
+  const errorCauseRows = ERROR_CAUSES.map((cause) => {
+    const count = Number(stats.errorReasons?.[cause.id]) || 0;
+    return {
+      id: cause.filterId,
+      label: `${cause.icon} ${cause.label}`,
+      count,
+      pct: stats.errors > 0 ? Math.round((count / totalErrors) * 100) : 0,
+      barClass: cause.barClass,
+      textClass: cause.textClass
+    };
+  });
 
   const decayingDisciplines = forgettingCurveRows.filter(
     (r) => r.decayDelta !== null && r.decayDelta < -5

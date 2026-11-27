@@ -123,17 +123,17 @@ export function isEventInsideHud(event) {
   if (!event) return false;
   if (typeof event.composedPath === 'function') {
     const path = event.composedPath();
-    if (path.some((node) => node && (node.id === SHADOW_HOST_ID || node.id === 'qg-caveira-hud'))) {
+    if (path.some((node) => node && (node.id === SHADOW_HOST_ID || node.id === 'qg-caveira-hud' || node.classList?.contains('qg-inline-autopsy-host')))) {
       return true;
     }
   }
-  return Boolean(event.target?.closest && event.target.closest(`#${SHADOW_HOST_ID}, #qg-caveira-hud`));
+  return Boolean(event.target?.closest && event.target.closest(`#${SHADOW_HOST_ID}, #qg-caveira-hud, .qg-inline-autopsy-host`));
 }
 
 export function isMutationInsideHud(mutation) {
   if (!mutation || !mutation.target) return false;
   const target = mutation.target;
-  if (target.id === SHADOW_HOST_ID || target.id === 'qg-caveira-hud') return true;
+  if (target.id === SHADOW_HOST_ID || target.id === 'qg-caveira-hud' || target.classList?.contains('qg-inline-autopsy-host')) return true;
   if (activeShadowRoot && target.getRootNode && target.getRootNode() === activeShadowRoot) return true;
-  return Boolean(target.closest && target.closest(`#${SHADOW_HOST_ID}, #qg-caveira-hud`));
+  return Boolean(target.closest && target.closest(`#${SHADOW_HOST_ID}, #qg-caveira-hud, .qg-inline-autopsy-host`));
 }
