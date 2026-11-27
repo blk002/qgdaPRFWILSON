@@ -11,7 +11,8 @@ import {
   LayoutGrid,
   List,
   Star,
-  X
+  X,
+  SlidersHorizontal
 } from 'lucide-react';
 import { useStore } from '../store/useStore';
 import { toast } from 'sonner';
@@ -22,7 +23,8 @@ import CalendarioSubjectRail from '../components/calendario/CalendarioSubjectRai
 import {
   DayManagerModal,
   TransitionRuleModal,
-  ResetCalendarModal
+  ResetCalendarModal,
+  BulkScheduleModal
 } from '../components/calendario/CalendarioModals';
 
 const MESES_NOMES = [
@@ -68,7 +70,8 @@ export default function Calendario() {
     removeDayOverride,
     futureScheduleRules = [],
     updateSubject,
-    executeSelectiveReset
+    executeSelectiveReset,
+    applySubjectDaysInCalendar
   } = useStore();
 
   useEffect(() => {
@@ -82,6 +85,8 @@ export default function Calendario() {
 
   const [viewMode, setViewMode] = useState('month'); // 'month' | 'agenda'
   const [highlightedSubjectId, setHighlightedSubjectId] = useState(null);
+  const [showBulkScheduleModal, setShowBulkScheduleModal] = useState(false);
+  const [bulkInitialSubjectId, setBulkInitialSubjectId] = useState('');
   const [showRail, setShowRail] = useState(() => {
     try {
       const saved = localStorage.getItem('qg_cal_show_subjects');
@@ -1026,6 +1031,18 @@ export default function Calendario() {
 
           <button
             type="button"
+            onClick={() => {
+              setBulkInitialSubjectId(highlightedSubjectId || '');
+              setShowBulkScheduleModal(true);
+            }}
+            title="Adicionar uma matéria em vários dias da semana ou remover matérias do calendário"
+            className="h-8 px-2.5 rounded-lg border border-sky-300 dark:border-sky-800 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/60 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+          >
+            <SlidersHorizontal className="w-3.5 h-3.5" /> Gerenciar Matérias
+          </button>
+
+          <button
+            type="button"
             onClick={handleFixCalendar}
             title="Fixar a grade semanal e remover regras ou personalizações avulsas"
             className="h-8 px-2.5 rounded-lg border border-emerald-300 dark:border-emerald-800 bg-emerald-50 hover:bg-emerald-100 dark:bg-emerald-950/60 dark:hover:bg-emerald-900/60 text-emerald-700 dark:text-emerald-300 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
@@ -1100,6 +1117,10 @@ export default function Calendario() {
               highlightedSubjectId={highlightedSubjectId}
               onToggleHighlight={setHighlightedSubjectId}
               onOpenTransitionModal={handleOpenTransitionModal}
+              onOpenBulkSubjectModal={(subId) => {
+                setBulkInitialSubjectId(subId || '');
+                setShowBulkScheduleModal(true);
+              }}
             />
           </div>
         )}
@@ -1146,6 +1167,33 @@ export default function Calendario() {
         setResetMode={setResetMode}
         isResettingCalendar={isResettingCalendar}
         onConfirm={handleConfirmResetCalendar}
+      />
+
+      <BulkScheduleModal
+        isOpen={showBulkScheduleModal}
+        onClose={() => setShowBulkScheduleModal(false)}
+        subjects={subjects}
+        initialSubjectId={bulkInitialSubjectId}
+        cycle={cycle}
+        cycleSlotCounts={cycleSlotCounts}
+        cycleWeekStart={cycleWeekStart}
+        futureScheduleRules={futureScheduleRules}
+        onApplySubjectDays={async (subId, days, count) => {
+          if (!subId || !applySubjectDaysInCalendar) return;
+          const subName = subjects?.[subId]?.name || 'Matéria';
+          await applySubjectDaysInCalendar(subId, days, count);
+          if (days.length === 0) {
+            toast.success(`${subName} removida de todos os dias do calendário.`);
+          } else {
+            toast.success(`${subName} programada em ${days.length} dia(s) da semana.`);
+          }
+          setShowBulkScheduleModal(false);
+        }}
+        onClearAllCalendar={async () => {
+          await executeSelectiveReset({ calendarSchedule: true });
+          toast.success('Todas as matérias foram removidas do calendário.');
+          setShowBulkScheduleModal(false);
+        }}
       />
     </div>
   );

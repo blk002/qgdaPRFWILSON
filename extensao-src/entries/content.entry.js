@@ -22,6 +22,7 @@ import {
   FILTER_MEMORY_CLOUD_KEY,
   TODAY_MISSION_KEY,
   SUBJECT_SPEEDS_KEY,
+  MODULE_SPEEDS_KEY,
   PLAYER_SPEED_KEY,
   PLAYER_SEEK_KEY,
   PENDING_CATALOG_KEY,
@@ -76,7 +77,7 @@ import {
 
 (function() {
   if (isExcludedCaveiraHost(window.location.hostname)) return;
-  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.4.5';
+  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.4.6';
   console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
@@ -112,6 +113,10 @@ import {
   let cachedTodayMission = null;
   let todayMissionIdx = 0;
   let cachedSubjectSpeeds = {};
+  let cachedModuleSpeeds = {};
+  let lastExplicitLessonSpeed = null;
+  let lastExplicitLessonUrlSig = '';
+  let lastPlaygroundSpeedSig = '';
   let pdfReadingSeconds = 0;
   let pdfTimerInterval = null;
   let lastPlaygroundSpeedApplied = 0;
@@ -424,7 +429,7 @@ import {
         [
           STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, SCHEMA_VERSION_KEY, GOAL_KEY,
           ACTIVE_USER_KEY, ACTIVE_USER_LABEL_KEY, PENDING_FILTER_KEY, LAST_FILTER_DIAG_KEY,
-          TODAY_MISSION_KEY, SUBJECT_SPEEDS_KEY, FILTER_ID_MEMORY_KEY, FILTER_MEMORY_CLOUD_KEY,
+          TODAY_MISSION_KEY, SUBJECT_SPEEDS_KEY, MODULE_SPEEDS_KEY, FILTER_ID_MEMORY_KEY, FILTER_MEMORY_CLOUD_KEY,
           DIAGNOSTIC_MODE_KEY, PENDING_SIMULADOS_QUEUE_KEY, ACTIVE_MISSION_KEY
         ],
         (res) => {
@@ -445,6 +450,9 @@ import {
           if (res?.[TODAY_MISSION_KEY]) cachedTodayMission = res[TODAY_MISSION_KEY];
           if (res?.[SUBJECT_SPEEDS_KEY] && typeof res[SUBJECT_SPEEDS_KEY] === 'object') {
             cachedSubjectSpeeds = res[SUBJECT_SPEEDS_KEY];
+          }
+          if (res?.[MODULE_SPEEDS_KEY] && typeof res[MODULE_SPEEDS_KEY] === 'object') {
+            cachedModuleSpeeds = res[MODULE_SPEEDS_KEY];
           }
           // #56: Mescla memória de filtros vinda da nuvem sem perder seleções locais mais novas
           const cloudMem = res?.[FILTER_MEMORY_CLOUD_KEY];
@@ -704,7 +712,14 @@ import {
           }
           if (changes[SUBJECT_SPEEDS_KEY]) {
             cachedSubjectSpeeds = changes[SUBJECT_SPEEDS_KEY].newValue || {};
+            lastExplicitLessonSpeed = null;
             updateContextualHud();
+            applySubjectVideoSpeedInPlayground(true);
+          }
+          if (changes[MODULE_SPEEDS_KEY]) {
+            cachedModuleSpeeds = changes[MODULE_SPEEDS_KEY].newValue || {};
+            lastExplicitLessonSpeed = null;
+            applySubjectVideoSpeedInPlayground(true);
           }
           if (changes[DIAGNOSTIC_MODE_KEY]) {
             diagnosticModeEnabled = Boolean(changes[DIAGNOSTIC_MODE_KEY].newValue);
@@ -788,6 +803,10 @@ import {
         }
         if (msg && msg.type === 'PLAYER_VIDEO_ENDED') {
           showLessonCompletedBanner();
+          sendResponse({ ok: true });
+        }
+        if (msg && msg.type === 'PLAYER_BRIDGE_READY') {
+          applySubjectVideoSpeedInPlayground(true);
           sendResponse({ ok: true });
         }
         if (msg && msg.type === 'HUD_QUICK_TAG' && msg.payload?.tag) {
@@ -1295,26 +1314,58 @@ import {
   } catch (_) {}
 
   // --- HELPERS DAS 15 INTEGRAÇÕES v2.0.0 (#1, #2, #27, #29, #30, #31) ---
-  function resolveSubjectSpeedForContext(contextTitle = '') {
-    return resolveSubjectSpeedHelper(cachedSubjectSpeeds, contextTitle, inferSubjectFromLessons);
+  function resolveSubjectSpeedForContext(contextTitle = '', extraContexts = [], options = {}) {
+    const contextList = [
+      contextTitle,
+      ...(Array.isArray(extraContexts) ? extraContexts : [extraContexts]),
+      currentCourseIndexStatus?.courseTitle || '',
+      currentCourseIndexStatus?.moduleTitle || '',
+      lastOpenedCourseContext?.subject || '',
+      lastOpenedCourseContext?.course || '',
+      document.title || '',
+    ].filter(Boolean);
+
+    const cidMatch = window.location.pathname.match(/\/courses\/(\d+)/i);
+    const midMatch = window.location.pathname.match(/\/modules\/(\d+)/i);
+    const courseId = options.courseId || (cidMatch ? cidMatch[1] : '');
+    const moduleId = options.moduleId || (midMatch ? midMatch[1] : '');
+    const currentSig = `${courseId}:${moduleId}`;
+    const explicitSpeed = (
+      options.explicitSpeed !== undefined
+        ? options.explicitSpeed
+        : (lastExplicitLessonSpeed && lastExplicitLessonUrlSig === currentSig ? lastExplicitLessonSpeed : null)
+    );
+
+    return resolveSubjectSpeedHelper(cachedSubjectSpeeds, contextList, inferSubjectFromLessons, {
+      moduleSpeeds: cachedModuleSpeeds,
+      courseId,
+      moduleId,
+      explicitSpeed,
+    });
   }
 
-  function applySubjectVideoSpeedInPlayground() {
+  function applySubjectVideoSpeedInPlayground(forceSend = false) {
     if (!isCoursePlaygroundPage()) return;
     const lessonTitle = currentCourseIndexStatus?.lessonTitle || extractCourseLessonTitle() || document.title || '';
-    const targetSpeed = resolveSubjectSpeedForContext(lessonTitle);
+    const courseTitle = currentCourseIndexStatus?.courseTitle || lastOpenedCourseContext?.course || '';
+    const currentCourseId = window.location.pathname.match(/\/courses\/(\d+)/i)?.[1] || '';
+    const currentModuleId = window.location.pathname.match(/\/modules\/(\d+)/i)?.[1] || '';
+    const targetSpeed = resolveSubjectSpeedForContext(lessonTitle, [courseTitle], {
+      courseId: currentCourseId,
+      moduleId: currentModuleId,
+    });
     const speedBadge = getHudEl('qg-hud-speed-badge');
     if (speedBadge) {
       if (targetSpeed !== 1) {
         speedBadge.style.display = 'inline-flex';
-        speedBadge.textContent = `⚡ Velocidade QG: ${targetSpeed}x`;
+        speedBadge.textContent = `⚡ Velocidade QG: ${targetSpeed}x • HD Máx`;
       } else {
-        speedBadge.style.display = 'none';
+        speedBadge.style.display = 'inline-flex';
+        speedBadge.textContent = '🎬 Qualidade Máxima';
       }
     }
 
     // #1 + #28: Auto-seek no iframe mediadelivery.net quando ?t=<segundos> estiver na URL
-    const currentCourseId = window.location.pathname.match(/\/courses\/(\d+)/i)?.[1] || '';
     try {
       const currentHrefNoHash = window.location.href.split('#')[0];
       if (currentHrefNoHash !== lastSeekUrlApplied) {
@@ -1330,15 +1381,31 @@ import {
       }
     } catch (_) {}
 
-    // #1 + #30: Enviar velocidade para o iframe player_bridge.js via storage + runtime message
-    if (targetSpeed !== lastPlaygroundSpeedApplied) {
+    // #1 + #30: Enviar velocidade + qualidade máxima para o iframe player_bridge.js via storage + runtime message
+    const speedSig = `${currentCourseId}:${currentModuleId}:${lessonTitle}:${targetSpeed}`;
+    if (forceSend || targetSpeed !== lastPlaygroundSpeedApplied || speedSig !== lastPlaygroundSpeedSig) {
       lastPlaygroundSpeedApplied = targetSpeed;
+      lastPlaygroundSpeedSig = speedSig;
       try {
-        chrome.storage.local.set({ [PLAYER_SPEED_KEY]: { speed: targetSpeed, courseId: currentCourseId, updatedAt: Date.now() } }, () => {
-          if (chrome.runtime?.sendMessage) {
-            chrome.runtime.sendMessage({ type: 'APPLY_PLAYER_SPEED', payload: { speed: targetSpeed } }).catch(() => {});
+        chrome.storage.local.set(
+          {
+            [PLAYER_SPEED_KEY]: {
+              speed: targetSpeed,
+              forceMaxQuality: true,
+              courseId: currentCourseId,
+              moduleId: currentModuleId,
+              updatedAt: Date.now(),
+            },
+          },
+          () => {
+            if (chrome.runtime?.sendMessage) {
+              chrome.runtime.sendMessage({
+                type: 'APPLY_PLAYER_SPEED',
+                payload: { speed: targetSpeed, forceMaxQuality: true },
+              }).catch(() => {});
+            }
           }
-        });
+        );
       } catch (_) {}
     }
 
@@ -1742,10 +1809,20 @@ import {
       const mSub = rawHash.match(/qg_subject=([^&]+)/);
       const mTop = rawHash.match(/qg_topic=([^&]+)/);
       const mCrs = rawHash.match(/qg_course=([^&]+)/);
+      const mSpd = rawHash.match(/qg_speed=([^&]+)/);
       if (mLes) targetLesson = safeDecode(mLes[1]);
       if (mSub) targetSubject = safeDecode(mSub[1]);
       if (mTop) targetTopic = safeDecode(mTop[1]);
       if (mCrs) targetCourse = safeDecode(mCrs[1]);
+      if (mSpd) {
+        const parsedSpd = Number(safeDecode(mSpd[1]));
+        if (Number.isFinite(parsedSpd) && parsedSpd >= 0.5 && parsedSpd <= 4) {
+          const cidM = window.location.pathname.match(/\/courses\/(\d+)/i);
+          const midM = window.location.pathname.match(/\/modules\/(\d+)/i);
+          lastExplicitLessonSpeed = Math.round(parsedSpd * 100) / 100;
+          lastExplicitLessonUrlSig = `${cidM ? cidM[1] : ''}:${midM ? midM[1] : ''}`;
+        }
+      }
       if (targetLesson) {
         try {
           sessionStorage.setItem('qg_target_lesson_pending', JSON.stringify({
@@ -1753,6 +1830,7 @@ import {
             subject: targetSubject,
             topic: targetTopic,
             course: targetCourse,
+            speed: lastExplicitLessonSpeed,
             savedAt: Date.now()
           }));
         } catch (_) {}
@@ -1765,6 +1843,12 @@ import {
           targetSubject = stored.subject || '';
           targetTopic = stored.topic || '';
           targetCourse = stored.course || '';
+          if (Number.isFinite(Number(stored.speed)) && Number(stored.speed) >= 0.5 && Number(stored.speed) <= 4) {
+            const cidM = window.location.pathname.match(/\/courses\/(\d+)/i);
+            const midM = window.location.pathname.match(/\/modules\/(\d+)/i);
+            lastExplicitLessonSpeed = Math.round(Number(stored.speed) * 100) / 100;
+            lastExplicitLessonUrlSig = `${cidM ? cidM[1] : ''}:${midM ? midM[1] : ''}`;
+          }
         }
       } catch (_) {}
     }

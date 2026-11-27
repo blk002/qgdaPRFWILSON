@@ -6,6 +6,7 @@ import { PET_FOODS, PET_LEVELS } from '../data/petConstants';
 import { parseDurationToSeconds, calculateLessonsForGoal } from '../lib/durationHelpers';
 import { normalizeCourseLookupKey } from '../lib/courseIndexParser';
 import { extractCourseIdFromUrl, scoreLessonTitleMatch } from '../lib/caveiraLessonLinks';
+import { applySubjectDaysToSchedule } from '../lib/calendarBulkOps';
 import {
   DEFAULT_CAVEIRA_QUESTION_PREFS,
   sanitizeCaveiraQuestionPrefs,
@@ -1358,7 +1359,7 @@ export const useStore = create(
             ...state.subjects,
             [subjectId]: {
               ...sub,
-              speed: Number(speed) || 1
+              speed: Math.min(4, Math.max(0.5, Math.round((Number(speed) || 1) * 100) / 100))
             }
           }
         };
@@ -3361,6 +3362,17 @@ export const useStore = create(
         await saveToCloud({ allowEmptyOverwrite: true });
 
         return summary;
+      },
+
+      applySubjectDaysInCalendar: async (subjectId, selectedDaysOfWeek = [], slotCount = 0) => {
+        if (!subjectId) return;
+        const st = get();
+        const todayStr = st.getLocalDateStr ? st.getLocalDateStr() : '';
+        const updated = applySubjectDaysToSchedule(st, subjectId, selectedDaysOfWeek, slotCount, todayStr);
+        set(updated);
+        if (st.user?.id) {
+          await get().saveToCloud({ allowEmptyOverwrite: true });
+        }
       },
 
       createLocalRestorePoint: (reason = 'manual', label = '') => {

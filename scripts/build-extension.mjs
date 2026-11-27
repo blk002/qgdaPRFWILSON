@@ -12,6 +12,7 @@ const ENTRIES = [
   { in: 'popup.entry.js', out: 'popup.js' },
   { in: 'qg_bridge.entry.js', out: 'qg_bridge.js' },
   { in: 'player_bridge.entry.js', out: 'player_bridge.js' },
+  { in: 'player_main.entry.js', out: 'player_main.js' },
   { in: 'api_sniffer.entry.js', out: 'api_sniffer.js' },
 ];
 

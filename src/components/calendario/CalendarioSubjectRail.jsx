@@ -47,7 +47,8 @@ export default function CalendarioSubjectRail({
   calCompletionDates,
   highlightedSubjectId,
   onToggleHighlight,
-  onOpenTransitionModal
+  onOpenTransitionModal,
+  onOpenBulkSubjectModal
 }) {
   const orderedSubjects = useMemo(() => {
     return (subjectEstimates || [])
@@ -179,17 +180,32 @@ export default function CalendarioSubjectRail({
                       {currentGoal ? ` · ${currentGoal}` : ''}
                     </span>
 
-                    <button
-                      type="button"
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        onOpenTransitionModal(sub);
-                      }}
-                      title="Configurar o que acontece ao concluir esta disciplina"
-                      className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-400 shrink-0 cursor-pointer whitespace-nowrap"
-                    >
-                      <Settings2 className="w-3 h-3" /> {ruleShort}
-                    </button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      {onOpenBulkSubjectModal && (
+                        <button
+                          type="button"
+                          onClick={(e) => {
+                            e.stopPropagation();
+                            onOpenBulkSubjectModal(sub.id);
+                          }}
+                          title="Escolher dias da semana ou remover esta disciplina do calendário"
+                          className="inline-flex items-center gap-1 text-[11px] font-semibold text-sky-600 dark:text-sky-400 hover:text-sky-700 dark:hover:text-sky-300 cursor-pointer whitespace-nowrap"
+                        >
+                          Dias
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenTransitionModal(sub);
+                        }}
+                        title="Configurar o que acontece ao concluir esta disciplina"
+                        className="inline-flex items-center gap-1 text-[11px] font-semibold text-slate-600 dark:text-slate-300 hover:text-sky-600 dark:hover:text-sky-400 cursor-pointer whitespace-nowrap"
+                      >
+                        <Settings2 className="w-3 h-3" /> {ruleShort}
+                      </button>
+                    </div>
                   </div>
                 )}
               </div>

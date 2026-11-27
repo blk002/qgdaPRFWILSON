@@ -520,6 +520,7 @@ ${EXTRA_SHADOW_CSS}`;
   var FILTER_MEMORY_CLOUD_KEY = "qg_filter_memory_cloud";
   var TODAY_MISSION_KEY = "qg_today_mission";
   var SUBJECT_SPEEDS_KEY = "qg_subject_speeds";
+  var MODULE_SPEEDS_KEY = "qg_module_speeds";
   var PLAYER_SPEED_KEY = "qg_player_target_speed";
   var PLAYER_SEEK_KEY = "qg_player_pending_seek";
   var PENDING_CATALOG_KEY = "qg_pending_course_catalog";
@@ -922,17 +923,71 @@ ${EXTRA_SHADOW_CSS}`;
   }
 
   // extensao-src/content/videoHelper.js
-  function resolveSubjectSpeedForContext(cachedSubjectSpeeds, contextTitle = "", inferSubjectFn = null) {
+  var SUBJECT_ALIAS_FAMILIES = [
+    ["lingua portuguesa", "portugues", "interpretacao de texto", "gramatica"],
+    ["raciocinio logico", "matematica", "rlm", "estatistica"],
+    ["informatica", "tecnologia da informacao", "ti"],
+    ["fisica", "mecanica", "cinematica"],
+    ["etica", "etica no servico publico", "cidadania"],
+    ["geopolitica", "atualidades", "historia da prf"],
+    ["legislacao de transito", "transito", "ctb", "codigo de transito brasileiro", "resolucoes contran", "contran"],
+    ["direito administrativo", "administrativo", "ato administrativo", "licitacoes"],
+    ["direito constitucional", "constitucional", "constituicao federal"],
+    ["direito penal", "penal", "codigo penal"],
+    ["direito processual penal", "processual penal", "processo penal", "cpp"],
+    ["legislacao especial", "leis penais especiais", "legislacao extravagante"],
+    ["direitos humanos", "direitos e garantias fundamentais"],
+    ["redacao", "discursiva", "texto dissertativo"]
+  ];
+  function clampSpeed(value) {
+    const num = Number(value);
+    if (!Number.isFinite(num) || num < 0.5 || num > 4) return null;
+    return Math.round(num * 100) / 100;
+  }
+  function matchAliasFamily(a, b) {
+    if (!a || !b) return false;
+    for (const family of SUBJECT_ALIAS_FAMILIES) {
+      const aHit = family.some((term) => a.includes(term) || term.includes(a));
+      const bHit = family.some((term) => b.includes(term) || term.includes(b));
+      if (aHit && bHit) return true;
+    }
+    return false;
+  }
+  function resolveSubjectSpeedForContext(cachedSubjectSpeeds, contextTitleOrList = "", inferSubjectFn = null, options = {}) {
+    const explicit = options && options.explicitSpeed !== void 0 && options.explicitSpeed !== null && options.explicitSpeed !== "" ? clampSpeed(options.explicitSpeed) : null;
+    if (explicit !== null) return explicit;
+    const moduleSpeeds = options?.moduleSpeeds;
+    const courseId = String(options?.courseId || "").trim();
+    const moduleId = String(options?.moduleId || "").trim();
+    if (moduleSpeeds && typeof moduleSpeeds === "object" && courseId) {
+      if (moduleId) {
+        const byRoute = clampSpeed(moduleSpeeds[`${courseId}:${moduleId}`]);
+        if (byRoute !== null) return byRoute;
+      }
+      const byCourse = clampSpeed(moduleSpeeds[`course:${courseId}`]);
+      if (byCourse !== null) return byCourse;
+    }
     if (!cachedSubjectSpeeds || typeof cachedSubjectSpeeds !== "object") return 1;
-    const normCtx = normalizeFilterText(contextTitle);
-    const inferred = typeof inferSubjectFn === "function" ? inferSubjectFn([contextTitle], contextTitle) || "" : "";
-    const normInf = normalizeFilterText(inferred);
-    for (const [subName, spd] of Object.entries(cachedSubjectSpeeds)) {
-      const sNorm = normalizeFilterText(subName);
-      if (!sNorm) continue;
-      if (normInf && (sNorm === normInf || sNorm.includes(normInf) || normInf.includes(sNorm)) || normCtx && (normCtx.includes(sNorm) || sNorm.includes(normCtx))) {
-        const num = Number(spd);
-        if (Number.isFinite(num) && num >= 0.5 && num <= 4) return num;
+    const contexts = (Array.isArray(contextTitleOrList) ? contextTitleOrList : [contextTitleOrList]).map((item) => String(item || "").trim()).filter(Boolean);
+    if (contexts.length === 0) return 1;
+    const entries = Object.entries(cachedSubjectSpeeds).map(([subName, spd]) => ({
+      norm: normalizeFilterText(subName),
+      speed: clampSpeed(spd)
+    })).filter((entry) => entry.norm && entry.speed !== null);
+    if (entries.length === 0) return 1;
+    for (const ctx of contexts) {
+      const normCtx = normalizeFilterText(ctx);
+      const inferred = typeof inferSubjectFn === "function" ? inferSubjectFn([ctx], ctx) || "" : "";
+      const normInf = normalizeFilterText(inferred);
+      for (const entry of entries) {
+        if (normInf && (entry.norm === normInf || entry.norm.includes(normInf) || normInf.includes(entry.norm)) || normCtx && (entry.norm === normCtx || normCtx.includes(entry.norm) || entry.norm.includes(normCtx))) {
+          return entry.speed;
+        }
+      }
+      for (const entry of entries) {
+        if (matchAliasFamily(entry.norm, normInf) || matchAliasFamily(entry.norm, normCtx)) {
+          return entry.speed;
+        }
       }
     }
     return 1;
@@ -1130,7 +1185,7 @@ ${EXTRA_SHADOW_CSS}`;
   // extensao-src/entries/content.entry.js
   (function() {
     if (isExcludedCaveiraHost(window.location.hostname)) return;
-    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.4.5";
+    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.4.6";
     console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
     try {
       window.dispatchEvent(new CustomEvent("qg-caveira-teardown"));
@@ -1164,6 +1219,10 @@ ${EXTRA_SHADOW_CSS}`;
     let cachedTodayMission = null;
     let todayMissionIdx = 0;
     let cachedSubjectSpeeds = {};
+    let cachedModuleSpeeds = {};
+    let lastExplicitLessonSpeed = null;
+    let lastExplicitLessonUrlSig = "";
+    let lastPlaygroundSpeedSig = "";
     let pdfReadingSeconds = 0;
     let pdfTimerInterval = null;
     let lastPlaygroundSpeedApplied = 0;
@@ -1458,6 +1517,7 @@ ${EXTRA_SHADOW_CSS}`;
             LAST_FILTER_DIAG_KEY,
             TODAY_MISSION_KEY,
             SUBJECT_SPEEDS_KEY,
+            MODULE_SPEEDS_KEY,
             FILTER_ID_MEMORY_KEY,
             FILTER_MEMORY_CLOUD_KEY,
             DIAGNOSTIC_MODE_KEY,
@@ -1478,6 +1538,9 @@ ${EXTRA_SHADOW_CSS}`;
             if (res?.[TODAY_MISSION_KEY]) cachedTodayMission = res[TODAY_MISSION_KEY];
             if (res?.[SUBJECT_SPEEDS_KEY] && typeof res[SUBJECT_SPEEDS_KEY] === "object") {
               cachedSubjectSpeeds = res[SUBJECT_SPEEDS_KEY];
+            }
+            if (res?.[MODULE_SPEEDS_KEY] && typeof res[MODULE_SPEEDS_KEY] === "object") {
+              cachedModuleSpeeds = res[MODULE_SPEEDS_KEY];
             }
             const cloudMem = res?.[FILTER_MEMORY_CLOUD_KEY];
             if (cloudMem && typeof cloudMem === "object" && Object.keys(cloudMem).length > 0) {
@@ -1712,7 +1775,14 @@ ${EXTRA_SHADOW_CSS}`;
             }
             if (changes[SUBJECT_SPEEDS_KEY]) {
               cachedSubjectSpeeds = changes[SUBJECT_SPEEDS_KEY].newValue || {};
+              lastExplicitLessonSpeed = null;
               updateContextualHud();
+              applySubjectVideoSpeedInPlayground(true);
+            }
+            if (changes[MODULE_SPEEDS_KEY]) {
+              cachedModuleSpeeds = changes[MODULE_SPEEDS_KEY].newValue || {};
+              lastExplicitLessonSpeed = null;
+              applySubjectVideoSpeedInPlayground(true);
             }
             if (changes[DIAGNOSTIC_MODE_KEY]) {
               diagnosticModeEnabled = Boolean(changes[DIAGNOSTIC_MODE_KEY].newValue);
@@ -1790,6 +1860,10 @@ ${EXTRA_SHADOW_CSS}`;
           }
           if (msg && msg.type === "PLAYER_VIDEO_ENDED") {
             showLessonCompletedBanner();
+            sendResponse({ ok: true });
+          }
+          if (msg && msg.type === "PLAYER_BRIDGE_READY") {
+            applySubjectVideoSpeedInPlayground(true);
             sendResponse({ ok: true });
           }
           if (msg && msg.type === "HUD_QUICK_TAG" && msg.payload?.tag) {
@@ -2290,23 +2364,49 @@ ${EXTRA_SHADOW_CSS}`;
       }, 900);
     } catch (_) {
     }
-    function resolveSubjectSpeedForContext2(contextTitle = "") {
-      return resolveSubjectSpeedForContext(cachedSubjectSpeeds, contextTitle, inferSubjectFromLessons);
+    function resolveSubjectSpeedForContext2(contextTitle = "", extraContexts = [], options = {}) {
+      const contextList = [
+        contextTitle,
+        ...Array.isArray(extraContexts) ? extraContexts : [extraContexts],
+        currentCourseIndexStatus?.courseTitle || "",
+        currentCourseIndexStatus?.moduleTitle || "",
+        lastOpenedCourseContext?.subject || "",
+        lastOpenedCourseContext?.course || "",
+        document.title || ""
+      ].filter(Boolean);
+      const cidMatch = window.location.pathname.match(/\/courses\/(\d+)/i);
+      const midMatch = window.location.pathname.match(/\/modules\/(\d+)/i);
+      const courseId = options.courseId || (cidMatch ? cidMatch[1] : "");
+      const moduleId = options.moduleId || (midMatch ? midMatch[1] : "");
+      const currentSig = `${courseId}:${moduleId}`;
+      const explicitSpeed = options.explicitSpeed !== void 0 ? options.explicitSpeed : lastExplicitLessonSpeed && lastExplicitLessonUrlSig === currentSig ? lastExplicitLessonSpeed : null;
+      return resolveSubjectSpeedForContext(cachedSubjectSpeeds, contextList, inferSubjectFromLessons, {
+        moduleSpeeds: cachedModuleSpeeds,
+        courseId,
+        moduleId,
+        explicitSpeed
+      });
     }
-    function applySubjectVideoSpeedInPlayground() {
+    function applySubjectVideoSpeedInPlayground(forceSend = false) {
       if (!isCoursePlaygroundPage()) return;
       const lessonTitle = currentCourseIndexStatus?.lessonTitle || extractCourseLessonTitle() || document.title || "";
-      const targetSpeed = resolveSubjectSpeedForContext2(lessonTitle);
+      const courseTitle = currentCourseIndexStatus?.courseTitle || lastOpenedCourseContext?.course || "";
+      const currentCourseId = window.location.pathname.match(/\/courses\/(\d+)/i)?.[1] || "";
+      const currentModuleId = window.location.pathname.match(/\/modules\/(\d+)/i)?.[1] || "";
+      const targetSpeed = resolveSubjectSpeedForContext2(lessonTitle, [courseTitle], {
+        courseId: currentCourseId,
+        moduleId: currentModuleId
+      });
       const speedBadge = getHudEl("qg-hud-speed-badge");
       if (speedBadge) {
         if (targetSpeed !== 1) {
           speedBadge.style.display = "inline-flex";
-          speedBadge.textContent = `⚡ Velocidade QG: ${targetSpeed}x`;
+          speedBadge.textContent = `⚡ Velocidade QG: ${targetSpeed}x • HD Máx`;
         } else {
-          speedBadge.style.display = "none";
+          speedBadge.style.display = "inline-flex";
+          speedBadge.textContent = "🎬 Qualidade Máxima";
         }
       }
-      const currentCourseId = window.location.pathname.match(/\/courses\/(\d+)/i)?.[1] || "";
       try {
         const currentHrefNoHash = window.location.href.split("#")[0];
         if (currentHrefNoHash !== lastSeekUrlApplied) {
@@ -2323,15 +2423,31 @@ ${EXTRA_SHADOW_CSS}`;
         }
       } catch (_) {
       }
-      if (targetSpeed !== lastPlaygroundSpeedApplied) {
+      const speedSig = `${currentCourseId}:${currentModuleId}:${lessonTitle}:${targetSpeed}`;
+      if (forceSend || targetSpeed !== lastPlaygroundSpeedApplied || speedSig !== lastPlaygroundSpeedSig) {
         lastPlaygroundSpeedApplied = targetSpeed;
+        lastPlaygroundSpeedSig = speedSig;
         try {
-          chrome.storage.local.set({ [PLAYER_SPEED_KEY]: { speed: targetSpeed, courseId: currentCourseId, updatedAt: Date.now() } }, () => {
-            if (chrome.runtime?.sendMessage) {
-              chrome.runtime.sendMessage({ type: "APPLY_PLAYER_SPEED", payload: { speed: targetSpeed } }).catch(() => {
-              });
+          chrome.storage.local.set(
+            {
+              [PLAYER_SPEED_KEY]: {
+                speed: targetSpeed,
+                forceMaxQuality: true,
+                courseId: currentCourseId,
+                moduleId: currentModuleId,
+                updatedAt: Date.now()
+              }
+            },
+            () => {
+              if (chrome.runtime?.sendMessage) {
+                chrome.runtime.sendMessage({
+                  type: "APPLY_PLAYER_SPEED",
+                  payload: { speed: targetSpeed, forceMaxQuality: true }
+                }).catch(() => {
+                });
+              }
             }
-          });
+          );
         } catch (_) {
         }
       }
@@ -2679,10 +2795,20 @@ ${EXTRA_SHADOW_CSS}`;
         const mSub = rawHash.match(/qg_subject=([^&]+)/);
         const mTop = rawHash.match(/qg_topic=([^&]+)/);
         const mCrs = rawHash.match(/qg_course=([^&]+)/);
+        const mSpd = rawHash.match(/qg_speed=([^&]+)/);
         if (mLes) targetLesson = safeDecode(mLes[1]);
         if (mSub) targetSubject = safeDecode(mSub[1]);
         if (mTop) targetTopic = safeDecode(mTop[1]);
         if (mCrs) targetCourse = safeDecode(mCrs[1]);
+        if (mSpd) {
+          const parsedSpd = Number(safeDecode(mSpd[1]));
+          if (Number.isFinite(parsedSpd) && parsedSpd >= 0.5 && parsedSpd <= 4) {
+            const cidM = window.location.pathname.match(/\/courses\/(\d+)/i);
+            const midM = window.location.pathname.match(/\/modules\/(\d+)/i);
+            lastExplicitLessonSpeed = Math.round(parsedSpd * 100) / 100;
+            lastExplicitLessonUrlSig = `${cidM ? cidM[1] : ""}:${midM ? midM[1] : ""}`;
+          }
+        }
         if (targetLesson) {
           try {
             sessionStorage.setItem("qg_target_lesson_pending", JSON.stringify({
@@ -2690,6 +2816,7 @@ ${EXTRA_SHADOW_CSS}`;
               subject: targetSubject,
               topic: targetTopic,
               course: targetCourse,
+              speed: lastExplicitLessonSpeed,
               savedAt: Date.now()
             }));
           } catch (_) {
@@ -2703,6 +2830,12 @@ ${EXTRA_SHADOW_CSS}`;
             targetSubject = stored.subject || "";
             targetTopic = stored.topic || "";
             targetCourse = stored.course || "";
+            if (Number.isFinite(Number(stored.speed)) && Number(stored.speed) >= 0.5 && Number(stored.speed) <= 4) {
+              const cidM = window.location.pathname.match(/\/courses\/(\d+)/i);
+              const midM = window.location.pathname.match(/\/modules\/(\d+)/i);
+              lastExplicitLessonSpeed = Math.round(Number(stored.speed) * 100) / 100;
+              lastExplicitLessonUrlSig = `${cidM ? cidM[1] : ""}:${midM ? midM[1] : ""}`;
+            }
           }
         } catch (_) {
         }

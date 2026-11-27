@@ -15,6 +15,7 @@ export const FILTER_ID_MEMORY_KEY = 'qg_caveira_filter_id_memory_v1';
 export const FILTER_MEMORY_CLOUD_KEY = 'qg_filter_memory_cloud';
 export const TODAY_MISSION_KEY = 'qg_today_mission';
 export const SUBJECT_SPEEDS_KEY = 'qg_subject_speeds';
+export const MODULE_SPEEDS_KEY = 'qg_module_speeds';
 export const PLAYER_SPEED_KEY = 'qg_player_target_speed';
 export const PLAYER_SEEK_KEY = 'qg_player_pending_seek';
 export const PENDING_CATALOG_KEY = 'qg_pending_course_catalog';

@@ -302,6 +302,8 @@ export function resolveCaveiraLessonHref({
   if (subject?.name) params.push(`qg_subject=${encodeURIComponent(subject.name)}`);
   if (topic?.name) params.push(`qg_topic=${encodeURIComponent(topic.name)}`);
   if (courseHintName) params.push(`qg_course=${encodeURIComponent(courseHintName)}`);
+  const clampedSpeed = Math.min(4, Math.max(0.5, Number(subject?.speed) || 1));
+  params.push(`qg_speed=${encodeURIComponent(String(clampedSpeed))}`);
 
   return `${cleanBase}#${params.join('&')}`;
 }

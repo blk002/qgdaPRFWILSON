@@ -523,14 +523,49 @@ export function useExtensionBridge() {
       );
 
       const speeds = {};
+      const moduleSpeeds = {};
       Object.values(subjects || {}).forEach((sub) => {
-        if (sub?.name) speeds[sub.name] = Math.max(0.5, Number(sub.speed) || 1);
+        if (!sub?.name) return;
+        const speedVal = Math.min(4, Math.max(0.5, Number(sub.speed) || 1));
+        speeds[sub.name] = speedVal;
+        const urls = [];
+        const courseIds = [];
+        if (sub.caveiraModuleUrl) urls.push(sub.caveiraModuleUrl);
+        if (sub.caveiraCourseId) courseIds.push(String(sub.caveiraCourseId));
+        if (Array.isArray(sub.topics)) {
+          sub.topics.forEach((topic) => {
+            if (topic?.caveiraModuleUrl) urls.push(topic.caveiraModuleUrl);
+            if (topic?.caveiraCourseId) courseIds.push(String(topic.caveiraCourseId));
+            if (Array.isArray(topic?.lessons)) {
+              topic.lessons.forEach((lesson) => {
+                if (lesson?.caveiraUrl) urls.push(lesson.caveiraUrl);
+                if (lesson?.url) urls.push(lesson.url);
+              });
+            }
+          });
+        }
+        urls.forEach((rawUrl) => {
+          const sUrl = String(rawUrl || '');
+          const modMatch = sUrl.match(/\/courses\/(\d+)\/modules\/(\d+)/i);
+          if (modMatch) {
+            moduleSpeeds[`${modMatch[1]}:${modMatch[2]}`] = speedVal;
+          }
+          const cidMatch = sUrl.match(/\/courses\/(\d+)/i);
+          if (cidMatch) {
+            courseIds.push(cidMatch[1]);
+          }
+        });
+        courseIds.forEach((cid) => {
+          if (cid && moduleSpeeds[`course:${cid}`] === undefined) {
+            moduleSpeeds[`course:${cid}`] = speedVal;
+          }
+        });
       });
       window.postMessage(
         {
           source: 'QG_WEB_APP',
           type: 'QG_PRF_SYNC_SUBJECT_SPEEDS',
-          payload: { speeds },
+          payload: { speeds, moduleSpeeds },
         },
         window.location.origin
       );

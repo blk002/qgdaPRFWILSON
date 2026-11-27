@@ -29108,7 +29108,7 @@ ${suffix}`;
       sendResponse({ success: true });
       return true;
     }
-    if (message.type === "PLAYER_VIDEO_ENDED" && sender?.tab?.id) {
+    if ((message.type === "PLAYER_VIDEO_ENDED" || message.type === "PLAYER_BRIDGE_READY") && sender?.tab?.id) {
       chrome.tabs.sendMessage(sender.tab.id, message, { frameId: 0 }).catch(() => {
       });
       sendResponse({ success: true });

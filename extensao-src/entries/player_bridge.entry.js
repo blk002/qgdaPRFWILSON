@@ -1,227 +1,273 @@
-// Bridge dentro do iframe de vídeo (BunnyCDN / mediadelivery.net) — #1
-(function () {
+// Bridge para o iframe do player de vídeo (Bunny Stream / mediadelivery.net)
+// Responsável por sincronizar velocidade configurada no QG, resolução máxima e sinalizar término de aula.
+
+(function() {
+  if (window.__QG_PLAYER_BRIDGE_INSTALLED__) return;
+  window.__QG_PLAYER_BRIDGE_INSTALLED__ = true;
+
   const SPEED_KEY = 'qg_player_target_speed';
   const SEEK_KEY = 'qg_player_pending_seek';
   const RESUME_KEY = 'qg_video_resume_positions';
+  let desiredSpeed = 1;
+  let forceMaxQuality = true;
+  let lastCourseId = null;
+  let lastBoundVideo = null;
+  let endedNotified = false;
+  let lastResumeSave = 0;
 
-  let currentVideo = null;
-  let targetSpeed = 1;
-  let pendingSeekSec = 0;
-  let speedLockUntil = 0;
-  let lastResumeSavedAt = 0;
+  function clampSpeed(val) {
+    const n = Number(val);
+    if (!Number.isFinite(n) || n < 0.5 || n > 4) return 1;
+    return Math.round(n * 100) / 100;
+  }
 
-  const isContextValid = () => {
+  function extractCourseIdFromRef() {
     try {
-      return Boolean(typeof chrome !== 'undefined' && chrome.runtime && chrome.runtime.id && chrome.storage?.local);
+      const m = String(document.referrer || '').match(/\/courses\/(\d+)/i);
+      return m ? m[1] : null;
     } catch (_) {
-      return false;
+      return null;
     }
-  };
+  }
 
-  const getVideoKey = () => {
+  function postSettingsToMain(force = false) {
     try {
-      const u = new URL(window.location.href);
-      return u.pathname.replace(/[^a-zA-Z0-9/_-]/g, '').slice(-80) || 'default_video';
-    } catch (_) {
-      return 'default_video';
-    }
-  };
+      window.postMessage(
+        {
+          source: 'QG_PLAYER_BRIDGE',
+          type: 'QG_APPLY_PLAYER_SETTINGS',
+          payload: {
+            speed: clampSpeed(desiredSpeed),
+            forceMaxQuality,
+            force: Boolean(force),
+          },
+        },
+        window.location.origin
+      );
+    } catch (_) {}
+  }
 
-  function applySpeedToVideo(video, speed) {
-    if (!video || !Number.isFinite(speed) || speed < 0.5 || speed > 4) return;
+  function applyTargetSpeed(video, force = false) {
+    const speed = clampSpeed(desiredSpeed);
+    postSettingsToMain(force);
+    if (!video) return;
     try {
-      if (Math.abs((video.playbackRate || 1) - speed) > 0.01) {
-        video.playbackRate = speed;
+      if (Math.abs((video.defaultPlaybackRate || 1) - speed) > 0.005) {
         video.defaultPlaybackRate = speed;
+      }
+      if (Math.abs((video.playbackRate || 1) - speed) > 0.005) {
+        video.playbackRate = speed;
       }
     } catch (_) {}
   }
 
-  function tryApplyPendingSeek(video) {
-    if (!video || !pendingSeekSec || pendingSeekSec <= 0) return;
+  function getResumeVideoKey() {
     try {
-      if (video.readyState >= 1) {
-        const dur = Number(video.duration);
-        const safeSec = Number.isFinite(dur) && dur > 0 ? Math.min(dur - 1, pendingSeekSec) : pendingSeekSec;
-        if (safeSec > 0) {
-          video.currentTime = safeSec;
-          pendingSeekSec = 0;
-          if (isContextValid()) {
-            chrome.storage.local.remove([SEEK_KEY]).catch(() => {});
-          }
-        }
-      }
+      const parts = window.location.pathname.split('/').filter(Boolean);
+      const vidId = parts[parts.length - 1] || '';
+      if (vidId && vidId.length > 6) return `vid_${vidId}`;
     } catch (_) {}
+    return '';
   }
 
   function saveResumePosition(video) {
-    if (!video || !isContextValid()) return;
+    if (!video || !Number.isFinite(video.currentTime) || !Number.isFinite(video.duration)) return;
+    if (video.duration < 30) return;
+    const key = getResumeVideoKey();
+    if (!key) return;
     const now = Date.now();
-    if (now - lastResumeSavedAt < 10000) return;
-    const cur = Math.floor(Number(video.currentTime) || 0);
-    const dur = Math.floor(Number(video.duration) || 0);
-    if (cur < 5 || (dur > 0 && cur >= dur - 5)) return;
-    lastResumeSavedAt = now;
+    if (now - lastResumeSave < 5000 && !video.ended) return;
+    lastResumeSave = now;
     try {
-      const key = getVideoKey();
+      const ratio = video.currentTime / video.duration;
       chrome.storage.local.get([RESUME_KEY], (res) => {
-        if (chrome.runtime?.lastError || !isContextValid()) return;
-        const map = (res?.[RESUME_KEY] && typeof res[RESUME_KEY] === 'object') ? { ...res[RESUME_KEY] } : {};
-        map[key] = { currentTime: cur, duration: dur, updatedAt: now };
-        const entries = Object.entries(map).sort((a, b) => (b[1]?.updatedAt || 0) - (a[1]?.updatedAt || 0)).slice(0, 80);
-        chrome.storage.local.set({ [RESUME_KEY]: Object.fromEntries(entries) }).catch(() => {});
+        if (chrome.runtime?.lastError) return;
+        const map = (res && res[RESUME_KEY] && typeof res[RESUME_KEY] === 'object') ? { ...res[RESUME_KEY] } : {};
+        if (ratio >= 0.96 || video.ended) {
+          delete map[key];
+        } else if (video.currentTime >= 15) {
+          map[key] = { time: Math.floor(video.currentTime), duration: Math.floor(video.duration), updatedAt: now };
+        }
+        const entries = Object.entries(map);
+        if (entries.length > 100) {
+          entries.sort((a, b) => (b[1]?.updatedAt || 0) - (a[1]?.updatedAt || 0));
+          const pruned = Object.fromEntries(entries.slice(0, 100));
+          chrome.storage.local.set({ [RESUME_KEY]: pruned });
+        } else {
+          chrome.storage.local.set({ [RESUME_KEY]: map });
+        }
       });
     } catch (_) {}
   }
 
-  function bindVideo(video) {
-    if (!video || currentVideo === video) return;
-    currentVideo = video;
+  function checkAndApplySeek(video) {
+    if (!video) return;
+    try {
+      chrome.storage.local.get([SEEK_KEY], (res) => {
+        if (chrome.runtime?.lastError) return;
+        const item = res?.[SEEK_KEY];
+        if (!item || typeof item !== 'object') return;
+        const age = Date.now() - (Number(item.updatedAt) || 0);
+        if (age > 45000) return;
+        const targetSec = Number(item.seconds);
+        if (!Number.isFinite(targetSec) || targetSec < 0) return;
 
-    if (targetSpeed !== 1) {
-      speedLockUntil = Date.now() + 8000;
-      applySpeedToVideo(video, targetSpeed);
-    }
-    tryApplyPendingSeek(video);
+        const doSeek = () => {
+          try {
+            if (Number.isFinite(video.duration) && targetSec < video.duration) {
+              video.currentTime = targetSec;
+              chrome.storage.local.remove(SEEK_KEY);
+              video.play?.().catch(() => {});
+            } else if (!Number.isFinite(video.duration) || video.duration === 0) {
+              setTimeout(() => {
+                if (Number.isFinite(video.duration) && targetSec < video.duration) {
+                  video.currentTime = targetSec;
+                  chrome.storage.local.remove(SEEK_KEY);
+                  video.play?.().catch(() => {});
+                }
+              }, 1200);
+            }
+          } catch (_) {}
+        };
+
+        if (video.readyState >= 1) doSeek();
+        else video.addEventListener('loadedmetadata', doSeek, { once: true });
+      });
+    } catch (_) {}
+  }
+
+  function tryAutoResumePosition(video) {
+    if (!video || video.__qgResumedOnce) return;
+    const key = getResumeVideoKey();
+    if (!key) return;
+    try {
+      chrome.storage.local.get([RESUME_KEY, SEEK_KEY], (res) => {
+        if (chrome.runtime?.lastError) return;
+        const seekItem = res?.[SEEK_KEY];
+        if (seekItem && (Date.now() - (Number(seekItem.updatedAt) || 0)) < 45000) return;
+        const saved = res?.[RESUME_KEY]?.[key];
+        if (!saved || !Number.isFinite(saved.time) || saved.time < 15) return;
+        video.__qgResumedOnce = true;
+        const applyResume = () => {
+          if (video.currentTime < 5 && Number.isFinite(video.duration) && saved.time < video.duration - 10) {
+            video.currentTime = saved.time;
+          }
+        };
+        if (video.readyState >= 1) applyResume();
+        else video.addEventListener('loadedmetadata', applyResume, { once: true });
+      });
+    } catch (_) {}
+  }
+
+  function bindVideoElement() {
+    const video = document.querySelector('video');
+    if (!video || video === lastBoundVideo) return;
+    lastBoundVideo = video;
+    endedNotified = false;
 
     video.addEventListener('loadedmetadata', () => {
-      if (targetSpeed !== 1) {
-        speedLockUntil = Date.now() + 6000;
-        applySpeedToVideo(video, targetSpeed);
-      }
-      tryApplyPendingSeek(video);
+      applyTargetSpeed(video, false);
+      tryAutoResumePosition(video);
     });
-
-    video.addEventListener('canplay', () => {
-      tryApplyPendingSeek(video);
+    video.addEventListener('canplay', () => applyTargetSpeed(video, false));
+    video.addEventListener('playing', () => applyTargetSpeed(video, false));
+    video.addEventListener('timeupdate', () => saveResumePosition(video));
+    video.addEventListener('pause', () => {
+      lastResumeSave = 0;
+      saveResumePosition(video);
     });
-
-    video.addEventListener('play', () => {
-      if (targetSpeed !== 1 && Date.now() < speedLockUntil) {
-        applySpeedToVideo(video, targetSpeed);
-      }
-      tryApplyPendingSeek(video);
-    });
-
-    video.addEventListener('ratechange', () => {
-      if (targetSpeed !== 1 && Date.now() < speedLockUntil && Math.abs((video.playbackRate || 1) - targetSpeed) > 0.01) {
-        applySpeedToVideo(video, targetSpeed);
-      }
-    });
-
-    video.addEventListener('timeupdate', () => {
-      if (!video.paused) saveResumePosition(video);
-    });
-
     video.addEventListener('ended', () => {
-      if (!isContextValid()) return;
+      lastResumeSave = 0;
+      saveResumePosition(video);
+      if (endedNotified) return;
+      endedNotified = true;
       try {
-        chrome.runtime.sendMessage({
-          type: 'PLAYER_VIDEO_ENDED',
-          payload: { duration: Number(video.duration) || 0, src: window.location.href },
-        }).catch(() => {});
+        if (chrome?.runtime?.sendMessage) {
+          chrome.runtime.sendMessage({ type: 'PLAYER_VIDEO_ENDED', payload: { endedAt: Date.now() } }).catch(() => {});
+        }
       } catch (_) {}
     });
+
+    applyTargetSpeed(video, false);
+    checkAndApplySeek(video);
+    tryAutoResumePosition(video);
   }
 
-  let scanIntervalId = null;
-  function scanForVideo() {
-    if (!isContextValid()) {
-      try { observer.disconnect(); } catch (_) {}
-      if (scanIntervalId) {
-        clearInterval(scanIntervalId);
-        scanIntervalId = null;
-      }
-      return;
-    }
-    const vid = document.querySelector('video');
-    if (vid) bindVideo(vid);
-  }
-
-  function loadPlayerPrefs() {
-    if (!isContextValid()) return;
+  function initSpeedFromStorage() {
     try {
-      chrome.storage.local.get([SPEED_KEY, SEEK_KEY], (res) => {
-        if (chrome.runtime?.lastError || !isContextValid()) return;
-        const refCourseId = String(document.referrer || '').match(/\/courses\/(\d+)/i)?.[1] || '';
-        const speedObj = res?.[SPEED_KEY];
-        const speedCourseId = speedObj?.courseId ? String(speedObj.courseId) : '';
-        if (
-          speedObj &&
-          (!speedCourseId || !refCourseId || speedCourseId === refCourseId) &&
-          Number(speedObj.speed) >= 0.5 &&
-          (Date.now() - (Number(speedObj.updatedAt) || 0)) < 3600000
-        ) {
-          targetSpeed = Number(speedObj.speed);
-          if (currentVideo) {
-            speedLockUntil = Date.now() + 6000;
-            applySpeedToVideo(currentVideo, targetSpeed);
+      chrome.storage.local.get([SPEED_KEY], (res) => {
+        if (chrome.runtime?.lastError) return;
+        const item = res?.[SPEED_KEY];
+        if (item && typeof item === 'object') {
+          const refCid = extractCourseIdFromRef();
+          const age = Date.now() - (Number(item.updatedAt) || 0);
+          const sameCourse = !refCid || !item.courseId || String(refCid) === String(item.courseId);
+          if (sameCourse || age < 600000) {
+            desiredSpeed = clampSpeed(item.speed);
+            if (typeof item.forceMaxQuality === 'boolean') {
+              forceMaxQuality = item.forceMaxQuality;
+            }
+            lastCourseId = item.courseId || null;
+            applyTargetSpeed(document.querySelector('video'), true);
           }
-        }
-        const seekObj = res?.[SEEK_KEY];
-        const seekCourseId = seekObj?.courseId ? String(seekObj.courseId) : '';
-        if (
-          seekObj &&
-          (!seekCourseId || !refCourseId || seekCourseId === refCourseId) &&
-          Number(seekObj.seconds) > 0 &&
-          (Date.now() - (Number(seekObj.savedAt) || 0)) < 90000
-        ) {
-          pendingSeekSec = Number(seekObj.seconds);
-          if (currentVideo) tryApplyPendingSeek(currentVideo);
         }
       });
     } catch (_) {}
   }
 
-  loadPlayerPrefs();
-
-  if (isContextValid() && chrome.storage?.onChanged) {
+  try {
     chrome.storage.onChanged.addListener((changes, area) => {
-      if (area !== 'local' || !isContextValid()) return;
+      if (area !== 'local') return;
       if (changes[SPEED_KEY]?.newValue) {
-        const sp = changes[SPEED_KEY].newValue;
-        const refCourseId = String(document.referrer || '').match(/\/courses\/(\d+)/i)?.[1] || '';
-        const speedCourseId = sp?.courseId ? String(sp.courseId) : '';
-        if (speedCourseId && refCourseId && speedCourseId !== refCourseId) return;
-        const nextSpd = Number(sp.speed);
-        if (Number.isFinite(nextSpd) && nextSpd >= 0.5 && nextSpd <= 4) {
-          targetSpeed = nextSpd;
-          speedLockUntil = Date.now() + 6000;
-          if (currentVideo) applySpeedToVideo(currentVideo, targetSpeed);
+        const item = changes[SPEED_KEY].newValue;
+        desiredSpeed = clampSpeed(item.speed);
+        if (typeof item.forceMaxQuality === 'boolean') {
+          forceMaxQuality = item.forceMaxQuality;
         }
+        lastCourseId = item.courseId || lastCourseId;
+        applyTargetSpeed(document.querySelector('video'), true);
       }
       if (changes[SEEK_KEY]?.newValue) {
-        const s = changes[SEEK_KEY].newValue;
-        const refCourseId = String(document.referrer || '').match(/\/courses\/(\d+)/i)?.[1] || '';
-        const seekCourseId = s?.courseId ? String(s.courseId) : '';
-        if (seekCourseId && refCourseId && seekCourseId !== refCourseId) return;
-        if (Number(s.seconds) > 0 && (Date.now() - (Number(s.savedAt) || 0)) < 90000) {
-          pendingSeekSec = Number(s.seconds);
-          if (currentVideo) tryApplyPendingSeek(currentVideo);
+        checkAndApplySeek(document.querySelector('video'));
+      }
+    });
+  } catch (_) {}
+
+  try {
+    chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
+      if (msg && msg.type === 'APPLY_PLAYER_SPEED' && msg.payload) {
+        desiredSpeed = clampSpeed(msg.payload.speed);
+        if (typeof msg.payload.forceMaxQuality === 'boolean') {
+          forceMaxQuality = msg.payload.forceMaxQuality;
         }
+        applyTargetSpeed(document.querySelector('video'), true);
+        sendResponse({ ok: true, applied: desiredSpeed, forceMaxQuality });
+      }
+      if (msg && msg.type === 'SEEK_VIDEO_TO') {
+        checkAndApplySeek(document.querySelector('video'));
+        sendResponse({ ok: true });
       }
     });
-  }
+  } catch (_) {}
 
-  if (isContextValid() && chrome.runtime?.onMessage) {
-    chrome.runtime.onMessage.addListener((msg) => {
-      if (!msg || !isContextValid()) return;
-      if (msg.type === 'APPLY_PLAYER_SPEED' && Number(msg.payload?.speed) >= 0.5) {
-        targetSpeed = Number(msg.payload.speed);
-        speedLockUntil = Date.now() + 6000;
-        if (currentVideo) applySpeedToVideo(currentVideo, targetSpeed);
-      }
-      if (msg.type === 'SEEK_VIDEO_TO' && Number(msg.payload?.seconds) > 0) {
-        pendingSeekSec = Number(msg.payload.seconds);
-        if (currentVideo) tryApplyPendingSeek(currentVideo);
-      }
-    });
-  }
+  initSpeedFromStorage();
+  bindVideoElement();
 
-  const observer = new MutationObserver(() => scanForVideo());
+  // Notifica a aba pai (Caveira) que o player iframe está pronto para receber velocidade + qualidade máxima
+  try {
+    if (chrome?.runtime?.sendMessage) {
+      chrome.runtime.sendMessage({ type: 'PLAYER_BRIDGE_READY' }).catch(() => {});
+    }
+  } catch (_) {}
+
+  const observer = new MutationObserver(() => bindVideoElement());
   if (document.documentElement) {
     observer.observe(document.documentElement, { childList: true, subtree: true });
   }
-  scanForVideo();
-  scanIntervalId = setInterval(scanForVideo, 1500);
+  const poll = setInterval(() => {
+    bindVideoElement();
+    postSettingsToMain(false);
+    if (lastBoundVideo) clearInterval(poll);
+  }, 800);
+  setTimeout(() => clearInterval(poll), 20000);
 })();

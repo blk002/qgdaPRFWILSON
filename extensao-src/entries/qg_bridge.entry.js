@@ -32,6 +32,7 @@ import {
   const FILTER_MEMORY_CLOUD_KEY = 'qg_filter_memory_cloud';
   const TODAY_MISSION_KEY = 'qg_today_mission';
   const SUBJECT_SPEEDS_KEY = 'qg_subject_speeds';
+  const MODULE_SPEEDS_KEY = 'qg_module_speeds';
   const PENDING_CATALOG_KEY = 'qg_pending_course_catalog';
   const PENDING_SIMULADOS_KEY = 'qg_pending_simulados_import';
   const PENDING_PDF_KEY = 'qg_pending_pdf_study';
@@ -41,6 +42,7 @@ import {
     ACTIVE_MISSION_KEY,
     TODAY_MISSION_KEY,
     SUBJECT_SPEEDS_KEY,
+    MODULE_SPEEDS_KEY,
     PERFORMANCE_SNAPSHOT_KEY,
     PENDING_FILTER_KEY,
     'qg_last_filter_diag',
@@ -859,10 +861,16 @@ import {
 
       if (event.data.type === 'QG_PRF_SYNC_SUBJECT_SPEEDS' && event.data.payload?.speeds) {
         const speedsPayload = event.data.payload.speeds;
+        const moduleSpeedsPayload = (event.data.payload.moduleSpeeds && typeof event.data.payload.moduleSpeeds === 'object')
+          ? event.data.payload.moduleSpeeds
+          : {};
         bucketSwitchPromise.then(() => {
           if (isBridgeDestroyed || !cachedActiveUserId) return;
           try {
-            chrome.storage.local.set({ [SUBJECT_SPEEDS_KEY]: speedsPayload });
+            chrome.storage.local.set({
+              [SUBJECT_SPEEDS_KEY]: speedsPayload,
+              [MODULE_SPEEDS_KEY]: moduleSpeedsPayload,
+            });
           } catch (_) {}
         });
       }

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import {
   Calendar as CalendarIcon,
@@ -12,10 +12,16 @@ import {
   Target,
   AlertTriangle,
   Loader2,
-  Clock
+  Clock,
+  SlidersHorizontal
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { formatSecondsToFriendly } from '../../lib/durationHelpers';
+import {
+  WEEKDAY_ORDER,
+  WEEKDAY_LABELS,
+  getScheduledDaysForSubject
+} from '../../lib/calendarBulkOps';
 
 const DIAS_SEMANA_FULL = [
   'Domingo',
@@ -845,6 +851,264 @@ export function ResetCalendarModal({
               </>
             )}
           </button>
+        </div>
+      </div>
+    </div>,
+    document.body
+  );
+}
+
+export function BulkScheduleModal(props) {
+  if (!props.isOpen) return null;
+  const modalKey = `${props.initialSubjectId || 'first'}:${(props.futureScheduleRules || []).length}`;
+  return <BulkScheduleModalContent key={modalKey} {...props} />;
+}
+
+function BulkScheduleModalContent({
+  onClose,
+  subjects = {},
+  initialSubjectId = '',
+  cycle = [],
+  cycleSlotCounts = [],
+  cycleWeekStart = 'sunday',
+  futureScheduleRules = [],
+  onApplySubjectDays,
+  onClearAllCalendar
+}) {
+  const subjectList = useMemo(() => {
+    return Object.values(subjects || {})
+      .filter((s) => s && s.id && s.name)
+      .sort((a, b) => String(a.name).localeCompare(String(b.name), 'pt-BR'));
+  }, [subjects]);
+
+  const initialId = (initialSubjectId && subjects?.[initialSubjectId]?.id) || subjectList[0]?.id || '';
+  const initialDetected = getScheduledDaysForSubject(
+    { cycle, cycleSlotCounts, cycleWeekStart, futureScheduleRules },
+    initialId
+  );
+
+  const [selectedSubjectId, setSelectedSubjectId] = useState(initialId);
+  const [selectedDays, setSelectedDays] = useState(initialDetected.days);
+  const [slotCount, setSlotCount] = useState(initialDetected.slotCount || 0);
+  const [confirmClearAll, setConfirmClearAll] = useState(false);
+
+  const handleSubjectChange = (nextId) => {
+    setSelectedSubjectId(nextId);
+    const detected = getScheduledDaysForSubject(
+      { cycle, cycleSlotCounts, cycleWeekStart, futureScheduleRules },
+      nextId
+    );
+    setSelectedDays(detected.days);
+    setSlotCount(detected.slotCount || 0);
+    setConfirmClearAll(false);
+  };
+
+  const activeSubject = subjects?.[selectedSubjectId] || null;
+  const activeSubjectName = activeSubject?.name || 'Matéria';
+
+  const toggleDay = (dow) => {
+    setSelectedDays((prev) =>
+      prev.includes(dow) ? prev.filter((d) => d !== dow) : [...prev, dow]
+    );
+  };
+
+  return createPortal(
+    <div
+      className="fixed inset-0 z-[10000] flex items-center justify-center p-4 bg-slate-950/65 backdrop-blur-sm animate-fade-in"
+      onClick={(e) => {
+        if (e.target === e.currentTarget) onClose();
+      }}
+    >
+      <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl w-full max-w-lg p-6 shadow-2xl space-y-5 max-h-[90vh] overflow-y-auto">
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="w-10 h-10 rounded-xl bg-sky-500/10 border border-sky-500/20 flex items-center justify-center shrink-0">
+              <SlidersHorizontal className="w-5 h-5 text-sky-600 dark:text-sky-400" />
+            </div>
+            <div>
+              <h3 className="text-base font-bold text-slate-900 dark:text-slate-100">
+                Gerenciar Matérias no Calendário
+              </h3>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5 leading-relaxed">
+                Adicione uma disciplina em vários dias da semana de uma só vez, ou remova uma matéria ou toda a grade em um clique.
+              </p>
+            </div>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            aria-label="Fechar"
+            className="text-slate-400 hover:text-slate-700 dark:hover:text-slate-200 p-1 rounded-lg cursor-pointer"
+          >
+            <X className="w-4 h-4" />
+          </button>
+        </div>
+
+        {subjectList.length === 0 ? (
+          <div className="p-4 rounded-xl bg-slate-50 dark:bg-slate-800/50 border border-slate-200 dark:border-slate-700 text-xs text-slate-500 dark:text-slate-400">
+            Nenhuma disciplina cadastrada ainda. Cadastre matérias em Configurações para programá-las aqui.
+          </div>
+        ) : (
+          <div className="space-y-4">
+            <div className="space-y-1.5">
+              <label
+                htmlFor="bulk-calendar-subject-select"
+                className="text-xs font-semibold text-slate-700 dark:text-slate-300"
+              >
+                Disciplina
+              </label>
+              <select
+                id="bulk-calendar-subject-select"
+                value={selectedSubjectId}
+                onChange={(e) => handleSubjectChange(e.target.value)}
+                className="w-full h-10 px-3 rounded-xl border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-950 text-sm font-medium text-slate-800 dark:text-slate-100 focus:outline-none focus:ring-2 focus:ring-sky-500/40"
+              >
+                {subjectList.map((sub) => (
+                  <option key={sub.id} value={sub.id}>
+                    {sub.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300">
+                  Dias da semana para estudar
+                </span>
+                <div className="flex flex-wrap gap-1.5">
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDays([1, 2, 3, 4, 5])}
+                    className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer"
+                  >
+                    Seg a Sex
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDays([1, 2, 3, 4, 5, 6])}
+                    className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer"
+                  >
+                    Seg a Sáb
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDays([1, 2, 3, 4, 5, 6, 0])}
+                    className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 cursor-pointer"
+                  >
+                    Todos
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSelectedDays([])}
+                    className="px-2 py-0.5 rounded-md text-[11px] font-medium bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-500 dark:text-slate-400 cursor-pointer"
+                  >
+                    Limpar
+                  </button>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-7 gap-1.5">
+                {WEEKDAY_ORDER.map((dow) => {
+                  const active = selectedDays.includes(dow);
+                  return (
+                    <button
+                      key={dow}
+                      type="button"
+                      onClick={() => toggleDay(dow)}
+                      aria-pressed={active}
+                      className={`h-10 rounded-xl text-xs font-semibold transition-colors cursor-pointer border ${
+                        active
+                          ? 'bg-sky-600 text-white border-sky-600 shadow-xs'
+                          : 'bg-slate-50 dark:bg-slate-950 text-slate-600 dark:text-slate-400 border-slate-200 dark:border-slate-800 hover:border-sky-400'
+                      }`}
+                    >
+                      {WEEKDAY_LABELS[dow].short}
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+
+            <div className="flex items-center justify-between gap-3 bg-slate-50 dark:bg-slate-950/60 border border-slate-200 dark:border-slate-800 rounded-xl px-3.5 py-2.5">
+              <div>
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-300 block">
+                  Aulas por dia (opcional)
+                </span>
+                <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                  0 usa a meta/padrão da disciplina
+                </span>
+              </div>
+              <input
+                type="number"
+                min="0"
+                max="20"
+                value={slotCount}
+                onChange={(e) => {
+                  const n = Number(e.target.value);
+                  setSlotCount(Number.isFinite(n) ? Math.max(0, Math.min(20, Math.floor(n))) : 0);
+                }}
+                className="w-20 h-9 px-2.5 text-right rounded-lg border border-slate-200 dark:border-slate-700 bg-white dark:bg-slate-900 text-xs font-semibold tabular-nums text-slate-800 dark:text-slate-100"
+              />
+            </div>
+
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+              <button
+                type="button"
+                onClick={() => onApplySubjectDays(selectedSubjectId, [], 0)}
+                className="px-3.5 py-2 rounded-xl border border-red-200 dark:border-red-900/70 bg-red-50/70 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/50 text-red-700 dark:text-red-300 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Remover {activeSubjectName} do calendário
+              </button>
+
+              <button
+                type="button"
+                onClick={() => onApplySubjectDays(selectedSubjectId, selectedDays, slotCount)}
+                className="px-4 py-2 rounded-xl bg-sky-600 hover:bg-sky-700 text-white text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shadow-xs"
+              >
+                <CheckCircle className="w-3.5 h-3.5" /> Aplicar dias de {activeSubjectName}
+              </button>
+            </div>
+          </div>
+        )}
+
+        <div className="pt-3 border-t border-slate-200 dark:border-slate-800 space-y-2.5">
+          {!confirmClearAll ? (
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                Quer começar a grade semanal do zero?
+              </span>
+              <button
+                type="button"
+                onClick={() => setConfirmClearAll(true)}
+                className="px-3 py-1.5 rounded-lg border border-red-300 dark:border-red-800 text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-950/40 text-xs font-semibold inline-flex items-center gap-1.5 cursor-pointer shrink-0"
+              >
+                <Trash2 className="w-3.5 h-3.5" /> Remover todas do calendário
+              </button>
+            </div>
+          ) : (
+            <div className="p-3 rounded-xl bg-red-50 dark:bg-red-950/35 border border-red-200 dark:border-red-800/70 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-medium text-red-800 dark:text-red-200">
+                Confirmar remoção de todas as matérias da grade? (Suas disciplinas cadastradas serão mantidas.)
+              </span>
+              <div className="flex items-center gap-2 ml-auto">
+                <button
+                  type="button"
+                  onClick={() => setConfirmClearAll(false)}
+                  className="px-2.5 py-1 rounded-lg text-xs font-semibold text-slate-600 dark:text-slate-300 hover:bg-white/70 dark:hover:bg-slate-800 cursor-pointer"
+                >
+                  Cancelar
+                </button>
+                <button
+                  type="button"
+                  onClick={onClearAllCalendar}
+                  className="px-3 py-1 rounded-lg bg-red-600 hover:bg-red-700 text-white text-xs font-semibold cursor-pointer"
+                >
+                  Confirmar remoção total
+                </button>
+              </div>
+            </div>
+          )}
         </div>
       </div>
     </div>,
