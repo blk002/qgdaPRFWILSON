@@ -1127,7 +1127,7 @@ ${EXTRA_SHADOW_CSS}`;
   // extensao-src/entries/content.entry.js
   (function() {
     if (isExcludedCaveiraHost(window.location.hostname)) return;
-    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.4.1";
+    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.4.2";
     console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
     try {
       window.dispatchEvent(new CustomEvent("qg-caveira-teardown"));
@@ -1136,6 +1136,9 @@ ${EXTRA_SHADOW_CSS}`;
     }
     const SCHEMA_VERSION_KEY = "qg_caveira_schema_version";
     const HUD_COURSE_DIFF_KEY = "qg_hud_course_difficulty_ids";
+    const DISMISSED_MISSIONS_KEY = "qg_dismissed_mission_ids";
+    const TAB_FILTER_DIAG_SESSION_KEY = "qg_tab_last_filter_diag";
+    let handleStorageChangedRef = null;
     let hudCourseDifficultyIds = [];
     let renderHudCourseDiffBarRef = null;
     let activePracticeMission = null;
@@ -1425,6 +1428,12 @@ ${EXTRA_SHADOW_CSS}`;
         } catch (_) {
         }
       }
+      if (handleStorageChangedRef && chrome?.storage?.onChanged) {
+        try {
+          chrome.storage.onChanged.removeListener(handleStorageChangedRef);
+        } catch (_) {
+        }
+      }
       destroyShadowHud();
     }
     window.addEventListener("qg-caveira-teardown", teardownInstance, { once: true });
@@ -1482,8 +1491,38 @@ ${EXTRA_SHADOW_CSS}`;
             updateHudUser();
             updateContextualHud();
             updateHudMission();
-            const savedDiag = res?.[LAST_FILTER_DIAG_KEY];
-            if (savedDiag && savedDiag.savedAt && Date.now() - savedDiag.savedAt < 25e3) {
+            let tabDiag = null;
+            try {
+              const rawTabDiag = sessionStorage.getItem(TAB_FILTER_DIAG_SESSION_KEY);
+              if (rawTabDiag) {
+                sessionStorage.removeItem(TAB_FILTER_DIAG_SESSION_KEY);
+                const parsedTabDiag = JSON.parse(rawTabDiag);
+                if (parsedTabDiag && parsedTabDiag.savedAt && Date.now() - parsedTabDiag.savedAt < 25e3) {
+                  tabDiag = parsedTabDiag;
+                }
+              }
+            } catch (_) {
+            }
+            const globalDiag = res?.[LAST_FILTER_DIAG_KEY];
+            let savedDiag = tabDiag;
+            if (!savedDiag && globalDiag && globalDiag.savedAt) {
+              const isFreshDiag = Date.now() - globalDiag.savedAt < 25e3;
+              if (!isFreshDiag) {
+                chrome.storage.local.remove([LAST_FILTER_DIAG_KEY]);
+              } else {
+                const curPathSearch = `${window.location.pathname || ""}${window.location.search || ""}`;
+                const urlSubjectId = Number(new URLSearchParams(window.location.search || "").get("subject_ids")?.split(",")[0] || 0);
+                const matchesTargetUrl = Boolean(globalDiag.targetUrl && globalDiag.targetUrl === curPathSearch);
+                const matchesSubject = Boolean(
+                  globalDiag.expectedFilter?.subjectId && urlSubjectId && Number(globalDiag.expectedFilter.subjectId) === urlSubjectId
+                );
+                if (matchesTargetUrl || matchesSubject) {
+                  savedDiag = globalDiag;
+                  chrome.storage.local.remove([LAST_FILTER_DIAG_KEY]);
+                }
+              }
+            }
+            if (savedDiag) {
               if (savedDiag.diagLog) lastFilterDiagnosticLog = savedDiag.diagLog;
               if (savedDiag.activePracticeFilter) activePracticeFilter = savedDiag.activePracticeFilter;
               if (savedDiag.proposedSelection) lastResolverProposed = savedDiag.proposedSelection;
@@ -1506,11 +1545,29 @@ ${EXTRA_SHADOW_CSS}`;
                   }
                 }, 2200);
               }
-              chrome.storage.local.remove([LAST_FILTER_DIAG_KEY]);
             }
-            const pendingFilter = res?.[PENDING_FILTER_KEY];
-            if (!isCoursePage() && pendingFilter && (pendingFilter.topic || Array.isArray(pendingFilter.lessons) && pendingFilter.lessons.length > 0) && Date.now() - (pendingFilter.createdAt || 0) < 18e4) {
-              setTimeout(() => applyCaveiraPracticeFilter(pendingFilter), 900);
+            if (!isCoursePage()) {
+              const pendingFilterFallback = res?.[PENDING_FILTER_KEY];
+              const tryRunFilter = (filterObj) => {
+                if (!isDestroyed && filterObj && (filterObj.topic || Array.isArray(filterObj.lessons) && filterObj.lessons.length > 0) && Date.now() - (Number(filterObj.createdAt) || 0) < 18e4) {
+                  setTimeout(() => applyCaveiraPracticeFilter(filterObj), 900);
+                }
+              };
+              if (chrome.runtime && chrome.runtime.sendMessage) {
+                chrome.runtime.sendMessage({ type: "CONSUME_PENDING_FILTER" }, (consumeResp) => {
+                  if (chrome.runtime.lastError) {
+                    if (pendingFilterFallback && !pendingFilterFallback.targetTabId) {
+                      tryRunFilter(pendingFilterFallback);
+                    }
+                    return;
+                  }
+                  if (consumeResp?.filter) {
+                    tryRunFilter(consumeResp.filter);
+                  }
+                });
+              } else if (pendingFilterFallback && !pendingFilterFallback.targetTabId) {
+                tryRunFilter(pendingFilterFallback);
+              }
             }
             if (res && res[GOAL_KEY]) {
               cachedDailyGoal = Number(res[GOAL_KEY]) || 50;
@@ -1561,7 +1618,7 @@ ${EXTRA_SHADOW_CSS}`;
     loadInitialState();
     if (isExtensionContextValid() && chrome.storage.onChanged) {
       try {
-        chrome.storage.onChanged.addListener((changes, area) => {
+        handleStorageChangedRef = (changes, area) => {
           if (!isExtensionContextValid()) {
             teardownInstance();
             return;
@@ -1637,7 +1694,8 @@ ${EXTRA_SHADOW_CSS}`;
               updateHudMission();
             }
           }
-        });
+        };
+        chrome.storage.onChanged.addListener(handleStorageChangedRef);
       } catch (_) {
       }
     }
@@ -2203,12 +2261,14 @@ ${EXTRA_SHADOW_CSS}`;
           speedBadge.style.display = "none";
         }
       }
+      const currentCourseId = window.location.pathname.match(/\/courses\/(\d+)/i)?.[1] || "";
       try {
-        if (window.location.href !== lastSeekUrlApplied) {
-          lastSeekUrlApplied = window.location.href;
+        const currentHrefNoHash = window.location.href.split("#")[0];
+        if (currentHrefNoHash !== lastSeekUrlApplied) {
+          lastSeekUrlApplied = currentHrefNoHash;
           const seekParam = Number(new URLSearchParams(window.location.search || "").get("t"));
           if (Number.isFinite(seekParam) && seekParam > 0) {
-            chrome.storage.local.set({ [PLAYER_SEEK_KEY]: { seconds: seekParam, savedAt: Date.now() } }, () => {
+            chrome.storage.local.set({ [PLAYER_SEEK_KEY]: { seconds: seekParam, courseId: currentCourseId, savedAt: Date.now() } }, () => {
               if (chrome.runtime?.sendMessage) {
                 chrome.runtime.sendMessage({ type: "SEEK_VIDEO_TO", payload: { seconds: seekParam } }).catch(() => {
                 });
@@ -2221,7 +2281,7 @@ ${EXTRA_SHADOW_CSS}`;
       if (targetSpeed !== lastPlaygroundSpeedApplied) {
         lastPlaygroundSpeedApplied = targetSpeed;
         try {
-          chrome.storage.local.set({ [PLAYER_SPEED_KEY]: { speed: targetSpeed, updatedAt: Date.now() } }, () => {
+          chrome.storage.local.set({ [PLAYER_SPEED_KEY]: { speed: targetSpeed, courseId: currentCourseId, updatedAt: Date.now() } }, () => {
             if (chrome.runtime?.sendMessage) {
               chrome.runtime.sendMessage({ type: "APPLY_PLAYER_SPEED", payload: { speed: targetSpeed } }).catch(() => {
               });
@@ -2659,7 +2719,13 @@ ${EXTRA_SHADOW_CSS}`;
         if (seekSec > 0) {
           setTimeout(() => {
             try {
-              chrome.storage.local.set({ [PLAYER_SEEK_KEY]: { seconds: seekSec, savedAt: Date.now() } }, () => {
+              chrome.storage.local.set({
+                [PLAYER_SEEK_KEY]: {
+                  seconds: seekSec,
+                  courseId: window.location.pathname.match(/\/courses\/(\d+)/i)?.[1] || "",
+                  savedAt: Date.now()
+                }
+              }, () => {
                 if (chrome.runtime?.sendMessage) {
                   chrome.runtime.sendMessage({ type: "SEEK_VIDEO_TO", payload: { seconds: seekSec } }).catch(() => {
                   });
@@ -3583,15 +3649,44 @@ ${EXTRA_SHADOW_CSS}`;
       });
       hud.querySelector("#qg-btn-mission-dismiss")?.addEventListener("click", (e) => {
         e.stopPropagation();
+        const dismissedId = activePracticeMission?.id ? String(activePracticeMission.id) : null;
         activePracticeMission = null;
         try {
           if (isExtensionContextValid() && chrome?.storage?.local) {
-            chrome.storage.local.remove([ACTIVE_MISSION_KEY]);
+            if (dismissedId) {
+              chrome.storage.local.get([DISMISSED_MISSIONS_KEY], (res) => {
+                if (chrome.runtime?.lastError || isDestroyed) return;
+                const nowMs = Date.now();
+                const prevList = Array.isArray(res?.[DISMISSED_MISSIONS_KEY]) ? res[DISMISSED_MISSIONS_KEY] : [];
+                const nextList = [
+                  { id: dismissedId, at: nowMs },
+                  ...prevList.filter((d) => d && d.id && String(d.id) !== dismissedId && nowMs - (Number(d.at) || 0) < 6e5)
+                ].slice(0, 20);
+                chrome.storage.local.set({ [DISMISSED_MISSIONS_KEY]: nextList }, () => {
+                  chrome.storage.local.remove([ACTIVE_MISSION_KEY]);
+                });
+              });
+            } else {
+              chrome.storage.local.remove([ACTIVE_MISSION_KEY]);
+            }
           }
         } catch (_) {
         }
         updateHudMission();
       });
+      const handleOpenOrFocusQg = (e) => {
+        if (!isExtensionContextValid() || !chrome?.runtime?.sendMessage) return;
+        e.preventDefault();
+        e.stopPropagation();
+        chrome.runtime.sendMessage({
+          type: "OPEN_OR_FOCUS_QG",
+          payload: { url: QG_WEB_URL }
+        }).catch(() => {
+          window.open(QG_WEB_URL, "_blank");
+        });
+      };
+      hud.querySelector("#qg-open-link")?.addEventListener("click", handleOpenOrFocusQg);
+      hud.querySelector("#qg-btn-mission-qg")?.addEventListener("click", handleOpenOrFocusQg);
       hud.querySelector("#qg-btn-copy-filter-log")?.addEventListener("click", async (e) => {
         e.stopPropagation();
         const btn = e.currentTarget;
@@ -3780,32 +3875,36 @@ ${EXTRA_SHADOW_CSS}`;
         };
         const openQuestionsFallback = () => {
           try {
-            window.open(`${window.location.origin}/questions`, "_blank");
+            if (isExtensionContextValid() && chrome?.storage?.local) {
+              chrome.storage.local.set({ [PENDING_FILTER_KEY]: filterData }, () => {
+                window.open(`${window.location.origin}/questions`, "_blank");
+              });
+            } else {
+              window.open(`${window.location.origin}/questions`, "_blank");
+            }
             if (btn && btn.isConnected) btn.innerHTML = "<span>✓ Filtro enviado!</span>";
           } catch (_) {
           }
           restoreBtn();
         };
         try {
-          chrome.storage.local.set({ [PENDING_FILTER_KEY]: filterData }, () => {
-            if (chrome.runtime && chrome.runtime.sendMessage) {
-              chrome.runtime.sendMessage({
-                type: "OPEN_CAVEIRA_PRACTICE",
-                payload: filterData
-              }).then((resp) => {
-                if (!resp || !resp.success) {
-                  openQuestionsFallback();
-                  return;
-                }
-                if (btn && btn.isConnected) btn.innerHTML = "<span>✓ Filtro enviado!</span>";
-                restoreBtn();
-              }).catch(() => {
+          if (chrome.runtime && chrome.runtime.sendMessage) {
+            chrome.runtime.sendMessage({
+              type: "OPEN_CAVEIRA_PRACTICE",
+              payload: filterData
+            }).then((resp) => {
+              if (!resp || !resp.success) {
                 openQuestionsFallback();
-              });
-            } else {
+                return;
+              }
+              if (btn && btn.isConnected) btn.innerHTML = "<span>✓ Filtro enviado!</span>";
+              restoreBtn();
+            }).catch(() => {
               openQuestionsFallback();
-            }
-          });
+            });
+          } else {
+            openQuestionsFallback();
+          }
         } catch (_) {
           openQuestionsFallback();
         }
@@ -6327,19 +6426,29 @@ ${EXTRA_SHADOW_CSS}`;
         lastFilterDiagnosticLog.prefsSource = prefs.source;
         lastFilterDiagnosticLog.url = url;
       }
+      let targetUrlPathSearch = "";
+      try {
+        const parsedUrl = new URL(url, window.location.origin);
+        targetUrlPathSearch = `${parsedUrl.pathname || ""}${parsedUrl.search || ""}`;
+      } catch (_) {
+      }
+      const diagRecord = {
+        savedAt: Date.now(),
+        targetUrl: targetUrlPathSearch,
+        diagLog: lastFilterDiagnosticLog,
+        activePracticeFilter,
+        bannerText: bannerText || "",
+        expectedFilter: { subjectId: Number(subjectId), ids: ids.map(Number) },
+        proposedSelection: lastResolverProposed
+      };
+      try {
+        sessionStorage.setItem(TAB_FILTER_DIAG_SESSION_KEY, JSON.stringify(diagRecord));
+      } catch (_) {
+      }
       try {
         if (isExtensionContextValid() && chrome?.storage?.local) {
           await new Promise((res) => {
-            chrome.storage.local.set({
-              [LAST_FILTER_DIAG_KEY]: {
-                savedAt: Date.now(),
-                diagLog: lastFilterDiagnosticLog,
-                activePracticeFilter,
-                bannerText: bannerText || "",
-                expectedFilter: { subjectId: Number(subjectId), ids: ids.map(Number) },
-                proposedSelection: lastResolverProposed
-              }
-            }, () => res());
+            chrome.storage.local.set({ [LAST_FILTER_DIAG_KEY]: diagRecord }, () => res());
           });
         }
       } catch (_) {

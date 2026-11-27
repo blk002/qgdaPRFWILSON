@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { toast } from 'sonner';
 import { useStore } from '../store/useStore';
 import { SUPABASE_URL, SUPABASE_ANON_KEY } from '../lib/supabaseClient';
@@ -8,7 +8,10 @@ import {
   resolveEffectiveDifficultyIds,
   sanitizeDifficultyIds,
 } from '../lib/caveiraDifficulty';
-import { serializeMissionForBridge } from '../lib/lessonMastery';
+import {
+  serializeMissionForBridge,
+  getMissionSyncSignature,
+} from '../lib/lessonMastery';
 
 export function triggerCaveiraPractice(
   subjectName = '',
@@ -121,6 +124,7 @@ export function useExtensionBridge() {
   const getCycleIndexForDate = useStore((s) => s.getCycleIndexForDate);
 
   const [courseIndexCache, setCourseIndexCache] = useState({ latest: null, byLesson: {} });
+  const lastSyncedMissionSigRef = useRef('');
   const [manualLessonIndexMap, setManualLessonIndexMap] = useState(() => {
     try {
       const saved = localStorage.getItem('qg_lesson_index_map_v1');
@@ -260,7 +264,13 @@ export function useExtensionBridge() {
           return;
         }
         if (event.data.type === 'MISSION_PROGRESS_SYNC' && event.data.payload?.mission) {
+          lastSyncedMissionSigRef.current = getMissionSyncSignature(event.data.payload.mission);
           useStore.getState().syncActiveMissionFromExtension?.(event.data.payload.mission);
+          return;
+        }
+        if (event.data.type === 'MISSION_CLEARED_IN_EXTENSION') {
+          lastSyncedMissionSigRef.current = '';
+          useStore.getState().handleMissionClearedFromExtension?.(event.data.payload?.missionId || null);
           return;
         }
         const currentUser = useStore.getState().user;
@@ -554,14 +564,24 @@ export function useExtensionBridge() {
       );
 
       if (activePracticeMission && activePracticeMission.id && activePracticeMission.status === 'active') {
-        window.postMessage(
-          {
-            source: 'QG_WEB_APP',
-            type: 'QG_PRF_SYNC_ACTIVE_MISSION',
-            payload: { mission: serializeMissionForBridge(activePracticeMission) },
-          },
-          window.location.origin
-        );
+        const missionSig = getMissionSyncSignature(activePracticeMission);
+        if (
+          missionSig &&
+          missionSig !== lastSyncedMissionSigRef.current &&
+          missionSig !== useStore._lastMissionSyncFromExtSig
+        ) {
+          lastSyncedMissionSigRef.current = missionSig;
+          window.postMessage(
+            {
+              source: 'QG_WEB_APP',
+              type: 'QG_PRF_SYNC_ACTIVE_MISSION',
+              payload: { mission: serializeMissionForBridge(activePracticeMission) },
+            },
+            window.location.origin
+          );
+        }
+      } else if (!activePracticeMission) {
+        lastSyncedMissionSigRef.current = '';
       }
     } catch {}
   }, [

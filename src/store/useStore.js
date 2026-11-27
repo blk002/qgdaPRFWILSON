@@ -22,6 +22,8 @@ import {
   addDaysToLocalDateStr,
   computeNextProgressiveReviewState,
   serializeMissionForBridge,
+  isMissionNewerThan,
+  getMissionSyncSignature,
 } from '../lib/lessonMastery';
 import {
   LOCAL_TEST_ACCOUNT,
@@ -383,6 +385,45 @@ const mergeCloudAndLocalData = (remoteRaw, localState, localKeyTimestamps = {}, 
         if (s && s.id != null && !deletedIds.has(s.id)) byId.set(s.id, s);
       });
       merged[key] = Array.from(byId.values()).sort((a, b) => Number(a.id) - Number(b.id));
+      return;
+    }
+
+    if (key === 'activePracticeMission') {
+      const completedSet = new Set([
+        ...(Array.isArray(remoteRaw?.completedMissionIds) ? remoteRaw.completedMissionIds.map(String) : []),
+        ...(Array.isArray(localState?.completedMissionIds) ? localState.completedMissionIds.map(String) : []),
+      ]);
+      const safeLocal = localVal && localVal.id && !completedSet.has(String(localVal.id)) ? localVal : null;
+      const safeRemote = remoteVal && remoteVal.id && !completedSet.has(String(remoteVal.id)) ? remoteVal : null;
+      if (!safeLocal && !safeRemote) {
+        merged[key] = null;
+        return;
+      }
+      if (!safeLocal || !safeRemote) {
+        const localWonTs = lTs > rTs;
+        merged[key] = safeLocal ? (lTs >= rTs ? safeLocal : null) : (localWonTs ? null : safeRemote);
+        return;
+      }
+      if (String(safeLocal.id) === String(safeRemote.id)) {
+        const lIds = Array.isArray(safeLocal.answeredQuestionIds) ? safeLocal.answeredQuestionIds.map(String) : [];
+        const rIds = Array.isArray(safeRemote.answeredQuestionIds) ? safeRemote.answeredQuestionIds.map(String) : [];
+        const unionIds = Array.from(new Set([...lIds, ...rIds]));
+        const unionDiffs = sanitizeDifficultyIds([
+          ...(Array.isArray(safeLocal.activeDifficultyIds) ? safeLocal.activeDifficultyIds : []),
+          ...(Array.isArray(safeRemote.activeDifficultyIds) ? safeRemote.activeDifficultyIds : []),
+        ]);
+        merged[key] = {
+          ...safeRemote,
+          ...safeLocal,
+          answeredQuestionIds: unionIds,
+          hits: Math.max(Number(safeLocal.hits) || 0, Number(safeRemote.hits) || 0),
+          errors: Math.max(Number(safeLocal.errors) || 0, Number(safeRemote.errors) || 0),
+          activeDifficultyIds: unionDiffs,
+          updatedAt: Math.max(Number(safeLocal.updatedAt) || 0, Number(safeRemote.updatedAt) || 0),
+        };
+      } else {
+        merged[key] = isMissionNewerThan(safeLocal, safeRemote) ? safeLocal : safeRemote;
+      }
       return;
     }
 
@@ -4242,18 +4283,28 @@ export const useStore = create(
       },
 
       cancelActivePracticeMission: () => {
-        if (!get().activePracticeMission) return;
+        const cur = get().activePracticeMission;
+        if (!cur) return;
         set({ activePracticeMission: null });
         try {
           window.postMessage(
             {
               source: 'QG_WEB_APP',
               type: 'QG_PRF_CLEAR_ACTIVE_MISSION',
+              payload: { missionId: cur.id || null },
             },
             window.location.origin
           );
         } catch (_) {}
         toast.info('Missão ativa cancelada.');
+      },
+
+      handleMissionClearedFromExtension: (missionId = null) => {
+        const cur = get().activePracticeMission;
+        if (!cur || !cur.id) return false;
+        if (missionId && String(cur.id) !== String(missionId)) return false;
+        set({ activePracticeMission: null });
+        return true;
       },
 
       recordMissionQuestionAnswer: (questionId, hit) => {
@@ -4316,6 +4367,9 @@ export const useStore = create(
 
         const local = get().activePracticeMission;
         if (!local || local.id !== extMission.id) {
+          if (local && local.id && !isMissionNewerThan(extMission, local)) {
+            return false;
+          }
           const extAnswered = Array.isArray(extMission.answeredQuestionIds)
             ? Array.from(new Set(extMission.answeredQuestionIds.map(String)))
             : [];
@@ -4329,6 +4383,7 @@ export const useStore = create(
           if (merged.status === 'completed' || extAnswered.length >= target) {
             return get().completeActivePracticeMission(merged);
           }
+          useStore._lastMissionSyncFromExtSig = getMissionSyncSignature(merged);
           set({ activePracticeMission: merged });
           return true;
         }
@@ -4338,13 +4393,22 @@ export const useStore = create(
         const unionIds = Array.from(new Set([...localIds, ...extIds]));
         const hits = extIds.length >= localIds.length ? (Number(extMission.hits) || 0) : (Number(local.hits) || 0);
         const errors = extIds.length >= localIds.length ? (Number(extMission.errors) || 0) : (Number(local.errors) || 0);
-        const activeDifficultyIds = sanitizeDifficultyIds(
-          Array.isArray(extMission.activeDifficultyIds) && extMission.activeDifficultyIds.length > (local.activeDifficultyIds?.length || 0)
-            ? extMission.activeDifficultyIds
-            : local.activeDifficultyIds
-        );
+        const localDiffs = sanitizeDifficultyIds(local.activeDifficultyIds);
+        const extDiffs = sanitizeDifficultyIds(extMission.activeDifficultyIds);
+        const activeDifficultyIds = sanitizeDifficultyIds([...localDiffs, ...extDiffs]);
         const targetCount = Math.max(1, Number(local.targetCount) || Number(extMission.targetCount) || 1);
         const isDone = extMission.status === 'completed' || unionIds.length >= targetCount;
+
+        if (
+          !isDone &&
+          unionIds.length === localIds.length &&
+          hits === (Number(local.hits) || 0) &&
+          errors === (Number(local.errors) || 0) &&
+          activeDifficultyIds.join(',') === localDiffs.join(',') &&
+          local.status === 'active'
+        ) {
+          return false;
+        }
 
         const merged = {
           ...local,
@@ -4360,6 +4424,7 @@ export const useStore = create(
         if (isDone) {
           return get().completeActivePracticeMission(merged);
         }
+        useStore._lastMissionSyncFromExtSig = getMissionSyncSignature(merged);
         set({ activePracticeMission: merged });
         return true;
       },

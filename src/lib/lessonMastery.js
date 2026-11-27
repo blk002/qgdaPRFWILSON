@@ -416,9 +416,11 @@ export function serializeMissionForBridge(mission) {
 
   if (Array.isArray(finishedSeries)) {
     serialized.finishedSeries = finishedSeries.map((item) => ({
-      id: item?.id || '',
-      title: item?.title || '',
-      partIndex: Number.isFinite(Number(item?.partIndex)) ? Number(item.partIndex) : null,
+      seriesKey: String(item?.seriesKey || ''),
+      title: String(item?.title || ''),
+      lessonNames: Array.isArray(item?.lessonNames) ? item.lessonNames.map(String).filter(Boolean) : [],
+      partCount: Number.isFinite(Number(item?.partCount)) ? Number(item.partCount) : 1,
+      alreadyFixated: Boolean(item?.alreadyFixated),
     }));
   }
 
@@ -434,4 +436,46 @@ export function serializeMissionForBridge(mission) {
   }
 
   return serialized;
+}
+
+export function getMissionRevisionTs(mission) {
+  if (!mission || typeof mission !== 'object') return 0;
+  return Math.max(Number(mission.updatedAt) || 0, Number(mission.startedAt) || 0);
+}
+
+export function isMissionNewerThan(candidate, current) {
+  if (!candidate || !candidate.id) return false;
+  if (!current || !current.id) return true;
+  if (String(candidate.id) === String(current.id)) return false;
+
+  const candTs = getMissionRevisionTs(candidate);
+  const curTs = getMissionRevisionTs(current);
+  if (candTs !== curTs) return candTs > curTs;
+
+  const candStart = Number(candidate.startedAt) || 0;
+  const curStart = Number(current.startedAt) || 0;
+  if (candStart !== curStart) return candStart > curStart;
+
+  return String(candidate.id) > String(current.id);
+}
+
+export function getMissionSyncSignature(mission) {
+  if (!mission || !mission.id) return '';
+  const answered = Array.isArray(mission.answeredQuestionIds)
+    ? Array.from(new Set(mission.answeredQuestionIds.map(String))).sort().join(',')
+    : '';
+  const diffs = Array.isArray(mission.activeDifficultyIds)
+    ? Array.from(new Set(mission.activeDifficultyIds.map(Number).filter(Number.isFinite)))
+        .sort((a, b) => a - b)
+        .join(',')
+    : '';
+  return [
+    String(mission.id),
+    mission.status || 'active',
+    Number(mission.hits) || 0,
+    Number(mission.errors) || 0,
+    answered,
+    diffs,
+    Number(mission.targetCount) || 0,
+  ].join('|');
 }

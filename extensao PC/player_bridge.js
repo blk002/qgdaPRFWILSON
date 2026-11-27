@@ -138,8 +138,10 @@
       try {
         chrome.storage.local.get([SPEED_KEY, SEEK_KEY], (res) => {
           if (chrome.runtime?.lastError || !isContextValid()) return;
+          const refCourseId = String(document.referrer || "").match(/\/courses\/(\d+)/i)?.[1] || "";
           const speedObj = res?.[SPEED_KEY];
-          if (speedObj && Number(speedObj.speed) >= 0.5 && Date.now() - (Number(speedObj.updatedAt) || 0) < 36e5) {
+          const speedCourseId = speedObj?.courseId ? String(speedObj.courseId) : "";
+          if (speedObj && (!speedCourseId || !refCourseId || speedCourseId === refCourseId) && Number(speedObj.speed) >= 0.5 && Date.now() - (Number(speedObj.updatedAt) || 0) < 36e5) {
             targetSpeed = Number(speedObj.speed);
             if (currentVideo) {
               speedLockUntil = Date.now() + 6e3;
@@ -147,7 +149,8 @@
             }
           }
           const seekObj = res?.[SEEK_KEY];
-          if (seekObj && Number(seekObj.seconds) > 0 && Date.now() - (Number(seekObj.savedAt) || 0) < 9e4) {
+          const seekCourseId = seekObj?.courseId ? String(seekObj.courseId) : "";
+          if (seekObj && (!seekCourseId || !refCourseId || seekCourseId === refCourseId) && Number(seekObj.seconds) > 0 && Date.now() - (Number(seekObj.savedAt) || 0) < 9e4) {
             pendingSeekSec = Number(seekObj.seconds);
             if (currentVideo) tryApplyPendingSeek(currentVideo);
           }
@@ -160,7 +163,11 @@
       chrome.storage.onChanged.addListener((changes, area) => {
         if (area !== "local" || !isContextValid()) return;
         if (changes[SPEED_KEY]?.newValue) {
-          const nextSpd = Number(changes[SPEED_KEY].newValue.speed);
+          const sp = changes[SPEED_KEY].newValue;
+          const refCourseId = String(document.referrer || "").match(/\/courses\/(\d+)/i)?.[1] || "";
+          const speedCourseId = sp?.courseId ? String(sp.courseId) : "";
+          if (speedCourseId && refCourseId && speedCourseId !== refCourseId) return;
+          const nextSpd = Number(sp.speed);
           if (Number.isFinite(nextSpd) && nextSpd >= 0.5 && nextSpd <= 4) {
             targetSpeed = nextSpd;
             speedLockUntil = Date.now() + 6e3;

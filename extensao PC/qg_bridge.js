@@ -107,12 +107,46 @@
     const PENDING_SIMULADOS_KEY = "qg_pending_simulados_import";
     const PENDING_PDF_KEY = "qg_pending_pdf_study";
     const REMINDER_STATE_KEY = "qg_reminder_state";
+    const DISMISSED_MISSIONS_KEY = "qg_dismissed_mission_ids";
     const MAX_BUCKET_QUESTIONS = 1500;
     const ALLOWED_WEB_HOSTS = /* @__PURE__ */ new Set(["blk002.github.io", "localhost", "127.0.0.1"]);
     const SIM_ACK_TIMEOUT_MS = 5e3;
     const SIM_BACKOFF_DELAYS_MS = [5e3, 15e3, 45e3];
     let suppressFilterEchoUntil = 0;
+    let suppressMissionEchoUntil = 0;
+    let lastMissionBridgeSig = "";
+    let handleStorageChangedRef = null;
     let isBridgeDestroyed = false;
+    function getMissionTs(m) {
+      if (!m || typeof m !== "object") return 0;
+      return Math.max(Number(m.updatedAt) || 0, Number(m.startedAt) || 0);
+    }
+    function isMissionNewer(candidate, current) {
+      if (!candidate || !candidate.id) return false;
+      if (!current || !current.id) return true;
+      if (String(candidate.id) === String(current.id)) return false;
+      const candTs = getMissionTs(candidate);
+      const curTs = getMissionTs(current);
+      if (candTs !== curTs) return candTs > curTs;
+      const candStart = Number(candidate.startedAt) || 0;
+      const curStart = Number(current.startedAt) || 0;
+      if (candStart !== curStart) return candStart > curStart;
+      return String(candidate.id) > String(current.id);
+    }
+    function getMissionSig(m) {
+      if (!m || !m.id) return "";
+      const answered = Array.isArray(m.answeredQuestionIds) ? Array.from(new Set(m.answeredQuestionIds.map(String))).sort().join(",") : "";
+      const diffs = Array.isArray(m.activeDifficultyIds) ? Array.from(new Set(m.activeDifficultyIds.map(Number).filter(Number.isFinite))).sort((a, b) => a - b).join(",") : "";
+      return [
+        String(m.id),
+        m.status || "active",
+        Number(m.hits) || 0,
+        Number(m.errors) || 0,
+        answered,
+        diffs,
+        Number(m.targetCount) || 0
+      ].join("|");
+    }
     let cachedActiveUserId = null;
     let lastSyncPayloadJson = "";
     let lastSyncPayloadTime = 0;
@@ -821,32 +855,74 @@
           try {
             const incoming = event.data.payload.mission;
             if (!incoming || !incoming.id) return;
-            chrome.storage.local.get([ACTIVE_MISSION_KEY], (res) => {
+            chrome.storage.local.get([ACTIVE_MISSION_KEY, DISMISSED_MISSIONS_KEY], (res) => {
               if (chrome.runtime.lastError || isBridgeDestroyed) return;
+              const nowMs = Date.now();
+              const rawDismissed = Array.isArray(res?.[DISMISSED_MISSIONS_KEY]) ? res[DISMISSED_MISSIONS_KEY] : [];
+              const dismissed = rawDismissed.filter((d) => d && d.id && nowMs - (Number(d.at) || 0) < 6e5);
+              if (dismissed.some((d) => String(d.id) === String(incoming.id))) {
+                window.postMessage({
+                  source: "QG_CAVEIRA_EXTENSION",
+                  type: "MISSION_CLEARED_IN_EXTENSION",
+                  payload: { missionId: String(incoming.id) }
+                }, getTargetOrigin());
+                return;
+              }
               const prev = res?.[ACTIVE_MISSION_KEY];
               if (prev && prev.id === incoming.id) {
+                if (prev.finalizedInQg) return;
                 const prevIds = Array.isArray(prev.answeredQuestionIds) ? prev.answeredQuestionIds.map(String) : [];
                 const incIds = Array.isArray(incoming.answeredQuestionIds) ? incoming.answeredQuestionIds.map(String) : [];
                 const unionIds = Array.from(/* @__PURE__ */ new Set([...prevIds, ...incIds]));
                 const usePrevCounts = prevIds.length >= incIds.length;
+                const nextHits = usePrevCounts ? Number(prev.hits) || 0 : Number(incoming.hits) || 0;
+                const nextErrors = usePrevCounts ? Number(prev.errors) || 0 : Number(incoming.errors) || 0;
+                const prevDiffs = Array.isArray(prev.activeDifficultyIds) ? Array.from(new Set(prev.activeDifficultyIds.map(Number).filter(Number.isFinite))).sort((a, b) => a - b) : [];
+                const incDiffs = Array.isArray(incoming.activeDifficultyIds) ? Array.from(new Set(incoming.activeDifficultyIds.map(Number).filter(Number.isFinite))).sort((a, b) => a - b) : [];
+                const mergedDiffs = Array.from(/* @__PURE__ */ new Set([...prevDiffs, ...incDiffs])).sort((a, b) => a - b);
                 const targetCount = Math.max(1, Number(incoming.targetCount) || Number(prev.targetCount) || 1);
                 const isDone = prev.status === "completed" || incoming.status === "completed" || unionIds.length >= targetCount;
-                chrome.storage.local.set({
-                  [ACTIVE_MISSION_KEY]: {
-                    ...prev,
-                    ...incoming,
-                    answeredQuestionIds: unionIds,
-                    hits: usePrevCounts ? Number(prev.hits) || 0 : Number(incoming.hits) || 0,
-                    errors: usePrevCounts ? Number(prev.errors) || 0 : Number(incoming.errors) || 0,
-                    status: isDone ? "completed" : "active",
-                    finalizedInQg: Boolean(prev.finalizedInQg),
-                    updatedAt: Math.max(Number(prev.updatedAt) || 0, Number(incoming.updatedAt) || 0)
+                const nextStatus = isDone ? "completed" : "active";
+                if (unionIds.length === prevIds.length && nextHits === (Number(prev.hits) || 0) && nextErrors === (Number(prev.errors) || 0) && nextStatus === prev.status && mergedDiffs.join(",") === prevDiffs.join(",")) {
+                  lastMissionBridgeSig = getMissionSig(prev);
+                  return;
+                }
+                const nextMission = {
+                  ...prev,
+                  ...incoming,
+                  answeredQuestionIds: unionIds,
+                  hits: nextHits,
+                  errors: nextErrors,
+                  activeDifficultyIds: mergedDiffs,
+                  status: nextStatus,
+                  finalizedInQg: false,
+                  updatedAt: Math.max(Number(prev.updatedAt) || 0, Number(incoming.updatedAt) || 0)
+                };
+                suppressMissionEchoUntil = Date.now() + 1200;
+                lastMissionBridgeSig = getMissionSig(nextMission);
+                chrome.storage.local.set({ [ACTIVE_MISSION_KEY]: nextMission });
+              } else if (prev && prev.id && prev.id !== incoming.id) {
+                if (!isMissionNewer(incoming, prev)) {
+                  const prevSig = getMissionSig(prev);
+                  if (!prev.finalizedInQg && hasWebAppReadySignal && prevSig && prevSig !== lastMissionBridgeSig) {
+                    lastMissionBridgeSig = prevSig;
+                    window.postMessage({
+                      source: "QG_CAVEIRA_EXTENSION",
+                      type: "MISSION_PROGRESS_SYNC",
+                      payload: { mission: prev, userId: cachedActiveUserId || null }
+                    }, getTargetOrigin());
                   }
-                });
+                  return;
+                }
+                const nextMission = { ...incoming, finalizedInQg: false };
+                suppressMissionEchoUntil = Date.now() + 1200;
+                lastMissionBridgeSig = getMissionSig(nextMission);
+                chrome.storage.local.set({ [ACTIVE_MISSION_KEY]: nextMission });
               } else {
-                chrome.storage.local.set({
-                  [ACTIVE_MISSION_KEY]: { ...incoming, finalizedInQg: false }
-                });
+                const nextMission = { ...incoming, finalizedInQg: false };
+                suppressMissionEchoUntil = Date.now() + 1200;
+                lastMissionBridgeSig = getMissionSig(nextMission);
+                chrome.storage.local.set({ [ACTIVE_MISSION_KEY]: nextMission });
               }
             });
           } catch (_) {
@@ -854,7 +930,25 @@
         }
         if (event.data.type === "QG_PRF_CLEAR_ACTIVE_MISSION") {
           try {
-            chrome.storage.local.remove([ACTIVE_MISSION_KEY]);
+            suppressMissionEchoUntil = Date.now() + 1200;
+            lastMissionBridgeSig = "";
+            const missionId = event.data.payload?.missionId ? String(event.data.payload.missionId) : null;
+            if (missionId) {
+              chrome.storage.local.get([DISMISSED_MISSIONS_KEY], (res) => {
+                if (chrome.runtime.lastError || isBridgeDestroyed) return;
+                const nowMs = Date.now();
+                const prevList = Array.isArray(res?.[DISMISSED_MISSIONS_KEY]) ? res[DISMISSED_MISSIONS_KEY] : [];
+                const nextList = [
+                  { id: missionId, at: nowMs },
+                  ...prevList.filter((d) => d && d.id && String(d.id) !== missionId && nowMs - (Number(d.at) || 0) < 6e5)
+                ].slice(0, 20);
+                chrome.storage.local.set({ [DISMISSED_MISSIONS_KEY]: nextList }, () => {
+                  chrome.storage.local.remove([ACTIVE_MISSION_KEY]);
+                });
+              });
+            } else {
+              chrome.storage.local.remove([ACTIVE_MISSION_KEY]);
+            }
           } catch (_) {
           }
         }
@@ -865,6 +959,8 @@
               if (chrome.runtime.lastError || isBridgeDestroyed) return;
               const cur = res?.[ACTIVE_MISSION_KEY];
               if (cur && String(cur.id) === mId) {
+                suppressMissionEchoUntil = Date.now() + 1200;
+                lastMissionBridgeSig = "";
                 chrome.storage.local.set({
                   [ACTIVE_MISSION_KEY]: {
                     ...cur,
@@ -905,15 +1001,18 @@
             createdAt: Date.now()
           };
           try {
-            chrome.storage.local.set({ [PENDING_FILTER_KEY]: filterData }, () => {
-              if (chrome.runtime && chrome.runtime.sendMessage) {
-                chrome.runtime.sendMessage({
-                  type: "OPEN_CAVEIRA_PRACTICE",
-                  payload: filterData
-                }).catch(() => {
-                });
-              }
-            });
+            if (chrome.runtime && chrome.runtime.sendMessage) {
+              chrome.runtime.sendMessage({
+                type: "OPEN_CAVEIRA_PRACTICE",
+                payload: filterData
+              }, () => {
+                if (chrome.runtime.lastError && !isBridgeDestroyed) {
+                  chrome.storage.local.set({ [PENDING_FILTER_KEY]: filterData });
+                }
+              });
+            } else {
+              chrome.storage.local.set({ [PENDING_FILTER_KEY]: filterData });
+            }
           } catch (_) {
           }
         }
@@ -1111,11 +1210,17 @@
       window.removeEventListener("focus", handleFocus);
       document.removeEventListener("visibilitychange", handleVisibilityChange);
       window.removeEventListener("message", handleWindowMessage);
+      if (handleStorageChangedRef && chrome?.storage?.onChanged) {
+        try {
+          chrome.storage.onChanged.removeListener(handleStorageChangedRef);
+        } catch (_) {
+        }
+      }
     }
     window.addEventListener("qg-bridge-teardown", teardownBridge, { once: true });
     if (isExtensionContextValid() && chrome.storage.onChanged) {
       try {
-        chrome.storage.onChanged.addListener((changes, area) => {
+        handleStorageChangedRef = (changes, area) => {
           if (isBridgeDestroyed || !isExtensionContextValid()) return;
           if (area === "local") {
             if (changes[ACTIVE_USER_KEY]) {
@@ -1180,17 +1285,29 @@
               }
             }
             if (changes[ACTIVE_MISSION_KEY]) {
+              if (Date.now() < suppressMissionEchoUntil) return;
               const missionVal = changes[ACTIVE_MISSION_KEY].newValue;
               if (missionVal && missionVal.id && !missionVal.finalizedInQg) {
+                const sig = getMissionSig(missionVal);
+                if (sig && sig === lastMissionBridgeSig) return;
+                lastMissionBridgeSig = sig;
                 window.postMessage({
                   source: "QG_CAVEIRA_EXTENSION",
                   type: "MISSION_PROGRESS_SYNC",
                   payload: { mission: missionVal, userId: cachedActiveUserId || null }
                 }, getTargetOrigin());
+              } else if (!missionVal && changes[ACTIVE_MISSION_KEY].oldValue?.id) {
+                lastMissionBridgeSig = "";
+                window.postMessage({
+                  source: "QG_CAVEIRA_EXTENSION",
+                  type: "MISSION_CLEARED_IN_EXTENSION",
+                  payload: { missionId: String(changes[ACTIVE_MISSION_KEY].oldValue.id) }
+                }, getTargetOrigin());
               }
             }
           }
-        });
+        };
+        chrome.storage.onChanged.addListener(handleStorageChangedRef);
       } catch (_) {
       }
     }

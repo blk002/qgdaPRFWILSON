@@ -29,6 +29,7 @@ const FILTER_CORRECTION_MEMORY_KEY = 'qg_caveira_filter_memory';
 const REMINDER_STATE_KEY = 'qg_reminder_state';
 const NOTIF_ENABLED_KEY = 'qg_notifications_enabled';
 const LAST_NOTIF_META_KEY = 'qg_last_notification_meta';
+const PENDING_FILTER_KEY = 'qg_pending_caveira_filter';
 const PERIODIC_ALARM_NAME = 'qg_periodic_check';
 const OUTBOX_FLUSH_ALARM_NAME = 'qg_outbox_flush';
 const EXCLUDED_CAVEIRA_HOST_RX = /^(?:loja|checkout|blog|pay|pagamentos?|www)\./i;
@@ -576,11 +577,24 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message.type === 'OPEN_CAVEIRA_PRACTICE') {
     (async () => {
       try {
+        const lastWin = chrome.windows?.getLastFocused
+          ? await chrome.windows.getLastFocused().catch(() => null)
+          : null;
+        const focusedWinId = lastWin?.id || null;
         const rawTabs = chrome.tabs ? await chrome.tabs.query({ url: CAVEIRA_URL_PATTERNS }) : [];
         const tabs = (rawTabs || []).filter((t) => t && t.id && !isExcludedCaveiraUrl(t.url));
         const nonCourseTabs = tabs.filter((t) => !String(t.url || '').includes('/courses'));
-        const questTab = nonCourseTabs.find((t) => /\/questions\b/i.test(t.url || '')) || null;
-        const fallbackTab = nonCourseTabs[0] || null;
+        const scoreTab = (t) => (
+          (t.active && focusedWinId && t.windowId === focusedWinId ? 1e15 : 0) +
+          (t.active ? 1e14 : 0) +
+          (Number(t.lastAccessed) || 0)
+        );
+        const questTabs = nonCourseTabs
+          .filter((t) => /\/questions\b/i.test(t.url || ''))
+          .sort((a, b) => scoreTab(b) - scoreTab(a));
+        const questTab = questTabs[0] || null;
+        const fallbackTabs = [...nonCourseTabs].sort((a, b) => scoreTab(b) - scoreTab(a));
+        const fallbackTab = fallbackTabs[0] || null;
         let targetOrigin = 'https://app.caveira.com';
         const originSource = questTab?.url || fallbackTab?.url || tabs[0]?.url;
         if (originSource) {
@@ -588,6 +602,16 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             targetOrigin = new URL(originSource).origin;
           } catch (_) {}
         }
+
+        const writePendingForTab = async (tabId) => {
+          await chrome.storage.local.set({
+            [PENDING_FILTER_KEY]: {
+              ...(message.payload || {}),
+              targetTabId: tabId || null,
+              createdAt: Date.now(),
+            },
+          });
+        };
 
         if (questTab && questTab.id && !questTab.discarded) {
           await chrome.tabs.update(questTab.id, { active: true });
@@ -602,21 +626,84 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
             });
             delivered = Boolean(resp && resp.ok);
           } catch (_) {}
-          if (!delivered) {
+          if (delivered) {
+            await chrome.storage.local.remove([PENDING_FILTER_KEY]).catch(() => {});
+          } else {
+            await writePendingForTab(questTab.id);
             await chrome.tabs.update(questTab.id, { active: true, url: `${targetOrigin}/questions` });
           }
         } else if (fallbackTab && fallbackTab.id) {
+          await writePendingForTab(fallbackTab.id);
           await chrome.tabs.update(fallbackTab.id, { active: true, url: `${targetOrigin}/questions` });
           if (fallbackTab.windowId && chrome.windows) {
             await chrome.windows.update(fallbackTab.windowId, { focused: true }).catch(() => {});
           }
         } else if (chrome.tabs) {
           const created = await chrome.tabs.create({ url: `${targetOrigin}/questions`, active: true });
+          await writePendingForTab(created?.id || null);
           if (created?.windowId && chrome.windows?.update) {
             await chrome.windows.update(created.windowId, { focused: true }).catch(() => {});
           }
         }
         sendResponse({ success: true });
+      } catch (_) {
+        sendResponse({ success: false });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'CONSUME_PENDING_FILTER') {
+    (async () => {
+      try {
+        const res = await chrome.storage.local.get([PENDING_FILTER_KEY]);
+        const pending = res?.[PENDING_FILTER_KEY];
+        if (!pending) {
+          sendResponse({ ok: true, filter: null });
+          return;
+        }
+        if ((Date.now() - (Number(pending.createdAt) || 0)) >= 180000) {
+          await chrome.storage.local.remove([PENDING_FILTER_KEY]).catch(() => {});
+          sendResponse({ ok: true, filter: null });
+          return;
+        }
+        if (pending.targetTabId && sender?.tab?.id && Number(pending.targetTabId) !== Number(sender.tab.id)) {
+          sendResponse({ ok: true, filter: null });
+          return;
+        }
+        await chrome.storage.local.remove([PENDING_FILTER_KEY]).catch(() => {});
+        sendResponse({ ok: true, filter: pending });
+      } catch (_) {
+        sendResponse({ ok: false, filter: null });
+      }
+    })();
+    return true;
+  }
+
+  if (message.type === 'OPEN_OR_FOCUS_QG') {
+    (async () => {
+      try {
+        const fallbackUrl = message.payload?.url || 'https://blk002.github.io/qgdaPRFWILSON/#/estudos?tab=caveira';
+        const qgTabs = chrome.tabs ? await chrome.tabs.query({ url: QG_URL_PATTERNS }) : [];
+        if (qgTabs && qgTabs.length > 0) {
+          const sorted = [...qgTabs].sort((a, b) => ((b.active ? 1e14 : 0) + (Number(b.lastAccessed) || 0)) - ((a.active ? 1e14 : 0) + (Number(a.lastAccessed) || 0)));
+          const tab = sorted[0];
+          if (tab?.id) {
+            await chrome.tabs.update(tab.id, { active: true });
+            if (tab.windowId && chrome.windows?.update) {
+              await chrome.windows.update(tab.windowId, { focused: true }).catch(() => {});
+            }
+            sendResponse({ success: true, focused: true });
+            return;
+          }
+        }
+        if (chrome.tabs) {
+          const created = await chrome.tabs.create({ url: fallbackUrl, active: true });
+          if (created?.windowId && chrome.windows?.update) {
+            await chrome.windows.update(created.windowId, { focused: true }).catch(() => {});
+          }
+        }
+        sendResponse({ success: true, focused: false });
       } catch (_) {
         sendResponse({ success: false });
       }
