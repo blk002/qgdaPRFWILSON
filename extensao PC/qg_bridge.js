@@ -1,5 +1,6 @@
 (() => {
   // extensao-src/content/utils.js
+  var PLAYER_SEEK_KEY = "qg_player_pending_seek";
   var PENDING_SIMULADOS_QUEUE_KEY = "qg_pending_simulados_queue";
   var LAST_FILTER_DIAG_KEY = "qg_caveira_last_filter_diag";
   var ACTIVE_MISSION_KEY = "qg_active_practice_mission";
@@ -902,6 +903,28 @@
             } catch (_) {
             }
           });
+        }
+        if (event.data.type === "QG_PRF_PREPARE_VIDEO_SEEK" && event.data.payload) {
+          const p = event.data.payload;
+          const sec = Math.max(0, Math.round(Number(p.seconds) || 0));
+          if (sec > 0 && isExtensionContextValid() && chrome?.storage?.local) {
+            const nowTs = Date.now();
+            try {
+              chrome.storage.local.set({
+                [PLAYER_SEEK_KEY]: {
+                  seconds: sec,
+                  courseId: String(p.courseId || ""),
+                  lessonTitle: String(p.lessonTitle || ""),
+                  topicLabel: String(p.topicLabel || ""),
+                  awaitingTargetLesson: Boolean(p.lessonTitle),
+                  readyToSeek: !p.lessonTitle,
+                  updatedAt: nowTs,
+                  savedAt: nowTs
+                }
+              });
+            } catch (_) {
+            }
+          }
         }
         if (event.data.type === "QG_PRF_SYNC_FILTER_MEMORY" && event.data.payload?.memory) {
           try {

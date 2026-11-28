@@ -1843,39 +1843,64 @@ ${EXTRA_SHADOW_CSS}`;
     "regras"
   ]);
   var GENERIC_TIMESTAMP_LABEL_RX = /^(?:saudac(?:ao|oes)(?:\s+iniciais?)?|introducao(?:\s+(?:geral|inicial|(?:a|ao|da|do)\s+(?:aula|tema|modulo|disciplina|curso|ctb)))?|apresentacao(?:\s+(?:inicial|geral|da\s+aula|do\s+tema|do\s+curso))?|boas[\s-]+vindas|abertura|inicio(?:\s+da\s+aula)?|encerramento|consideracoes\s+finais|conclusao|finalizacao|despedida|avisos?(?:\s+gerais|\s+importantes)?)$/i;
+  var INTRO_PREFIX_AT_START_RX = /^(?:introducao|apresentacao|saudac|boas[\s-]+vindas|abertura|encerramento|consideracoes\s+finais|conclusao|finalizacao|avisos?)\b/i;
   var DOMAIN_WEAK_TOKENS = /* @__PURE__ */ new Set([
-    "veiculo",
-    "veiculos",
-    "condutor",
-    "condutores",
-    "via",
-    "vias",
-    "pista",
-    "circulacao",
-    "crime",
-    "crimes",
-    "pena",
-    "penas",
-    "processo",
-    "acao",
-    "estado",
     "publico",
     "publica",
-    "servidor",
-    "servidores",
-    "administracao",
     "federal",
     "nacional",
     "sistema",
-    "seguranca",
     "texto",
     "frase",
     "palavra",
     "palavras",
     "oracao",
-    "oracoes"
+    "oracoes",
+    "conceito",
+    "conceitos",
+    "geral",
+    "basico",
+    "basicos"
   ]);
   var tokenize = (str) => normalizeCourseIndexKey(str).replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
+  function cleanCourseEntryTitle(str = "") {
+    return String(str || "").replace(/\b(?:play_circle(?:_outline|_filled)?|check_circle|ondemand_video|smart_display|lock|schedule)\b/gi, " ").replace(/\s+\d{1,2}:\d{2}(?::\d{2})?\s*$/g, "").replace(/\s+/g, " ").trim();
+  }
+  function stripLessonPartSuffix(str = "") {
+    return cleanCourseEntryTitle(str).replace(/\s*[-–—:|]?\s*(?:parte|pt\.?|aula|bloco)\s*(?:\d+|[ivxlcdm]+)\s*$/i, "").trim();
+  }
+  function extractPartNumber(str = "") {
+    const m = String(str || "").match(/\b(?:parte|pt\.?|aula|bloco)\s*(\d+)\b/i);
+    return m ? Number(m[1]) : 99;
+  }
+  function sanitizeCourseBaseUrl(rawUrl = "") {
+    if (!rawUrl) return "";
+    try {
+      const u = new URL(String(rawUrl));
+      u.hash = "";
+      u.searchParams.delete("t");
+      return u.toString();
+    } catch (_) {
+      return String(rawUrl).split("#")[0].replace(/([?&])t=\d+&?/g, "$1").replace(/[?&]$/, "");
+    }
+  }
+  function extractLawOrResolutionNumbers(rawStr = "") {
+    const norm = normalizeCourseIndexKey(rawStr);
+    const contranNums = /* @__PURE__ */ new Set();
+    const lawNums = /* @__PURE__ */ new Set();
+    const contranRx = /\b(?:resoluc(?:ao|oes)?\s*(?:contran|do\s+contran)?|contran)\s*(?:n[°ºo.]*\s*)?(\d+(?:\.\d+)?)\b/gi;
+    let m;
+    while ((m = contranRx.exec(norm)) !== null) {
+      const cleanNum = m[1].replace(/\./g, "");
+      if (cleanNum) contranNums.add(cleanNum);
+    }
+    const leiRx = /\blei\s*(?:n[°ºo.]*\s*)?(\d+(?:\.\d+)?)\b/gi;
+    while ((m = leiRx.exec(norm)) !== null) {
+      const cleanNum = m[1].replace(/\./g, "");
+      if (cleanNum && cleanNum.length >= 3) lawNums.add(cleanNum);
+    }
+    return { contranNums, lawNums };
+  }
   function inferSubjectFamily(rawStr = "") {
     const s = normalizeCourseIndexKey(rawStr);
     if (!s) return "";
@@ -1975,34 +2000,49 @@ ${EXTRA_SHADOW_CSS}`;
       return true;
     });
     const leafRaw = specificSegments.length > 0 ? specificSegments[specificSegments.length - 1] : question.topic || "";
+    const leafWithoutParens = leafRaw.replace(/\([^)]*(?:art|arts|lei|ctb|decreto|cf|resoluc)[^)]*\)/gi, "").trim();
     const specificRaw = specificSegments.length > 0 ? specificSegments.join(" ") : question.topic || "";
-    const leafNorm = normalizeCourseIndexKey(leafRaw).replace(/^(?:capitulo|secao|titulo|modulo)\s+[ivxlcdm\d]+\s*/i, "").trim();
+    const leafNorm = normalizeCourseIndexKey(leafWithoutParens || leafRaw).replace(/^(?:capitulo|secao|titulo|modulo)\s+[ivxlcdm\d]+\s*/i, "").trim();
     const specificPhrases = Array.from(new Set([
       normalizeCourseIndexKey(leafRaw),
+      normalizeCourseIndexKey(leafWithoutParens),
       leafNorm
     ].filter((p) => p && p.length >= 6)));
+    const qLawNums = extractLawOrResolutionNumbers(`${qSubjectRaw} ${specificRaw}`);
+    const qAllowsIntroTimestamp = /\b(?:introduc|definic|conceitos?\s+basicos?|nocoes?\s+iniciais?)\b/i.test(leafNorm);
     const qSubTokens = new Set(tokenize(qSubjectRaw));
     const specificTopicTokens = Array.from(new Set(tokenize(specificRaw))).filter((tok) => !qSubTokens.has(tok) || tokenize(leafRaw).includes(tok));
-    if (specificTopicTokens.length === 0) return null;
-    const strongTopicTokens = specificTopicTokens.filter((tok) => !DOMAIN_WEAK_TOKENS.has(tok));
-    const contentTokens = Array.from(new Set(tokenize((question.content || "").slice(0, 220)))).filter((tok) => !specificTopicTokens.includes(tok));
+    const specificTopicWordTokens = specificTopicTokens.filter((tok) => !/^\d+$/.test(tok));
+    if (specificTopicWordTokens.length === 0 && qLawNums.contranNums.size === 0 && qLawNums.lawNums.size === 0) return null;
+    const strongTopicTokens = specificTopicWordTokens.filter((tok) => !DOMAIN_WEAK_TOKENS.has(tok));
+    const contentTokens = Array.from(new Set(tokenize(`${(question.content || "").slice(0, 320)} ${(question.teacherComment || "").slice(0, 220)}`))).filter((tok) => !specificTopicWordTokens.includes(tok));
     let bestEntry = null;
     let bestTopic = null;
     let bestScore = 0;
     entries.forEach((entry) => {
-      const entryTitle = entry.title || entry.lessonTitle || "";
+      const entryTitle = cleanCourseEntryTitle(entry.title || entry.lessonTitle || "");
       const eHeaderRaw = `${entry.subject || ""} ${entry.moduleName || ""} ${entryTitle}`;
       const eSubNorm = normalizeCourseIndexKey(eHeaderRaw);
       const entryFamily = inferSubjectFamily(eHeaderRaw);
       if (qFamily && entryFamily && qFamily !== entryFamily) return;
+      const eLawNums = extractLawOrResolutionNumbers(`${entry.moduleName || ""} ${entryTitle}`);
+      if (qLawNums.contranNums.size > 0 && eLawNums.contranNums.size > 0) {
+        const hasSharedContran = Array.from(qLawNums.contranNums).some((n) => eLawNums.contranNums.has(n));
+        if (!hasSharedContran) return;
+      }
+      const sharedContran = qLawNums.contranNums.size > 0 && Array.from(qLawNums.contranNums).some((n) => eLawNums.contranNums.has(n));
+      const sharedLawNum = qLawNums.lawNums.size > 0 && Array.from(qLawNums.lawNums).some((n) => eLawNums.lawNums.has(n));
       const sameDiscipline = Boolean(
         qFamily && entryFamily && qFamily === entryFamily || qSubNorm && eSubNorm && (eSubNorm.includes(qSubNorm) || qSubNorm.includes(eSubNorm))
       );
       const entryTitleNorm = normalizeCourseIndexKey(entryTitle);
-      const titlePhraseMatch = specificPhrases.some((p) => entryTitleNorm.includes(p) || entryTitleNorm.length >= 8 && p.includes(entryTitleNorm));
+      const entryTitleBaseNorm = normalizeCourseIndexKey(stripLessonPartSuffix(entryTitle));
+      const titlePhraseMatch = specificPhrases.some((p) => entryTitleNorm.includes(p) || entryTitleBaseNorm && (entryTitleBaseNorm.includes(p) || entryTitleBaseNorm.length >= 7 && p.includes(entryTitleBaseNorm)) || entryTitleNorm.length >= 8 && p.includes(entryTitleNorm));
       const entryTitleTokenSet = new Set(tokenize(`${entryTitle} ${entry.moduleName || ""}`));
-      const entryTitleMatch = collectTokenMatches(specificTopicTokens, entryTitleTokenSet);
+      const entryTitleMatch = collectTokenMatches(specificTopicWordTokens, entryTitleTokenSet);
       const entryTitleStrongMatch = collectTokenMatches(strongTopicTokens, entryTitleTokenSet);
+      const partNum = extractPartNumber(entryTitle);
+      const partTieBias = partNum === 1 ? 0.45 : partNum < 99 ? Math.max(0, 0.35 - partNum * 0.05) : 0.15;
       const topicsList = Array.isArray(entry.topics) && entry.topics.length > 0 ? entry.topics : parseTimestampTopicsFromText(entry.indiceRawText || entry.rawIndexText || "");
       let matchedInsideTopics = false;
       if (topicsList.length > 0) {
@@ -2010,26 +2050,27 @@ ${EXTRA_SHADOW_CSS}`;
           if (!tp || !tp.label) return;
           const tLabelNorm = normalizeCourseIndexKey(tp.label);
           if (!tLabelNorm || GENERIC_TIMESTAMP_LABEL_RX.test(tLabelNorm)) return;
+          if (!qAllowsIntroTimestamp && Number(tp.seconds) <= 15 && INTRO_PREFIX_AT_START_RX.test(tLabelNorm)) return;
           const tLabelTokenSet = new Set(tokenize(tp.label));
           if (tLabelTokenSet.size === 0) return;
           const labelPhraseMatch = specificPhrases.some((p) => tLabelNorm.includes(p) || tLabelNorm.length >= 8 && p.includes(tLabelNorm));
-          const labelMatch = collectTokenMatches(specificTopicTokens, tLabelTokenSet);
+          const labelMatch = collectTokenMatches(specificTopicWordTokens, tLabelTokenSet);
           const labelStrongMatch = collectTokenMatches(strongTopicTokens, tLabelTokenSet);
           const contentMatchOnLabel = collectTokenMatches(contentTokens, tLabelTokenSet);
           let qualified = false;
           if (strongTopicTokens.length > 0) {
             qualified = Boolean(
-              labelPhraseMatch || titlePhraseMatch && labelStrongMatch.hits >= 1 || labelStrongMatch.hits >= 2 || labelStrongMatch.hits === 1 && (labelMatch.hits >= 2 || entryTitleMatch.hits >= 1 || contentMatchOnLabel.hits >= 1)
+              labelPhraseMatch || titlePhraseMatch && (labelStrongMatch.hits >= 1 || contentMatchOnLabel.hits >= 2) || sameDiscipline && entryTitleStrongMatch.hits >= 1 && contentMatchOnLabel.hits >= 2 || labelStrongMatch.hits >= 2 || labelStrongMatch.hits === 1 && (labelMatch.hits >= 2 || entryTitleMatch.hits >= 1 || contentMatchOnLabel.hits >= 1)
             );
           } else {
-            const weakCoverage = specificTopicTokens.length > 0 ? labelMatch.hits / specificTopicTokens.length : 0;
+            const weakCoverage = specificTopicWordTokens.length > 0 ? labelMatch.hits / specificTopicWordTokens.length : 0;
             qualified = Boolean(
-              labelPhraseMatch || titlePhraseMatch && labelMatch.hits >= 1 || labelMatch.hits >= 2 && weakCoverage >= 0.6
+              labelPhraseMatch || sharedContran || sharedLawNum || titlePhraseMatch && (labelMatch.hits >= 1 || contentMatchOnLabel.hits >= 2) || labelMatch.hits >= 2 && weakCoverage >= 0.6
             );
           }
           if (!qualified) return;
           matchedInsideTopics = true;
-          const score = (labelPhraseMatch ? 14 : 0) + (titlePhraseMatch ? 6 : 0) + labelStrongMatch.hits * 6 + entryTitleStrongMatch.hits * 3 + labelMatch.hits * 2 + entryTitleMatch.hits * 1.5 + Math.min(contentMatchOnLabel.hits, 3) * 1.5 + (sameDiscipline ? 1 : 0);
+          const score = (sharedContran ? 18 : 0) + (sharedLawNum ? 10 : 0) + (labelPhraseMatch ? 14 : 0) + (titlePhraseMatch ? 6 : 0) + labelStrongMatch.hits * 6 + entryTitleStrongMatch.hits * 3 + labelMatch.hits * 2 + entryTitleMatch.hits * 1.5 + Math.min(contentMatchOnLabel.hits, 3) * 2.2 + (sameDiscipline ? 1.5 : 0) + (Number(tp.seconds) > 0 ? 0.5 : 0) + partTieBias;
           if (score > bestScore) {
             bestScore = score;
             bestEntry = entry;
@@ -2040,18 +2081,20 @@ ${EXTRA_SHADOW_CSS}`;
       if (!matchedInsideTopics) {
         const contentMatchOnTitle = collectTokenMatches(contentTokens, entryTitleTokenSet);
         let qualifiedLessonOnly = false;
-        if (strongTopicTokens.length > 0) {
+        if (sharedContran || sharedLawNum) {
+          qualifiedLessonOnly = true;
+        } else if (strongTopicTokens.length > 0) {
           qualifiedLessonOnly = Boolean(
-            titlePhraseMatch || entryTitleStrongMatch.hits >= 1 && entryTitleMatch.hits >= 2 || entryTitleStrongMatch.hits >= 1 && entryTitleStrongMatch.maxLen >= 7 && sameDiscipline && (contentMatchOnTitle.hits >= 1 || entryTitleStrongMatch.maxLen >= 8)
+            titlePhraseMatch || entryTitleStrongMatch.hits >= 1 && entryTitleMatch.hits >= 2 || entryTitleStrongMatch.hits >= 1 && entryTitleStrongMatch.maxLen >= 6 && sameDiscipline && (contentMatchOnTitle.hits >= 1 || entryTitleStrongMatch.maxLen >= 7)
           );
         } else {
-          const weakTitleCoverage = specificTopicTokens.length > 0 ? entryTitleMatch.hits / specificTopicTokens.length : 0;
+          const weakTitleCoverage = specificTopicWordTokens.length > 0 ? entryTitleMatch.hits / specificTopicWordTokens.length : 0;
           qualifiedLessonOnly = Boolean(
             titlePhraseMatch || entryTitleMatch.hits >= 2 && weakTitleCoverage >= 0.6
           );
         }
         if (qualifiedLessonOnly) {
-          const lessonScore = (titlePhraseMatch ? 12 : 0) + entryTitleStrongMatch.hits * 5 + entryTitleMatch.hits * 2 + Math.min(contentMatchOnTitle.hits, 2) * 1.5 + (sameDiscipline ? 1 : 0) - (entry.isFallbackSubjectLesson ? 0.5 : 0);
+          const lessonScore = (sharedContran ? 18 : 0) + (sharedLawNum ? 10 : 0) + (titlePhraseMatch ? 12 : 0) + entryTitleStrongMatch.hits * 5 + entryTitleMatch.hits * 2 + Math.min(contentMatchOnTitle.hits, 2) * 1.5 + (sameDiscipline ? 1.5 : 0) - (entry.isFallbackSubjectLesson ? 0.5 : 0) + partTieBias;
           if (lessonScore > bestScore) {
             bestScore = lessonScore;
             bestEntry = entry;
@@ -2062,12 +2105,13 @@ ${EXTRA_SHADOW_CSS}`;
     });
     if (!bestEntry || !bestEntry.url) return null;
     const seconds = Math.max(0, Number(bestTopic?.seconds) || 0);
-    const lessonTitle = bestEntry.title || bestEntry.lessonTitle || "Aula do Caveira";
-    let targetUrl = appendTimestampToUrl(bestEntry.url, seconds);
-    if (lessonTitle && !String(targetUrl).includes("#qg_lesson=")) {
+    const lessonTitle = cleanCourseEntryTitle(bestEntry.title || bestEntry.lessonTitle || "Aula do Caveira");
+    const cleanBaseUrl = sanitizeCourseBaseUrl(bestEntry.url);
+    let targetUrl = appendTimestampToUrl(cleanBaseUrl, seconds);
+    if (lessonTitle) {
       const cleanUrl = String(targetUrl).split("#")[0];
       const subjectHint = question.canonicalSubject || question.subject || bestEntry.subject || "";
-      targetUrl = `${cleanUrl}#qg_lesson=${encodeURIComponent(lessonTitle)}${subjectHint ? `&qg_subject=${encodeURIComponent(subjectHint)}` : ""}`;
+      targetUrl = `${cleanUrl}#qg_lesson=${encodeURIComponent(lessonTitle)}${subjectHint ? `&qg_subject=${encodeURIComponent(subjectHint)}` : ""}${seconds > 0 ? `&qg_t=${seconds}` : ""}`;
     }
     const courseIdMatch = String(bestEntry.url || "").match(/\/courses\/(\d+)/i);
     const courseId = String(bestEntry.courseId || courseIdMatch?.[1] || "");
@@ -2826,7 +2870,7 @@ ${EXTRA_SHADOW_CSS}`;
   // extensao-src/entries/content.entry.js
   (function() {
     if (isExcludedCaveiraHost(window.location.hostname)) return;
-    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.6.2";
+    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.6.3";
     console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
     try {
       window.dispatchEvent(new CustomEvent("qg-caveira-teardown"));
@@ -3680,24 +3724,31 @@ ${EXTRA_SHADOW_CSS}`;
           const resolvedCid = apiCourseCatalogCache.courseId || (window.location.pathname.match(/\/courses\/(\d+)/i)?.[1] || "");
           const resolvedCName = apiCourseCatalogCache.courseName || "";
           msg.payload.modules.forEach((m) => {
+            const cleanModName = m?.name && m.name !== "Módulo Atual" ? m.name : "";
+            const inferredSubj = resolvedCName && resolvedCName !== "Curso Caveira" && !/extensivo|prf|policia|caveira/i.test(resolvedCName) ? resolvedCName : inferSubjectFromLessons([cleanModName]) || "";
             (m?.lessons || []).forEach((l) => {
               if (l?.title && l?.rawIndexText) {
-                const subs = parseCourseIndexSubtopics(l.rawIndexText, [m.name, l.title]);
-                if (subs.length > 0) {
+                const parsedTopics = parseTimestampTopicsFromText(l.rawIndexText);
+                const subs = parseCourseIndexSubtopics(l.rawIndexText, [cleanModName, l.title]);
+                if (subs.length > 0 || parsedTopics.length > 0) {
                   const lesKey = normalizeCourseIndexKey(l.title);
                   const lesCid = String(resolvedCid || (String(l.url || "").match(/\/courses\/(\d+)/i)?.[1] || ""));
                   const compositeKey = lesCid && lesKey ? `${lesCid}::${lesKey}` : lesKey;
+                  const lesSubj = inferredSubj || inferSubjectFromLessons([l.title, cleanModName]) || "";
                   indexLessons.push({
                     key: compositeKey,
                     entry: {
-                      url: l.url || window.location.href,
+                      url: String(l.url || window.location.href).split("#")[0],
                       courseId: lesCid,
                       courseName: resolvedCName,
-                      moduleName: m.name || "",
+                      subject: lesSubj,
+                      moduleName: cleanModName,
                       videoId: l.id ? String(l.id) : "",
                       lessonTitle: l.title,
                       source: "indice_api",
                       rawIndexText: l.rawIndexText,
+                      indiceRawText: l.rawIndexText,
+                      ...parsedTopics.length > 0 ? { topics: parsedTopics } : {},
                       subtopics: subs,
                       capturedAt: Date.now()
                     }
@@ -3715,8 +3766,18 @@ ${EXTRA_SHADOW_CSS}`;
               indexLessons.forEach(({ key, entry }) => {
                 if (!key) return;
                 const existing = nextBy[key];
-                if (!existing || existing.source !== "bizus" && !existing.rawIndexText) {
+                if (!existing) {
                   nextBy[key] = entry;
+                  changed = true;
+                } else if (Array.isArray(entry.topics) && entry.topics.length > 0 && (!Array.isArray(existing.topics) || existing.topics.length === 0) || !existing.rawIndexText && entry.rawIndexText) {
+                  nextBy[key] = {
+                    ...existing,
+                    url: existing.url || entry.url,
+                    subject: existing.subject || entry.subject || "",
+                    moduleName: existing.moduleName && existing.moduleName !== "Módulo Atual" ? existing.moduleName : entry.moduleName || "",
+                    indiceRawText: entry.indiceRawText,
+                    ...Array.isArray(entry.topics) && entry.topics.length > 0 ? { topics: entry.topics } : {}
+                  };
                   changed = true;
                 }
               });
@@ -4128,6 +4189,55 @@ ${EXTRA_SHADOW_CSS}`;
         explicitSpeed
       });
     }
+    function readRequestedSeekSeconds() {
+      try {
+        const tParam = Number(new URLSearchParams(window.location.search || "").get("t"));
+        if (Number.isFinite(tParam) && tParam > 0) return Math.round(tParam);
+      } catch (_) {
+      }
+      try {
+        const hashMatch = String(window.location.hash || "").match(/qg_t=(\d+)/);
+        if (hashMatch && Number(hashMatch[1]) > 0) return Math.round(Number(hashMatch[1]));
+      } catch (_) {
+      }
+      try {
+        const stored = JSON.parse(sessionStorage.getItem("qg_target_lesson_pending") || "null");
+        if (stored && Number(stored.seekSec) > 0 && Date.now() - (Number(stored.savedAt) || 0) < 9e4) {
+          return Math.round(Number(stored.seekSec));
+        }
+      } catch (_) {
+      }
+      return 0;
+    }
+    function dispatchReadySeek(seekSec, courseId = "") {
+      const sec = Math.max(0, Math.round(Number(seekSec) || 0));
+      if (sec <= 0 || !isExtensionContextValid() || !chrome?.storage?.local) return;
+      const cid = courseId || (window.location.pathname.match(/\/courses\/(\d+)/i)?.[1] || "");
+      const fire = () => {
+        if (isDestroyed) return;
+        const nowTs = Date.now();
+        try {
+          chrome.storage.local.set({
+            [PLAYER_SEEK_KEY]: {
+              seconds: sec,
+              courseId: cid,
+              awaitingTargetLesson: false,
+              readyToSeek: true,
+              updatedAt: nowTs,
+              savedAt: nowTs
+            }
+          }, () => {
+            if (chrome.runtime?.sendMessage) {
+              chrome.runtime.sendMessage({ type: "SEEK_VIDEO_TO", payload: { seconds: sec } }).catch(() => {
+              });
+            }
+          });
+        } catch (_) {
+        }
+      };
+      fire();
+      setTimeout(fire, 1200);
+    }
     function applySubjectVideoSpeedInPlayground(forceSend = false) {
       if (!isCoursePlaygroundPage()) return;
       const lessonTitle = currentCourseIndexStatus?.lessonTitle || extractCourseLessonTitle() || document.title || "";
@@ -4149,18 +4259,20 @@ ${EXTRA_SHADOW_CSS}`;
         }
       }
       try {
+        let waitingForTargetLesson = false;
+        const pendingNav = JSON.parse(sessionStorage.getItem("qg_target_lesson_pending") || "null");
+        if (pendingNav && pendingNav.lesson && Date.now() - (Number(pendingNav.savedAt) || 0) < 45e3) {
+          const curPlay = extractPlayingVideoTitleFromHeader() || extractCourseLessonTitle() || "";
+          if (!curPlay || scoreCaveiraLessonCandidate(curPlay, pendingNav.lesson) < 75) {
+            waitingForTargetLesson = true;
+          }
+        }
         const currentHrefNoHash = window.location.href.split("#")[0];
-        if (currentHrefNoHash !== lastSeekUrlApplied) {
-          lastSeekUrlApplied = currentHrefNoHash;
-          const seekParam = Number(new URLSearchParams(window.location.search || "").get("t"));
-          if (Number.isFinite(seekParam) && seekParam > 0) {
-            const nowTs = Date.now();
-            chrome.storage.local.set({ [PLAYER_SEEK_KEY]: { seconds: seekParam, courseId: currentCourseId, updatedAt: nowTs, savedAt: nowTs } }, () => {
-              if (chrome.runtime?.sendMessage) {
-                chrome.runtime.sendMessage({ type: "SEEK_VIDEO_TO", payload: { seconds: seekParam } }).catch(() => {
-                });
-              }
-            });
+        if (!waitingForTargetLesson && (currentHrefNoHash !== lastSeekUrlApplied || forceSend)) {
+          const seekParam = readRequestedSeekSeconds();
+          if (seekParam > 0) {
+            lastSeekUrlApplied = currentHrefNoHash;
+            dispatchReadySeek(seekParam, currentCourseId);
           }
         }
       } catch (_) {
@@ -4524,6 +4636,7 @@ ${EXTRA_SHADOW_CSS}`;
       let targetSubject = "";
       let targetTopic = "";
       let targetCourse = "";
+      let targetSeekSec = 0;
       const safeDecode = (v) => {
         try {
           return decodeURIComponent(v || "").trim();
@@ -4531,6 +4644,11 @@ ${EXTRA_SHADOW_CSS}`;
           return String(v || "").trim();
         }
       };
+      try {
+        const qT = Number(new URLSearchParams(window.location.search || "").get("t"));
+        if (Number.isFinite(qT) && qT > 0) targetSeekSec = Math.round(qT);
+      } catch (_) {
+      }
       const rawHash = String(window.location.hash || "");
       if (rawHash.includes("qg_lesson=")) {
         const mLes = rawHash.match(/qg_lesson=([^&]+)/);
@@ -4538,10 +4656,12 @@ ${EXTRA_SHADOW_CSS}`;
         const mTop = rawHash.match(/qg_topic=([^&]+)/);
         const mCrs = rawHash.match(/qg_course=([^&]+)/);
         const mSpd = rawHash.match(/qg_speed=([^&]+)/);
+        const mSeek = rawHash.match(/qg_t=(\d+)/);
         if (mLes) targetLesson = safeDecode(mLes[1]);
         if (mSub) targetSubject = safeDecode(mSub[1]);
         if (mTop) targetTopic = safeDecode(mTop[1]);
         if (mCrs) targetCourse = safeDecode(mCrs[1]);
+        if (mSeek && Number(mSeek[1]) > 0) targetSeekSec = Math.round(Number(mSeek[1]));
         if (mSpd) {
           const parsedSpd = Number(safeDecode(mSpd[1]));
           if (Number.isFinite(parsedSpd) && parsedSpd >= 0.5 && parsedSpd <= 4) {
@@ -4559,6 +4679,7 @@ ${EXTRA_SHADOW_CSS}`;
               topic: targetTopic,
               course: targetCourse,
               speed: lastExplicitLessonSpeed,
+              seekSec: targetSeekSec,
               savedAt: Date.now()
             }));
           } catch (_) {
@@ -4572,6 +4693,7 @@ ${EXTRA_SHADOW_CSS}`;
             targetSubject = stored.subject || "";
             targetTopic = stored.topic || "";
             targetCourse = stored.course || "";
+            if (Number(stored.seekSec) > 0 && targetSeekSec <= 0) targetSeekSec = Math.round(Number(stored.seekSec));
             if (Number.isFinite(Number(stored.speed)) && Number(stored.speed) >= 0.5 && Number(stored.speed) <= 4) {
               const cidM = window.location.pathname.match(/\/courses\/(\d+)/i);
               const midM = window.location.pathname.match(/\/modules\/(\d+)/i);
@@ -4633,31 +4755,11 @@ ${EXTRA_SHADOW_CSS}`;
       let titleBeforeDomClick = "";
       let postNavConfirmTicks = 0;
       const applyPendingSeekIfAny = () => {
-        let seekSec = 0;
-        try {
-          seekSec = Math.max(0, Number(new URLSearchParams(window.location.search || "").get("t")) || 0);
-        } catch (_) {
-        }
+        const seekSec = targetSeekSec > 0 ? targetSeekSec : readRequestedSeekSeconds();
         if (seekSec > 0) {
           setTimeout(() => {
-            try {
-              const nowSeekTs = Date.now();
-              chrome.storage.local.set({
-                [PLAYER_SEEK_KEY]: {
-                  seconds: seekSec,
-                  courseId: window.location.pathname.match(/\/courses\/(\d+)/i)?.[1] || "",
-                  updatedAt: nowSeekTs,
-                  savedAt: nowSeekTs
-                }
-              }, () => {
-                if (chrome.runtime?.sendMessage) {
-                  chrome.runtime.sendMessage({ type: "SEEK_VIDEO_TO", payload: { seconds: seekSec } }).catch(() => {
-                  });
-                }
-              });
-            } catch (_) {
-            }
-          }, 1e3);
+            dispatchReadySeek(seekSec);
+          }, 450);
         }
       };
       const tryNavigate = () => {
@@ -10462,9 +10564,12 @@ ${EXTRA_SHADOW_CSS}`;
         dismissPrompt();
       }, 1e4);
     }
+    function cleanExtractedLessonTitle(raw = "") {
+      return String(raw || "").replace(/\b(?:play_circle(?:_outline|_filled)?|check_circle|ondemand_video|smart_display|lock|schedule)\b/gi, " ").replace(/\s+\d{1,2}:\d{2}(?::\d{2})?\s*$/g, "").replace(/\s+/g, " ").trim();
+    }
     function extractCourseLessonTitle() {
       const headerTitle = extractPlayingVideoTitleFromHeader();
-      if (headerTitle) return headerTitle;
+      if (headerTitle) return cleanExtractedLessonTitle(headerTitle);
       const ignored = /* @__PURE__ */ new Set([
         "indice",
         "charlie",
@@ -10483,7 +10588,7 @@ ${EXTRA_SHADOW_CSS}`;
         document.querySelectorAll('h1, h2, h3, [aria-current="page"], [aria-current="true"], [class*="active"], [class*="selected"], [class*="lesson"] [class*="title"], [class*="video"] [class*="title"]')
       ).filter((el) => {
         if (!el || el.closest("#qg-caveira-shadow-host, #qg-caveira-hud") || !isElementVisible(el)) return false;
-        const txt = (el.innerText || el.textContent || "").replace(/\s+/g, " ").trim();
+        const txt = cleanExtractedLessonTitle(el.innerText || el.textContent || "");
         if (txt.length < 4 || txt.length > 140) return false;
         if (/^[[(]?\d{1,2}:\d{2}/.test(txt)) return false;
         const norm = normalizeCourseIndexKey(txt);
@@ -10502,7 +10607,7 @@ ${EXTRA_SHADOW_CSS}`;
         return aHeading - bHeading;
       });
       if (candidates[0]) {
-        return (candidates[0].innerText || candidates[0].textContent || "").replace(/\s+/g, " ").trim();
+        return cleanExtractedLessonTitle(candidates[0].innerText || candidates[0].textContent || "");
       }
       const docTitle = String(document.title || "").replace(/\s*[|\-–]\s*projeto\s*caveira.*$/i, "").replace(/\s*[|\-–]\s*caveira.*$/i, "").trim();
       return docTitle.length >= 4 && !ignored.has(normalizeCourseIndexKey(docTitle)) ? docTitle : "";
@@ -10524,11 +10629,14 @@ ${EXTRA_SHADOW_CSS}`;
       }) || null;
     }
     function extractCourseIndexRawTextFromDom() {
-      const tsRegex = /\[\d{1,2}:\d{2}(?::\d{2})?\]/g;
+      const indexTab = findCourseTabElement("indice");
+      if (indexTab && !isCourseTabActive(indexTab)) return "";
+      const tsRegex = /(?:^|\n)\s*[[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?(?:\s*[-–—:|]?\s*[^\n]+)?/gm;
       const containers = [];
-      for (const el of document.querySelectorAll("div, ul, ol, section, aside, main")) {
+      for (const el of document.querySelectorAll('.q-tab-panel, [role="tabpanel"], div, ul, ol, section, aside, main')) {
         if (!el || el.closest("#qg-caveira-shadow-host, #qg-caveira-hud") || !isElementVisible(el)) continue;
         const txt = el.innerText || el.textContent || "";
+        if (/\bplay_circle\b/i.test(txt)) continue;
         const matches = txt.match(tsRegex);
         if (matches && matches.length >= 2) {
           containers.push({ el, count: matches.length, len: txt.length, txt });
@@ -10542,16 +10650,22 @@ ${EXTRA_SHADOW_CSS}`;
       const best = containers[0];
       const rawLines = best.txt.split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
       const tsLines = [];
+      const bareTsRx = /^[[(]?(\d{1,2}:\d{2}(?::\d{2})?)[\])]?$/;
+      const leadTsRx = /^[[(]?(\d{1,2}:\d{2}(?::\d{2})?)[\])]?\s*[-–—:|]*\s*(\S.*)$/;
       for (let i = 0; i < rawLines.length; i++) {
         const cur = rawLines[i];
-        if (/^\[\d{1,2}:\d{2}(?::\d{2})?\]$/.test(cur) && i + 1 < rawLines.length) {
-          tsLines.push(`${cur} ${rawLines[i + 1]}`);
+        const bareM = cur.match(bareTsRx);
+        if (bareM && i + 1 < rawLines.length) {
+          tsLines.push(`[${bareM[1]}] ${rawLines[i + 1]}`);
           i += 1;
-        } else if (/^\[\d{1,2}:\d{2}(?::\d{2})?\]\s*\S+/.test(cur)) {
-          tsLines.push(cur);
+        } else {
+          const leadM = cur.match(leadTsRx);
+          if (leadM) {
+            tsLines.push(`[${leadM[1]}] ${leadM[2]}`);
+          }
         }
       }
-      return tsLines.join("\n");
+      return tsLines.length >= 2 ? tsLines.join("\n") : "";
     }
     function extractCourseBizusRawTextFromDom() {
       const bizusTab = findCourseTabElement("bizus");
@@ -10724,12 +10838,25 @@ ${EXTRA_SHADOW_CSS}`;
       if (titles.length === 0) return "";
       return titles.slice(0, 20).map((t, idx) => `${idx + 1}. ${t}`).join("\n");
     }
+    let lastCapturedIndiceState = { lessonKey: "", digest: "", at: 0 };
     function scanCourseVideoIndex() {
       if (isDestroyed || !isCoursePage()) return;
-      const lessonTitle = extractCourseLessonTitle();
-      const peekKey = `${window.location.href}|${lessonTitle}`;
+      const lessonTitle = cleanExtractedLessonTitle(extractCourseLessonTitle());
+      const courseIdMatch = window.location.pathname.match(/\/courses\/(\d+)/i);
+      const courseId = courseIdMatch ? courseIdMatch[1] : "";
+      const rawLessonKey = normalizeCourseIndexKey(lessonTitle);
+      const lessonKey = courseId && rawLessonKey ? `${courseId}::${rawLessonKey}` : rawLessonKey;
+      const peekKey = `${window.location.href.split("#")[0]}|${lessonTitle}`;
       const rawBizusText = extractCourseBizusRawTextFromDom();
       const rawIndiceText = extractCourseIndexRawTextFromDom();
+      if (rawIndiceText && lessonKey) {
+        const digest = `${rawIndiceText.length}:${rawIndiceText.slice(0, 120)}:${rawIndiceText.slice(-80)}`;
+        if (lastCapturedIndiceState.lessonKey && lastCapturedIndiceState.lessonKey !== lessonKey && lastCapturedIndiceState.digest === digest && Date.now() - lastCapturedIndiceState.at < 12e4) {
+          setTimeout(scanCourseVideoIndex, 650);
+          return;
+        }
+        lastCapturedIndiceState = { lessonKey, digest, at: Date.now() };
+      }
       let captureSource = rawBizusText ? "bizus" : rawIndiceText ? "indice" : "bizus";
       let rawIndexText = rawBizusText || rawIndiceText;
       if (!rawIndexText) {
@@ -10746,11 +10873,22 @@ ${EXTRA_SHADOW_CSS}`;
         if (indexTab && !isCourseTabActive(indexTab) && !peekedCourseUrls.has(indicePeekKey)) {
           peekedCourseUrls.add(indicePeekKey);
           clickElementRealistically(indexTab);
-          setTimeout(scanCourseVideoIndex, 450);
+          setTimeout(scanCourseVideoIndex, 550);
         }
         return;
       }
       const parsedTopics = rawIndiceText ? parseTimestampTopicsFromText(rawIndiceText) : [];
+      const existingCachedForLesson = lessonKey ? cachedLocalCourseIndexByLesson?.[lessonKey] : null;
+      const hasTopicsAlready = parsedTopics.length > 0 || Array.isArray(existingCachedForLesson?.topics) && existingCachedForLesson.topics.length > 0;
+      if (rawBizusText && !rawIndiceText && !hasTopicsAlready) {
+        const indexTab = findCourseTabElement("indice");
+        const indicePeekKey = `${peekKey}|indice_ts`;
+        if (indexTab && !isCourseTabActive(indexTab) && !peekedCourseUrls.has(indicePeekKey)) {
+          peekedCourseUrls.add(indicePeekKey);
+          clickElementRealistically(indexTab);
+          setTimeout(scanCourseVideoIndex, 550);
+        }
+      }
       const subtopics = parseCourseIndexSubtopics(rawIndexText, lessonTitle ? [lessonTitle] : []);
       if (subtopics.length === 0) return;
       currentCourseIndexStatus = {
@@ -10771,7 +10909,7 @@ ${EXTRA_SHADOW_CSS}`;
       if (courseActionsEl) {
         courseActionsEl.style.display = "flex";
       }
-      const signature = `${captureSource}|${window.location.href}|${lessonTitle}|${rawIndexText}`;
+      const signature = `${captureSource}|${window.location.href.split("#")[0]}|${lessonTitle}|${rawIndexText}|${parsedTopics.length}`;
       if (signature === lastCapturedCourseSignature || !isExtensionContextValid()) return;
       lastCapturedCourseSignature = signature;
       let videoId = "";
@@ -10779,14 +10917,24 @@ ${EXTRA_SHADOW_CSS}`;
         videoId = new URL(window.location.href).searchParams.get("course_video_id") || "";
       } catch (_) {
       }
-      const courseIdMatch = window.location.pathname.match(/\/courses\/(\d+)/i);
-      const courseId = courseIdMatch ? courseIdMatch[1] : "";
       const sameCourseApi = !courseId || !apiCourseCatalogCache?.courseId || String(apiCourseCatalogCache.courseId) === String(courseId);
       const courseName = sameCourseApi ? apiCourseCatalogCache?.courseName || "" : "";
+      const cleanEntryUrl = (() => {
+        try {
+          const u = new URL(window.location.href);
+          u.hash = "";
+          u.searchParams.delete("t");
+          return u.toString();
+        } catch (_) {
+          return String(window.location.href).split("#")[0];
+        }
+      })();
+      const inferredSubject = lastOpenedCourseContext?.courseId === courseId && lastOpenedCourseContext?.subject || inferSubjectFromLessons([lessonTitle, courseName]) || "";
       const entry = {
-        url: window.location.href,
+        url: cleanEntryUrl,
         courseId,
         courseName,
+        subject: inferredSubject,
         videoId,
         lessonTitle,
         source: captureSource,
@@ -10802,27 +10950,27 @@ ${EXTRA_SHADOW_CSS}`;
           if (chrome.runtime.lastError || isDestroyed) return;
           const prev = res?.[COURSE_INDEX_CACHE_KEY] && typeof res[COURSE_INDEX_CACHE_KEY] === "object" ? res[COURSE_INDEX_CACHE_KEY] : { latest: null, byLesson: {} };
           const nextByLesson = { ...prev.byLesson || {} };
-          const rawLessonKey = normalizeCourseIndexKey(lessonTitle);
-          const lessonKey = courseId && rawLessonKey ? `${courseId}::${rawLessonKey}` : rawLessonKey;
-          if (lessonKey) {
-            const existing = nextByLesson[lessonKey];
+          const rawLessonKey2 = normalizeCourseIndexKey(lessonTitle);
+          const lessonKey2 = courseId && rawLessonKey2 ? `${courseId}::${rawLessonKey2}` : rawLessonKey2;
+          if (lessonKey2) {
+            const existing = nextByLesson[lessonKey2];
             const mergedTopics = parsedTopics.length > 0 ? parsedTopics : existing?.topics || [];
             const mergedIndiceRaw = rawIndiceText || existing?.indiceRawText || "";
             if (captureSource === "bizus") {
-              nextByLesson[lessonKey] = {
+              nextByLesson[lessonKey2] = {
                 ...existing || {},
                 ...entry,
                 ...mergedIndiceRaw ? { indiceRawText: mergedIndiceRaw } : {},
                 ...mergedTopics.length > 0 ? { topics: mergedTopics } : {}
               };
             } else if (existing && existing.source === "bizus") {
-              nextByLesson[lessonKey] = {
+              nextByLesson[lessonKey2] = {
                 ...existing,
                 ...mergedIndiceRaw ? { indiceRawText: mergedIndiceRaw } : {},
                 ...mergedTopics.length > 0 ? { topics: mergedTopics } : {}
               };
             } else {
-              nextByLesson[lessonKey] = {
+              nextByLesson[lessonKey2] = {
                 ...existing || {},
                 ...entry,
                 ...mergedIndiceRaw ? { indiceRawText: mergedIndiceRaw } : {},
@@ -10833,7 +10981,7 @@ ${EXTRA_SHADOW_CSS}`;
           const ordered = Object.entries(nextByLesson).sort((a, b) => (b[1]?.capturedAt || 0) - (a[1]?.capturedAt || 0)).slice(0, 120);
           const compactedByLesson = Object.fromEntries(ordered);
           cachedLocalCourseIndexByLesson = compactedByLesson;
-          const latestEntry = prev.latest && prev.latest.source === "bizus" && captureSource === "indice" && rawLessonKey && normalizeCourseIndexKey(prev.latest.lessonTitle || "") === rawLessonKey ? prev.latest : lessonKey && compactedByLesson[lessonKey] || entry;
+          const latestEntry = prev.latest && prev.latest.source === "bizus" && captureSource === "indice" && rawLessonKey2 && normalizeCourseIndexKey(prev.latest.lessonTitle || "") === rawLessonKey2 ? prev.latest : lessonKey2 && compactedByLesson[lessonKey2] || entry;
           chrome.storage.local.set({
             [COURSE_INDEX_CACHE_KEY]: {
               latest: latestEntry,
@@ -11163,6 +11311,10 @@ ${EXTRA_SHADOW_CSS}`;
                           [PLAYER_SEEK_KEY]: {
                             seconds: vm.seconds,
                             courseId: vm.courseId || "",
+                            lessonTitle: vm.lessonTitle || "",
+                            topicLabel: vm.topicLabel || "",
+                            awaitingTargetLesson: Boolean(vm.lessonTitle),
+                            readyToSeek: !vm.lessonTitle,
                             updatedAt: nowTs,
                             savedAt: nowTs
                           }

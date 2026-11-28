@@ -14,6 +14,32 @@
   let isApplyingInternally = false;
   let observer = null;
   let bootTimer = null;
+  let pendingSeekSec = null;
+  let pendingSeekExpiresAt = 0;
+
+  function applyPendingSeekToPlayer() {
+    if (!pendingSeekSec || Date.now() > pendingSeekExpiresAt) {
+      pendingSeekSec = null;
+      return;
+    }
+    const video = getVideoEl();
+    if (!video || !Number.isFinite(video.duration) || video.duration <= 0 || pendingSeekSec >= video.duration) return;
+    if (Math.abs(video.currentTime - pendingSeekSec) <= 3) {
+      pendingSeekSec = null;
+      return;
+    }
+    const plyr = getPlyrInstance();
+    isApplyingInternally = true;
+    try {
+      if (plyr && typeof plyr.currentTime === 'number') {
+        plyr.currentTime = pendingSeekSec;
+      }
+      video.currentTime = pendingSeekSec;
+      video.play?.().catch(() => {});
+    } catch (_) {} finally {
+      setTimeout(() => { isApplyingInternally = false; }, 120);
+    }
+  }
 
   function notifyManualSpeedOverride(active) {
     try {
@@ -151,6 +177,9 @@
           }
         } catch (_) {}
       }
+      if (pendingSeekSec > 0) {
+        setTimeout(applyPendingSeekToPlayer, 350);
+      }
     } finally {
       setTimeout(() => { isApplyingInternally = false; }, 120);
     }
@@ -182,6 +211,7 @@
 
       ['loadedmetadata', 'canplay', 'playing', 'play'].forEach((evtName) => {
         video.addEventListener(evtName, () => {
+          if (pendingSeekSec > 0) applyPendingSeekToPlayer();
           if (manualSpeedOverride) return;
           const speed = clampSpeed(desiredSpeed);
           if (Math.abs((video.playbackRate || 1) - speed) > 0.005) {
@@ -239,6 +269,14 @@
       }
       applySpeedControl(forceSpeed);
       applyMaxQualityOnce();
+    }
+    if (msg.type === 'QG_SEEK_PLAYER' && msg.payload) {
+      const sec = Number(msg.payload.seconds);
+      if (Number.isFinite(sec) && sec > 0) {
+        pendingSeekSec = sec;
+        pendingSeekExpiresAt = Date.now() + 15000;
+        applyPendingSeekToPlayer();
+      }
     }
   });
 

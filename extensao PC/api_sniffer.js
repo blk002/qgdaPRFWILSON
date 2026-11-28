@@ -389,6 +389,38 @@
           const idMatchesCurrentUrl = Boolean(
             currentUrlVideoId && rawItems.some((v) => String(v.id || "") === currentUrlVideoId && String(v.video_id || "") !== currentUrlVideoId)
           );
+          const formatSec = (s) => {
+            const n = Math.max(0, Math.round(Number(s) || 0));
+            const h = Math.floor(n / 3600);
+            const m = Math.floor(n % 3600 / 60);
+            const sec = n % 60;
+            return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+          };
+          const extractVideoIndexTextFromApiNode = (v) => {
+            if (!v || typeof v !== "object") return "";
+            for (const arrKey of ["chapters", "timestamps", "indexes", "video_indexes", "topics", "markers"]) {
+              const arr = v[arrKey];
+              if (Array.isArray(arr) && arr.length >= 2) {
+                const lines = arr.map((it) => {
+                  if (!it || typeof it !== "object") return "";
+                  const lbl = String(it.title || it.label || it.name || it.description || "").trim();
+                  if (!lbl) return "";
+                  const rawT = it.time ?? it.timestamp ?? it.start ?? it.seconds ?? it.mmss;
+                  if (typeof rawT === "number" && Number.isFinite(rawT)) return `[${formatSec(rawT)}] ${lbl}`;
+                  if (typeof rawT === "string" && /\d{1,2}:\d{2}/.test(rawT)) return `[${rawT.trim()}] ${lbl}`;
+                  return "";
+                }).filter(Boolean);
+                if (lines.length >= 2) return lines.join("\n").slice(0, 6e3);
+              }
+            }
+            for (const txtKey of ["description", "index", "video_index", "summary", "content"]) {
+              const rawTxt = typeof v[txtKey] === "string" ? v[txtKey].trim() : "";
+              if (!rawTxt) continue;
+              const tsMatches = rawTxt.match(/(?:^|\n)\s*[[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?\s*[-–—:|]?\s*[^\n]+/gm);
+              if (tsMatches && tsMatches.length >= 2) return rawTxt.slice(0, 6e3);
+            }
+            return "";
+          };
           const rawLessons = [];
           const seenVids = /* @__PURE__ */ new Set();
           const pushLesson = (v) => {
@@ -401,8 +433,7 @@
             seenVids.add(dedup);
             const hasVerifiedUrl = Boolean(courseId && verifiedVid);
             const urlPath = hasVerifiedUrl ? `${window.location.origin}/courses/${courseId}/modules/${modId || "0"}/playground?course_video_id=${verifiedVid}` : moduleUrl;
-            const rawDesc = typeof v.description === "string" ? v.description.trim() : "";
-            const hasTimestampIndex = /\[\d{1,2}:\d{2}(?::\d{2})?\]/.test(rawDesc);
+            const extractedIndexText = extractVideoIndexTextFromApiNode(v);
             rawLessons.push({
               id: verifiedVid || null,
               verifiedVideoUrl: hasVerifiedUrl,
@@ -410,7 +441,7 @@
               durationMin: normalizeDurationMin(v.duration || v.duration_seconds || v.duration_minutes || v.time || v.length),
               completed: Boolean(v.completed || v.is_completed || v.watched || v.concluded || v.finished),
               url: urlPath,
-              ...hasTimestampIndex ? { rawIndexText: rawDesc.slice(0, 4e3) } : {}
+              ...extractedIndexText ? { rawIndexText: extractedIndexText } : {}
             });
           };
           rawItems.forEach(pushLesson);

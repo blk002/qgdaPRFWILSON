@@ -103,6 +103,26 @@
     } catch (_) {}
   }
 
+  let activeSeekTimerIds = [];
+
+  function clearSeekTimers() {
+    activeSeekTimerIds.forEach((id) => clearTimeout(id));
+    activeSeekTimerIds = [];
+  }
+
+  function postSeekToMain(seconds) {
+    try {
+      window.postMessage(
+        {
+          source: 'QG_PLAYER_BRIDGE',
+          type: 'QG_SEEK_PLAYER',
+          payload: { seconds },
+        },
+        window.location.origin
+      );
+    } catch (_) {}
+  }
+
   function checkAndApplySeek(video) {
     if (!video) return;
     try {
@@ -111,30 +131,39 @@
         const item = res?.[SEEK_KEY];
         if (!item || typeof item !== 'object') return;
         const age = Date.now() - (Number(item.updatedAt || item.savedAt) || 0);
-        if (age > 45000) return;
+        if (age > 90000) return;
+        if (item.awaitingTargetLesson && !item.readyToSeek) return;
         const targetSec = Number(item.seconds);
-        if (!Number.isFinite(targetSec) || targetSec < 0) return;
+        if (!Number.isFinite(targetSec) || targetSec <= 0) return;
 
-        const doSeek = () => {
+        clearSeekTimers();
+        postSeekToMain(targetSec);
+
+        const attemptSeek = () => {
           try {
-            if (Number.isFinite(video.duration) && targetSec < video.duration) {
-              video.currentTime = targetSec;
-              chrome.storage.local.remove(SEEK_KEY);
-              video.play?.().catch(() => {});
-            } else if (!Number.isFinite(video.duration) || video.duration === 0) {
-              setTimeout(() => {
-                if (Number.isFinite(video.duration) && targetSec < video.duration) {
-                  video.currentTime = targetSec;
-                  chrome.storage.local.remove(SEEK_KEY);
-                  video.play?.().catch(() => {});
-                }
-              }, 1200);
+            postSeekToMain(targetSec);
+            if (Number.isFinite(video.duration) && video.duration > 0 && targetSec < video.duration) {
+              if (Math.abs(video.currentTime - targetSec) > 3) {
+                video.currentTime = targetSec;
+                video.play?.().catch(() => {});
+              }
+              if (Math.abs(video.currentTime - targetSec) <= 3) {
+                chrome.storage.local.remove(SEEK_KEY);
+                clearSeekTimers();
+                return true;
+              }
             }
           } catch (_) {}
+          return false;
         };
 
-        if (video.readyState >= 1) doSeek();
-        else video.addEventListener('loadedmetadata', doSeek, { once: true });
+        if (video.readyState >= 1 && attemptSeek()) return;
+        video.addEventListener('loadedmetadata', attemptSeek, { once: true });
+        video.addEventListener('canplay', attemptSeek, { once: true });
+        [350, 1000, 2200, 3800].forEach((delay) => {
+          const tid = setTimeout(attemptSeek, delay);
+          activeSeekTimerIds.push(tid);
+        });
       });
     } catch (_) {}
   }
@@ -177,9 +206,11 @@
 
     video.addEventListener('loadedmetadata', () => {
       if (!manualSpeedOverride) applyTargetSpeed(video, false);
+      checkAndApplySeek(video);
       tryAutoResumePosition(video);
     });
     video.addEventListener('canplay', () => {
+      checkAndApplySeek(video);
       if (!manualSpeedOverride && Math.abs((video.playbackRate || 1) - clampSpeed(desiredSpeed)) > 0.005) {
         applyTargetSpeed(video, false);
       }

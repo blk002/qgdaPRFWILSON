@@ -573,15 +573,41 @@ export function useExtensionBridge() {
       );
 
       // Sincroniza índice de aulas + timestamps + aulas vinculadas para "Professor no Timestamp" (#9)
+      const moduleUrlToSubject = {};
+      Object.values(subjects || {}).forEach((sub) => {
+        if (!sub) return;
+        const reg = (u, modTitle = '') => {
+          const m = String(u || '').match(/\/courses\/(\d+)\/modules\/(\d+)/i);
+          if (m && !moduleUrlToSubject[`${m[1]}:${m[2]}`]) {
+            moduleUrlToSubject[`${m[1]}:${m[2]}`] = { subject: sub.name || '', moduleName: modTitle || '' };
+          }
+        };
+        reg(sub.caveiraModuleUrl, '');
+        (sub.topics || []).forEach((t) => {
+          if (!t) return;
+          reg(t.caveiraModuleUrl, t.name || '');
+          (t.lessons || []).forEach((l) => reg(l?.caveiraUrl || l?.url, t.name || ''));
+        });
+      });
+
       const videoIndexOut = {};
       Object.entries(caveiraCourseIndexMap || {}).slice(0, 200).forEach(([k, v]) => {
         if (!v || !v.url) return;
+        const cleanTitle = String(v.title || v.lessonTitle || '')
+          .replace(/\b(?:play_circle(?:_outline|_filled)?|check_circle|ondemand_video|smart_display|lock|schedule)\b/gi, ' ')
+          .replace(/\s+\d{1,2}:\d{2}(?::\d{2})?\s*$/g, '')
+          .replace(/\s+/g, ' ')
+          .trim();
+        const modMatch = String(v.url || '').match(/\/courses\/(\d+)\/modules\/(\d+)/i);
+        const modMeta = modMatch ? moduleUrlToSubject[`${modMatch[1]}:${modMatch[2]}`] : null;
+        const resolvedSubj = v.subject || modMeta?.subject || '';
+        const resolvedMod = (v.moduleName && v.moduleName !== 'Módulo Atual') ? v.moduleName : (modMeta?.moduleName || '');
         videoIndexOut[k] = {
-          url: v.url,
+          url: String(v.url).split('#')[0].replace(/([?&])t=\d+&?/g, '$1').replace(/[?&]$/, ''),
           courseId: v.courseId || '',
-          title: v.title || v.lessonTitle || '',
-          subject: v.subject || '',
-          moduleName: v.moduleName || '',
+          title: cleanTitle || v.title || v.lessonTitle || '',
+          subject: resolvedSubj,
+          moduleName: resolvedMod,
           topics: Array.isArray(v.topics) ? v.topics.slice(0, 60) : [],
         };
       });
@@ -607,7 +633,9 @@ export function useExtensionBridge() {
         });
       });
       const videoIndexKeys = Object.keys(videoIndexOut);
-      const videoIndexSig = `${videoIndexKeys.length}|${videoIndexKeys.slice(0, 8).join(',')}`;
+      const totalTsCount = videoIndexKeys.reduce((acc, k) => acc + (videoIndexOut[k]?.topics?.length || 0), 0);
+      const totalSubjCount = videoIndexKeys.reduce((acc, k) => acc + (videoIndexOut[k]?.subject ? 1 : 0), 0);
+      const videoIndexSig = `${videoIndexKeys.length}|${totalTsCount}|${totalSubjCount}|${videoIndexKeys.slice(0, 12).join(',')}`;
       if (videoIndexKeys.length > 0 && videoIndexSig !== lastSyncedVideoIndexSigRef.current) {
         lastSyncedVideoIndexSigRef.current = videoIndexSig;
         window.postMessage(

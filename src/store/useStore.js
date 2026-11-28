@@ -4927,31 +4927,116 @@ export const useStore = create(
           return parsed;
         };
 
+        const cleanCourseLessonTitle = (str = '') =>
+          String(str || '')
+            .replace(/\b(?:play_circle(?:_outline|_filled)?|check_circle|ondemand_video|smart_display|lock|schedule)\b/gi, ' ')
+            .replace(/\s+\d{1,2}:\d{2}(?::\d{2})?\s*$/g, '')
+            .replace(/\s+/g, ' ')
+            .trim();
+
+        const cleanCourseEntryUrl = (rawUrl = '') => {
+          if (!rawUrl) return '';
+          try {
+            const u = new URL(String(rawUrl));
+            u.hash = '';
+            u.searchParams.delete('t');
+            return u.toString();
+          } catch (_) {
+            return String(rawUrl).split('#')[0].replace(/([?&])t=\d+&?/g, '$1').replace(/[?&]$/, '');
+          }
+        };
+
+        const modLookup = {};
+        const lessonSubjectLookup = {};
+        Object.values(get().subjects || {}).forEach((sub) => {
+          if (!sub) return;
+          const addUrlMod = (rawU, modTitle = '') => {
+            const m = String(rawU || '').match(/\/courses\/(\d+)\/modules\/(\d+)/i);
+            if (m) {
+              const mk = `${m[1]}:${m[2]}`;
+              if (!modLookup[mk]) modLookup[mk] = { subject: sub.name || '', moduleName: modTitle || '' };
+            }
+          };
+          addUrlMod(sub.caveiraModuleUrl, '');
+          (sub.topics || []).forEach((t) => {
+            if (!t) return;
+            addUrlMod(t.caveiraModuleUrl, t.name || '');
+            (t.lessons || []).forEach((l) => {
+              addUrlMod(l?.caveiraUrl || l?.url, t.name || '');
+              const lk = normalizeCourseLookupKey(cleanCourseLessonTitle(l?.name || ''));
+              if (lk && !lessonSubjectLookup[lk]) {
+                lessonSubjectLookup[lk] = { subject: sub.name || '', moduleName: t.name || '' };
+              }
+            });
+          });
+        });
+
+        // Self-heal entradas antigas sujas no store (play_circle, ?t= na base URL, subject vazio, Módulo Atual)
+        Object.keys(next).forEach((k) => {
+          const item = next[k];
+          if (!item || typeof item !== 'object') return;
+          const cleanedTitle = cleanCourseLessonTitle(item.title || item.lessonTitle || k);
+          const cleanedUrl = cleanCourseEntryUrl(item.url || '');
+          const modMatch = cleanedUrl.match(/\/courses\/(\d+)\/modules\/(\d+)/i);
+          const fromMod = modMatch ? modLookup[`${modMatch[1]}:${modMatch[2]}`] : null;
+          const fromLesson = lessonSubjectLookup[normalizeCourseLookupKey(cleanedTitle)] || null;
+          const nextSubj = item.subject || fromMod?.subject || fromLesson?.subject || '';
+          const nextMod = (item.moduleName && item.moduleName !== 'Módulo Atual')
+            ? item.moduleName
+            : (fromMod?.moduleName || fromLesson?.moduleName || '');
+          if (cleanedTitle !== item.title || cleanedUrl !== item.url || nextSubj !== item.subject || nextMod !== item.moduleName) {
+            next[k] = { ...item, title: cleanedTitle, url: cleanedUrl, subject: nextSubj, moduleName: nextMod };
+            changed = true;
+          }
+          if (/\b(?:play_circle|check_circle|ondemand_video)\b/i.test(k) || /\s+\d{1,2}\s+\d{2}$/.test(k)) {
+            const cid = String(item.courseId || extractCourseIdFromUrl(cleanedUrl) || '');
+            const cleanKeyCore = normalizeCourseLookupKey(cleanedTitle);
+            const cleanKey = cid && cleanKeyCore ? `${cid}::${cleanKeyCore}` : cleanKeyCore;
+            if (cleanKey && cleanKey !== k) {
+              if (!next[cleanKey] || (Array.isArray(item.topics) && item.topics.length > (next[cleanKey].topics?.length || 0))) {
+                next[cleanKey] = next[k];
+              }
+              delete next[k];
+              changed = true;
+            }
+          }
+        });
+
         const upsertEntry = (key, rawEntry) => {
           if (!key || !rawEntry || typeof rawEntry !== 'object') return;
           const rawText = rawEntry.indiceRawText || rawEntry.rawIndexText || rawEntry.bizusRawText || '';
           const topics = Array.isArray(rawEntry.topics) && rawEntry.topics.length > 0
             ? rawEntry.topics
             : parseTimestampTopics(rawText);
-          const initialUrl = rawEntry.url || prev[key]?.url || '';
+          const rawTitle = cleanCourseLessonTitle(rawEntry.lessonTitle || rawEntry.title || key);
+          const initialUrl = cleanCourseEntryUrl(rawEntry.url || prev[key]?.url || '');
           const initialCourseId = String(rawEntry.courseId || extractCourseIdFromUrl(initialUrl) || prev[key]?.courseId || '');
-          const scopedKey = (initialCourseId && !String(key).includes('::')) ? `${initialCourseId}::${key}` : key;
-          const prevScoped = prev[scopedKey] || prev[key];
-          const url = rawEntry.url || prevScoped?.url || '';
+          const cleanKeyPart = normalizeCourseLookupKey(rawTitle) || String(key).replace(/^\d+::/, '');
+          const scopedKey = initialCourseId ? `${initialCourseId}::${cleanKeyPart}` : cleanKeyPart;
+          const prevScoped = next[scopedKey] || prev[scopedKey] || prev[key];
+          const url = cleanCourseEntryUrl(rawEntry.url || prevScoped?.url || '');
           const courseId = String(rawEntry.courseId || extractCourseIdFromUrl(url) || prevScoped?.courseId || '');
           const courseName = String(rawEntry.courseName || prevScoped?.courseName || '');
+          const modMatch = url.match(/\/courses\/(\d+)\/modules\/(\d+)/i);
+          const fromMod = modMatch ? modLookup[`${modMatch[1]}:${modMatch[2]}`] : null;
+          const fromLesson = lessonSubjectLookup[normalizeCourseLookupKey(rawTitle)] || null;
+          const resolvedSubject = rawEntry.subject || prevScoped?.subject || fromMod?.subject || fromLesson?.subject || '';
+          const rawMod = rawEntry.moduleName || prevScoped?.moduleName || '';
+          const resolvedModuleName = (rawMod && rawMod !== 'Módulo Atual')
+            ? rawMod
+            : (fromMod?.moduleName || fromLesson?.moduleName || '');
           const candidate = {
             url,
             courseId,
             courseName,
-            title: rawEntry.lessonTitle || rawEntry.title || prevScoped?.title || key,
-            subject: rawEntry.subject || prevScoped?.subject || '',
-            moduleName: rawEntry.moduleName || prevScoped?.moduleName || '',
+            title: rawTitle || prevScoped?.title || key,
+            subject: resolvedSubject,
+            moduleName: resolvedModuleName,
             topics: topics.length > 0 ? topics : (prevScoped?.topics || []),
             subtopics: Array.isArray(rawEntry.subtopics) ? rawEntry.subtopics : (prevScoped?.subtopics || []),
             updatedAt: rawEntry.updatedAt || prevScoped?.updatedAt || Date.now()
           };
-          if (JSON.stringify(prev[scopedKey]) !== JSON.stringify(candidate)) {
+          if (JSON.stringify(next[scopedKey]) !== JSON.stringify(candidate)) {
             next[scopedKey] = candidate;
             changed = true;
           }

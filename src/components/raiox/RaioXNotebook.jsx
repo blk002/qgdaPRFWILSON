@@ -468,7 +468,29 @@ export default function RaioXNotebook({
                           } catch (_) {
                             /* ignore */
                           }
-                          toast.info(`Abrindo aula em ${videoMatch.mmss}`);
+                          if (videoMatch.seconds > 0) {
+                            try {
+                              const cidMatch = String(safeVideoUrl).match(/\/courses\/(\d+)/i);
+                              window.postMessage(
+                                {
+                                  source: 'QG_WEB_APP',
+                                  type: 'QG_PRF_PREPARE_VIDEO_SEEK',
+                                  payload: {
+                                    seconds: videoMatch.seconds,
+                                    courseId: cidMatch?.[1] || '',
+                                    lessonTitle: videoMatch.lessonTitle || '',
+                                    topicLabel: videoMatch.topicLabel || '',
+                                  },
+                                },
+                                window.location.origin
+                              );
+                            } catch (_) {
+                              /* ignore */
+                            }
+                            toast.info(`Abrindo "${videoMatch.lessonTitle}" aos ${videoMatch.mmss}`);
+                          } else {
+                            toast.info(`Abrindo aula "${videoMatch.lessonTitle}"`);
+                          }
                         }}
                         className="group h-7 pl-1.5 pr-2 rounded-lg border border-sky-500/25 dark:border-sky-400/25 bg-sky-500/[0.06] dark:bg-sky-400/[0.07] hover:bg-sky-500/[0.14] dark:hover:bg-sky-400/[0.16] hover:border-sky-500/45 dark:hover:border-sky-400/45 hover:shadow-xs active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 text-sky-700 dark:text-sky-300 text-xs font-semibold inline-flex items-center gap-1.5 transition-all duration-200 cursor-pointer"
                         title={`Explicado em ${videoMatch.lessonTitle}${videoMatch.seconds > 0 ? ` aos ${videoMatch.mmss}` : ''} (${videoMatch.topicLabel || ''})`}

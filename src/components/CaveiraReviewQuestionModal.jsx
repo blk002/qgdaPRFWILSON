@@ -290,6 +290,24 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
                 rel="noopener noreferrer"
                 onClick={() => {
                   try { navigator.clipboard?.writeText(`${videoMatch.mmss} ${videoMatch.topicLabel}`); } catch (_) {}
+                  if (videoMatch.seconds > 0) {
+                    try {
+                      const cidMatch = String(videoMatch.url || '').match(/\/courses\/(\d+)/i);
+                      window.postMessage(
+                        {
+                          source: 'QG_WEB_APP',
+                          type: 'QG_PRF_PREPARE_VIDEO_SEEK',
+                          payload: {
+                            seconds: videoMatch.seconds,
+                            courseId: cidMatch?.[1] || '',
+                            lessonTitle: videoMatch.lessonTitle || '',
+                            topicLabel: videoMatch.topicLabel || '',
+                          },
+                        },
+                        window.location.origin
+                      );
+                    } catch (_) {}
+                  }
                 }}
                 className="group inline-flex items-center gap-1.5 text-[10px] font-black uppercase bg-sky-500/12 hover:bg-sky-500/20 text-sky-600 dark:text-sky-300 border border-sky-500/30 hover:border-sky-500/50 hover:shadow-xs active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 pl-1.5 pr-2 py-1 rounded-lg transition-all duration-200 cursor-pointer"
                 title={`Ir para ${videoMatch.lessonTitle} (${videoMatch.topicLabel || videoMatch.mmss})`}

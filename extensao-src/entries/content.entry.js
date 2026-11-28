@@ -98,7 +98,7 @@ import {
 
 (function() {
   if (isExcludedCaveiraHost(window.location.hostname)) return;
-  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.6.2';
+  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.6.3';
   console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
@@ -1031,24 +1031,33 @@ import {
         const resolvedCid = apiCourseCatalogCache.courseId || (window.location.pathname.match(/\/courses\/(\d+)/i)?.[1] || '');
         const resolvedCName = apiCourseCatalogCache.courseName || '';
         msg.payload.modules.forEach((m) => {
+          const cleanModName = (m?.name && m.name !== 'Módulo Atual') ? m.name : '';
+          const inferredSubj = (resolvedCName && resolvedCName !== 'Curso Caveira' && !/extensivo|prf|policia|caveira/i.test(resolvedCName))
+            ? resolvedCName
+            : (inferSubjectFromLessons([cleanModName]) || '');
           (m?.lessons || []).forEach((l) => {
             if (l?.title && l?.rawIndexText) {
-              const subs = parseCourseIndexSubtopics(l.rawIndexText, [m.name, l.title]);
-              if (subs.length > 0) {
+              const parsedTopics = parseTimestampTopicsFromText(l.rawIndexText);
+              const subs = parseCourseIndexSubtopics(l.rawIndexText, [cleanModName, l.title]);
+              if (subs.length > 0 || parsedTopics.length > 0) {
                 const lesKey = normalizeCourseIndexKey(l.title);
                 const lesCid = String(resolvedCid || (String(l.url || '').match(/\/courses\/(\d+)/i)?.[1] || ''));
                 const compositeKey = lesCid && lesKey ? `${lesCid}::${lesKey}` : lesKey;
+                const lesSubj = inferredSubj || inferSubjectFromLessons([l.title, cleanModName]) || '';
                 indexLessons.push({
                   key: compositeKey,
                   entry: {
-                    url: l.url || window.location.href,
+                    url: String(l.url || window.location.href).split('#')[0],
                     courseId: lesCid,
                     courseName: resolvedCName,
-                    moduleName: m.name || '',
+                    subject: lesSubj,
+                    moduleName: cleanModName,
                     videoId: l.id ? String(l.id) : '',
                     lessonTitle: l.title,
                     source: 'indice_api',
                     rawIndexText: l.rawIndexText,
+                    indiceRawText: l.rawIndexText,
+                    ...(parsedTopics.length > 0 ? { topics: parsedTopics } : {}),
                     subtopics: subs,
                     capturedAt: Date.now(),
                   },
@@ -1068,8 +1077,21 @@ import {
             indexLessons.forEach(({ key, entry }) => {
               if (!key) return;
               const existing = nextBy[key];
-              if (!existing || (existing.source !== 'bizus' && !existing.rawIndexText)) {
+              if (!existing) {
                 nextBy[key] = entry;
+                changed = true;
+              } else if (
+                (Array.isArray(entry.topics) && entry.topics.length > 0 && (!Array.isArray(existing.topics) || existing.topics.length === 0)) ||
+                (!existing.rawIndexText && entry.rawIndexText)
+              ) {
+                nextBy[key] = {
+                  ...existing,
+                  url: existing.url || entry.url,
+                  subject: existing.subject || entry.subject || '',
+                  moduleName: (existing.moduleName && existing.moduleName !== 'Módulo Atual') ? existing.moduleName : (entry.moduleName || ''),
+                  indiceRawText: entry.indiceRawText,
+                  ...(Array.isArray(entry.topics) && entry.topics.length > 0 ? { topics: entry.topics } : {}),
+                };
                 changed = true;
               }
             });
@@ -1489,6 +1511,52 @@ import {
     });
   }
 
+  function readRequestedSeekSeconds() {
+    try {
+      const tParam = Number(new URLSearchParams(window.location.search || '').get('t'));
+      if (Number.isFinite(tParam) && tParam > 0) return Math.round(tParam);
+    } catch (_) {}
+    try {
+      const hashMatch = String(window.location.hash || '').match(/qg_t=(\d+)/);
+      if (hashMatch && Number(hashMatch[1]) > 0) return Math.round(Number(hashMatch[1]));
+    } catch (_) {}
+    try {
+      const stored = JSON.parse(sessionStorage.getItem('qg_target_lesson_pending') || 'null');
+      if (stored && Number(stored.seekSec) > 0 && (Date.now() - (Number(stored.savedAt) || 0)) < 90000) {
+        return Math.round(Number(stored.seekSec));
+      }
+    } catch (_) {}
+    return 0;
+  }
+
+  function dispatchReadySeek(seekSec, courseId = '') {
+    const sec = Math.max(0, Math.round(Number(seekSec) || 0));
+    if (sec <= 0 || !isExtensionContextValid() || !chrome?.storage?.local) return;
+    const cid = courseId || (window.location.pathname.match(/\/courses\/(\d+)/i)?.[1] || '');
+    const fire = () => {
+      if (isDestroyed) return;
+      const nowTs = Date.now();
+      try {
+        chrome.storage.local.set({
+          [PLAYER_SEEK_KEY]: {
+            seconds: sec,
+            courseId: cid,
+            awaitingTargetLesson: false,
+            readyToSeek: true,
+            updatedAt: nowTs,
+            savedAt: nowTs,
+          },
+        }, () => {
+          if (chrome.runtime?.sendMessage) {
+            chrome.runtime.sendMessage({ type: 'SEEK_VIDEO_TO', payload: { seconds: sec } }).catch(() => {});
+          }
+        });
+      } catch (_) {}
+    };
+    fire();
+    setTimeout(fire, 1200);
+  }
+
   function applySubjectVideoSpeedInPlayground(forceSend = false) {
     if (!isCoursePlaygroundPage()) return;
     const lessonTitle = currentCourseIndexStatus?.lessonTitle || extractCourseLessonTitle() || document.title || '';
@@ -1510,19 +1578,22 @@ import {
       }
     }
 
-    // #1 + #28: Auto-seek no iframe mediadelivery.net quando ?t=<segundos> estiver na URL
+    // #1 + #9: Auto-seek no iframe mediadelivery.net só após confirmar que a aula-alvo está ativa (nunca na aula errada)
     try {
+      let waitingForTargetLesson = false;
+      const pendingNav = JSON.parse(sessionStorage.getItem('qg_target_lesson_pending') || 'null');
+      if (pendingNav && pendingNav.lesson && (Date.now() - (Number(pendingNav.savedAt) || 0)) < 45000) {
+        const curPlay = extractPlayingVideoTitleFromHeader() || extractCourseLessonTitle() || '';
+        if (!curPlay || scoreCaveiraLessonCandidate(curPlay, pendingNav.lesson) < 75) {
+          waitingForTargetLesson = true;
+        }
+      }
       const currentHrefNoHash = window.location.href.split('#')[0];
-      if (currentHrefNoHash !== lastSeekUrlApplied) {
-        lastSeekUrlApplied = currentHrefNoHash;
-        const seekParam = Number(new URLSearchParams(window.location.search || '').get('t'));
-        if (Number.isFinite(seekParam) && seekParam > 0) {
-          const nowTs = Date.now();
-          chrome.storage.local.set({ [PLAYER_SEEK_KEY]: { seconds: seekParam, courseId: currentCourseId, updatedAt: nowTs, savedAt: nowTs } }, () => {
-            if (chrome.runtime?.sendMessage) {
-              chrome.runtime.sendMessage({ type: 'SEEK_VIDEO_TO', payload: { seconds: seekParam } }).catch(() => {});
-            }
-          });
+      if (!waitingForTargetLesson && (currentHrefNoHash !== lastSeekUrlApplied || forceSend)) {
+        const seekParam = readRequestedSeekSeconds();
+        if (seekParam > 0) {
+          lastSeekUrlApplied = currentHrefNoHash;
+          dispatchReadySeek(seekParam, currentCourseId);
         }
       }
     } catch (_) {}
@@ -1946,9 +2017,14 @@ import {
     let targetSubject = '';
     let targetTopic = '';
     let targetCourse = '';
+    let targetSeekSec = 0;
     const safeDecode = (v) => {
       try { return decodeURIComponent(v || '').trim(); } catch (_) { return String(v || '').trim(); }
     };
+    try {
+      const qT = Number(new URLSearchParams(window.location.search || '').get('t'));
+      if (Number.isFinite(qT) && qT > 0) targetSeekSec = Math.round(qT);
+    } catch (_) {}
     const rawHash = String(window.location.hash || '');
     if (rawHash.includes('qg_lesson=')) {
       const mLes = rawHash.match(/qg_lesson=([^&]+)/);
@@ -1956,10 +2032,12 @@ import {
       const mTop = rawHash.match(/qg_topic=([^&]+)/);
       const mCrs = rawHash.match(/qg_course=([^&]+)/);
       const mSpd = rawHash.match(/qg_speed=([^&]+)/);
+      const mSeek = rawHash.match(/qg_t=(\d+)/);
       if (mLes) targetLesson = safeDecode(mLes[1]);
       if (mSub) targetSubject = safeDecode(mSub[1]);
       if (mTop) targetTopic = safeDecode(mTop[1]);
       if (mCrs) targetCourse = safeDecode(mCrs[1]);
+      if (mSeek && Number(mSeek[1]) > 0) targetSeekSec = Math.round(Number(mSeek[1]));
       if (mSpd) {
         const parsedSpd = Number(safeDecode(mSpd[1]));
         if (Number.isFinite(parsedSpd) && parsedSpd >= 0.5 && parsedSpd <= 4) {
@@ -1977,6 +2055,7 @@ import {
             topic: targetTopic,
             course: targetCourse,
             speed: lastExplicitLessonSpeed,
+            seekSec: targetSeekSec,
             savedAt: Date.now()
           }));
         } catch (_) {}
@@ -1989,6 +2068,7 @@ import {
           targetSubject = stored.subject || '';
           targetTopic = stored.topic || '';
           targetCourse = stored.course || '';
+          if (Number(stored.seekSec) > 0 && targetSeekSec <= 0) targetSeekSec = Math.round(Number(stored.seekSec));
           if (Number.isFinite(Number(stored.speed)) && Number(stored.speed) >= 0.5 && Number(stored.speed) <= 4) {
             const cidM = window.location.pathname.match(/\/courses\/(\d+)/i);
             const midM = window.location.pathname.match(/\/modules\/(\d+)/i);
@@ -2050,28 +2130,11 @@ import {
     let postNavConfirmTicks = 0;
 
     const applyPendingSeekIfAny = () => {
-      let seekSec = 0;
-      try {
-        seekSec = Math.max(0, Number(new URLSearchParams(window.location.search || '').get('t')) || 0);
-      } catch (_) {}
+      const seekSec = targetSeekSec > 0 ? targetSeekSec : readRequestedSeekSeconds();
       if (seekSec > 0) {
         setTimeout(() => {
-          try {
-            const nowSeekTs = Date.now();
-            chrome.storage.local.set({
-              [PLAYER_SEEK_KEY]: {
-                seconds: seekSec,
-                courseId: window.location.pathname.match(/\/courses\/(\d+)/i)?.[1] || '',
-                updatedAt: nowSeekTs,
-                savedAt: nowSeekTs,
-              },
-            }, () => {
-              if (chrome.runtime?.sendMessage) {
-                chrome.runtime.sendMessage({ type: 'SEEK_VIDEO_TO', payload: { seconds: seekSec } }).catch(() => {});
-              }
-            });
-          } catch (_) {}
-        }, 1000);
+          dispatchReadySeek(seekSec);
+        }, 450);
       }
     };
 
@@ -8862,9 +8925,17 @@ import {
     }, 10000);
   }
 
+  function cleanExtractedLessonTitle(raw = '') {
+    return String(raw || '')
+      .replace(/\b(?:play_circle(?:_outline|_filled)?|check_circle|ondemand_video|smart_display|lock|schedule)\b/gi, ' ')
+      .replace(/\s+\d{1,2}:\d{2}(?::\d{2})?\s*$/g, '')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   function extractCourseLessonTitle() {
     const headerTitle = extractPlayingVideoTitleFromHeader();
-    if (headerTitle) return headerTitle;
+    if (headerTitle) return cleanExtractedLessonTitle(headerTitle);
     const ignored = new Set([
       'indice', 'charlie', 'bizus', 'arquivos', 'comentarios', 'comentario',
       'voltar', 'cursos', 'aulas', 'modulos', 'projeto caveira', 'digite para pesquisar'
@@ -8873,7 +8944,7 @@ import {
       document.querySelectorAll('h1, h2, h3, [aria-current="page"], [aria-current="true"], [class*="active"], [class*="selected"], [class*="lesson"] [class*="title"], [class*="video"] [class*="title"]')
     ).filter(el => {
       if (!el || el.closest('#qg-caveira-shadow-host, #qg-caveira-hud') || !isElementVisible(el)) return false;
-      const txt = (el.innerText || el.textContent || '').replace(/\s+/g, ' ').trim();
+      const txt = cleanExtractedLessonTitle(el.innerText || el.textContent || '');
       if (txt.length < 4 || txt.length > 140) return false;
       if (/^[[(]?\d{1,2}:\d{2}/.test(txt)) return false;
       const norm = normalizeCourseIndexKey(txt);
@@ -8894,7 +8965,7 @@ import {
     });
 
     if (candidates[0]) {
-      return (candidates[0].innerText || candidates[0].textContent || '').replace(/\s+/g, ' ').trim();
+      return cleanExtractedLessonTitle(candidates[0].innerText || candidates[0].textContent || '');
     }
 
     const docTitle = String(document.title || '')
@@ -8926,11 +8997,15 @@ import {
   }
 
   function extractCourseIndexRawTextFromDom() {
-    const tsRegex = /\[\d{1,2}:\d{2}(?::\d{2})?\]/g;
+    const indexTab = findCourseTabElement('indice');
+    if (indexTab && !isCourseTabActive(indexTab)) return '';
+
+    const tsRegex = /(?:^|\n)\s*[[(]?\d{1,2}:\d{2}(?::\d{2})?[\])]?(?:\s*[-–—:|]?\s*[^\n]+)?/gm;
     const containers = [];
-    for (const el of document.querySelectorAll('div, ul, ol, section, aside, main')) {
+    for (const el of document.querySelectorAll('.q-tab-panel, [role="tabpanel"], div, ul, ol, section, aside, main')) {
       if (!el || el.closest('#qg-caveira-shadow-host, #qg-caveira-hud') || !isElementVisible(el)) continue;
       const txt = el.innerText || el.textContent || '';
+      if (/\bplay_circle\b/i.test(txt)) continue;
       const matches = txt.match(tsRegex);
       if (matches && matches.length >= 2) {
         containers.push({ el, count: matches.length, len: txt.length, txt });
@@ -8947,16 +9022,22 @@ import {
     const best = containers[0];
     const rawLines = best.txt.split(/\r?\n/).map(l => l.trim()).filter(Boolean);
     const tsLines = [];
+    const bareTsRx = /^[[(]?(\d{1,2}:\d{2}(?::\d{2})?)[\])]?$/;
+    const leadTsRx = /^[[(]?(\d{1,2}:\d{2}(?::\d{2})?)[\])]?\s*[-–—:|]*\s*(\S.*)$/;
     for (let i = 0; i < rawLines.length; i++) {
       const cur = rawLines[i];
-      if (/^\[\d{1,2}:\d{2}(?::\d{2})?\]$/.test(cur) && i + 1 < rawLines.length) {
-        tsLines.push(`${cur} ${rawLines[i + 1]}`);
+      const bareM = cur.match(bareTsRx);
+      if (bareM && i + 1 < rawLines.length) {
+        tsLines.push(`[${bareM[1]}] ${rawLines[i + 1]}`);
         i += 1;
-      } else if (/^\[\d{1,2}:\d{2}(?::\d{2})?\]\s*\S+/.test(cur)) {
-        tsLines.push(cur);
+      } else {
+        const leadM = cur.match(leadTsRx);
+        if (leadM) {
+          tsLines.push(`[${leadM[1]}] ${leadM[2]}`);
+        }
       }
     }
-    return tsLines.join('\n');
+    return tsLines.length >= 2 ? tsLines.join('\n') : '';
   }
 
   function extractCourseBizusRawTextFromDom() {
@@ -9176,14 +9257,35 @@ import {
     return titles.slice(0, 20).map((t, idx) => `${idx + 1}. ${t}`).join('\n');
   }
 
+  let lastCapturedIndiceState = { lessonKey: '', digest: '', at: 0 };
+
   function scanCourseVideoIndex() {
     if (isDestroyed || !isCoursePage()) return;
 
-    const lessonTitle = extractCourseLessonTitle();
-    const peekKey = `${window.location.href}|${lessonTitle}`;
+    const lessonTitle = cleanExtractedLessonTitle(extractCourseLessonTitle());
+    const courseIdMatch = window.location.pathname.match(/\/courses\/(\d+)/i);
+    const courseId = courseIdMatch ? courseIdMatch[1] : '';
+    const rawLessonKey = normalizeCourseIndexKey(lessonTitle);
+    const lessonKey = (courseId && rawLessonKey) ? `${courseId}::${rawLessonKey}` : rawLessonKey;
+    const peekKey = `${window.location.href.split('#')[0]}|${lessonTitle}`;
 
     const rawBizusText = extractCourseBizusRawTextFromDom();
     const rawIndiceText = extractCourseIndexRawTextFromDom();
+
+    // Proteção anti-DOM obsoleto: se o título mudou mas o painel Índice ainda exibe exatamente os mesmos timestamps da aula anterior, aborta e re-tenta em 650ms
+    if (rawIndiceText && lessonKey) {
+      const digest = `${rawIndiceText.length}:${rawIndiceText.slice(0, 120)}:${rawIndiceText.slice(-80)}`;
+      if (
+        lastCapturedIndiceState.lessonKey &&
+        lastCapturedIndiceState.lessonKey !== lessonKey &&
+        lastCapturedIndiceState.digest === digest &&
+        (Date.now() - lastCapturedIndiceState.at) < 120000
+      ) {
+        setTimeout(scanCourseVideoIndex, 650);
+        return;
+      }
+      lastCapturedIndiceState = { lessonKey, digest, at: Date.now() };
+    }
 
     let captureSource = rawBizusText ? 'bizus' : (rawIndiceText ? 'indice' : 'bizus');
     let rawIndexText = rawBizusText || rawIndiceText;
@@ -9203,12 +9305,23 @@ import {
       if (indexTab && !isCourseTabActive(indexTab) && !peekedCourseUrls.has(indicePeekKey)) {
         peekedCourseUrls.add(indicePeekKey);
         clickElementRealistically(indexTab);
-        setTimeout(scanCourseVideoIndex, 450);
+        setTimeout(scanCourseVideoIndex, 550);
       }
       return;
     }
 
     const parsedTopics = rawIndiceText ? parseTimestampTopicsFromText(rawIndiceText) : [];
+    const existingCachedForLesson = lessonKey ? cachedLocalCourseIndexByLesson?.[lessonKey] : null;
+    const hasTopicsAlready = parsedTopics.length > 0 || (Array.isArray(existingCachedForLesson?.topics) && existingCachedForLesson.topics.length > 0);
+    if (rawBizusText && !rawIndiceText && !hasTopicsAlready) {
+      const indexTab = findCourseTabElement('indice');
+      const indicePeekKey = `${peekKey}|indice_ts`;
+      if (indexTab && !isCourseTabActive(indexTab) && !peekedCourseUrls.has(indicePeekKey)) {
+        peekedCourseUrls.add(indicePeekKey);
+        clickElementRealistically(indexTab);
+        setTimeout(scanCourseVideoIndex, 550);
+      }
+    }
 
     const subtopics = parseCourseIndexSubtopics(rawIndexText, lessonTitle ? [lessonTitle] : []);
     if (subtopics.length === 0) return;
@@ -9234,7 +9347,7 @@ import {
       courseActionsEl.style.display = 'flex';
     }
 
-    const signature = `${captureSource}|${window.location.href}|${lessonTitle}|${rawIndexText}`;
+    const signature = `${captureSource}|${window.location.href.split('#')[0]}|${lessonTitle}|${rawIndexText}|${parsedTopics.length}`;
     if (signature === lastCapturedCourseSignature || !isExtensionContextValid()) return;
     lastCapturedCourseSignature = signature;
 
@@ -9242,15 +9355,29 @@ import {
     try {
       videoId = new URL(window.location.href).searchParams.get('course_video_id') || '';
     } catch (_) {}
-    const courseIdMatch = window.location.pathname.match(/\/courses\/(\d+)/i);
-    const courseId = courseIdMatch ? courseIdMatch[1] : '';
     const sameCourseApi = !courseId || !apiCourseCatalogCache?.courseId || String(apiCourseCatalogCache.courseId) === String(courseId);
     const courseName = sameCourseApi ? (apiCourseCatalogCache?.courseName || '') : '';
+    const cleanEntryUrl = (() => {
+      try {
+        const u = new URL(window.location.href);
+        u.hash = '';
+        u.searchParams.delete('t');
+        return u.toString();
+      } catch (_) {
+        return String(window.location.href).split('#')[0];
+      }
+    })();
+    const inferredSubject = (
+      (lastOpenedCourseContext?.courseId === courseId && lastOpenedCourseContext?.subject) ||
+      inferSubjectFromLessons([lessonTitle, courseName]) ||
+      ''
+    );
 
     const entry = {
-      url: window.location.href,
+      url: cleanEntryUrl,
       courseId,
       courseName,
+      subject: inferredSubject,
       videoId,
       lessonTitle,
       source: captureSource,
@@ -9700,6 +9827,10 @@ import {
                         [PLAYER_SEEK_KEY]: {
                           seconds: vm.seconds,
                           courseId: vm.courseId || '',
+                          lessonTitle: vm.lessonTitle || '',
+                          topicLabel: vm.topicLabel || '',
+                          awaitingTargetLesson: Boolean(vm.lessonTitle),
+                          readyToSeek: !vm.lessonTitle,
                           updatedAt: nowTs,
                           savedAt: nowTs,
                         },

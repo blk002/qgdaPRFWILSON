@@ -12,6 +12,7 @@ import {
   LAST_FILTER_DIAG_KEY,
   COURSE_VIDEO_INDEX_SYNC_KEY,
   PENDING_MIRROR_PROOF_KEY,
+  PLAYER_SEEK_KEY,
 } from '../content/utils.js';
 
 // Bridge entre a Extensão e a aplicação Web QG da PRF (v3.1.0 Strict)
@@ -888,6 +889,28 @@ import {
             chrome.storage.local.set({ [COURSE_VIDEO_INDEX_SYNC_KEY]: videoIndexPayload });
           } catch (_) {}
         });
+      }
+
+      if (event.data.type === 'QG_PRF_PREPARE_VIDEO_SEEK' && event.data.payload) {
+        const p = event.data.payload;
+        const sec = Math.max(0, Math.round(Number(p.seconds) || 0));
+        if (sec > 0 && isExtensionContextValid() && chrome?.storage?.local) {
+          const nowTs = Date.now();
+          try {
+            chrome.storage.local.set({
+              [PLAYER_SEEK_KEY]: {
+                seconds: sec,
+                courseId: String(p.courseId || ''),
+                lessonTitle: String(p.lessonTitle || ''),
+                topicLabel: String(p.topicLabel || ''),
+                awaitingTargetLesson: Boolean(p.lessonTitle),
+                readyToSeek: !p.lessonTitle,
+                updatedAt: nowTs,
+                savedAt: nowTs,
+              },
+            });
+          } catch (_) {}
+        }
       }
 
       if (event.data.type === 'QG_PRF_SYNC_FILTER_MEMORY' && event.data.payload?.memory) {
