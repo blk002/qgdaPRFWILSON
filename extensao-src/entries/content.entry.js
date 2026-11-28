@@ -98,7 +98,7 @@ import {
 
 (function() {
   if (isExcludedCaveiraHost(window.location.hostname)) return;
-  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.6.1';
+  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.6.2';
   console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
@@ -159,6 +159,8 @@ import {
   let cachedLocalCourseIndexByLesson = {};
   let cachedSyncedVideoIndexMap = {};
   let cachedPendingMirrorProof = null;
+  const pendingMirrorRequests = new Map();
+  const requestedMirrorForQIds = new Set();
 
   function getMergedCourseVideoIndex() {
     return {
@@ -167,114 +169,81 @@ import {
     };
   }
 
-  // #8: Questão-Espelho 100% passiva — usa somente questões já carregadas na página ou link padrão para clique do usuário
-  function findPassiveMirrorState(missedQuestionData) {
-    if (!missedQuestionData || !missedQuestionData.id) return null;
-
-    const answeredSet = new Set(
-      (questionsCache || []).map((q) => String(q?.id || '').toUpperCase()).filter(Boolean)
-    );
-    answeredSet.add(String(missedQuestionData.id).toUpperCase());
-
-    const localPool = Array.from(apiQuestionByApiId.values());
-    const inDomUnansweredIds = new Set(
-      getQuestionCards()
-        .filter((c) => !isCardAnswered(c))
-        .map((c) => extractQuestionId(c))
-        .filter(Boolean)
-        .map((id) => String(id).toUpperCase())
-    );
-    const inDomPool = localPool.filter((q) => {
-      const code = String(q?.code || (q?.apiId ? `Q${q.apiId}` : '')).toUpperCase();
-      return Boolean(code && inDomUnansweredIds.has(code));
-    });
-
-    const inPagePick = pickBestMirrorCandidate(missedQuestionData, inDomPool, answeredSet);
-    const picked = (inPagePick && inPagePick.score >= 1)
-      ? inPagePick
-      : pickBestMirrorCandidate(missedQuestionData, localPool, answeredSet);
-
-    if (picked && picked.candidate && picked.score >= 16) {
-      return {
-        status: 'ready',
-        inPage: inDomUnansweredIds.has(String(picked.candidate.id || '').toUpperCase()),
-        candidate: picked.candidate,
-        sharedTraps: picked.sharedTraps || [],
-        sameSubtopic: Boolean(picked.sameSubtopic),
-      };
-    }
-
-    const apiMeta =
-      apiQuestionByCode.get(missedQuestionData.id) ||
-      apiQuestionCache.get(missedQuestionData.id) ||
-      null;
-
-    const resolvedIds = cachedCaveiraTree
-      ? resolveTreeIdsForQuestion(cachedCaveiraTree, {
-          subject: missedQuestionData.subject || '',
-          subtopic: missedQuestionData.topic || '',
-          subtopicPath: apiMeta?.subtopicPath || missedQuestionData.topic || '',
-        })
-      : { subjectId: null, subtopicId: null };
-
-    const subjectId = apiMeta?.subjectId || resolvedIds?.subjectId || null;
-    const subtopicId = apiMeta?.subtopicId || resolvedIds?.subtopicId || null;
-    if (!subjectId && !subtopicId) {
-      if (picked && picked.candidate) {
-        return {
-          status: 'ready',
-          inPage: inDomUnansweredIds.has(String(picked.candidate.id || '').toUpperCase()),
-          candidate: picked.candidate,
-          sharedTraps: picked.sharedTraps || [],
-          sameSubtopic: Boolean(picked.sameSubtopic),
-        };
+  function requestMirrorQuestionFromApi(missedQuestionData) {
+    return new Promise((resolve) => {
+      if (!missedQuestionData || !missedQuestionData.id) {
+        resolve(null);
+        return;
       }
-      return null;
-    }
-
-    const urlAlts = (new URLSearchParams(window.location.search || '').get('number_alternatives') || '')
-      .split(',')
-      .map(Number)
-      .filter((n) => Number.isInteger(n) && n > 0);
-    const resolver = (typeof globalThis !== 'undefined' && globalThis.QGCaveiraResolver) ? globalThis.QGCaveiraResolver : null;
-    let url = '';
-    if (resolver && typeof resolver.buildUrl === 'function' && subjectId && subtopicId) {
-      url = resolver.buildUrl(
-        window.location.origin,
-        Number(subjectId),
-        [Number(subtopicId)],
-        {
-          status: 'not_resolved',
-          ...(urlAlts.length > 0 ? { numberAlternatives: urlAlts } : {}),
-        }
+      const answeredSet = new Set(
+        (questionsCache || []).map((q) => String(q?.id || '').toUpperCase()).filter(Boolean)
       );
-    } else {
-      const params = new URLSearchParams({
-        career_id: 'all',
-        subject_ids: subjectId ? String(subjectId) : '',
-        subtopic_id: '',
-        subtopic_ids: subtopicId ? String(subtopicId) : '',
-        number_alternatives: (urlAlts.length > 0 ? urlAlts : [2]).join(','),
-        status: 'not_resolved',
+      answeredSet.add(String(missedQuestionData.id).toUpperCase());
+
+      // 1. Tenta primeiro nas questões já carregadas na página (zero latência)
+      const localPool = Array.from(apiQuestionByApiId.values());
+      const localPick = pickBestMirrorCandidate(missedQuestionData, localPool, answeredSet);
+      if (localPick && localPick.score >= 16) {
+        resolve(localPick);
+        return;
+      }
+
+      const apiMeta =
+        apiQuestionByCode.get(missedQuestionData.id) ||
+        apiQuestionCache.get(missedQuestionData.id) ||
+        null;
+      const numericApiId =
+        Number(apiMeta?.apiId) ||
+        Number(String(missedQuestionData.id || '').replace(/^Q/i, '').replace(/\D+/g, '')) ||
+        null;
+
+      const resolvedIds = cachedCaveiraTree
+        ? resolveTreeIdsForQuestion(cachedCaveiraTree, {
+            subject: missedQuestionData.subject || '',
+            subtopic: missedQuestionData.topic || '',
+            subtopicPath: apiMeta?.subtopicPath || missedQuestionData.topic || '',
+          })
+        : { subjectId: null, subtopicId: null };
+
+      const subjectId = apiMeta?.subjectId || resolvedIds?.subjectId || null;
+      const subtopicId = apiMeta?.subtopicId || resolvedIds?.subtopicId || null;
+      if (!subjectId && !subtopicId) {
+        resolve(localPick || null);
+        return;
+      }
+
+      const urlParams = new URLSearchParams(window.location.search || '');
+      const urlBoards = (urlParams.get('examining_board_ids') || '')
+        .split(',')
+        .map(Number)
+        .filter((n) => Number.isInteger(n) && n > 0);
+      const urlAlts = (urlParams.get('number_alternatives') || '')
+        .split(',')
+        .map(Number)
+        .filter((n) => Number.isInteger(n) && n > 0);
+
+      const reqId = `mir_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const timer = setTimeout(() => {
+        pendingMirrorRequests.delete(reqId);
+        resolve(localPick || null);
+      }, 4500);
+
+      pendingMirrorRequests.set(reqId, (candidates) => {
+        clearTimeout(timer);
+        const combinedPool = [...(Array.isArray(candidates) ? candidates : []), ...localPool];
+        const picked = pickBestMirrorCandidate(missedQuestionData, combinedPool, answeredSet);
+        resolve(picked || localPick || null);
       });
-      url = `${window.location.origin || 'https://app.caveira.com'}/questions?${params.toString()}`;
-    }
 
-    const topicParts = String(missedQuestionData.topic || '')
-      .split(/->|➔|›|>/)
-      .map((s) => s.trim())
-      .filter(Boolean);
-    const label = topicParts[topicParts.length - 1] || missedQuestionData.subject || 'mesmo assunto';
-
-    return {
-      status: 'link',
-      url,
-      subjectId: subjectId ? Number(subjectId) : null,
-      subtopicId: subtopicId ? Number(subtopicId) : null,
-      subject: missedQuestionData.subject || '',
-      topic: missedQuestionData.topic || '',
-      label,
-    };
+      postToSniffer('FETCH_MIRROR_QUESTION', {
+        requestId: reqId,
+        excludeApiId: numericApiId,
+        subjectIds: subjectId ? [Number(subjectId)] : [],
+        subtopicIds: subtopicId ? [Number(subtopicId)] : [],
+        numberAlternatives: urlAlts.length > 0 ? urlAlts : [2],
+        examBoardIds: urlBoards.length > 0 ? urlBoards : [2, 5, 12],
+      });
+    });
   }
 
   function postToSniffer(type, payload) {
@@ -329,6 +298,40 @@ import {
     };
     if (examId) apiSimuladoDatesByExamId.set(String(examId), merged);
     if (titleNorm) apiSimuladoDatesByTitle.set(titleNorm, merged);
+  }
+
+  function requestSimuladoDatesFromSniffer(teamId = '', examId = '', timeoutMs = 2600) {
+    return new Promise((resolve) => {
+      const requestId = `dates_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      let settled = false;
+      const done = (payload = null) => {
+        if (settled) return;
+        settled = true;
+        clearTimeout(timer);
+        window.removeEventListener('message', onResult);
+        resolve(payload);
+      };
+      const onResult = (ev) => {
+        if (
+          ev.source !== window ||
+          ev.origin !== window.location.origin ||
+          ev.data?.source !== 'QG_CAVEIRA_API_SNIFFER' ||
+          ev.data?.nonce !== CHANNEL_NONCE
+        ) {
+          return;
+        }
+        if (ev.data?.type === 'FETCH_SIMULADO_DATES_RESULT' && ev.data?.payload?.requestId === requestId) {
+          done(ev.data.payload);
+        }
+      };
+      const timer = setTimeout(() => done(null), timeoutMs);
+      window.addEventListener('message', onResult);
+      try {
+        postToSniffer('FETCH_SIMULADO_DATES', { requestId, teamId: String(teamId || ''), examId: String(examId || '') });
+      } catch (_) {
+        done(null);
+      }
+    });
   }
   let handleApiSnifferMessageRef = null;
   const lessonCompletionStateByUrl = new Map();
@@ -436,6 +439,8 @@ import {
   const savedQuestionIds = new Set();
   // Questões já salvas anteriormente que ainda não possuem o texto das alternativas
   const savedQuestionsMissingAlts = new Set();
+  // Questões já respondidas cujos comentários do professor já tentamos auto-carregar silenciosamente
+  const autoCommentAttemptedQIds = new Set();
 
   // Estado da Sessão no HUD
   let sessionStats = {
@@ -571,7 +576,7 @@ import {
             cachedSyncedVideoIndexMap = res[COURSE_VIDEO_INDEX_SYNC_KEY];
           }
           const rawProof = res?.[PENDING_MIRROR_PROOF_KEY];
-          if (rawProof && (rawProof.mirrorQId || rawProof.anyInTopic) && rawProof.sourceQId && (Date.now() - (Number(rawProof.at) || 0)) < 1800000) {
+          if (rawProof && rawProof.mirrorQId && rawProof.sourceQId && (Date.now() - (Number(rawProof.at) || 0)) < 1800000) {
             cachedPendingMirrorProof = rawProof;
           }
           // #56: Mescla memória de filtros vinda da nuvem sem perder seleções locais mais novas
@@ -877,7 +882,7 @@ import {
           }
           if (changes[PENDING_MIRROR_PROOF_KEY]) {
             const np = changes[PENDING_MIRROR_PROOF_KEY].newValue || null;
-            cachedPendingMirrorProof = (np && (np.mirrorQId || np.anyInTopic) && np.sourceQId && (Date.now() - (Number(np.at) || 0)) < 1800000) ? np : null;
+            cachedPendingMirrorProof = (np && np.mirrorQId && np.sourceQId && (Date.now() - (Number(np.at) || 0)) < 1800000) ? np : null;
           }
         }
       };
@@ -1401,6 +1406,15 @@ import {
             ...enjoyObj,
           });
         }
+      }
+      return;
+    }
+
+    if (msg.type === 'FETCH_MIRROR_QUESTION_RESULT' && msg.payload?.requestId) {
+      const cb = pendingMirrorRequests.get(msg.payload.requestId);
+      if (cb) {
+        pendingMirrorRequests.delete(msg.payload.requestId);
+        cb(msg.payload.candidates || []);
       }
       return;
     }
@@ -2636,9 +2650,17 @@ import {
         ? apiEnjoy.subjectScores
         : (dialogData?.subjectScores || []);
 
-      const dateInfo = (examId ? apiSimuladoDatesByExamId.get(examId) : null)
-        || apiSimuladoDatesByTitle.get(normalizeCourseIndexKey(title))
-        || null;
+      const teamIdMatch = window.location.pathname.match(/\/teams\/(\d+)/i);
+      const teamId = teamIdMatch?.[1] || '';
+
+      let dateInfo = examId ? apiSimuladoDatesByExamId.get(examId) : null;
+      if (!dateInfo?.attemptDate && (teamId || examId)) {
+        const fetchedDates = await requestSimuladoDatesFromSniffer(teamId, examId, 2600);
+        if (fetchedDates) {
+          mergeSimuladoDateEntry(examId, title, fetchedDates);
+          dateInfo = examId ? apiSimuladoDatesByExamId.get(examId) : apiSimuladoDatesByTitle.get(normalizeCourseIndexKey(title));
+        }
+      }
 
       const dateStr = dateInfo?.attemptDate || dateInfo?.releaseDate || dateInfo?.anyDate || getTodaySessionDate();
       const dateSource = dateInfo?.attemptDate ? 'attempt' : (dateInfo?.releaseDate ? 'release' : (dateInfo?.anyDate ? 'api_date' : 'import'));
@@ -2676,6 +2698,11 @@ import {
     let domItemsSeen = 0;
     if (results.length === 0) {
       const isPersonalPage = window.location.pathname.includes('/personal-practice-exams');
+      const teamIdMatch = window.location.pathname.match(/\/teams\/(\d+)/i);
+      const teamId = teamIdMatch?.[1] || '';
+      if (teamId && apiSimuladoDatesByTitle.size === 0) {
+        await requestSimuladoDatesFromSniffer(teamId, '', 2600);
+      }
 
       const simItems = Array.from(document.querySelectorAll('.simulated-item'))
         .filter((el) => (
@@ -9378,62 +9405,142 @@ import {
   }
 
   function triggerSilentTeacherCommentCapture(card, qId) {
-    if (!card || !qId) return;
+    if (!card || !qId || autoCommentAttemptedQIds.has(qId)) return;
     if (!isCardAnswered(card) || !savedQuestionIds.has(qId)) return;
+    autoCommentAttemptedQIds.add(qId);
 
-    const existing = questionsCache.find(item => item && item.id === qId);
-    if (!existing) return;
+    const tabs = Array.from(card.querySelectorAll('.q-tab, [role="tab"], button, .q-btn')).filter(el => {
+      if (!el || el.closest('#qg-caveira-shadow-host, #qg-caveira-hud') || !isElementVisible(el)) return false;
+      const r = el.getBoundingClientRect();
+      return r.width >= 30 && r.height >= 18 && r.height <= 56;
+    });
+
+    const findTab = (matcher) => tabs.find(t => matcher(normalizeFilterText(t.innerText || t.textContent)));
+    const teacherTab = findTab(tText =>
+      tText === 'comentario do professor' ||
+      tText === 'comentarios do professor' ||
+      tText === 'gabarito comentado' ||
+      tText === 'professor' ||
+      (tText.includes('comentario') && tText.includes('professor')) ||
+      tText === 'comentario'
+    );
+    const charlieTab = findTab(tText => tText.includes('charlie'));
+    const studentTab = findTab(tText => tText === 'comentarios' || tText === 'comentarios alunos' || (tText.includes('coment') && !tText.includes('professor')));
+    const notesTab = findTab(tText => tText.includes('anotac'));
+    const statsTab = findTab(tText => tText.includes('estatist'));
+
+    const activeTabBefore = tabs.find(t =>
+      t.getAttribute('aria-selected') === 'true' ||
+      t.classList.contains('q-tab--active') ||
+      /\bactive\b/i.test(t.className || '')
+    ) || null;
 
     const patch = {};
-    // Modo 100% passivo: lê somente cache passivo da API e elementos já visíveis no card (zero cliques automáticos em abas)
+    // #2: Primeiro aproveita dados já capturados passivamente da API (zero cliques em abas)
     const numericFromQId = Number(String(qId || '').replace(/^Q/i, '').replace(/\D+/g, ''));
     const apiData =
       apiQuestionByCode.get(qId) ||
       (Number.isFinite(numericFromQId) && numericFromQId > 0 ? apiQuestionByApiId.get(numericFromQId) : null) ||
       apiQuestionCache.get(qId);
     if (apiData) {
-      if (apiData.teacherComment && !existing.teacherComment) {
+      if (apiData.teacherComment) {
         patch.teacherComment = apiData.teacherComment;
         patch.commentSource = apiData.commentSource || 'professor';
       }
-      if (apiData.communityCorrectPct !== undefined && existing.communityCorrectPct === undefined) {
+      if (apiData.communityCorrectPct !== undefined) {
         patch.communityCorrectPct = apiData.communityCorrectPct;
         patch.communityErrorPct = apiData.communityErrorPct;
       }
-      if (apiData.userNote && !existing.userNote) {
+      if (apiData.userNote) {
         patch.userNote = apiData.userNote;
       }
     }
 
-    if (patch.communityCorrectPct === undefined && existing.communityCorrectPct === undefined) {
-      const inlineStats = extractCommunityStatsFromNode(card.querySelector('.stats-box') || card);
-      if (inlineStats) Object.assign(patch, inlineStats);
+    // Verifica estatísticas e comentário visíveis imediatamente
+    const inlineStats = extractCommunityStatsFromNode(card.querySelector('.stats-box') || card);
+    if (inlineStats && patch.communityCorrectPct === undefined) Object.assign(patch, inlineStats);
+
+    const immediateProf = extractTeacherCommentFromCard(card);
+    if (immediateProf && !patch.teacherComment) {
+      patch.teacherComment = immediateProf;
+      patch.commentSource = 'professor';
     }
 
-    if (!patch.teacherComment && !existing.teacherComment) {
-      const immediateProf = extractTeacherCommentFromCard(card);
-      if (immediateProf) {
-        patch.teacherComment = immediateProf;
-        patch.commentSource = 'professor';
-      } else {
-        const visibleCommunity = extractCharlieOrStudentCommentFromCard(card);
-        if (visibleCommunity) {
-          patch.teacherComment = visibleCommunity;
-          patch.commentSource = 'comunidade';
+    const waitMs = (ms) => new Promise(r => setTimeout(r, ms));
+    let didClickTab = false;
+    const saveScrollAndClick = async (tabEl, delay = 260) => {
+      if (!tabEl || !card.isConnected || isDestroyed) return false;
+      const yBefore = window.scrollY;
+      didClickTab = true;
+      tabEl.click();
+      if (Math.abs(window.scrollY - yBefore) > 4) window.scrollTo({ top: yBefore, behavior: 'instant' });
+      await waitMs(delay);
+      return !isDestroyed && card.isConnected;
+    };
+
+    (async () => {
+      try {
+        const existing = questionsCache.find(item => item && item.id === qId) || {};
+        if (!patch.teacherComment && !existing.teacherComment && teacherTab && teacherTab !== activeTabBefore) {
+          if (await saveScrollAndClick(teacherTab, 320)) {
+            const profTxt = extractTeacherCommentFromCard(card);
+            if (profTxt) {
+              patch.teacherComment = profTxt;
+              patch.commentSource = 'professor';
+            }
+          }
         }
-      }
-    }
 
-    if (!patch.userNote && !existing.userNote) {
-      const immediateNote = extractPrivateNoteFromCard(card);
-      if (immediateNote) {
-        patch.userNote = immediateNote;
-      }
-    }
+        // #3 Fallback Charlie IA ou Comentário da Comunidade se Professor estiver vazio
+        if (!patch.teacherComment && !existing.teacherComment && charlieTab) {
+          if (await saveScrollAndClick(charlieTab, 300)) {
+            const cTxt = extractCharlieOrStudentCommentFromCard(card);
+            if (cTxt) {
+              patch.teacherComment = cTxt;
+              patch.commentSource = 'charlie';
+            }
+          }
+        }
+        if (!patch.teacherComment && !existing.teacherComment && studentTab) {
+          if (await saveScrollAndClick(studentTab, 280)) {
+            const sTxt = extractCharlieOrStudentCommentFromCard(card);
+            if (sTxt) {
+              patch.teacherComment = sTxt;
+              patch.commentSource = 'aluno';
+            }
+          }
+        }
 
-    if (Object.keys(patch).length > 0 && card.isConnected && !isDestroyed) {
-      saveQuestion({ ...existing, ...patch }, true);
-    }
+        // #3 Captura Anotações privadas
+        if (notesTab && !patch.userNote && !existing.userNote) {
+          if (await saveScrollAndClick(notesTab, 220)) {
+            const noteTxt = extractPrivateNoteFromCard(card);
+            if (noteTxt) patch.userNote = noteTxt;
+          }
+        }
+
+        // #12 Captura % de acertos da comunidade (Estatísticas)
+        if (patch.communityCorrectPct === undefined && existing.communityCorrectPct === undefined && statsTab) {
+          if (await saveScrollAndClick(statsTab, 220)) {
+            const st = extractCommunityStatsFromNode(card.querySelector('.q-tab-panel') || card);
+            if (st) Object.assign(patch, st);
+          }
+        }
+
+        if (didClickTab && activeTabBefore && activeTabBefore.isConnected) {
+          const yBefore = window.scrollY;
+          activeTabBefore.click();
+          if (Math.abs(window.scrollY - yBefore) > 4) window.scrollTo({ top: yBefore, behavior: 'instant' });
+        }
+
+        if (Object.keys(patch).length > 0 && card.isConnected && !isDestroyed) {
+          const latest = questionsCache.find(item => item && item.id === qId);
+          if (latest) {
+            saveQuestion({ ...latest, ...patch }, true);
+          }
+        }
+      } catch (_) {}
+    })();
   }
 
   // --- 7. VARREDURA DE CARDS E DETECÇÃO DE VIEWPORT ---
@@ -9477,23 +9584,12 @@ import {
     // #2: Radar Cebraspe ao vivo nos enunciados visíveis
     applyTrapRadarToCards(cards, questionsCache, extractQuestionId);
 
-    let topicMirrorBannerMounted = false;
     cards.forEach(card => {
       const qId = extractQuestionId(card);
       if (!qId) return;
 
-      if (cachedPendingMirrorProof && String(cachedPendingMirrorProof.sourceQId) !== String(qId)) {
-        if (cachedPendingMirrorProof.mirrorQId && String(cachedPendingMirrorProof.mirrorQId) === String(qId)) {
-          mountMirrorChallengeBanner(card, cachedPendingMirrorProof);
-        } else if (cachedPendingMirrorProof.anyInTopic && !topicMirrorBannerMounted && !isCardAnswered(card)) {
-          const cardApiMeta = apiQuestionByCode.get(qId) || apiQuestionCache.get(qId);
-          const cardSubject = cardApiMeta?.subject || card.querySelector('.discipline, .subject, .breadcrumb')?.textContent || '';
-          const targetSubjNorm = normalizeFilterText(cachedPendingMirrorProof.targetSubject || '');
-          if (!targetSubjNorm || normalizeFilterText(cardSubject).includes(targetSubjNorm)) {
-            mountMirrorChallengeBanner(card, cachedPendingMirrorProof);
-            topicMirrorBannerMounted = true;
-          }
-        }
+      if (cachedPendingMirrorProof && String(cachedPendingMirrorProof.mirrorQId) === String(qId)) {
+        mountMirrorChallengeBanner(card, cachedPendingMirrorProof);
       }
 
       // Se a questão já estava salva antes da v1.1.4 sem o texto das alternativas, enriquece automaticamente!
@@ -9515,12 +9611,15 @@ import {
         }
       }
 
-      // Se a questão já estava salva e falta comentário, nota privada ou estatística da comunidade, captura passivamente quando visível!
+      // Se a questão já estava salva e falta comentário, nota privada ou estatística da comunidade, captura silenciosamente!
       if (savedQuestionIds.has(qId)) {
         const existing = questionsCache.find(item => item && item.id === qId);
-        if (existing && (!existing.teacherComment || existing.communityCorrectPct === undefined || !existing.userNote)) {
-          if (isCardAnswered(card)) {
-            triggerSilentTeacherCommentCapture(card, qId);
+        if (existing && (!existing.teacherComment || existing.communityCorrectPct === undefined)) {
+          const commentTxt = !existing.teacherComment ? extractTeacherCommentFromCard(card) : '';
+          if (commentTxt) {
+            saveQuestion({ ...existing, teacherComment: commentTxt, commentSource: 'professor' }, true);
+          } else if (isCardAnswered(card) && !autoCommentAttemptedQIds.has(qId)) {
+            setTimeout(() => triggerSilentTeacherCommentCapture(card, qId), 350);
           }
         }
       }
@@ -9563,14 +9662,13 @@ import {
             const videoMatch = !questionData.hit
               ? findCourseVideoMatchForExtension(questionData, getMergedCourseVideoIndex())
               : null;
-            const mirrorState = !questionData.hit ? findPassiveMirrorState(questionData) : null;
 
             const mountedInline = mountInlineAutopsyCard(
               card,
               {
                 ...questionData,
                 videoMatch,
-                mirrorState,
+                mirrorState: !questionData.hit ? { status: 'loading' } : null,
               },
               {
                 onSelectErrorReason: (targetId, reasonId) => {
@@ -9631,44 +9729,31 @@ import {
                     : `https://app.caveira.com/questions?raw_text=${encodeURIComponent(cand.id)}`;
                   window.open(targetUrl, '_blank', 'noopener');
                 },
-                onOpenMirrorTopic: (ms, sourceQId) => {
-                  if (!ms || !ms.url) return;
-                  const proof = {
-                    sourceQId,
-                    anyInTopic: true,
-                    targetSubject: ms.subject || '',
-                    targetTopic: ms.topic || '',
-                    targetSubjectId: ms.subjectId || null,
-                    targetSubtopicId: ms.subtopicId || null,
-                    at: Date.now(),
-                  };
-                  cachedPendingMirrorProof = proof;
-                  try {
-                    if (isExtensionContextValid() && chrome?.storage?.local) {
-                      chrome.storage.local.set({ [PENDING_MIRROR_PROOF_KEY]: proof });
-                    }
-                  } catch (_) {}
-                  window.open(ms.url, '_blank', 'noopener');
-                },
               }
             );
 
-            // #8: Se acertou uma questão-espelho ativa (por ID ou no mesmo tópico), rebaixa o erro original no FSRS
-            const proofTargetSubj = normalizeFilterText(cachedPendingMirrorProof?.targetSubject || '');
-            const matchesMirrorProof = Boolean(
-              questionData.hit &&
-              cachedPendingMirrorProof &&
-              String(cachedPendingMirrorProof.sourceQId) !== String(qId) &&
-              (
-                (cachedPendingMirrorProof.mirrorQId && String(cachedPendingMirrorProof.mirrorQId) === String(qId)) ||
-                (cachedPendingMirrorProof.anyInTopic && (
-                  !proofTargetSubj ||
-                  normalizeFilterText(questionData.subject) === proofTargetSubj ||
-                  normalizeFilterText(questionData.canonicalSubject) === proofTargetSubj
-                ))
-              )
-            );
-            if (matchesMirrorProof) {
+            // #8: Busca questão-espelho em segundo plano ao errar
+            if (!questionData.hit && mountedInline && !requestedMirrorForQIds.has(qId)) {
+              requestedMirrorForQIds.add(qId);
+              requestMirrorQuestionFromApi(questionData).then((mirrorResult) => {
+                if (isDestroyed) return;
+                if (mirrorResult && mirrorResult.candidate) {
+                  updateInlineAutopsyExtras(qId, {
+                    mirrorState: {
+                      status: 'ready',
+                      candidate: mirrorResult.candidate,
+                      sharedTraps: mirrorResult.sharedTraps || [],
+                      sameSubtopic: Boolean(mirrorResult.sameSubtopic),
+                    },
+                  });
+                } else {
+                  updateInlineAutopsyExtras(qId, { mirrorState: { status: 'empty' } });
+                }
+              });
+            }
+
+            // #8: Se acertou uma questão-espelho ativa, rebaixa o erro original no FSRS
+            if (questionData.hit && cachedPendingMirrorProof && String(cachedPendingMirrorProof.mirrorQId) === String(qId)) {
               const sourceQId = cachedPendingMirrorProof.sourceQId;
               const sourceQ = questionsCache.find((q) => q && q.id === sourceQId);
               if (sourceQ) {

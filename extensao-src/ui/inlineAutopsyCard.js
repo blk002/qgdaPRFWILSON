@@ -512,36 +512,10 @@ function buildExtrasSection(state, callbacks) {
       const btn = document.createElement('button');
       btn.type = 'button';
       btn.className = 'qg-extra-btn is-mirror-btn';
-      btn.textContent = ms.inPage ? 'Ir para espelho ↓' : 'Abrir espelho ↗';
+      btn.textContent = 'Prove que entendeu →';
       btn.addEventListener('click', (e) => {
         e.stopPropagation();
         callbacks?.onStartMirror?.(ms.candidate, state.qId);
-      });
-
-      row.appendChild(txt);
-      row.appendChild(btn);
-      stack.appendChild(row);
-    } else if (ms.status === 'link' && ms.url) {
-      row.className = 'qg-extra-row is-mirror';
-      const txt = document.createElement('div');
-      txt.className = 'qg-extra-text';
-      const title = document.createElement('span');
-      title.className = 'qg-extra-title';
-      title.textContent = `🪞 Espelho · ${String(ms.label || 'mesmo assunto').slice(0, 40)}`;
-      txt.appendChild(title);
-
-      const sub = document.createElement('span');
-      sub.className = 'qg-extra-sub';
-      sub.textContent = 'Abrir não resolvidas do mesmo tópico';
-      txt.appendChild(sub);
-
-      const btn = document.createElement('button');
-      btn.type = 'button';
-      btn.className = 'qg-extra-btn is-mirror-btn';
-      btn.textContent = 'Abrir espelho ↗';
-      btn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        callbacks?.onOpenMirrorTopic?.(ms, state.qId);
       });
 
       row.appendChild(txt);
@@ -627,24 +601,13 @@ function renderShadowContent(shadowRoot, state, callbacks, host) {
       const mirrorQuickBtn = document.createElement('button');
       mirrorQuickBtn.type = 'button';
       mirrorQuickBtn.className = 'qg-link-btn';
-      mirrorQuickBtn.textContent = state.mirrorState.inPage ? '🪞 Ir p/ espelho' : '🪞 Espelho ↗';
+      mirrorQuickBtn.textContent = '🪞 Espelho →';
       mirrorQuickBtn.title = `Resolver questão-espelho ${state.mirrorState.candidate.id}`;
       mirrorQuickBtn.addEventListener('click', (e) => {
         e.stopPropagation();
         callbacks?.onStartMirror?.(state.mirrorState.candidate, state.qId);
       });
       actionsEl.appendChild(mirrorQuickBtn);
-    } else if (isError && state.mirrorState?.status === 'link' && state.mirrorState?.url) {
-      const mirrorLinkBtn = document.createElement('button');
-      mirrorLinkBtn.type = 'button';
-      mirrorLinkBtn.className = 'qg-link-btn';
-      mirrorLinkBtn.textContent = '🪞 Espelho ↗';
-      mirrorLinkBtn.title = `Abrir questões de ${state.mirrorState.label || 'mesmo tópico'}`;
-      mirrorLinkBtn.addEventListener('click', (e) => {
-        e.stopPropagation();
-        callbacks?.onOpenMirrorTopic?.(state.mirrorState, state.qId);
-      });
-      actionsEl.appendChild(mirrorLinkBtn);
     }
 
     actionsEl.appendChild(editBtn);
@@ -818,7 +781,7 @@ export function updateInlineAutopsyExtras(qId, extras = {}) {
 
 export function mountMirrorChallengeBanner(card, proofMeta) {
   if (!card || !proofMeta?.sourceQId) return false;
-  const mirrorQId = String(proofMeta.mirrorQId || (proofMeta.anyInTopic ? 'topic' : ''));
+  const mirrorQId = String(proofMeta.mirrorQId || '');
   if (card.querySelector(`.qg-mirror-banner-host[data-qg-source="${proofMeta.sourceQId}"]`)) return true;
   const contentEl = card.querySelector('.content') || card.querySelector('.question-alternatives');
   if (!contentEl) return false;
@@ -834,10 +797,7 @@ export function mountMirrorChallengeBanner(card, proofMeta) {
   styleEl.textContent = INLINE_CARD_CSS;
   const banner = document.createElement('div');
   banner.className = 'qg-mirror-banner';
-  const topicHint = proofMeta.targetTopic || proofMeta.targetSubject || 'mesmo tópico';
-  banner.textContent = proofMeta.mirrorQId
-    ? `🪞 Desafio Espelho da ${proofMeta.sourceQId}: acerte esta questão para rebaixar a revisão no FSRS`
-    : `🪞 Desafio Espelho da ${proofMeta.sourceQId} (${topicHint}): acerte uma questão daqui para rebaixar no FSRS`;
+  banner.textContent = `🪞 Desafio Espelho da ${proofMeta.sourceQId}: acerte esta questão para rebaixar a revisão no FSRS`;
 
   shadow.appendChild(styleEl);
   shadow.appendChild(banner);
@@ -847,11 +807,7 @@ export function mountMirrorChallengeBanner(card, proofMeta) {
 
 export function showMirrorProvenToastOnCard(card, sourceQId) {
   if (!card) return false;
-  let host = card.querySelector(`.qg-mirror-banner-host[data-qg-source="${sourceQId}"]`);
-  if (!host) {
-    mountMirrorChallengeBanner(card, { sourceQId, anyInTopic: true });
-    host = card.querySelector(`.qg-mirror-banner-host[data-qg-source="${sourceQId}"]`);
-  }
+  const host = card.querySelector(`.qg-mirror-banner-host[data-qg-source="${sourceQId}"]`);
   if (!host || !host.shadowRoot) return false;
   const banner = host.shadowRoot.querySelector('.qg-mirror-banner');
   if (banner) {
