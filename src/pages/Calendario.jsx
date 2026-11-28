@@ -1182,14 +1182,31 @@ export default function Calendario() {
         cycleSlotCounts={cycleSlotCounts}
         cycleWeekStart={cycleWeekStart}
         futureScheduleRules={futureScheduleRules}
-        onApplySubjectDays={async (subId, days, count) => {
+        todayStr={getLocalDateStr ? getLocalDateStr() : ''}
+        onApplySubjectDays={async (subId, days, count, fromDate = '') => {
           if (!subId || !applySubjectDaysInCalendar) return;
           const subName = subjects?.[subId]?.name || 'Matéria';
-          await applySubjectDaysInCalendar(subId, days, count);
+          const cleanFrom = /^\d{4}-\d{2}-\d{2}$/.test(String(fromDate || '')) ? String(fromDate) : '';
+          await applySubjectDaysInCalendar(subId, days, count, cleanFrom);
+          const brDate = cleanFrom ? cleanFrom.split('-').reverse().join('/') : '';
           if (days.length === 0) {
-            toast.success(`${subName} removida de todos os dias do calendário.`);
+            toast.success(
+              cleanFrom
+                ? `${subName} removida do calendário a partir de ${brDate}.`
+                : `${subName} removida de todos os dias do calendário.`
+            );
           } else {
-            toast.success(`${subName} programada em ${days.length} dia(s) da semana.`);
+            toast.success(
+              cleanFrom
+                ? `${subName} programada em ${days.length} dia(s) da semana a partir de ${brDate}.`
+                : `${subName} programada em ${days.length} dia(s) da semana.`
+            );
+          }
+          if (cleanFrom) {
+            const [fy, fm] = cleanFrom.split('-').map(Number);
+            if (fy && fm && (fy !== year || fm - 1 !== month)) {
+              setCalendarDate(new Date(fy, fm - 1, 1));
+            }
           }
           setShowBulkScheduleModal(false);
         }}

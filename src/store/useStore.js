@@ -239,8 +239,10 @@ const normalizeHydratedState = (raw, currentCaveira = []) => {
     cleanData.cycleSlotCounts = Array.from({ length: 7 }, (_, i) => Array.isArray(cleanData.cycleSlotCounts?.[i]) ? cleanData.cycleSlotCounts[i] : []);
     const isCycleCompletelyEmpty = cleanData.cycle.every(d => !Array.isArray(d) || d.length === 0);
     if (isCycleCompletelyEmpty && Array.isArray(cleanData.futureScheduleRules) && cleanData.futureScheduleRules.length > 0) {
+      const nowD = new Date();
+      const todayLocalNow = `${nowD.getFullYear()}-${String(nowD.getMonth() + 1).padStart(2, '0')}-${String(nowD.getDate()).padStart(2, '0')}`;
       const sortedAsc = [...cleanData.futureScheduleRules]
-        .filter(r => r && r.v === 2 && Array.isArray(r.daySlots) && r.daySlots.length > 0)
+        .filter(r => r && r.v === 2 && (!r.fromDate || r.fromDate <= todayLocalNow) && Array.isArray(r.daySlots) && r.daySlots.length > 0)
         .sort((a, b) => String(a.fromDate || '').localeCompare(String(b.fromDate || '')));
       sortedAsc.forEach(r => {
         const idx = (cleanData.cycleWeekStart === 'monday' && r.dayOfWeek !== undefined)
@@ -3411,12 +3413,12 @@ export const useStore = create(
         return summary;
       },
 
-      applySubjectDaysInCalendar: async (subjectId, selectedDaysOfWeek = [], slotCount = 0) => {
+      applySubjectDaysInCalendar: async (subjectId, selectedDaysOfWeek = [], slotCount = 0, fromDate = '') => {
         if (!subjectId) return;
         const st = get();
         if ((st.cycleScheduleType || 'weekly') !== 'weekly') return;
         const todayStr = st.getLocalDateStr ? st.getLocalDateStr() : '';
-        const updated = applySubjectDaysToSchedule(st, subjectId, selectedDaysOfWeek, slotCount, todayStr);
+        const updated = applySubjectDaysToSchedule(st, subjectId, selectedDaysOfWeek, slotCount, todayStr, fromDate);
         if (!updated || Object.keys(updated).length === 0) return;
         set(updated);
         if (st.user?.id) {
