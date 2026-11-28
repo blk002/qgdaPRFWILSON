@@ -123,6 +123,8 @@
             const raw = st.getItem(k) || "";
             const m = raw.match(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}/);
             if (m) return `Bearer ${m[0]}`;
+            const sanctum = raw.match(/\b(\d+\|[A-Za-z0-9]{15,})\b/);
+            if (sanctum) return `Bearer ${sanctum[1]}`;
           }
         }
       } catch (_) {
@@ -1122,7 +1124,7 @@
           const res = await fetchFn(buildMirrorUrl(sIds, subIds, boards), {
             method: "GET",
             headers,
-            credentials: "include"
+            credentials: "omit"
           });
           if (!res || !res.ok) return [];
           const json = await res.json();
