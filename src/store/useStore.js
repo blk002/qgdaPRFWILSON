@@ -152,6 +152,22 @@ const mergeImageUrlArrays = (a, b, max = 8) => {
   return out;
 };
 
+const resolveQuestionAnsweredDateStr = (question, fallbackTs, getLocalDateStr, todayStr) => {
+  const attempts = Array.isArray(question?.attempts) ? question.attempts : [];
+  const latestAttemptTs = attempts.length > 0 ? attempts[attempts.length - 1]?.timestamp : null;
+  const rawTs = latestAttemptTs || question?.timestamp || fallbackTs || null;
+  if (rawTs) {
+    const d = new Date(rawTs);
+    if (!Number.isNaN(d.getTime())) {
+      return getLocalDateStr(d);
+    }
+  }
+  if (typeof question?.data === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(question.data)) {
+    return question.data;
+  }
+  return todayStr;
+};
+
 const enrichCaveiraQuestionPayload = (prev = null, incoming = {}) => {
   const merged = prev ? { ...prev, ...incoming } : { ...incoming };
   const attempts = mergeAttempts(prev, incoming);
@@ -2279,7 +2295,7 @@ export const useStore = create(
         const updatedReviews = reviews.map(r => {
           if (r && r.nextDateStr === targetDateStr && r.nextDateStr > todayStr) {
             movedCount++;
-            return { ...r, nextDateStr: todayStr };
+            return { ...r, nextDateStr: todayStr, manuallyAdvancedDate: todayStr };
           }
           return r;
         });
@@ -2379,7 +2395,11 @@ export const useStore = create(
           : `Autópsia do erro: ${getErrorCauseMeta(question.errorReason).label}`;
 
         const isMirrorProven = Boolean(question.mirrorProven);
-        const initialNextDate = isMirrorProven ? addDaysToLocalDateStr(todayStr, 3) : todayStr;
+        const answeredDateStr = resolveQuestionAnsweredDateStr(question, null, getLocalDateStr, todayStr);
+        const minDueDate = addDaysToLocalDateStr(answeredDateStr, 1);
+        const initialNextDate = isMirrorProven
+          ? addDaysToLocalDateStr(todayStr, 3)
+          : (minDueDate > todayStr ? minDueDate : todayStr);
 
         const newReview = {
           id: 'rev_caveira_' + question.id,
@@ -2405,7 +2425,15 @@ export const useStore = create(
         try { localStorage.setItem('prf_caveira_questions', JSON.stringify(updatedQuestions)); } catch (_) {}
         if (!silent) {
           playSound('coin');
-          toast.success(`🃏 Questão ${question.id} adicionada à fila de Revisões FSRS!`);
+          if (initialNextDate > todayStr) {
+            const tomorrowStr = addDaysToLocalDateStr(todayStr, 1);
+            const dateLabel = initialNextDate === tomorrowStr
+              ? 'amanhã'
+              : `em ${initialNextDate.split('-').reverse().slice(0, 2).join('/')}`;
+            toast.success(`🃏 Questão ${question.id} agendada para revisão FSRS ${dateLabel}!`);
+          } else {
+            toast.success(`🃏 Questão ${question.id} adicionada à fila de Revisões FSRS!`);
+          }
         }
         return true;
       },
@@ -2530,7 +2558,9 @@ export const useStore = create(
           const isMirrorProven = Boolean(mergedQuestionData.mirrorProven);
           const needsMirrorDowngrade = Boolean(isMirrorProven && !rev.lastReviewDate && !rev.mirrorDowngraded);
 
-          // Se nunca foi revisado ainda (lastReviewDate === null) e estava agendado para amanhã, traz para hoje (exceto se já superou questão-espelho!)
+          // Questões resolvidas hoje só entram na fila FSRS a partir de amanhã (a menos que tenham sido adiantadas manualmente hoje)
+          const answeredDateStr = resolveQuestionAnsweredDateStr(matchedQ || rev.questionData, resolvedTimestamp, getLocalDateStr, todayStr);
+          const minInitialDueDate = addDaysToLocalDateStr(answeredDateStr, 1);
           let repairedNextDateStr = rev.nextDateStr;
           let repairedInterval = rev.interval;
           let repairedStability = rev.stability;
@@ -2540,8 +2570,14 @@ export const useStore = create(
             repairedInterval = Math.max(Number(rev.interval) || 0, 3);
             repairedStability = Math.max(Number(rev.stability) || 0, 3);
             repairedMirrorDowngraded = true;
-          } else if (!rev.lastReviewDate && !isMirrorProven && rev.nextDateStr > todayStr) {
-            repairedNextDateStr = todayStr;
+          } else if (
+            !rev.lastReviewDate &&
+            !isMirrorProven &&
+            rev.manuallyAdvancedDate !== todayStr &&
+            minInitialDueDate > todayStr &&
+            (!repairedNextDateStr || repairedNextDateStr <= todayStr)
+          ) {
+            repairedNextDateStr = minInitialDueDate;
           }
 
           const altsMismatch = JSON.stringify(rev.questionData?.alternatives || null) !== JSON.stringify(sanitizedAlts);
@@ -2622,7 +2658,11 @@ export const useStore = create(
               : `Motivo do erro: ${q.errorReason || 'Conteúdo'}`;
 
             const isMirrorProven = Boolean(q.mirrorProven);
-            const initialNextDate = isMirrorProven ? addDaysToLocalDateStr(todayStr, 3) : todayStr;
+            const answeredDateStr = resolveQuestionAnsweredDateStr(q, q.timestamp || null, getLocalDateStr, todayStr);
+            const minDueDate = addDaysToLocalDateStr(answeredDateStr, 1);
+            const initialNextDate = isMirrorProven
+              ? addDaysToLocalDateStr(todayStr, 3)
+              : (minDueDate > todayStr ? minDueDate : todayStr);
 
             repairedReviews.push({
               id: 'rev_caveira_' + q.id,
