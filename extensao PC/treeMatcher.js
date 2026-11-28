@@ -46,9 +46,10 @@
 
   function singularizePtWord(w) {
     if (!w || w.length < 4) return w;
+    if (w === 'leis') return 'lei';
     if (w.endsWith('oes')) return w.slice(0, -3) + 'ao';
     if (w.endsWith('aes')) return w.slice(0, -3) + 'ao';
-    if (w.endsWith('eis')) return w.slice(0, -3) + 'el';
+    if (w.endsWith('eis') && w.length >= 5) return w.slice(0, -3) + 'el';
     if (w.endsWith('is') && w.length >= 5) return w.slice(0, -2) + 'l';
     if (/(?:r|z|n|l)es$/.test(w) && w.length >= 6) return w.slice(0, -2);
     if (w.endsWith('s') && !w.endsWith('ss') && !w.endsWith('us')) return w.slice(0, -1);

@@ -60,8 +60,10 @@
   function cleanAnchorQuery(text) {
     let s = String(text || '').trim();
     if (!s) return '';
-    // Remove sufixos de aula/parte/bloco/exercícios e caudas didáticas comuns
+    // Remove marcadores iniciais ou inline de aula/parte/bloco/módulo (ex.: "MRUV - AULA 06 - GRÁFICO DA POSIÇÃO")
     s = s
+      .replace(/^(?:aula|parte|pt|bloco|m[oó]dulo)\s*0*\d+\s*[-–—|:]\s*/i, '')
+      .replace(/\s*[-–—|:]\s*(?:parte|pt|aula|bloco|m[oó]dulo)\s*0*\d+(?=\s*[-–—|:]|$)/gi, '')
       .replace(/\s*[-–—|:]\s*(?:parte|pt|aula|bloco)\s*0*\d+(?:\s*[-–—|:]\s*(?:exercicios?|teoria|revisao|resolucao|questoes?))?\s*$/i, '')
       .replace(/\s*[-–—|:]\s*(?:exercicios?|teoria|revisao|resolucao)\s*$/i, '')
       .replace(/\s+(?:parte|pt)\s*0*\d+\s*$/i, '')
@@ -80,7 +82,18 @@
     return s;
   }
 
-  function expandQueryVariants(cleanedText) {
+  function decomposeLessonHierarchy(text) {
+    const cleaned = cleanAnchorQuery(text);
+    if (!cleaned) return null;
+    const parts = cleaned.split(/\s+[-–—:]\s+/).map(p => p.trim()).filter(Boolean);
+    if (parts.length < 2) return null;
+    const head = parts[0];
+    const tail = parts.slice(1).join(' - ');
+    if (!head || !tail) return null;
+    return { head, tail };
+  }
+
+  function expandQueryVariants(cleanedText, opts = {}) {
     const base = String(cleanedText || '').trim();
     if (!base) return [];
     const n = norm(base);
@@ -90,8 +103,29 @@
     };
 
     if (/\bmruv\b/i.test(n)) push(base.replace(/\bmruv\b/gi, 'Movimento Retilineo e Uniformemente Variado'));
+    if (/\bmuv\b/i.test(n)) push(base.replace(/\bmuv\b/gi, 'Movimento Retilineo e Uniformemente Variado'));
     if (/\bmru\b/i.test(n)) push(base.replace(/\bmru\b/gi, 'Movimento Retilineo e Uniforme'));
     if (/\bmcu\b/i.test(n)) push(base.replace(/\bmcu\b/gi, 'Movimento Circular e Uniforme'));
+    if (/\bmcuv\b/i.test(n)) push(base.replace(/\bmcuv\b/gi, 'Movimento Circular Uniformemente Variado'));
+    if (/\btorricelli\b/i.test(n)) push('Equacao de Torricelli');
+    if (/\b(?:funcao|funcoes|equacao|equacoes)\s+horarias?\b/i.test(n)) {
+      if (/\b(?:posicao|posicoes|espaco|espacos)\b/i.test(n)) {
+        push('Equacao Horaria do Espaco');
+      } else if (/\bvelocidade\b/i.test(n)) {
+        push('Equacao da Velocidade');
+      } else {
+        push('Equacao Horaria do Espaco');
+        push('Equacao da Velocidade');
+      }
+    }
+    if (/\b(?:1a?|primeira)\s+lei(?:\s+de\s+newton)?\b|\binercia\b/i.test(n)) push('Lei da Inercia');
+    if (/\b(?:2a?|segunda)\s+lei(?:\s+de\s+newton)?\b|\bprincipio\s+fundamental\s+da\s+dinamica\b/i.test(n)) push('Principio Fundamental da Dinamica');
+    if (/\b(?:3a?|terceira)\s+lei(?:\s+de\s+newton)?\b|\bacao\s+e\s+reacao\b/i.test(n)) push('Lei da Acao e Reacao');
+    if (opts.scoped && /\bgraficos?\b/i.test(n)) {
+      push('Graficos');
+      if (/\b(?:posicao|espaco|s\s*x\s*t)\b/i.test(n)) push('Grafico S x t');
+      if (/\b(?:velocidade|v\s*x\s*t)\b/i.test(n)) push('Grafico V x t');
+    }
     if (/\bjecrim\b/i.test(n)) push('Lei 9099 Juizados Especiais Criminais');
     if (/\beca\b/i.test(n)) push('Lei 8069 Estatuto da Crianca e do Adolescente');
     if (/\b(?:motores?|ferramentas?)\s+de\s+buscas?\b/i.test(n)) push('Ferramentas de Busca e Pesquisa');
@@ -194,6 +228,7 @@
   function buildIndex(subject) {
     if (subject.index) return subject.index;
     const docs = subject.nodes.filter(n => !n.isLeaf && n.depth <= 4);
+    const deepDocs = subject.nodes.filter(n => !n.isLeaf && n.depth <= 5);
     const df = new Map(), sdf = new Map();
     let totalLen = 0;
     for (const n of docs) {
@@ -203,7 +238,7 @@
     }
     const N = Math.max(1, docs.length), avgLen = totalLen / N || 1;
     const idf = (f) => Math.log(1 + (N - f + 0.5) / (f + 0.5));
-    subject.index = { docs, N, avgLen, df, sdf, idf };
+    subject.index = { docs, deepDocs, N, avgLen, df, sdf, idf };
     return subject.index;
   }
 
@@ -245,8 +280,9 @@
     const maxIdf = known.length ? Math.max(...known.map(x => idx.idf(x.f))) : 0;
     const rare = new Set(known.filter(x => idx.idf(x.f) >= maxIdf * 0.65).map(x => x.t));
     const maxTheo = q.tokens.reduce((a, t) => a + Math.max(idx.idf(idx.df.get(t) || 0), 0.6), 0) || 1;
+    const pool = (opts.allowDeepInScope && opts.scope) ? (idx.deepDocs || idx.docs) : idx.docs;
     const res = [];
-    for (const n of idx.docs) {
+    for (const n of pool) {
       if (opts.scope && !opts.scope.has(n.id)) continue;
       if (opts.minDepth && n.depth < opts.minDepth) continue;
       let bm = 0, matched = 0, rareHit = 0;
@@ -283,9 +319,13 @@
     return res;
   }
 
-  function pickBest(ranked, { minRel, minCov, margin = 1.12 }) {
-    const t = ranked[0], t2 = ranked[1];
+  function pickBest(ranked, { minRel, minCov, margin = 1.12, subject = null }) {
+    const t = ranked[0];
     if (!t || t.rel < minRel || t.cov < minCov) return { pick: null, ambiguous: false, ranked };
+    const t2 = ranked.slice(1).find(r => {
+      if (!subject) return true;
+      return !isAncestor(subject, t.node.id, r.node.id) && !isAncestor(subject, r.node.id, t.node.id);
+    });
     if (t2 && t.rel < t2.rel * margin) return { pick: null, ambiguous: true, ranked };
     return { pick: t, ambiguous: false, ranked };
   }
@@ -338,17 +378,25 @@
     const subs = filterAndRankBizusSubtopics(input.subtopics || [], [...lessons, topic], input.maxSubtopics || 10);
     const log = { anchors: [], subtopics: [] };
 
-    // 1) Âncora: título da aula / tópico (com limpeza de ruído + variantes de siglas)
+    // 1) Âncora: título da aula / tópico (com limpeza de ruído + decomposição hierárquica + variantes de siglas)
     const rawAnchorInputs = [
       ...lessons.map(t => ({ text: t, isLesson: true })),
       ...(topic ? [{ text: topic, isLesson: false }] : []),
     ];
+    const lessonTails = [];
     const anchorQuerySpecs = [];
     for (const item of rawAnchorInputs) {
       const cleaned = cleanAnchorQuery(item.text);
-      const candidates = [item.text, cleaned, ...expandQueryVariants(cleaned)].filter(Boolean);
+      const decomp = item.isLesson ? decomposeLessonHierarchy(item.text) : null;
+      const candidates = [item.text, cleaned, ...expandQueryVariants(cleaned)];
+      if (decomp) {
+        candidates.push(decomp.head, ...expandQueryVariants(decomp.head));
+        if (decomp.tail && !lessonTails.some(x => norm(x) === norm(decomp.tail))) {
+          lessonTails.push(decomp.tail);
+        }
+      }
       const seenNorm = new Set();
-      for (const cand of candidates) {
+      for (const cand of candidates.filter(Boolean)) {
         const n = norm(cand);
         if (!n || seenNorm.has(n)) continue;
         seenNorm.add(n);
@@ -449,6 +497,17 @@
         anchorAmbiguous = true;
         break;
       }
+      // Se o escolhido veio apenas do tópico e existe um descendente que casou na aula, promove o descendente
+      if (!anchorAmbiguous && chosen.fromTopic && !chosen.fromLesson) {
+        const lessonDesc = top.find(r =>
+          r.node.id !== chosen.node.id &&
+          r.fromLesson &&
+          r.rel >= 0.55 &&
+          r.cov >= 0.5 &&
+          isAncestor(subject, chosen.node.id, r.node.id)
+        );
+        if (lessonDesc) chosen = lessonDesc;
+      }
       if (anchorAmbiguous && top[0] && top[1] && top[0].node.parentId && top[0].node.parentId === top[1].node.parentId && top[0].node.parentId !== subject.id) {
         const parentNode = subject.byId.get(top[0].node.parentId);
         if (parentNode && !parentNode.isLeaf) {
@@ -465,6 +524,31 @@
     const picks = [];
     const scope = anchor ? descendantsOf(subject, anchor.node.id) : null;
     const scopedExclude = anchor ? new Set([...exclude, ...anchor.node.tokens]) : exclude;
+
+    // Refinamento hierárquico: tenta casar a cauda da aula (ex.: "GRÁFICO DA POSIÇÃO") dentro da âncora
+    const tailPicks = [];
+    if (anchor && scope && scope.size && lessonTails.length) {
+      for (const tail of lessonTails) {
+        const directRr = score(subject, tail, { scope, excludeTokens: scopedExclude, allowDeepInScope: true });
+        const directPk = pickBest(directRr, { minRel: 0.75, minCov: 0.5, subject });
+        if (directPk.pick) {
+          if (!tailPicks.some(x => x.node.id === directPk.pick.node.id)) {
+            tailPicks.push({ ...directPk.pick, where: 'dentro-da-ancora', from: 'tail-direto' });
+          }
+          continue;
+        }
+        const variants = expandQueryVariants(tail, { scoped: true }).slice(1);
+        for (const v of variants) {
+          const rr = score(subject, v, { scope, excludeTokens: scopedExclude, allowDeepInScope: true });
+          const pk = pickBest(rr, { minRel: 0.6, minCov: 0.5, subject });
+          if (pk.pick && !tailPicks.some(x => x.node.id === pk.pick.node.id)) {
+            tailPicks.push({ ...pk.pick, where: 'dentro-da-ancora', from: 'tail-variante' });
+          }
+        }
+      }
+      log.tailPicks = tailPicks.map(p => ({ id: p.node.id, name: p.node.name, rel: p.rel, from: p.from }));
+    }
+
     const splitEnum = (txt) => String(txt || '').split(/\s*(?:,|;|\be\b|\bou\b)\s*/i).map(x => x.trim()).filter(x => canon(x).tokens.length >= 1);
 
     const tryQuery = (q, isPart = false) => {
@@ -517,7 +601,10 @@
     const outScope = picks.filter(p => p.where !== 'dentro-da-ancora');
     if (anchor) {
       const exactTitle = anchor.rel >= 1.2;
-      if (!exactTitle && picks.length >= 1 && ratio >= 0.6) {
+      if (tailPicks.length >= 1) {
+        ids = tailPicks.map(p => p.node.id); reason = 'subtópico da aula dentro da âncora';
+        outScope.forEach(p => { if (!ids.includes(p.node.id)) ids.push(p.node.id); });
+      } else if (!exactTitle && picks.length >= 1 && ratio >= 0.6) {
         ids = picks.map(p => p.node.id); reason = 'subassuntos cobrem o conteúdo (âncora ampla)';
       } else {
         ids = [anchor.node.id, ...duplicateTwinIds]; reason = exactTitle ? 'âncora exata (pasta cobre os filhos)' : 'âncora (pasta cobre os filhos)';

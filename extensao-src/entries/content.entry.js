@@ -98,7 +98,7 @@ import {
 
 (function() {
   if (isExcludedCaveiraHost(window.location.hostname)) return;
-  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.6.3';
+  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.6.4';
   console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)

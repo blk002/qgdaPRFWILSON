@@ -9,7 +9,7 @@ const find = (sid, rx, parentRx, depth) => {
   if (!out.length) throw new Error('não achei ' + rx + ' em ' + sid);
   return out[0].id;
 };
-const IDS = { CTB: 8199, ESP: 17254, INF: 3989, PORT: 4899, ADM: 1, DPP: 2373, DP: 1490 };
+const IDS = { CTB: 8199, ESP: 17254, INF: 3989, PORT: 4899, ADM: 1, DPP: 2373, DP: 1490, FIS: 15926 };
 const CASES = [
   { nome: 'Informática: Redes + Internet/Intranet/Extranet', input: { subjectName: 'Informática', lessons: ['Redes de computadores'], topic: '', subtopics: ['Definições de Redes - Internet, Intranet e Extranet', 'Classificação de Redes'] },
     expected: () => [find(IDS.INF, /^Classificação de Redes/), find(IDS.INF, /^Intranet x Extranet x Internet/)] },
@@ -34,7 +34,35 @@ const CASES = [
   { nome: 'CTB: Infrações', input: { subjectName: 'CTB', lessons: ['Das infrações'], topic: 'CTB', subtopics: [] },
     expected: () => [find(IDS.CTB, /^Capítulo XV - Das Infrações/)] },
   { nome: 'ECA crimes (com tópico)', input: { subjectName: 'Legislação Especial', lessons: ['Crimes contra a criança e o adolescente'], topic: 'ECA', subtopics: ['Crimes previstos no ECA'] },
-    expected: () => [17458] }
+    expected: () => [17458] },
+  // Casos de precisão exata em Física (v3.6.4)
+  { nome: '13. MRUV - Gráfico da Posição (exato)', exactIds: true,
+    input: { subjectName: 'FÍSICA', topic: 'Cinemática Escalar', lessons: ['MRUV - AULA 06 - GRÁFICO DA POSIÇÃO'], subtopics: [] },
+    expected: () => [15967] },
+  { nome: '14. MRUV - Gráfico da Aceleração (exato)', exactIds: true,
+    input: { subjectName: 'FÍSICA', topic: 'Cinemática Escalar', lessons: ['MRUV - AULA 07 - GRÁFICO DA ACELERAÇÃO'], subtopics: [] },
+    expected: () => [15967] },
+  { nome: '15. MRUV - Função Horária (exato)', exactIds: true,
+    input: { subjectName: 'FÍSICA', topic: 'Cinemática Escalar', lessons: ['MRUV - AULA 01 - FUNÇÃO HORÁRIA'], subtopics: [] },
+    expected: () => [15964, 15965] },
+  { nome: '16. MRUV - Equação de Torricelli (exato)', exactIds: true,
+    input: { subjectName: 'FÍSICA', topic: 'Cinemática Escalar', lessons: ['MRUV - AULA 04 - EQUAÇÃO DE TORRICELLI'], subtopics: [] },
+    expected: () => [15966] },
+  { nome: '17. MRU - Gráfico da Posição (exato)', exactIds: true,
+    input: { subjectName: 'FÍSICA', topic: 'Cinemática Escalar', lessons: ['MRU - AULA 03 - GRÁFICO DA POSIÇÃO'], subtopics: [] },
+    expected: () => [15955] },
+  { nome: '18. Leis de Newton - Lei da Inércia (exato)', exactIds: true,
+    input: { subjectName: 'FÍSICA', topic: 'Dinâmica', lessons: ['LEIS DE NEWTON - AULA 01 - LEI DA INÉRCIA'], subtopics: [] },
+    expected: () => [16009] },
+  { nome: '19. Leis de Newton - 2ª Lei de Newton (exato)', exactIds: true,
+    input: { subjectName: 'FÍSICA', topic: 'Dinâmica', lessons: ['LEIS DE NEWTON - AULA 02 - 2ª LEI DE NEWTON'], subtopics: [] },
+    expected: () => [16010] },
+  { nome: '20. Dinâmica - Força de Atrito (exato)', exactIds: true,
+    input: { subjectName: 'FÍSICA', topic: 'Dinâmica', lessons: ['DINÂMICA - AULA 04 - FORÇA DE ATRITO'], subtopics: [] },
+    expected: () => [16017] },
+  { nome: '21. Energia Mecânica - Energia Cinética (exato)', exactIds: true,
+    input: { subjectName: 'FÍSICA', topic: 'Energia', lessons: ['ENERGIA MECÂNICA - AULA 01 - ENERGIA CINÉTICA'], subtopics: [] },
+    expected: () => [16050] }
 ];
 function covered(s, resultIds, id) { let c = s.byId.get(id); while (c) { if (resultIds.includes(c.id)) return true; c = s.byId.get(c.parentId); } return false; }
 function underOrAbove(s, expIds, id) { // resultado relacionado ao gabarito?
@@ -46,10 +74,12 @@ for (const c of CASES) {
   const r = R.resolveLesson(tree, c.input); const exp = c.expected(); tot++;
   if (!r.subject) { console.log('✖', c.nome, '→ disciplina não resolvida'); continue; }
   const s = subj(r.subject.id);
-  const hit = exp.filter(e => covered(s, r.ids, e)); const out = r.ids.filter(id => !underOrAbove(s, exp, id));
+  const hit = c.exactIds ? exp.filter(e => r.ids.includes(e)) : exp.filter(e => covered(s, r.ids, e));
+  const out = c.exactIds ? r.ids.filter(id => !exp.includes(id)) : r.ids.filter(id => !underOrAbove(s, exp, id));
   rec += hit.length; recTot += exp.length; outs += out.length;
   const ok = hit.length === exp.length && out.length === 0; if (ok) okCases++;
   const names = r.ids.map(id => (s.byId.get(id) || {}).name).map(n => (n || '').slice(0, 34));
   console.log(ok ? '✔' : '✖', c.nome, '| conf:', r.confidence, '| cobertura', hit.length + '/' + exp.length, out.length ? '| FORA: ' + out : '', '\n    →', names.join(' ; '));
 }
 console.log(`\nCasos OK: ${okCases}/${tot} | cobertura dos esperados: ${rec}/${recTot} | ids fora do gabarito: ${outs}`);
+if (okCases !== tot || outs !== 0) process.exitCode = 1;
