@@ -925,10 +925,33 @@ ${EXTRA_SHADOW_CSS}`;
         const btn = document.createElement("button");
         btn.type = "button";
         btn.className = "qg-extra-btn is-mirror-btn";
-        btn.textContent = "Prove que entendeu →";
+        btn.textContent = ms.inPage ? "Ir para espelho ↓" : "Abrir espelho ↗";
         btn.addEventListener("click", (e) => {
           e.stopPropagation();
           callbacks?.onStartMirror?.(ms.candidate, state.qId);
+        });
+        row.appendChild(txt);
+        row.appendChild(btn);
+        stack.appendChild(row);
+      } else if (ms.status === "link" && ms.url) {
+        row.className = "qg-extra-row is-mirror";
+        const txt = document.createElement("div");
+        txt.className = "qg-extra-text";
+        const title = document.createElement("span");
+        title.className = "qg-extra-title";
+        title.textContent = `🪞 Espelho · ${String(ms.label || "mesmo assunto").slice(0, 40)}`;
+        txt.appendChild(title);
+        const sub = document.createElement("span");
+        sub.className = "qg-extra-sub";
+        sub.textContent = "Abrir não resolvidas do mesmo tópico";
+        txt.appendChild(sub);
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "qg-extra-btn is-mirror-btn";
+        btn.textContent = "Abrir espelho ↗";
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          callbacks?.onOpenMirrorTopic?.(ms, state.qId);
         });
         row.appendChild(txt);
         row.appendChild(btn);
@@ -982,7 +1005,7 @@ ${EXTRA_SHADOW_CSS}`;
         e.stopPropagation();
         host.remove();
       });
-      if (!isError && state.videoMatch?.url) {
+      if (isError && state.videoMatch?.url) {
         const vidQuickBtn = document.createElement("button");
         vidQuickBtn.type = "button";
         vidQuickBtn.className = "qg-link-btn";
@@ -994,17 +1017,28 @@ ${EXTRA_SHADOW_CSS}`;
         });
         actionsEl.appendChild(vidQuickBtn);
       }
-      if (!isError && state.mirrorState?.status === "ready" && state.mirrorState?.candidate) {
+      if (isError && state.mirrorState?.status === "ready" && state.mirrorState?.candidate) {
         const mirrorQuickBtn = document.createElement("button");
         mirrorQuickBtn.type = "button";
         mirrorQuickBtn.className = "qg-link-btn";
-        mirrorQuickBtn.textContent = "🪞 Espelho →";
+        mirrorQuickBtn.textContent = state.mirrorState.inPage ? "🪞 Ir p/ espelho" : "🪞 Espelho ↗";
         mirrorQuickBtn.title = `Resolver questão-espelho ${state.mirrorState.candidate.id}`;
         mirrorQuickBtn.addEventListener("click", (e) => {
           e.stopPropagation();
           callbacks?.onStartMirror?.(state.mirrorState.candidate, state.qId);
         });
         actionsEl.appendChild(mirrorQuickBtn);
+      } else if (isError && state.mirrorState?.status === "link" && state.mirrorState?.url) {
+        const mirrorLinkBtn = document.createElement("button");
+        mirrorLinkBtn.type = "button";
+        mirrorLinkBtn.className = "qg-link-btn";
+        mirrorLinkBtn.textContent = "🪞 Espelho ↗";
+        mirrorLinkBtn.title = `Abrir questões de ${state.mirrorState.label || "mesmo tópico"}`;
+        mirrorLinkBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          callbacks?.onOpenMirrorTopic?.(state.mirrorState, state.qId);
+        });
+        actionsEl.appendChild(mirrorLinkBtn);
       }
       actionsEl.appendChild(editBtn);
       actionsEl.appendChild(closeBtn);
@@ -1152,7 +1186,7 @@ ${EXTRA_SHADOW_CSS}`;
   }
   function mountMirrorChallengeBanner(card, proofMeta) {
     if (!card || !proofMeta?.sourceQId) return false;
-    const mirrorQId = String(proofMeta.mirrorQId || "");
+    const mirrorQId = String(proofMeta.mirrorQId || (proofMeta.anyInTopic ? "topic" : ""));
     if (card.querySelector(`.qg-mirror-banner-host[data-qg-source="${proofMeta.sourceQId}"]`)) return true;
     const contentEl = card.querySelector(".content") || card.querySelector(".question-alternatives");
     if (!contentEl) return false;
@@ -1166,7 +1200,8 @@ ${EXTRA_SHADOW_CSS}`;
     styleEl.textContent = INLINE_CARD_CSS;
     const banner = document.createElement("div");
     banner.className = "qg-mirror-banner";
-    banner.textContent = `🪞 Desafio Espelho da ${proofMeta.sourceQId}: acerte esta questão para rebaixar a revisão no FSRS`;
+    const topicHint = proofMeta.targetTopic || proofMeta.targetSubject || "mesmo tópico";
+    banner.textContent = proofMeta.mirrorQId ? `🪞 Desafio Espelho da ${proofMeta.sourceQId}: acerte esta questão para rebaixar a revisão no FSRS` : `🪞 Desafio Espelho da ${proofMeta.sourceQId} (${topicHint}): acerte uma questão daqui para rebaixar no FSRS`;
     shadow.appendChild(styleEl);
     shadow.appendChild(banner);
     contentEl.insertAdjacentElement("beforebegin", host);
@@ -1174,7 +1209,11 @@ ${EXTRA_SHADOW_CSS}`;
   }
   function showMirrorProvenToastOnCard(card, sourceQId) {
     if (!card) return false;
-    const host = card.querySelector(`.qg-mirror-banner-host[data-qg-source="${sourceQId}"]`);
+    let host = card.querySelector(`.qg-mirror-banner-host[data-qg-source="${sourceQId}"]`);
+    if (!host) {
+      mountMirrorChallengeBanner(card, { sourceQId, anyInTopic: true });
+      host = card.querySelector(`.qg-mirror-banner-host[data-qg-source="${sourceQId}"]`);
+    }
     if (!host || !host.shadowRoot) return false;
     const banner = host.shadowRoot.querySelector(".qg-mirror-banner");
     if (banner) {
@@ -2826,7 +2865,7 @@ ${EXTRA_SHADOW_CSS}`;
   // extensao-src/entries/content.entry.js
   (function() {
     if (isExcludedCaveiraHost(window.location.hostname)) return;
-    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.6.0";
+    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.6.1";
     console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
     try {
       window.dispatchEvent(new CustomEvent("qg-caveira-teardown"));
@@ -2885,66 +2924,92 @@ ${EXTRA_SHADOW_CSS}`;
     let cachedLocalCourseIndexByLesson = {};
     let cachedSyncedVideoIndexMap = {};
     let cachedPendingMirrorProof = null;
-    const pendingMirrorRequests = /* @__PURE__ */ new Map();
-    const requestedMirrorForQIds = /* @__PURE__ */ new Set();
     function getMergedCourseVideoIndex() {
       return {
         ...cachedSyncedVideoIndexMap || {},
         ...cachedLocalCourseIndexByLesson || {}
       };
     }
-    function requestMirrorQuestionFromApi(missedQuestionData) {
-      return new Promise((resolve) => {
-        if (!missedQuestionData || !missedQuestionData.id) {
-          resolve(null);
-          return;
-        }
-        const answeredSet = new Set(
-          (questionsCache || []).map((q) => String(q?.id || "").toUpperCase()).filter(Boolean)
-        );
-        answeredSet.add(String(missedQuestionData.id).toUpperCase());
-        const localPool = Array.from(apiQuestionByApiId.values());
-        const localPick = pickBestMirrorCandidate(missedQuestionData, localPool, answeredSet);
-        if (localPick && localPick.score >= 16) {
-          resolve(localPick);
-          return;
-        }
-        const apiMeta = apiQuestionByCode.get(missedQuestionData.id) || apiQuestionCache.get(missedQuestionData.id) || null;
-        const numericApiId = Number(apiMeta?.apiId) || Number(String(missedQuestionData.id || "").replace(/^Q/i, "").replace(/\D+/g, "")) || null;
-        const resolvedIds = cachedCaveiraTree ? resolveTreeIdsForQuestion(cachedCaveiraTree, {
-          subject: missedQuestionData.subject || "",
-          subtopic: missedQuestionData.topic || "",
-          subtopicPath: apiMeta?.subtopicPath || missedQuestionData.topic || ""
-        }) : { subjectId: null, subtopicId: null };
-        const subjectId = apiMeta?.subjectId || resolvedIds?.subjectId || null;
-        const subtopicId = apiMeta?.subtopicId || resolvedIds?.subtopicId || null;
-        if (!subjectId && !subtopicId) {
-          resolve(localPick || null);
-          return;
-        }
-        const urlParams = new URLSearchParams(window.location.search || "");
-        const urlBoards = (urlParams.get("examining_board_ids") || "").split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0);
-        const urlAlts = (urlParams.get("number_alternatives") || "").split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0);
-        const reqId = `mir_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        const timer = setTimeout(() => {
-          pendingMirrorRequests.delete(reqId);
-          resolve(localPick || null);
-        }, 4500);
-        pendingMirrorRequests.set(reqId, (candidates) => {
-          clearTimeout(timer);
-          const combinedPool = [...Array.isArray(candidates) ? candidates : [], ...localPool];
-          const picked = pickBestMirrorCandidate(missedQuestionData, combinedPool, answeredSet);
-          resolve(picked || localPick || null);
-        });
-        postToSniffer("FETCH_MIRROR_QUESTION", {
-          requestId: reqId,
-          excludeApiId: numericApiId,
-          subjectIds: subjectId ? [Number(subjectId)] : [],
-          subtopicIds: subtopicId ? [Number(subtopicId)] : [],
-          numberAlternatives: urlAlts.length > 0 ? urlAlts : [2],
-          examBoardIds: urlBoards.length > 0 ? urlBoards : [2, 5, 12]
-        });
+    function findPassiveMirrorState(missedQuestionData) {
+      if (!missedQuestionData || !missedQuestionData.id) return null;
+      const answeredSet = new Set(
+        (questionsCache || []).map((q) => String(q?.id || "").toUpperCase()).filter(Boolean)
+      );
+      answeredSet.add(String(missedQuestionData.id).toUpperCase());
+      const localPool = Array.from(apiQuestionByApiId.values());
+      const inDomUnansweredIds = new Set(
+        getQuestionCards().filter((c) => !isCardAnswered(c)).map((c) => extractQuestionId(c)).filter(Boolean).map((id) => String(id).toUpperCase())
+      );
+      const inDomPool = localPool.filter((q) => {
+        const code = String(q?.code || (q?.apiId ? `Q${q.apiId}` : "")).toUpperCase();
+        return Boolean(code && inDomUnansweredIds.has(code));
       });
+      const inPagePick = pickBestMirrorCandidate(missedQuestionData, inDomPool, answeredSet);
+      const picked = inPagePick && inPagePick.score >= 1 ? inPagePick : pickBestMirrorCandidate(missedQuestionData, localPool, answeredSet);
+      if (picked && picked.candidate && picked.score >= 16) {
+        return {
+          status: "ready",
+          inPage: inDomUnansweredIds.has(String(picked.candidate.id || "").toUpperCase()),
+          candidate: picked.candidate,
+          sharedTraps: picked.sharedTraps || [],
+          sameSubtopic: Boolean(picked.sameSubtopic)
+        };
+      }
+      const apiMeta = apiQuestionByCode.get(missedQuestionData.id) || apiQuestionCache.get(missedQuestionData.id) || null;
+      const resolvedIds = cachedCaveiraTree ? resolveTreeIdsForQuestion(cachedCaveiraTree, {
+        subject: missedQuestionData.subject || "",
+        subtopic: missedQuestionData.topic || "",
+        subtopicPath: apiMeta?.subtopicPath || missedQuestionData.topic || ""
+      }) : { subjectId: null, subtopicId: null };
+      const subjectId = apiMeta?.subjectId || resolvedIds?.subjectId || null;
+      const subtopicId = apiMeta?.subtopicId || resolvedIds?.subtopicId || null;
+      if (!subjectId && !subtopicId) {
+        if (picked && picked.candidate) {
+          return {
+            status: "ready",
+            inPage: inDomUnansweredIds.has(String(picked.candidate.id || "").toUpperCase()),
+            candidate: picked.candidate,
+            sharedTraps: picked.sharedTraps || [],
+            sameSubtopic: Boolean(picked.sameSubtopic)
+          };
+        }
+        return null;
+      }
+      const urlAlts = (new URLSearchParams(window.location.search || "").get("number_alternatives") || "").split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0);
+      const resolver = typeof globalThis !== "undefined" && globalThis.QGCaveiraResolver ? globalThis.QGCaveiraResolver : null;
+      let url = "";
+      if (resolver && typeof resolver.buildUrl === "function" && subjectId && subtopicId) {
+        url = resolver.buildUrl(
+          window.location.origin,
+          Number(subjectId),
+          [Number(subtopicId)],
+          {
+            status: "not_resolved",
+            ...urlAlts.length > 0 ? { numberAlternatives: urlAlts } : {}
+          }
+        );
+      } else {
+        const params = new URLSearchParams({
+          career_id: "all",
+          subject_ids: subjectId ? String(subjectId) : "",
+          subtopic_id: "",
+          subtopic_ids: subtopicId ? String(subtopicId) : "",
+          number_alternatives: (urlAlts.length > 0 ? urlAlts : [2]).join(","),
+          status: "not_resolved"
+        });
+        url = `${window.location.origin || "https://app.caveira.com"}/questions?${params.toString()}`;
+      }
+      const topicParts = String(missedQuestionData.topic || "").split(/->|➔|›|>/).map((s) => s.trim()).filter(Boolean);
+      const label = topicParts[topicParts.length - 1] || missedQuestionData.subject || "mesmo assunto";
+      return {
+        status: "link",
+        url,
+        subjectId: subjectId ? Number(subjectId) : null,
+        subtopicId: subtopicId ? Number(subtopicId) : null,
+        subject: missedQuestionData.subject || "",
+        topic: missedQuestionData.topic || "",
+        label
+      };
     }
     function postToSniffer(type, payload) {
       try {
@@ -2997,34 +3062,6 @@ ${EXTRA_SHADOW_CSS}`;
       };
       if (examId) apiSimuladoDatesByExamId.set(String(examId), merged);
       if (titleNorm) apiSimuladoDatesByTitle.set(titleNorm, merged);
-    }
-    function requestSimuladoDatesFromSniffer(teamId = "", examId = "", timeoutMs = 2600) {
-      return new Promise((resolve) => {
-        const requestId = `dates_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
-        let settled = false;
-        const done = (payload = null) => {
-          if (settled) return;
-          settled = true;
-          clearTimeout(timer);
-          window.removeEventListener("message", onResult);
-          resolve(payload);
-        };
-        const onResult = (ev) => {
-          if (ev.source !== window || ev.origin !== window.location.origin || ev.data?.source !== "QG_CAVEIRA_API_SNIFFER" || ev.data?.nonce !== CHANNEL_NONCE) {
-            return;
-          }
-          if (ev.data?.type === "FETCH_SIMULADO_DATES_RESULT" && ev.data?.payload?.requestId === requestId) {
-            done(ev.data.payload);
-          }
-        };
-        const timer = setTimeout(() => done(null), timeoutMs);
-        window.addEventListener("message", onResult);
-        try {
-          postToSniffer("FETCH_SIMULADO_DATES", { requestId, teamId: String(teamId || ""), examId: String(examId || "") });
-        } catch (_) {
-          done(null);
-        }
-      });
     }
     let handleApiSnifferMessageRef = null;
     const lessonCompletionStateByUrl = /* @__PURE__ */ new Map();
@@ -3117,7 +3154,6 @@ ${EXTRA_SHADOW_CSS}`;
     const pendingAnswerQIds = /* @__PURE__ */ new Set();
     const savedQuestionIds = /* @__PURE__ */ new Set();
     const savedQuestionsMissingAlts = /* @__PURE__ */ new Set();
-    const autoCommentAttemptedQIds = /* @__PURE__ */ new Set();
     let sessionStats = {
       date: getTodaySessionDate(),
       total: 0,
@@ -3261,7 +3297,7 @@ ${EXTRA_SHADOW_CSS}`;
               cachedSyncedVideoIndexMap = res[COURSE_VIDEO_INDEX_SYNC_KEY];
             }
             const rawProof = res?.[PENDING_MIRROR_PROOF_KEY];
-            if (rawProof && rawProof.mirrorQId && rawProof.sourceQId && Date.now() - (Number(rawProof.at) || 0) < 18e5) {
+            if (rawProof && (rawProof.mirrorQId || rawProof.anyInTopic) && rawProof.sourceQId && Date.now() - (Number(rawProof.at) || 0) < 18e5) {
               cachedPendingMirrorProof = rawProof;
             }
             const cloudMem = res?.[FILTER_MEMORY_CLOUD_KEY];
@@ -3537,7 +3573,7 @@ ${EXTRA_SHADOW_CSS}`;
             }
             if (changes[PENDING_MIRROR_PROOF_KEY]) {
               const np = changes[PENDING_MIRROR_PROOF_KEY].newValue || null;
-              cachedPendingMirrorProof = np && np.mirrorQId && np.sourceQId && Date.now() - (Number(np.at) || 0) < 18e5 ? np : null;
+              cachedPendingMirrorProof = np && (np.mirrorQId || np.anyInTopic) && np.sourceQId && Date.now() - (Number(np.at) || 0) < 18e5 ? np : null;
             }
           }
         };
@@ -4055,14 +4091,6 @@ ${EXTRA_SHADOW_CSS}`;
               ...enjoyObj
             });
           }
-        }
-        return;
-      }
-      if (msg.type === "FETCH_MIRROR_QUESTION_RESULT" && msg.payload?.requestId) {
-        const cb = pendingMirrorRequests.get(msg.payload.requestId);
-        if (cb) {
-          pendingMirrorRequests.delete(msg.payload.requestId);
-          cb(msg.payload.candidates || []);
         }
         return;
       }
@@ -5221,16 +5249,7 @@ ${EXTRA_SHADOW_CSS}`;
           b3Liquida: apiEnjoy.b3Liquida
         } : {});
         const subjectScores = (apiEnjoy?.subjectScores?.length || 0) > 0 ? apiEnjoy.subjectScores : dialogData?.subjectScores || [];
-        const teamIdMatch = window.location.pathname.match(/\/teams\/(\d+)/i);
-        const teamId = teamIdMatch?.[1] || "";
-        let dateInfo = examId ? apiSimuladoDatesByExamId.get(examId) : null;
-        if (!dateInfo?.attemptDate && (teamId || examId)) {
-          const fetchedDates = await requestSimuladoDatesFromSniffer(teamId, examId, 2600);
-          if (fetchedDates) {
-            mergeSimuladoDateEntry(examId, title, fetchedDates);
-            dateInfo = examId ? apiSimuladoDatesByExamId.get(examId) : apiSimuladoDatesByTitle.get(normalizeCourseIndexKey(title));
-          }
-        }
+        const dateInfo = (examId ? apiSimuladoDatesByExamId.get(examId) : null) || apiSimuladoDatesByTitle.get(normalizeCourseIndexKey(title)) || null;
         const dateStr = dateInfo?.attemptDate || dateInfo?.releaseDate || dateInfo?.anyDate || getTodaySessionDate();
         const dateSource = dateInfo?.attemptDate ? "attempt" : dateInfo?.releaseDate ? "release" : dateInfo?.anyDate ? "api_date" : "import";
         const dataSource = apiEnjoy || apiMatchById || dateSource !== "import" ? "api+dom" : "dom";
@@ -5261,11 +5280,6 @@ ${EXTRA_SHADOW_CSS}`;
       let domItemsSeen = 0;
       if (results.length === 0) {
         const isPersonalPage = window.location.pathname.includes("/personal-practice-exams");
-        const teamIdMatch = window.location.pathname.match(/\/teams\/(\d+)/i);
-        const teamId = teamIdMatch?.[1] || "";
-        if (teamId && apiSimuladoDatesByTitle.size === 0) {
-          await requestSimuladoDatesFromSniffer(teamId, "", 2600);
-        }
         const simItems = Array.from(document.querySelectorAll(".simulated-item")).filter((el) => !el.closest("#qg-caveira-shadow-host, #qg-caveira-hud, .ranking-table-wrap, .larger, table") && isElementVisible(el));
         domItemsSeen = simItems.length;
         simItems.forEach((item) => {
@@ -10919,115 +10933,52 @@ ${EXTRA_SHADOW_CSS}`;
       return "";
     }
     function triggerSilentTeacherCommentCapture(card, qId) {
-      if (!card || !qId || autoCommentAttemptedQIds.has(qId)) return;
+      if (!card || !qId) return;
       if (!isCardAnswered(card) || !savedQuestionIds.has(qId)) return;
-      autoCommentAttemptedQIds.add(qId);
-      const tabs = Array.from(card.querySelectorAll('.q-tab, [role="tab"], button, .q-btn')).filter((el) => {
-        if (!el || el.closest("#qg-caveira-shadow-host, #qg-caveira-hud") || !isElementVisible(el)) return false;
-        const r = el.getBoundingClientRect();
-        return r.width >= 30 && r.height >= 18 && r.height <= 56;
-      });
-      const findTab = (matcher) => tabs.find((t) => matcher(normalizeFilterText(t.innerText || t.textContent)));
-      const teacherTab = findTab(
-        (tText) => tText === "comentario do professor" || tText === "comentarios do professor" || tText === "gabarito comentado" || tText === "professor" || tText.includes("comentario") && tText.includes("professor") || tText === "comentario"
-      );
-      const charlieTab = findTab((tText) => tText.includes("charlie"));
-      const studentTab = findTab((tText) => tText === "comentarios" || tText === "comentarios alunos" || tText.includes("coment") && !tText.includes("professor"));
-      const notesTab = findTab((tText) => tText.includes("anotac"));
-      const statsTab = findTab((tText) => tText.includes("estatist"));
-      const activeTabBefore = tabs.find(
-        (t) => t.getAttribute("aria-selected") === "true" || t.classList.contains("q-tab--active") || /\bactive\b/i.test(t.className || "")
-      ) || null;
+      const existing = questionsCache.find((item) => item && item.id === qId);
+      if (!existing) return;
       const patch = {};
       const numericFromQId = Number(String(qId || "").replace(/^Q/i, "").replace(/\D+/g, ""));
       const apiData = apiQuestionByCode.get(qId) || (Number.isFinite(numericFromQId) && numericFromQId > 0 ? apiQuestionByApiId.get(numericFromQId) : null) || apiQuestionCache.get(qId);
       if (apiData) {
-        if (apiData.teacherComment) {
+        if (apiData.teacherComment && !existing.teacherComment) {
           patch.teacherComment = apiData.teacherComment;
           patch.commentSource = apiData.commentSource || "professor";
         }
-        if (apiData.communityCorrectPct !== void 0) {
+        if (apiData.communityCorrectPct !== void 0 && existing.communityCorrectPct === void 0) {
           patch.communityCorrectPct = apiData.communityCorrectPct;
           patch.communityErrorPct = apiData.communityErrorPct;
         }
-        if (apiData.userNote) {
+        if (apiData.userNote && !existing.userNote) {
           patch.userNote = apiData.userNote;
         }
       }
-      const inlineStats = extractCommunityStatsFromNode(card.querySelector(".stats-box") || card);
-      if (inlineStats && patch.communityCorrectPct === void 0) Object.assign(patch, inlineStats);
-      const immediateProf = extractTeacherCommentFromCard(card);
-      if (immediateProf && !patch.teacherComment) {
-        patch.teacherComment = immediateProf;
-        patch.commentSource = "professor";
+      if (patch.communityCorrectPct === void 0 && existing.communityCorrectPct === void 0) {
+        const inlineStats = extractCommunityStatsFromNode(card.querySelector(".stats-box") || card);
+        if (inlineStats) Object.assign(patch, inlineStats);
       }
-      const waitMs = (ms) => new Promise((r) => setTimeout(r, ms));
-      let didClickTab = false;
-      const saveScrollAndClick = async (tabEl, delay = 260) => {
-        if (!tabEl || !card.isConnected || isDestroyed) return false;
-        const yBefore = window.scrollY;
-        didClickTab = true;
-        tabEl.click();
-        if (Math.abs(window.scrollY - yBefore) > 4) window.scrollTo({ top: yBefore, behavior: "instant" });
-        await waitMs(delay);
-        return !isDestroyed && card.isConnected;
-      };
-      (async () => {
-        try {
-          const existing = questionsCache.find((item) => item && item.id === qId) || {};
-          if (!patch.teacherComment && !existing.teacherComment && teacherTab && teacherTab !== activeTabBefore) {
-            if (await saveScrollAndClick(teacherTab, 320)) {
-              const profTxt = extractTeacherCommentFromCard(card);
-              if (profTxt) {
-                patch.teacherComment = profTxt;
-                patch.commentSource = "professor";
-              }
-            }
+      if (!patch.teacherComment && !existing.teacherComment) {
+        const immediateProf = extractTeacherCommentFromCard(card);
+        if (immediateProf) {
+          patch.teacherComment = immediateProf;
+          patch.commentSource = "professor";
+        } else {
+          const visibleCommunity = extractCharlieOrStudentCommentFromCard(card);
+          if (visibleCommunity) {
+            patch.teacherComment = visibleCommunity;
+            patch.commentSource = "comunidade";
           }
-          if (!patch.teacherComment && !existing.teacherComment && charlieTab) {
-            if (await saveScrollAndClick(charlieTab, 300)) {
-              const cTxt = extractCharlieOrStudentCommentFromCard(card);
-              if (cTxt) {
-                patch.teacherComment = cTxt;
-                patch.commentSource = "charlie";
-              }
-            }
-          }
-          if (!patch.teacherComment && !existing.teacherComment && studentTab) {
-            if (await saveScrollAndClick(studentTab, 280)) {
-              const sTxt = extractCharlieOrStudentCommentFromCard(card);
-              if (sTxt) {
-                patch.teacherComment = sTxt;
-                patch.commentSource = "aluno";
-              }
-            }
-          }
-          if (notesTab && !patch.userNote && !existing.userNote) {
-            if (await saveScrollAndClick(notesTab, 220)) {
-              const noteTxt = extractPrivateNoteFromCard(card);
-              if (noteTxt) patch.userNote = noteTxt;
-            }
-          }
-          if (patch.communityCorrectPct === void 0 && existing.communityCorrectPct === void 0 && statsTab) {
-            if (await saveScrollAndClick(statsTab, 220)) {
-              const st = extractCommunityStatsFromNode(card.querySelector(".q-tab-panel") || card);
-              if (st) Object.assign(patch, st);
-            }
-          }
-          if (didClickTab && activeTabBefore && activeTabBefore.isConnected) {
-            const yBefore = window.scrollY;
-            activeTabBefore.click();
-            if (Math.abs(window.scrollY - yBefore) > 4) window.scrollTo({ top: yBefore, behavior: "instant" });
-          }
-          if (Object.keys(patch).length > 0 && card.isConnected && !isDestroyed) {
-            const latest = questionsCache.find((item) => item && item.id === qId);
-            if (latest) {
-              saveQuestion({ ...latest, ...patch }, true);
-            }
-          }
-        } catch (_) {
         }
-      })();
+      }
+      if (!patch.userNote && !existing.userNote) {
+        const immediateNote = extractPrivateNoteFromCard(card);
+        if (immediateNote) {
+          patch.userNote = immediateNote;
+        }
+      }
+      if (Object.keys(patch).length > 0 && card.isConnected && !isDestroyed) {
+        saveQuestion({ ...existing, ...patch }, true);
+      }
     }
     function scanCards() {
       if (isDestroyed) return;
@@ -11063,11 +11014,22 @@ ${EXTRA_SHADOW_CSS}`;
         return;
       }
       applyTrapRadarToCards(cards, questionsCache, extractQuestionId);
+      let topicMirrorBannerMounted = false;
       cards.forEach((card) => {
         const qId = extractQuestionId(card);
         if (!qId) return;
-        if (cachedPendingMirrorProof && String(cachedPendingMirrorProof.mirrorQId) === String(qId)) {
-          mountMirrorChallengeBanner(card, cachedPendingMirrorProof);
+        if (cachedPendingMirrorProof && String(cachedPendingMirrorProof.sourceQId) !== String(qId)) {
+          if (cachedPendingMirrorProof.mirrorQId && String(cachedPendingMirrorProof.mirrorQId) === String(qId)) {
+            mountMirrorChallengeBanner(card, cachedPendingMirrorProof);
+          } else if (cachedPendingMirrorProof.anyInTopic && !topicMirrorBannerMounted && !isCardAnswered(card)) {
+            const cardApiMeta = apiQuestionByCode.get(qId) || apiQuestionCache.get(qId);
+            const cardSubject = cardApiMeta?.subject || card.querySelector(".discipline, .subject, .breadcrumb")?.textContent || "";
+            const targetSubjNorm = normalizeFilterText(cachedPendingMirrorProof.targetSubject || "");
+            if (!targetSubjNorm || normalizeFilterText(cardSubject).includes(targetSubjNorm)) {
+              mountMirrorChallengeBanner(card, cachedPendingMirrorProof);
+              topicMirrorBannerMounted = true;
+            }
+          }
         }
         if (savedQuestionsMissingAlts.has(qId)) {
           const enriched = extractQuestionData(card, qId);
@@ -11088,12 +11050,9 @@ ${EXTRA_SHADOW_CSS}`;
         }
         if (savedQuestionIds.has(qId)) {
           const existing = questionsCache.find((item) => item && item.id === qId);
-          if (existing && (!existing.teacherComment || existing.communityCorrectPct === void 0)) {
-            const commentTxt = !existing.teacherComment ? extractTeacherCommentFromCard(card) : "";
-            if (commentTxt) {
-              saveQuestion({ ...existing, teacherComment: commentTxt, commentSource: "professor" }, true);
-            } else if (isCardAnswered(card) && !autoCommentAttemptedQIds.has(qId)) {
-              setTimeout(() => triggerSilentTeacherCommentCapture(card, qId), 350);
+          if (existing && (!existing.teacherComment || existing.communityCorrectPct === void 0 || !existing.userNote)) {
+            if (isCardAnswered(card)) {
+              triggerSilentTeacherCommentCapture(card, qId);
             }
           }
         }
@@ -11126,12 +11085,13 @@ ${EXTRA_SHADOW_CSS}`;
               saveQuestion(questionData, false);
               renderQuestionHistory(qId, true);
               const videoMatch = !questionData.hit ? findCourseVideoMatchForExtension(questionData, getMergedCourseVideoIndex()) : null;
+              const mirrorState = !questionData.hit ? findPassiveMirrorState(questionData) : null;
               const mountedInline = mountInlineAutopsyCard(
                 card,
                 {
                   ...questionData,
                   videoMatch,
-                  mirrorState: !questionData.hit ? { status: "loading" } : null
+                  mirrorState
                 },
                 {
                   onSelectErrorReason: (targetId, reasonId) => {
@@ -11190,28 +11150,34 @@ ${EXTRA_SHADOW_CSS}`;
                     }
                     const targetUrl = cand.apiId ? `https://app.caveira.com/questions?question_id=${cand.apiId}` : `https://app.caveira.com/questions?raw_text=${encodeURIComponent(cand.id)}`;
                     window.open(targetUrl, "_blank", "noopener");
+                  },
+                  onOpenMirrorTopic: (ms, sourceQId) => {
+                    if (!ms || !ms.url) return;
+                    const proof = {
+                      sourceQId,
+                      anyInTopic: true,
+                      targetSubject: ms.subject || "",
+                      targetTopic: ms.topic || "",
+                      targetSubjectId: ms.subjectId || null,
+                      targetSubtopicId: ms.subtopicId || null,
+                      at: Date.now()
+                    };
+                    cachedPendingMirrorProof = proof;
+                    try {
+                      if (isExtensionContextValid() && chrome?.storage?.local) {
+                        chrome.storage.local.set({ [PENDING_MIRROR_PROOF_KEY]: proof });
+                      }
+                    } catch (_) {
+                    }
+                    window.open(ms.url, "_blank", "noopener");
                   }
                 }
               );
-              if (!questionData.hit && mountedInline && !requestedMirrorForQIds.has(qId)) {
-                requestedMirrorForQIds.add(qId);
-                requestMirrorQuestionFromApi(questionData).then((mirrorResult) => {
-                  if (isDestroyed) return;
-                  if (mirrorResult && mirrorResult.candidate) {
-                    updateInlineAutopsyExtras(qId, {
-                      mirrorState: {
-                        status: "ready",
-                        candidate: mirrorResult.candidate,
-                        sharedTraps: mirrorResult.sharedTraps || [],
-                        sameSubtopic: Boolean(mirrorResult.sameSubtopic)
-                      }
-                    });
-                  } else {
-                    updateInlineAutopsyExtras(qId, { mirrorState: { status: "empty" } });
-                  }
-                });
-              }
-              if (questionData.hit && cachedPendingMirrorProof && String(cachedPendingMirrorProof.mirrorQId) === String(qId)) {
+              const proofTargetSubj = normalizeFilterText(cachedPendingMirrorProof?.targetSubject || "");
+              const matchesMirrorProof = Boolean(
+                questionData.hit && cachedPendingMirrorProof && String(cachedPendingMirrorProof.sourceQId) !== String(qId) && (cachedPendingMirrorProof.mirrorQId && String(cachedPendingMirrorProof.mirrorQId) === String(qId) || cachedPendingMirrorProof.anyInTopic && (!proofTargetSubj || normalizeFilterText(questionData.subject) === proofTargetSubj || normalizeFilterText(questionData.canonicalSubject) === proofTargetSubj))
+              );
+              if (matchesMirrorProof) {
                 const sourceQId = cachedPendingMirrorProof.sourceQId;
                 const sourceQ = questionsCache.find((q) => q && q.id === sourceQId);
                 if (sourceQ) {

@@ -1,6 +1,6 @@
 import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
 
-// Sniffer passivo da API do Projeto Caveira (MAIN world — somente leitura de respostas JSON) — v3.2.5
+// Sniffer 100% passivo da API do Projeto Caveira (MAIN world — somente leitura de respostas JSON; zero requisições ativas e zero leitura de tokens) — v3.6.1
 (function () {
   if (/^(?:loja|checkout|blog|pay|pagamentos?|www)\./i.test(window.location.hostname || '')) return;
   if (window.__qgCaveiraApiSnifferInstalled) return;
@@ -8,7 +8,6 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
 
   const replayBuffer = [];
   const MAX_BUFFER = 80;
-  let cachedApiAuthHeader = '';
   let channelNonce = null;
   let allowNextNonceInit = true;
   let diagnosticMode = false;
@@ -53,26 +52,6 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       return out;
     }
     return t;
-  }
-
-  function readFallbackAuthHeader() {
-    if (cachedApiAuthHeader) return cachedApiAuthHeader;
-    try {
-      const storages = [window.localStorage, window.sessionStorage];
-      for (const st of storages) {
-        if (!st) continue;
-        for (let i = 0; i < st.length; i += 1) {
-          const k = st.key(i);
-          if (!k || !/(?:token|auth|jwt|access)/i.test(k)) continue;
-          const raw = st.getItem(k) || '';
-          const m = raw.match(/eyJ[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{10,}\.[A-Za-z0-9_-]{5,}/);
-          if (m) return `Bearer ${m[0]}`;
-          const sanctum = raw.match(/\b(\d+\|[A-Za-z0-9]{15,})\b/);
-          if (sanctum) return `Bearer ${sanctum[1]}`;
-        }
-      }
-    } catch (_) {}
-    return '';
   }
 
   function postVerifiedMessage(type, payload) {
@@ -1106,20 +1085,13 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
     return s.includes('caveira') || s.startsWith('/') || s.includes('/api/');
   };
 
-  // Wrapper passivo de fetch
+  // Wrapper passivo de fetch (somente leitura de respostas JSON; zero leitura de Authorization)
   const origFetch = window.fetch;
   if (typeof origFetch === 'function') {
     window.fetch = function (...args) {
       const reqUrl = typeof args[0] === 'string' ? args[0] : (args[0]?.url || '');
       const reqMethod = String(args[1]?.method || args[0]?.method || 'GET').toUpperCase();
       const reqBody = args[1]?.body;
-      try {
-        const hdrs = args[1]?.headers || args[0]?.headers;
-        const authVal = hdrs instanceof Headers ? hdrs.get('Authorization') : (hdrs?.Authorization || hdrs?.authorization);
-        if (authVal && /Bearer\s+/i.test(String(authVal))) {
-          cachedApiAuthHeader = String(authVal);
-        }
-      } catch (_) {}
       const promise = origFetch.apply(this, args);
       if (shouldInspectUrl(reqUrl)) {
         promise.then((res) => {
@@ -1147,20 +1119,11 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
 
   // Wrapper passivo de XMLHttpRequest (suporta responseType === 'json' usado por Axios/Quasar!)
   const origOpen = XMLHttpRequest.prototype.open;
-  const origSetHeader = XMLHttpRequest.prototype.setRequestHeader;
   const origSend = XMLHttpRequest.prototype.send;
   XMLHttpRequest.prototype.open = function (method, url, ...rest) {
     this.__qgMethod = String(method || 'GET').toUpperCase();
     this.__qgUrl = url;
     return origOpen.call(this, method, url, ...rest);
-  };
-  XMLHttpRequest.prototype.setRequestHeader = function (name, value) {
-    try {
-      if (String(name || '').toLowerCase() === 'authorization' && /Bearer\s+/i.test(String(value || ''))) {
-        cachedApiAuthHeader = String(value);
-      }
-    } catch (_) {}
-    return origSetHeader.call(this, name, value);
   };
   XMLHttpRequest.prototype.send = function (body, ...rest) {
     const reqMethod = this.__qgMethod || 'GET';
@@ -1189,197 +1152,4 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
     }
     return origSend.call(this, body, ...rest);
   };
-
-  // Busca ativa sob demanda para datas de simulado caso a resposta original tenha ocorrido antes ou sem payload de data
-  window.addEventListener('message', async (ev) => {
-    if (
-      ev.source !== window ||
-      ev.origin !== window.location.origin ||
-      ev.data?.source !== 'QG_CAVEIRA_CONTENT' ||
-      !channelNonce ||
-      ev.data?.nonce !== channelNonce ||
-      ev.data?.type !== 'FETCH_SIMULADO_DATES'
-    ) {
-      return;
-    }
-    const { requestId, teamId, examId } = ev.data.payload || {};
-    if (!requestId) return;
-
-    const urls = [];
-    if (teamId && examId) {
-      urls.push(`https://api.caveira.com/api/v1/skull/teams/${teamId}/practice-exam/${examId}`);
-      urls.push(`https://api.caveira.com/api/v1/skull/teams/${teamId}/practice-exam/${examId}/enjoyment`);
-      urls.push(`https://api.caveira.com/api/v1/skull/teams/${teamId}/practice-exam/${examId}/questions/revision?filters=${encodeURIComponent(JSON.stringify({ status: 'all', assurance: 'all', subject_id: 'all', practice_exam_id: Number(examId) }))}&page=1&rowsPerPage=5&rowsNumber=0`);
-    }
-    if (teamId) {
-      urls.push(`https://api.caveira.com/api/v1/skull/teams/${teamId}`);
-    }
-
-    const authHeader = readFallbackAuthHeader();
-    const headers = { Accept: 'application/json', ...(authHeader ? { Authorization: authHeader } : {}) };
-    const fetchFn = typeof origFetch === 'function' ? origFetch.bind(window) : window.fetch.bind(window);
-
-    let attemptDate = null;
-    let releaseDate = null;
-    let anyDate = null;
-    let dateField = null;
-
-    const scanResult = (urlTarget, jsonObj) => {
-      if (!jsonObj || typeof jsonObj !== 'object') return;
-      inspectApiPayload(urlTarget, jsonObj);
-      let rootData = (jsonObj.data && typeof jsonObj.data === 'object') ? jsonObj.data : jsonObj;
-      if (examId && /\/teams\/\d+\/?$/i.test(urlTarget) && Array.isArray(rootData.practice_exams)) {
-        const matchedExam = rootData.practice_exams.find((s) => String(s?.id) === String(examId));
-        if (!matchedExam) return;
-        rootData = { ...rootData, practice_exams: [matchedExam] };
-      }
-      // Usa walker local leve reaproveitando regras de data
-      const visitedNodes = new Set();
-      const isAttemptUrl = /\/(?:enjoyment|revision|result|attempt)/i.test(urlTarget);
-      const walkDate = (node, depth = 0, parentCtx = '') => {
-        if (!node || typeof node !== 'object' || depth > 6 || visitedNodes.has(node)) return;
-        visitedNodes.add(node);
-        if (Array.isArray(node)) {
-          if (node.length > 0 && typeof node[0] === 'object' && node[0] && (node[0].position !== undefined || node[0].rank !== undefined || node[0].nickname)) return;
-          node.slice(0, 12).forEach((c) => walkDate(c, depth + 1, parentCtx));
-          return;
-        }
-        for (const k of Object.keys(node)) {
-          const kl = k.toLowerCase();
-          if (/(?:ranking|rankings|leaderboard|participants|members|others|candidates)/i.test(kl)) continue;
-          const v = node[k];
-          if (typeof v === 'string') {
-            const iso = v.match(/\b(20\d{2})-(\d{2})-(\d{2})\b/);
-            const br = v.match(/\b(\d{2})\/(\d{2})\/(20\d{2})\b/);
-            const dStr = iso ? `${iso[1]}-${iso[2]}-${iso[3]}` : (br ? `${br[3]}-${br[2]}-${br[1]}` : null);
-            if (!dStr) continue;
-            const pathLbl = parentCtx ? `${parentCtx}.${k}` : k;
-            const isAtt = /(?:finish|complet|answer|submit|conclud|solv|done|realiz|execut|perform|taken|finaliz|sent|end|respon|feito|resolved)/i.test(kl)
-              || (/^(?:created_at|updated_at|date|data)$/i.test(kl) && (isAttemptUrl || /(?:user|attempt|answer|result|enjoyment|submission|pivot|student|my_|response|revision)/i.test(parentCtx)));
-            const isRel = /(?:releas|liber|availab|publish|start|open|begin|schedul|applied|exam_date|data_prova)/i.test(kl)
-              || (depth <= 2 && /^(?:created_at|date)$/i.test(kl));
-            if (isAtt && !attemptDate) { attemptDate = dStr; dateField = pathLbl; }
-            else if (isRel && !releaseDate) { releaseDate = dStr; if (!attemptDate) dateField = pathLbl; }
-            if (!anyDate) { anyDate = dStr; if (!attemptDate && !releaseDate) dateField = pathLbl; }
-          } else if (v && typeof v === 'object') {
-            walkDate(v, depth + 1, parentCtx ? `${parentCtx}.${kl}` : kl);
-          }
-        }
-      };
-      walkDate(rootData, 0, '');
-    };
-
-    try {
-      const results = new Array(urls.length).fill(null);
-      await Promise.allSettled(
-        urls.map(async (u, i) => {
-          const res = await fetchFn(u, { method: 'GET', headers, credentials: 'include' });
-          if (res && res.ok) {
-            results[i] = await res.json();
-          }
-        })
-      );
-      results.forEach((json, i) => {
-        if (json) scanResult(urls[i], json);
-      });
-    } catch (_) {}
-
-    postVerifiedMessage('FETCH_SIMULADO_DATES_RESULT', {
-      requestId,
-      teamId,
-      examId,
-      attemptDate,
-      releaseDate,
-      anyDate,
-      dateField,
-    });
-  });
-
-  // Busca ativa sob demanda de Questão-Espelho (#8) — somente leitura
-  window.addEventListener('message', async (ev) => {
-    if (
-      ev.source !== window ||
-      ev.origin !== window.location.origin ||
-      ev.data?.source !== 'QG_CAVEIRA_CONTENT' ||
-      !channelNonce ||
-      ev.data?.nonce !== channelNonce ||
-      ev.data?.type !== 'FETCH_MIRROR_QUESTION'
-    ) {
-      return;
-    }
-    const {
-      requestId,
-      excludeApiId,
-      subjectIds = [],
-      subtopicIds = [],
-      numberAlternatives = [2],
-      examBoardIds = [],
-    } = ev.data.payload || {};
-    if (!requestId) return;
-
-    const authHeader = readFallbackAuthHeader();
-    const headers = {
-      Accept: 'application/json, text/plain, */*',
-      environment: 'web',
-      ...(authHeader ? { Authorization: authHeader } : {}),
-    };
-    const fetchFn = typeof origFetch === 'function' ? origFetch.bind(window) : window.fetch.bind(window);
-
-    const buildMirrorUrl = (sIds, subIds, boards) => {
-      const filters = {
-        ids: [],
-        raw_text: '',
-        career_id: 'all',
-        number_alternatives: Array.isArray(numberAlternatives) && numberAlternatives.length > 0 ? numberAlternatives : [2],
-        subtopic_id: '',
-        status: 'not_resolved',
-        question_id: '',
-        book_ids: [],
-        examining_board_ids: Array.isArray(boards) ? boards : [],
-        years: [],
-        education_level_ids: [],
-        subject_ids: Array.isArray(sIds) ? sIds : [],
-        subtopic_ids: Array.isArray(subIds) ? subIds : [],
-        situation: [],
-        difficulty_ids: [],
-        institution_ids: [],
-        occupation_ids: [],
-        has_comment: '',
-        has_video: '',
-        category_ids: [],
-      };
-      return `https://api.caveira.com/api/v1/skull/question-database?filters=${encodeURIComponent(JSON.stringify(filters))}&descending=false&page=1&rowsPerPage=8&rowsNumber=0`;
-    };
-
-    const queryCandidates = async (sIds, subIds, boards) => {
-      try {
-        const res = await fetchFn(buildMirrorUrl(sIds, subIds, boards), {
-          method: 'GET',
-          headers,
-          credentials: 'omit',
-        });
-        if (!res || !res.ok) return [];
-        const json = await res.json();
-        const rawList = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
-        return rawList
-          .map(normalizeQuestionNode)
-          .filter((q) => q && (!excludeApiId || Number(q.apiId) !== Number(excludeApiId)));
-      } catch (_) {
-        return [];
-      }
-    };
-
-    let candidates = await queryCandidates(subjectIds, subtopicIds, examBoardIds);
-    if (candidates.length === 0 && Array.isArray(subtopicIds) && subtopicIds.length > 0) {
-      candidates = await queryCandidates(subjectIds, [], examBoardIds);
-    }
-    if (candidates.length === 0 && Array.isArray(examBoardIds) && examBoardIds.length > 0) {
-      candidates = await queryCandidates(subjectIds, [], []);
-    }
-
-    postVerifiedMessage('FETCH_MIRROR_QUESTION_RESULT', {
-      requestId,
-      candidates,
-    });
-  });
 })();
