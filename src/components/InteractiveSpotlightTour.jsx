@@ -1,7 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { useLocation, useNavigate } from 'react-router-dom';
-import { AnimatePresence, motion } from 'framer-motion';
+import { motion } from 'framer-motion';
 import { toast } from 'sonner';
 import {
   Award,
@@ -559,13 +559,11 @@ export default function InteractiveSpotlightTour() {
       )}
 
       {/* Caixa de diálogo flutuante ancorada ao elemento */}
-      <AnimatePresence mode="wait">
-        <motion.div
+      <motion.div
           ref={cardRef}
           key={currentStep.id}
           initial={{ opacity: 0, scale: 0.96, y: 6 }}
           animate={{ opacity: 1, scale: 1, y: 0 }}
-          exit={{ opacity: 0, scale: 0.97, y: -4 }}
           transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
           onClick={(e) => e.stopPropagation()}
           className="fixed z-[165] bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700/90 rounded-2xl shadow-[0_24px_60px_-14px_rgba(2,6,23,0.45)] dark:shadow-[0_24px_60px_-14px_rgba(0,0,0,0.85)] overflow-visible"
@@ -722,7 +720,6 @@ export default function InteractiveSpotlightTour() {
             </div>
           </div>
         </motion.div>
-      </AnimatePresence>
     </div>,
     document.body
   );

@@ -82,7 +82,7 @@ import {
 
 (function() {
   if (isExcludedCaveiraHost(window.location.hostname)) return;
-  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.5.1';
+  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.5.2';
   console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
@@ -1379,7 +1379,8 @@ import {
         lastSeekUrlApplied = currentHrefNoHash;
         const seekParam = Number(new URLSearchParams(window.location.search || '').get('t'));
         if (Number.isFinite(seekParam) && seekParam > 0) {
-          chrome.storage.local.set({ [PLAYER_SEEK_KEY]: { seconds: seekParam, courseId: currentCourseId, savedAt: Date.now() } }, () => {
+          const nowTs = Date.now();
+          chrome.storage.local.set({ [PLAYER_SEEK_KEY]: { seconds: seekParam, courseId: currentCourseId, updatedAt: nowTs, savedAt: nowTs } }, () => {
             if (chrome.runtime?.sendMessage) {
               chrome.runtime.sendMessage({ type: 'SEEK_VIDEO_TO', payload: { seconds: seekParam } }).catch(() => {});
             }
@@ -1918,11 +1919,13 @@ import {
       if (seekSec > 0) {
         setTimeout(() => {
           try {
+            const nowSeekTs = Date.now();
             chrome.storage.local.set({
               [PLAYER_SEEK_KEY]: {
                 seconds: seekSec,
                 courseId: window.location.pathname.match(/\/courses\/(\d+)/i)?.[1] || '',
-                savedAt: Date.now(),
+                updatedAt: nowSeekTs,
+                savedAt: nowSeekTs,
               },
             }, () => {
               if (chrome.runtime?.sendMessage) {

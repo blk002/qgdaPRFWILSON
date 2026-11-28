@@ -1853,7 +1853,7 @@ export default function Config({
                 {/* Preview de quantas aulas cabem */}
                 {draftSubject.timeGoalMinutes > 0 && (() => {
                   const firstTopic = (draftSubject.topics || []).find(t => (t.lessons && t.lessons.length > 0) || t.total > 0);
-                  const spd = draftSubject.speed || 1;
+                  const spd = Math.min(4, Math.max(0.5, Number(draftSubject.speed) || 1));
                   const sample = firstTopic
                     ? calculateLessonsForGoal(firstTopic.lessons || [], 0, spd, draftSubject.timeGoalMinutes, firstTopic.total)
                     : null;
@@ -2347,14 +2347,17 @@ export default function Config({
                                           })}
                                           className="w-13 bg-slate-50 dark:bg-slate-950 border border-slate-200 dark:border-slate-700 rounded-md px-1 py-0.5 text-center text-[11px] font-mono tabular-nums font-semibold text-emerald-600 dark:text-emerald-400 outline-none focus:border-emerald-500"
                                         />
-                                        {draftSubject.speed && draftSubject.speed > 1 && lesson.duration && lesson.duration !== '00:00' && (
-                                          <span
-                                            className="text-[10px] font-mono tabular-nums font-semibold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/70 px-1.5 py-0.5 rounded-md border border-sky-200 dark:border-sky-900"
-                                            title={`Com aceleração de ${draftSubject.speed}x`}
-                                          >
-                                            {formatSecondsToClock(Math.round(parseDurationToSeconds(lesson.duration) / draftSubject.speed))}
-                                          </span>
-                                        )}
+                                        {(() => {
+                                          const safeLessonSpeed = Math.min(4, Math.max(0.5, Number(draftSubject.speed) || 1));
+                                          return safeLessonSpeed > 1 && lesson.duration && lesson.duration !== '00:00' ? (
+                                            <span
+                                              className="text-[10px] font-mono tabular-nums font-semibold text-sky-700 dark:text-sky-400 bg-sky-50 dark:bg-sky-950/70 px-1.5 py-0.5 rounded-md border border-sky-200 dark:border-sky-900"
+                                              title={`Com aceleração de ${safeLessonSpeed}x`}
+                                            >
+                                              {formatSecondsToClock(Math.round(parseDurationToSeconds(lesson.duration) / safeLessonSpeed))}
+                                            </span>
+                                          ) : null;
+                                        })()}
                                       </div>
                                       <button
                                         type="button"

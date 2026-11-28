@@ -990,14 +990,12 @@ export default function Ciclo() {
       </header>
 
       {/* 4. ÁREA PRINCIPAL: FOCO NO DIA OU GRADE SEMANAL */}
-      <AnimatePresence mode="wait">
-        <motion.div
-          key={`${viewMode}-${weekOffset}-${viewMode === 'focus' ? activeDay?.dayIndex : 'all'}`}
-          initial={{ opacity: 0, y: 5 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: -5 }}
-          transition={{ duration: 0.14 }}
-        >
+      <motion.div
+        key={`${viewMode}-${weekOffset}-${viewMode === 'focus' ? activeDay?.dayIndex : 'all'}`}
+        initial={{ opacity: 0, y: 5 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.14 }}
+      >
           {viewMode === 'focus' ? (
             <CronogramaDayWorkbench
               day={activeDay}
@@ -1035,8 +1033,7 @@ export default function Ciclo() {
               onGoToCalendar={() => navigate('/estudos?tab=calendario')}
             />
           )}
-        </motion.div>
-      </AnimatePresence>
+      </motion.div>
 
       {/* Canvas de Confete ao bater a meta */}
       <ConfettiCanvas />

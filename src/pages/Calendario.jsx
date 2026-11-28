@@ -176,6 +176,8 @@ export default function Calendario() {
     ]
   );
 
+  const isWeeklyCycle = (cycleScheduleType || 'weekly') === 'weekly';
+
   const examDateNotSet =
     !targetExamDate ||
     (targetExamDate === LEGACY_DEFAULT_EXAM_DATE && targetExamDate < (getLocalDateStr ? getLocalDateStr() : ''));
@@ -1029,17 +1031,19 @@ export default function Calendario() {
             </button>
           </div>
 
-          <button
-            type="button"
-            onClick={() => {
-              setBulkInitialSubjectId(highlightedSubjectId || '');
-              setShowBulkScheduleModal(true);
-            }}
-            title="Adicionar uma matéria em vários dias da semana ou remover matérias do calendário"
-            className="h-8 px-2.5 rounded-lg border border-sky-300 dark:border-sky-800 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/60 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
-          >
-            <SlidersHorizontal className="w-3.5 h-3.5" /> Gerenciar Matérias
-          </button>
+          {isWeeklyCycle && (
+            <button
+              type="button"
+              onClick={() => {
+                setBulkInitialSubjectId(highlightedSubjectId || '');
+                setShowBulkScheduleModal(true);
+              }}
+              title="Adicionar uma matéria em vários dias da semana ou remover matérias do calendário"
+              className="h-8 px-2.5 rounded-lg border border-sky-300 dark:border-sky-800 bg-sky-50 hover:bg-sky-100 dark:bg-sky-950/60 dark:hover:bg-sky-900/60 text-sky-700 dark:text-sky-300 text-xs font-semibold inline-flex items-center gap-1.5 transition-colors cursor-pointer whitespace-nowrap"
+            >
+              <SlidersHorizontal className="w-3.5 h-3.5" /> Gerenciar Matérias
+            </button>
+          )}
 
           <button
             type="button"
@@ -1117,10 +1121,10 @@ export default function Calendario() {
               highlightedSubjectId={highlightedSubjectId}
               onToggleHighlight={setHighlightedSubjectId}
               onOpenTransitionModal={handleOpenTransitionModal}
-              onOpenBulkSubjectModal={(subId) => {
+              onOpenBulkSubjectModal={isWeeklyCycle ? (subId) => {
                 setBulkInitialSubjectId(subId || '');
                 setShowBulkScheduleModal(true);
-              }}
+              } : undefined}
             />
           </div>
         )}
@@ -1170,7 +1174,7 @@ export default function Calendario() {
       />
 
       <BulkScheduleModal
-        isOpen={showBulkScheduleModal}
+        isOpen={showBulkScheduleModal && isWeeklyCycle}
         onClose={() => setShowBulkScheduleModal(false)}
         subjects={subjects}
         initialSubjectId={bulkInitialSubjectId}

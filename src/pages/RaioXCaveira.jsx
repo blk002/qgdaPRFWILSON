@@ -333,6 +333,11 @@ export default function RaioXCaveira() {
     });
   }, [enrichedQuestions]);
 
+  const getQuestionTopicLabel = (q) =>
+    (q?.topic && q.topic !== q.subject && q.topic !== q.canonicalSubject)
+      ? q.topic
+      : (q?.topic || q?.canonicalSubject || q?.subject || 'Geral');
+
   // Agrupamento Hierárquico por Disciplina Padronizada e Tópico
   const subjectGroups = useMemo(() => {
     const groups = {};
@@ -356,9 +361,7 @@ export default function RaioXCaveira() {
       if (q.hit) groups[subName].hits += 1;
       else groups[subName].errors += 1;
 
-      const topicLabel = (q.topic && q.topic !== q.subject)
-        ? q.topic
-        : (q.topic || q.subject || 'Geral');
+      const topicLabel = getQuestionTopicLabel(q);
 
       if (!groups[subName].topics[topicLabel]) {
         groups[subName].topics[topicLabel] = {
@@ -498,11 +501,6 @@ export default function RaioXCaveira() {
       }))
       .sort((a, b) => b.errors - a.errors || b.guessesOrDoubts - a.guessesOrDoubts || b.total - a.total);
   }, [blockScopedQuestions]);
-
-  const getQuestionTopicLabel = (q) =>
-    (q?.topic && q.topic !== q.subject && q.topic !== q.canonicalSubject)
-      ? q.topic
-      : (q?.topic || q?.canonicalSubject || q?.subject || 'Geral');
 
   // Relatório Tático de Assuntos Mais Errados vs Mais Acertados
   const topicRankings = useMemo(() => {
@@ -1086,13 +1084,11 @@ export default function RaioXCaveira() {
         </section>
       ) : (
         /* WORKSPACE ATIVO */
-        <AnimatePresence mode="wait">
-          <motion.div
+        <motion.div
             key={activeTab}
             initial={{ opacity: 0, y: 6 }}
             animate={{ opacity: 1, y: 0 }}
-            exit={{ opacity: 0, y: -6 }}
-            transition={{ duration: 0.15 }}
+            transition={{ duration: 0.14 }}
           >
             {activeTab === 'overview' && (
               <RaioXOverview
@@ -1187,7 +1183,6 @@ export default function RaioXCaveira() {
               />
             )}
           </motion.div>
-        </AnimatePresence>
       )}
 
       {/* MODAL DE INSTALAÇÃO DA EXTENSÃO (LIGHT + DARK) */}

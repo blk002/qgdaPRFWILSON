@@ -173,14 +173,12 @@ export default function TacticalCountdownBanner() {
     <>
       {/* WIDGET FIXO NO CANTO INFERIOR DIREITO */}
       <div className="fixed bottom-4 right-4 sm:bottom-6 sm:right-6 z-40 pointer-events-auto select-none">
-        <AnimatePresence mode="wait">
-          {!config.isCollapsed ? (
+        {!config.isCollapsed ? (
             /* PAINEL EXPANDIDO FLUTUANTE */
             <motion.div
               key="expanded"
               initial={{ opacity: 0, y: 20, scale: 0.95 }}
               animate={{ opacity: 1, y: 0, scale: 1 }}
-              exit={{ opacity: 0, y: 20, scale: 0.95 }}
               transition={{ duration: 0.2 }}
               className="w-[320px] sm:w-[340px] max-w-[calc(100vw-2rem)] overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-900/95 shadow-[0_10px_35px_rgba(0,0,0,0.65)] backdrop-blur-xl"
             >
@@ -288,7 +286,6 @@ export default function TacticalCountdownBanner() {
               type="button"
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.15 }}
               onClick={toggleMiniIcon}
               className="flex items-center gap-1.5 bg-slate-900/90 border border-slate-700/80 hover:border-sky-400 text-white px-2.5 py-1.5 rounded-full shadow-lg backdrop-blur-md cursor-pointer transition-all"
@@ -303,7 +300,6 @@ export default function TacticalCountdownBanner() {
               key="collapsed"
               initial={{ opacity: 0, scale: 0.9 }}
               animate={{ opacity: 1, scale: 1 }}
-              exit={{ opacity: 0, scale: 0.9 }}
               transition={{ duration: 0.2 }}
               onClick={toggleCollapsed}
               className="flex items-center gap-2 bg-slate-900/95 border border-slate-700/80 hover:border-blue-400 text-white pl-3 pr-2 py-1.5 rounded-2xl shadow-2xl backdrop-blur-xl cursor-pointer transition-all group max-w-[calc(100vw-2rem)]"
@@ -330,7 +326,6 @@ export default function TacticalCountdownBanner() {
               </button>
             </motion.div>
           )}
-        </AnimatePresence>
       </div>
 
       {/* Modal de Configuração da Data da Prova / Meta */}

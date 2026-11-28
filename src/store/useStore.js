@@ -2088,6 +2088,8 @@ export const useStore = create(
                 newlyAnsweredForMission.push({
                   id: enrichedNew.id,
                   hit: Boolean(enrichedNew.hit),
+                  subject: enrichedNew.subject,
+                  canonicalSubject: enrichedNew.canonicalSubject,
                 });
               }
             }
@@ -2449,7 +2451,7 @@ export const useStore = create(
             ano: matchedQ?.ano || rev.questionData?.ano || '',
             hit: matchedQ ? Boolean(matchedQ.hit) : Boolean(rev.questionData?.hit),
             confidence: matchedQ?.confidence || rev.questionData?.confidence || 'sabia',
-            errorReason: matchedQ?.errorReason || rev.questionData?.errorReason || 'conteudo',
+            errorReason: normalizeErrorReason(matchedQ?.errorReason || rev.questionData?.errorReason || 'base'),
             userNote: matchedQ?.userNote || rev.questionData?.userNote || '',
             teacherComment: matchedQ?.teacherComment || rev.questionData?.teacherComment || '',
             timestamp: resolvedTimestamp
@@ -2476,6 +2478,7 @@ export const useStore = create(
             !rev.questionData ||
             rev.questionData.content !== mergedQuestionData.content ||
             rev.questionData.confidence !== mergedQuestionData.confidence ||
+            rev.questionData.errorReason !== mergedQuestionData.errorReason ||
             rev.questionData.userNote !== mergedQuestionData.userNote ||
             rev.questionData.teacherComment !== mergedQuestionData.teacherComment ||
             rev.questionData.timestamp !== resolvedTimestamp ||
@@ -3368,8 +3371,10 @@ export const useStore = create(
       applySubjectDaysInCalendar: async (subjectId, selectedDaysOfWeek = [], slotCount = 0) => {
         if (!subjectId) return;
         const st = get();
+        if ((st.cycleScheduleType || 'weekly') !== 'weekly') return;
         const todayStr = st.getLocalDateStr ? st.getLocalDateStr() : '';
         const updated = applySubjectDaysToSchedule(st, subjectId, selectedDaysOfWeek, slotCount, todayStr);
+        if (!updated || Object.keys(updated).length === 0) return;
         set(updated);
         if (st.user?.id) {
           await get().saveToCloud({ allowEmptyOverwrite: true });

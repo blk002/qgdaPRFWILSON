@@ -9,6 +9,7 @@ import {
   PERFORMANCE_SNAPSHOT_KEY,
   DEFAULT_PREFS_KEY,
   ACTIVE_MISSION_KEY,
+  LAST_FILTER_DIAG_KEY,
 } from '../content/utils.js';
 
 // Bridge entre a Extensão e a aplicação Web QG da PRF (v3.1.0 Strict)
@@ -45,7 +46,7 @@ import {
     MODULE_SPEEDS_KEY,
     PERFORMANCE_SNAPSHOT_KEY,
     PENDING_FILTER_KEY,
-    'qg_last_filter_diag',
+    LAST_FILTER_DIAG_KEY,
     PENDING_CATALOG_KEY,
     PENDING_SIMULADOS_KEY,
     PENDING_SIMULADOS_QUEUE_KEY,

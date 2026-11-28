@@ -296,11 +296,23 @@
 
     // Caso dedicado: Resoluções do CONTRAN (20363) por número da resolução
     if (subject.id === 20363) {
-      const combined = [...lessons, topic].join(' ');
-      const nums = Array.from(new Set(Array.from(combined.matchAll(/\b(?:res(?:olu[cç][aã]o)?\.?\s*(?:contran\s*)?(?:n[º°.]?\s*)?)?(\d{2,4})(?:\s*\/\s*\d{2,4})?\b/gi)).map(m => m[1])));
+      const combined = [...lessons, topic].join(' ')
+        .replace(/\b(\d)\.(\d{3})\b/g, '$1$2')
+        .replace(/\b(?:aula|parte|bloco|m[oó]dulo|cap[ií]tulo|item|tema|unid(?:ade)?)\s*(?:n[º°.]?\s*)?\d{1,4}\b/gi, ' ');
+      const explicitNums = Array.from(
+        combined.matchAll(/\bres(?:olu[cç][aã]o)?\.?\s*(?:do\s+)?(?:contran\s*)?(?:n[º°.]?\s*)?(\d{2,4})(?:\s*\/\s*\d{2,4})?\b/gi)
+      ).map(m => m[1]);
+      const fallbackNums = explicitNums.length === 0
+        ? Array.from(combined.matchAll(/\b(\d{2,4})(?:\s*\/\s*\d{2,4})?\b/g))
+            .map(m => m[1])
+            .filter(n => !/^(19\d\d|20[0-3]\d)$/.test(n))
+        : [];
+      const nums = Array.from(new Set((explicitNums.length > 0 ? explicitNums : fallbackNums)
+        .map(n => n.replace(/^0+/, ''))
+        .filter(n => n && Number(n) >= 10)));
       const matchedNodes = [];
-      for (const num of nums) {
-        const hit = subject.nodes.find(n => new RegExp(`^res\\.?\\s*0*${num.replace(/^0+/, '')}(?:\\b|\\/|\\.)`, 'i').test(n.name.replace(/\b(\d)\.(\d{3})\b/g, '$1$2')));
+      for (const cleanNum of nums) {
+        const hit = subject.nodes.find(n => new RegExp(`^res\\.?\\s*0*${cleanNum}(?:\\b|\\/|\\.)`, 'i').test(n.name.replace(/\b(\d)\.(\d{3})\b/g, '$1$2')));
         if (hit && !matchedNodes.some(x => x.id === hit.id)) matchedNodes.push(hit);
       }
       if (matchedNodes.length > 0) {

@@ -11,8 +11,8 @@ const SUBJECT_ALIAS_FAMILIES = [
   ['legislacao de transito', 'transito', 'ctb', 'codigo de transito brasileiro', 'resolucoes contran', 'contran'],
   ['direito administrativo', 'administrativo', 'ato administrativo', 'licitacoes'],
   ['direito constitucional', 'constitucional', 'constituicao federal'],
-  ['direito penal', 'penal', 'codigo penal'],
   ['direito processual penal', 'processual penal', 'processo penal', 'cpp'],
+  ['direito penal', 'penal', 'codigo penal'],
   ['legislacao especial', 'leis penais especiais', 'legislacao extravagante'],
   ['direitos humanos', 'direitos e garantias fundamentais'],
   ['redacao', 'discursiva', 'texto dissertativo'],
@@ -24,11 +24,23 @@ function clampSpeed(value) {
   return Math.round(num * 100) / 100;
 }
 
+function matchesAliasTerm(text, term, family) {
+  if (!text || !term) return false;
+  if (family.includes('codigo penal') && (text.includes('processual') || text.includes('processo penal'))) {
+    return false;
+  }
+  if (term.length <= 4) {
+    const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    return new RegExp(`(?:^|\\s)${escaped}(?:\\s|$)`).test(text);
+  }
+  return text.includes(term) || (text.length >= 5 && term.includes(text));
+}
+
 function matchAliasFamily(a, b) {
   if (!a || !b) return false;
   for (const family of SUBJECT_ALIAS_FAMILIES) {
-    const aHit = family.some((term) => a.includes(term) || term.includes(a));
-    const bHit = family.some((term) => b.includes(term) || term.includes(b));
+    const aHit = family.some((term) => matchesAliasTerm(a, term, family));
+    const bHit = family.some((term) => matchesAliasTerm(b, term, family));
     if (aHit && bHit) return true;
   }
   return false;

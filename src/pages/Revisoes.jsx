@@ -773,7 +773,12 @@ export default function Revisoes() {
             {rDays.map((day) => {
               const d = new Date(rYear, rMonth, day);
               const dateStr = getLocalDateStr(d);
-              const dayRevs = reviews.filter((r) => r.nextDateStr === dateStr);
+              const dayRevs = [
+                ...(reviews || []).filter((r) => r && r.nextDateStr === dateStr),
+                ...(progressiveReviews || [])
+                  .filter((r) => r && r.nextDateStr === dateStr)
+                  .map((r) => ({ ...r, isProgressiveReview: true })),
+              ];
               const isTodayStr = dateStr === todayStr;
               const isPast = dateStr < todayStr;
 

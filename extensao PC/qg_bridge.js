@@ -1,6 +1,7 @@
 (() => {
   // extensao-src/content/utils.js
   var PENDING_SIMULADOS_QUEUE_KEY = "qg_pending_simulados_queue";
+  var LAST_FILTER_DIAG_KEY = "qg_caveira_last_filter_diag";
   var ACTIVE_MISSION_KEY = "qg_active_practice_mission";
   var DEFAULT_PREFS_KEY = "qg_caveira_default_prefs";
   var PERFORMANCE_SNAPSHOT_KEY = "qg_caveira_performance_snapshot";
@@ -116,7 +117,7 @@
       MODULE_SPEEDS_KEY,
       PERFORMANCE_SNAPSHOT_KEY,
       PENDING_FILTER_KEY,
-      "qg_last_filter_diag",
+      LAST_FILTER_DIAG_KEY,
       PENDING_CATALOG_KEY,
       PENDING_SIMULADOS_KEY,
       PENDING_SIMULADOS_QUEUE_KEY,

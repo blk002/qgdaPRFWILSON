@@ -1,5 +1,5 @@
 import React, { useMemo, Suspense } from 'react';
-import { useSearchParams } from 'react-router-dom';
+import { useSearchParams, useNavigate } from 'react-router-dom';
 import { useStore } from '../store/useStore';
 import AbaHoje from '../components/AbaHoje';
 import {
@@ -28,6 +28,7 @@ const TAB_CONFIG = [
 
 export default function CentralEstudos() {
   const [searchParams, setSearchParams] = useSearchParams();
+  const navigate = useNavigate();
   const rawTab = searchParams.get('tab');
   const activeTab = VALID_TABS.has(rawTab) ? rawTab : 'hoje';
 
@@ -69,6 +70,10 @@ export default function CentralEstudos() {
   const currentTabMeta = TAB_CONFIG.find(t => t.id === activeTab) || TAB_CONFIG[0];
 
   const handleTabChange = (tabId) => {
+    if (tabId === 'revisoes') {
+      navigate('/revisoes');
+      return;
+    }
     setSearchParams({ tab: tabId });
   };
 

@@ -108,6 +108,9 @@ export function getScheduledDaysForSubject(state, subjectId) {
 }
 
 export function applySubjectDaysToSchedule(state, subjectId, selectedDaysOfWeek = [], slotCount = 0, todayStr = '') {
+  if ((state?.cycleScheduleType || 'weekly') !== 'weekly') {
+    return {};
+  }
   const targetIdStr = String(subjectId);
   const cycleWeekStart = state?.cycleWeekStart || 'sunday';
   const selectedSet = new Set(

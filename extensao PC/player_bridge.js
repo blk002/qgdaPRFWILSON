@@ -8,6 +8,7 @@
     const RESUME_KEY = "qg_video_resume_positions";
     let desiredSpeed = 1;
     let forceMaxQuality = true;
+    let manualSpeedOverride = false;
     let lastCourseId = null;
     let lastBoundVideo = null;
     let endedNotified = false;
@@ -104,7 +105,7 @@
           if (chrome.runtime?.lastError) return;
           const item = res?.[SEEK_KEY];
           if (!item || typeof item !== "object") return;
-          const age = Date.now() - (Number(item.updatedAt) || 0);
+          const age = Date.now() - (Number(item.updatedAt || item.savedAt) || 0);
           if (age > 45e3) return;
           const targetSec = Number(item.seconds);
           if (!Number.isFinite(targetSec) || targetSec < 0) return;
@@ -142,7 +143,7 @@
         chrome.storage.local.get([RESUME_KEY, SEEK_KEY], (res) => {
           if (chrome.runtime?.lastError) return;
           const seekItem = res?.[SEEK_KEY];
-          if (seekItem && Date.now() - (Number(seekItem.updatedAt) || 0) < 45e3) return;
+          if (seekItem && Date.now() - (Number(seekItem.updatedAt || seekItem.savedAt) || 0) < 45e3) return;
           const saved = res?.[RESUME_KEY]?.[key];
           if (!saved || !Number.isFinite(saved.time) || saved.time < 15) return;
           video.__qgResumedOnce = true;
@@ -162,22 +163,23 @@
       const video = document.querySelector("video");
       if (!video || video === lastBoundVideo) return;
       lastBoundVideo = video;
+      manualSpeedOverride = false;
       endedNotified = false;
       if (observer) {
         observer.disconnect();
         observer = null;
       }
       video.addEventListener("loadedmetadata", () => {
-        applyTargetSpeed(video, false);
+        if (!manualSpeedOverride) applyTargetSpeed(video, false);
         tryAutoResumePosition(video);
       });
       video.addEventListener("canplay", () => {
-        if (Math.abs((video.playbackRate || 1) - clampSpeed(desiredSpeed)) > 5e-3) {
+        if (!manualSpeedOverride && Math.abs((video.playbackRate || 1) - clampSpeed(desiredSpeed)) > 5e-3) {
           applyTargetSpeed(video, false);
         }
       });
       video.addEventListener("playing", () => {
-        if (Math.abs((video.playbackRate || 1) - clampSpeed(desiredSpeed)) > 5e-3) {
+        if (!manualSpeedOverride && Math.abs((video.playbackRate || 1) - clampSpeed(desiredSpeed)) > 5e-3) {
           applyTargetSpeed(video, false);
         }
       });
@@ -231,6 +233,7 @@
         if (changes[SPEED_KEY]?.newValue) {
           const item = changes[SPEED_KEY].newValue;
           desiredSpeed = clampSpeed(item.speed);
+          manualSpeedOverride = false;
           if (typeof item.forceMaxQuality === "boolean") {
             forceMaxQuality = item.forceMaxQuality;
           }
@@ -247,6 +250,7 @@
       chrome.runtime.onMessage.addListener((msg, sender, sendResponse) => {
         if (msg && msg.type === "APPLY_PLAYER_SPEED" && msg.payload) {
           desiredSpeed = clampSpeed(msg.payload.speed);
+          manualSpeedOverride = false;
           if (typeof msg.payload.forceMaxQuality === "boolean") {
             forceMaxQuality = msg.payload.forceMaxQuality;
           }
@@ -260,6 +264,13 @@
       });
     } catch (_) {
     }
+    window.addEventListener("message", (event) => {
+      if (event.source !== window || event.origin !== window.location.origin) return;
+      const msg = event.data;
+      if (msg && msg.source === "QG_PLAYER_MAIN" && msg.type === "QG_MANUAL_SPEED_OVERRIDE") {
+        manualSpeedOverride = Boolean(msg.payload?.active);
+      }
+    });
     initSpeedFromStorage();
     bindVideoElement();
     try {

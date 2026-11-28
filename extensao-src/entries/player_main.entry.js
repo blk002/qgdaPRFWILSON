@@ -15,6 +15,19 @@
   let observer = null;
   let bootTimer = null;
 
+  function notifyManualSpeedOverride(active) {
+    try {
+      window.postMessage(
+        {
+          source: 'QG_PLAYER_MAIN',
+          type: 'QG_MANUAL_SPEED_OVERRIDE',
+          payload: { active: Boolean(active) },
+        },
+        window.location.origin
+      );
+    } catch (_) {}
+  }
+
   function clampSpeed(val) {
     const n = Number(val);
     if (!Number.isFinite(n) || n < 0.5 || n > 4) return 1;
@@ -165,6 +178,7 @@
       manualSpeedOverride = false;
       manualQualityOverride = false;
       qualityLockedForVideo = false;
+      notifyManualSpeedOverride(false);
 
       ['loadedmetadata', 'canplay', 'playing', 'play'].forEach((evtName) => {
         video.addEventListener(evtName, () => {
@@ -197,6 +211,7 @@
     const speedBtn = e.target?.closest?.('[data-plyr="speed"]');
     if (speedBtn) {
       manualSpeedOverride = true;
+      notifyManualSpeedOverride(true);
       return;
     }
     const qualBtn = e.target?.closest?.('[data-plyr="quality"]');
@@ -220,6 +235,7 @@
       const forceSpeed = Boolean(msg.payload.forceSpeed || msg.payload.force);
       if (speedChanged || forceSpeed) {
         manualSpeedOverride = false;
+        notifyManualSpeedOverride(false);
       }
       applySpeedControl(forceSpeed);
       applyMaxQualityOnce();

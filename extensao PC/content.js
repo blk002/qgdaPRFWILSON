@@ -1432,8 +1432,8 @@ ${EXTRA_SHADOW_CSS}`;
     ["legislacao de transito", "transito", "ctb", "codigo de transito brasileiro", "resolucoes contran", "contran"],
     ["direito administrativo", "administrativo", "ato administrativo", "licitacoes"],
     ["direito constitucional", "constitucional", "constituicao federal"],
-    ["direito penal", "penal", "codigo penal"],
     ["direito processual penal", "processual penal", "processo penal", "cpp"],
+    ["direito penal", "penal", "codigo penal"],
     ["legislacao especial", "leis penais especiais", "legislacao extravagante"],
     ["direitos humanos", "direitos e garantias fundamentais"],
     ["redacao", "discursiva", "texto dissertativo"]
@@ -1443,11 +1443,22 @@ ${EXTRA_SHADOW_CSS}`;
     if (!Number.isFinite(num) || num < 0.5 || num > 4) return null;
     return Math.round(num * 100) / 100;
   }
+  function matchesAliasTerm(text, term, family) {
+    if (!text || !term) return false;
+    if (family.includes("codigo penal") && (text.includes("processual") || text.includes("processo penal"))) {
+      return false;
+    }
+    if (term.length <= 4) {
+      const escaped = term.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+      return new RegExp(`(?:^|\\s)${escaped}(?:\\s|$)`).test(text);
+    }
+    return text.includes(term) || text.length >= 5 && term.includes(text);
+  }
   function matchAliasFamily(a, b) {
     if (!a || !b) return false;
     for (const family of SUBJECT_ALIAS_FAMILIES) {
-      const aHit = family.some((term) => a.includes(term) || term.includes(a));
-      const bHit = family.some((term) => b.includes(term) || term.includes(b));
+      const aHit = family.some((term) => matchesAliasTerm(a, term, family));
+      const bHit = family.some((term) => matchesAliasTerm(b, term, family));
       if (aHit && bHit) return true;
     }
     return false;
@@ -1684,7 +1695,7 @@ ${EXTRA_SHADOW_CSS}`;
   // extensao-src/entries/content.entry.js
   (function() {
     if (isExcludedCaveiraHost(window.location.hostname)) return;
-    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.5.1";
+    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.5.2";
     console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
     try {
       window.dispatchEvent(new CustomEvent("qg-caveira-teardown"));
@@ -2914,7 +2925,8 @@ ${EXTRA_SHADOW_CSS}`;
           lastSeekUrlApplied = currentHrefNoHash;
           const seekParam = Number(new URLSearchParams(window.location.search || "").get("t"));
           if (Number.isFinite(seekParam) && seekParam > 0) {
-            chrome.storage.local.set({ [PLAYER_SEEK_KEY]: { seconds: seekParam, courseId: currentCourseId, savedAt: Date.now() } }, () => {
+            const nowTs = Date.now();
+            chrome.storage.local.set({ [PLAYER_SEEK_KEY]: { seconds: seekParam, courseId: currentCourseId, updatedAt: nowTs, savedAt: nowTs } }, () => {
               if (chrome.runtime?.sendMessage) {
                 chrome.runtime.sendMessage({ type: "SEEK_VIDEO_TO", payload: { seconds: seekParam } }).catch(() => {
                 });
@@ -3400,11 +3412,13 @@ ${EXTRA_SHADOW_CSS}`;
         if (seekSec > 0) {
           setTimeout(() => {
             try {
+              const nowSeekTs = Date.now();
               chrome.storage.local.set({
                 [PLAYER_SEEK_KEY]: {
                   seconds: seekSec,
                   courseId: window.location.pathname.match(/\/courses\/(\d+)/i)?.[1] || "",
-                  savedAt: Date.now()
+                  updatedAt: nowSeekTs,
+                  savedAt: nowSeekTs
                 }
               }, () => {
                 if (chrome.runtime?.sendMessage) {

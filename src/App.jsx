@@ -1,7 +1,7 @@
 import React, { useState, useEffect, Suspense, useRef } from 'react';
 import { Routes, Route, useLocation, Navigate } from 'react-router-dom';
 import { Toaster, toast } from 'sonner';
-import { AnimatePresence, motion } from 'framer-motion';
+import { MotionConfig, motion } from 'framer-motion';
 import { supabase } from './lib/supabaseClient';
 import {
   createLocalTestSession,
@@ -34,9 +34,8 @@ const Pet = React.lazy(() => import('./pages/Pet'));
 const DueloFPS = React.lazy(() => import('./pages/DueloFPS'));
 
 const PAGE_VARIANTS = {
-  initial: { opacity: 0, y: 8 },
+  initial: { opacity: 0, y: 6 },
   animate: { opacity: 1, y: 0 },
-  exit: { opacity: 0, y: -8 },
 };
 
 export default function App() {
@@ -257,11 +256,12 @@ export default function App() {
   }
 
   return (
-    <div
-      className={`min-h-screen transition-colors duration-200 relative overflow-x-clip flex flex-col ${
-        isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
-      }`}
-    >
+    <MotionConfig reducedMotion="user">
+      <div
+        className={`min-h-screen transition-colors duration-200 relative overflow-x-clip flex flex-col ${
+          isDarkMode ? 'dark bg-slate-950 text-slate-100' : 'bg-slate-50 text-slate-900'
+        }`}
+      >
       <ConfettiCanvas />
       <div className="fixed inset-0 tactical-grid pointer-events-none -z-20" />
       <Toaster position="top-right" richColors closeButton />
@@ -277,51 +277,48 @@ export default function App() {
         <main className="w-full max-w-[1640px] mx-auto px-4 sm:px-6 lg:px-8 xl:px-10 py-4 sm:py-6 pb-24 md:pb-12">
           <SyncStatusBanner />
 
-          <AnimatePresence mode="wait">
-            <motion.div
-              key={location.pathname}
-              initial="initial"
-              animate="animate"
-              exit="exit"
-              variants={PAGE_VARIANTS}
-              transition={{ duration: 0.16 }}
-            >
-              <ErrorBoundary key={`${location.pathname}${location.search}`}>
-                <Suspense
-                  fallback={
-                    <div className="flex items-center justify-center py-20">
-                      <div className="flex flex-col items-center gap-2.5">
-                        <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
-                        <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
-                          Carregando módulo...
-                        </span>
-                      </div>
+          <motion.div
+            key={location.pathname}
+            initial="initial"
+            animate="animate"
+            variants={PAGE_VARIANTS}
+            transition={{ duration: 0.14 }}
+          >
+            <ErrorBoundary key={`${location.pathname}${location.search}`}>
+              <Suspense
+                fallback={
+                  <div className="flex items-center justify-center py-20">
+                    <div className="flex flex-col items-center gap-2.5">
+                      <div className="w-6 h-6 border-2 border-sky-500 border-t-transparent rounded-full animate-spin" />
+                      <span className="text-xs font-medium text-slate-500 dark:text-slate-400">
+                        Carregando módulo...
+                      </span>
                     </div>
-                  }
-                >
-                  <Routes location={location}>
-                    <Route path="/" element={<Navigate to="/estudos?tab=hoje" replace />} />
-                    <Route path="/estudos" element={<CentralEstudos />} />
-                    <Route path="/carreira" element={<Dashboard />} />
-                    <Route path="/duelo" element={<DueloFPS />} />
-                    <Route path="/revisoes" element={<Revisoes />} />
-                    <Route path="/ciclo" element={<Navigate to="/estudos?tab=cronograma" replace />} />
-                    <Route path="/calendario" element={<Navigate to="/estudos?tab=calendario" replace />} />
-                    <Route path="/estatisticas" element={<Estatisticas />} />
-                    <Route path="/historico" element={<Navigate to="/estatisticas" replace />} />
-                    <Route path="/edital" element={<Edital />} />
-                    <Route path="/taf" element={<TreinoTAF />} />
-                    <Route path="/simulados" element={<Navigate to="/estudos?tab=simulados" replace />} />
-                    <Route path="/caveira" element={<Navigate to="/estudos?tab=caveira" replace />} />
-                    <Route path="/pet" element={<Pet />} />
-                    <Route path="/loja" element={<Loja />} />
-                    <Route path="/config" element={<Config availableColors={availableColors} />} />
-                    <Route path="*" element={<Navigate to="/estudos?tab=hoje" replace />} />
-                  </Routes>
-                </Suspense>
-              </ErrorBoundary>
-            </motion.div>
-          </AnimatePresence>
+                  </div>
+                }
+              >
+                <Routes location={location}>
+                  <Route path="/" element={<Navigate to="/estudos?tab=hoje" replace />} />
+                  <Route path="/estudos" element={<CentralEstudos />} />
+                  <Route path="/carreira" element={<Dashboard />} />
+                  <Route path="/duelo" element={<DueloFPS />} />
+                  <Route path="/revisoes" element={<Revisoes />} />
+                  <Route path="/ciclo" element={<Navigate to="/estudos?tab=cronograma" replace />} />
+                  <Route path="/calendario" element={<Navigate to="/estudos?tab=calendario" replace />} />
+                  <Route path="/estatisticas" element={<Estatisticas />} />
+                  <Route path="/historico" element={<Navigate to="/estatisticas" replace />} />
+                  <Route path="/edital" element={<Edital />} />
+                  <Route path="/taf" element={<TreinoTAF />} />
+                  <Route path="/simulados" element={<Navigate to="/estudos?tab=simulados" replace />} />
+                  <Route path="/caveira" element={<Navigate to="/estudos?tab=caveira" replace />} />
+                  <Route path="/pet" element={<Pet />} />
+                  <Route path="/loja" element={<Loja />} />
+                  <Route path="/config" element={<Config availableColors={availableColors} />} />
+                  <Route path="*" element={<Navigate to="/estudos?tab=hoje" replace />} />
+                </Routes>
+              </Suspense>
+            </ErrorBoundary>
+          </motion.div>
         </main>
       </div>
 
@@ -334,6 +331,7 @@ export default function App() {
       />
 
       <InteractiveSpotlightTour />
-    </div>
+      </div>
+    </MotionConfig>
   );
 }
