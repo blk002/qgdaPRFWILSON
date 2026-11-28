@@ -2870,7 +2870,7 @@ ${EXTRA_SHADOW_CSS}`;
   // extensao-src/entries/content.entry.js
   (function() {
     if (isExcludedCaveiraHost(window.location.hostname)) return;
-    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.6.4";
+    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.6.5";
     console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
     try {
       window.dispatchEvent(new CustomEvent("qg-caveira-teardown"));
@@ -3130,8 +3130,11 @@ ${EXTRA_SHADOW_CSS}`;
       return questions.slice(0, maxItems).map((q, idx) => {
         if (!q || idx < 150) return q;
         const compacted = { ...q };
-        if (typeof compacted.content === "string" && compacted.content.length > 400) {
-          compacted.content = compacted.content.slice(0, 400);
+        if (typeof compacted.content === "string" && compacted.content.length > 600) {
+          compacted.content = compacted.content.slice(0, 600);
+        }
+        if (typeof compacted.supportingContent === "string" && compacted.supportingContent.length > 1500) {
+          compacted.supportingContent = compacted.supportingContent.slice(0, 1500);
         }
         if (typeof compacted.teacherComment === "string" && compacted.teacherComment.length > 500) {
           compacted.teacherComment = compacted.teacherComment.slice(0, 500);
@@ -3909,7 +3912,16 @@ ${EXTRA_SHADOW_CSS}`;
             const needsStats = existing.communityCorrectPct === void 0 && mergedApi.communityCorrectPct !== void 0;
             const needsNote = !existing.userNote && mergedApi.userNote;
             const needsIds = !existing.apiId && numericApiId || !existing.subjectId && mappedIds.subjectId || !existing.subtopicId && mappedIds.subtopicId;
-            if (needsComment || needsStats || needsNote || needsIds) {
+            const needsSupport = Boolean(
+              mergedApi.supportingContent && (!existing.supportingContent || mergedApi.supportingContent.length > existing.supportingContent.length + 20)
+            );
+            const needsSupportImgs = Boolean(
+              Array.isArray(mergedApi.supportingImages) && mergedApi.supportingImages.length > (Array.isArray(existing.supportingImages) ? existing.supportingImages.length : 0)
+            );
+            const needsContentImgs = Boolean(
+              Array.isArray(mergedApi.contentImages) && mergedApi.contentImages.length > (Array.isArray(existing.contentImages) ? existing.contentImages.length : 0)
+            );
+            if (needsComment || needsStats || needsNote || needsIds || needsSupport || needsSupportImgs || needsContentImgs) {
               saveQuestion({
                 ...existing,
                 ...numericApiId ? { apiId: numericApiId } : {},
@@ -3919,7 +3931,10 @@ ${EXTRA_SHADOW_CSS}`;
                 ...mergedApi.ano && !existing.ano ? { ano: mergedApi.ano } : {},
                 ...needsComment ? { teacherComment: mergedApi.teacherComment, commentSource: mergedApi.commentSource || "professor" } : {},
                 ...needsStats ? { communityCorrectPct: mergedApi.communityCorrectPct, communityErrorPct: mergedApi.communityErrorPct } : {},
-                ...needsNote ? { userNote: mergedApi.userNote } : {}
+                ...needsNote ? { userNote: mergedApi.userNote } : {},
+                ...needsSupport ? { supportingContent: mergedApi.supportingContent } : {},
+                ...needsSupportImgs ? { supportingImages: mergedApi.supportingImages } : {},
+                ...needsContentImgs ? { contentImages: mergedApi.contentImages } : {}
               }, true);
             }
           }
@@ -10141,6 +10156,101 @@ ${EXTRA_SHADOW_CSS}`;
       }
       return { bloco: "Bloco I", canonicalSubject: subject || "Geral" };
     }
+    function normalizeSafeImageUrl(rawUrl) {
+      if (typeof rawUrl !== "string") return "";
+      const trimmed = rawUrl.trim();
+      if (!trimmed || /^data:/i.test(trimmed) || /^javascript:/i.test(trimmed)) return "";
+      try {
+        const parsed = new URL(trimmed, window.location.origin);
+        if (parsed.protocol === "http:" || parsed.protocol === "https:") {
+          return parsed.href;
+        }
+        return "";
+      } catch (_) {
+        return "";
+      }
+    }
+    function mergeImageLists(primary = [], secondary = [], excludeSet = null, max = 8) {
+      const out = [];
+      const seen = /* @__PURE__ */ new Set();
+      [...Array.isArray(primary) ? primary : [], ...Array.isArray(secondary) ? secondary : []].forEach((raw) => {
+        const safe = normalizeSafeImageUrl(raw);
+        if (!safe || seen.has(safe)) return;
+        if (excludeSet && excludeSet.has(safe)) return;
+        if (out.length < max) {
+          seen.add(safe);
+          out.push(safe);
+        }
+      });
+      return out;
+    }
+    function extractImagesFromElement(el, max = 8) {
+      if (!el || typeof el.querySelectorAll !== "function") return [];
+      const out = [];
+      const seen = /* @__PURE__ */ new Set();
+      const imgs = el.querySelectorAll("img");
+      for (const img of imgs) {
+        if (!img || img.closest("#qg-caveira-shadow-host, #qg-caveira-hud")) continue;
+        const cls = String(img.className || "");
+        if (/(?:avatar|logo|icon|badge|emoji)/i.test(cls)) continue;
+        const w = Number(img.naturalWidth || img.width || 0);
+        const h = Number(img.naturalHeight || img.height || 0);
+        if (w > 0 && w <= 24 && h > 0 && h <= 24) continue;
+        const rawSrc = img.currentSrc || img.getAttribute("src") || img.getAttribute("data-src") || "";
+        const safe = normalizeSafeImageUrl(rawSrc);
+        if (safe && !seen.has(safe)) {
+          seen.add(safe);
+          out.push(safe);
+          if (out.length >= max) break;
+        }
+      }
+      return out;
+    }
+    function extractSupportingContentFromCard(card, contentEl) {
+      if (!card) return { text: "", images: [] };
+      const textParts = [];
+      const seenTexts = /* @__PURE__ */ new Set();
+      const imgs = [];
+      const seenImgs = /* @__PURE__ */ new Set();
+      const isInsideExcluded = (node) => {
+        if (!node) return true;
+        if (node.closest("#qg-caveira-shadow-host, #qg-caveira-hud, .question-alternatives")) return true;
+        if (contentEl && (node === contentEl || node.contains(contentEl) || contentEl.contains(node))) return true;
+        return false;
+      };
+      const collectFromNode = (node) => {
+        if (!node || isInsideExcluded(node)) return;
+        const rawTxt = (node.innerText || node.textContent || "").replace(/[ \t]{2,}/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+        if (rawTxt && !seenTexts.has(rawTxt)) {
+          seenTexts.add(rawTxt);
+          textParts.push(rawTxt);
+        }
+        extractImagesFromElement(node, 8).forEach((u) => {
+          if (!seenImgs.has(u) && imgs.length < 8) {
+            seenImgs.add(u);
+            imgs.push(u);
+          }
+        });
+      };
+      const explicitNodes = card.querySelectorAll(
+        '.supporting-content, .supporting-text, .support-content, .associated-text, .question-support, .texto-apoio, .texto-associado, [class*="supporting"], [class*="associated-text"], [class*="texto-apoio"], [class*="texto-associado"]'
+      );
+      explicitNodes.forEach(collectFromNode);
+      const expansionItems = card.querySelectorAll(".q-expansion-item");
+      expansionItems.forEach((item) => {
+        if (isInsideExcluded(item)) return;
+        const headerEl = item.querySelector(":scope > .q-expansion-item__container > .q-item, :scope > .q-item");
+        const headerTxt = (headerEl?.innerText || headerEl?.textContent || "").trim();
+        if (/texto\s*(?:de\s*apoio|associado)|conte[uú]do\s*de\s*apoio|texto\s*base/i.test(headerTxt)) {
+          const bodyEl = item.querySelector(".q-expansion-item__content") || item;
+          collectFromNode(bodyEl);
+        }
+      });
+      return {
+        text: textParts.join("\n\n").slice(0, 5e3),
+        images: imgs
+      };
+    }
     function extractQuestionData(card, qId) {
       if (!card) return null;
       const numericFromQId = Number(String(qId || "").replace(/^Q/i, "").replace(/\D+/g, ""));
@@ -10186,8 +10296,26 @@ ${EXTRA_SHADOW_CSS}`;
       const banca = bancaMatch && bancaMatch[1].trim() || apiData?.banca || "CAVEIRA";
       const ano = anoMatch ? anoMatch[1].trim() : apiData?.ano || "2026";
       const difficulty = diffMatch ? diffMatch[1].trim() : apiData?.difficulty || "Média";
-      const domContent = card.querySelector(".content")?.innerText?.trim() || "";
+      const contentEl = card.querySelector(".content");
+      const domContent = contentEl?.innerText?.trim() || "";
       const content = domContent || apiData?.content || "";
+      const domSupport = extractSupportingContentFromCard(card, contentEl);
+      const apiSupportText = String(apiData?.supportingContent || "").trim();
+      const pickRicherSupportText = (a, b) => {
+        const sa = String(a || "").trim();
+        const sb = String(b || "").trim();
+        if (!sa) return sb;
+        if (!sb) return sa;
+        return sb.length > sa.length ? sb : sa;
+      };
+      let supportingContent = pickRicherSupportText(domSupport.text, apiSupportText).slice(0, 5e3);
+      if (supportingContent && supportingContent === content) {
+        supportingContent = "";
+      }
+      const supportingImages = mergeImageLists(apiData?.supportingImages, domSupport.images, null, 8);
+      const supportingImgSet = new Set(supportingImages);
+      const domContentImages = extractImagesFromElement(contentEl, 8);
+      const contentImages = mergeImageLists(apiData?.contentImages, domContentImages, supportingImgSet, 8);
       const { bloco, canonicalSubject } = classifyPRFCategory(subject, topic, content);
       const statsBox = card.querySelector(".stats-box");
       const statsText = statsBox ? statsBox.textContent : "";
@@ -10327,8 +10455,10 @@ ${EXTRA_SHADOW_CSS}`;
         topic,
         ...subtopicPath ? { subtopicPath } : {},
         difficulty,
-        content: content.slice(0, 1e3),
-        ...apiData?.supportingContent ? { supportingContent: apiData.supportingContent.slice(0, 1e3) } : {},
+        content: content.slice(0, 2500),
+        ...supportingContent ? { supportingContent } : {},
+        ...supportingImages.length > 0 ? { supportingImages } : {},
+        ...contentImages.length > 0 ? { contentImages } : {},
         alternatives: finalAlternatives,
         teacherComment: teacherComment || void 0,
         ...commCorrectPct !== void 0 ? { communityCorrectPct: commCorrectPct, communityErrorPct: commErrorPct } : {},
@@ -10414,6 +10544,15 @@ ${EXTRA_SHADOW_CSS}`;
           ...question,
           ...resolvedOwnerId ? { ownerUserId: resolvedOwnerId } : {},
           attempts: buildAttemptsList(prev, question),
+          supportingContent: (() => {
+            const p = String(prev.supportingContent || "");
+            const n = String(question.supportingContent || "");
+            if (!n) return p;
+            if (!p) return n;
+            return p.length > n.length + 25 ? p : n;
+          })(),
+          supportingImages: mergeImageLists(prev.supportingImages, question.supportingImages, null, 8),
+          contentImages: mergeImageLists(prev.contentImages, question.contentImages, null, 8),
           teacherComment: question.teacherComment || prev.teacherComment || "",
           commentSource: question.commentSource || prev.commentSource || (question.teacherComment || prev.teacherComment ? "professor" : ""),
           userNote: question.userNote !== void 0 && question.userNote !== "" ? question.userNote : prev.userNote || "",
@@ -11236,6 +11375,26 @@ ${EXTRA_SHADOW_CSS}`;
         }
         if (savedQuestionIds.has(qId)) {
           const existing = questionsCache.find((item) => item && item.id === qId);
+          if (existing) {
+            const contentElForBackfill = card.querySelector(".content");
+            const domSupportForBackfill = !existing.supportingContent || !Array.isArray(existing.supportingImages) || existing.supportingImages.length === 0 ? extractSupportingContentFromCard(card, contentElForBackfill) : { text: "", images: [] };
+            const domContentImgsForBackfill = !Array.isArray(existing.contentImages) || existing.contentImages.length === 0 ? extractImagesFromElement(contentElForBackfill, 8) : [];
+            const supportPatch = {};
+            if (!existing.supportingContent && domSupportForBackfill.text) {
+              supportPatch.supportingContent = domSupportForBackfill.text;
+            }
+            if ((!Array.isArray(existing.supportingImages) || existing.supportingImages.length === 0) && domSupportForBackfill.images.length > 0) {
+              supportPatch.supportingImages = domSupportForBackfill.images;
+            }
+            if ((!Array.isArray(existing.contentImages) || existing.contentImages.length === 0) && domContentImgsForBackfill.length > 0) {
+              const supSet = new Set(supportPatch.supportingImages || existing.supportingImages || []);
+              const filteredImgs = domContentImgsForBackfill.filter((u) => !supSet.has(u));
+              if (filteredImgs.length > 0) supportPatch.contentImages = filteredImgs;
+            }
+            if (Object.keys(supportPatch).length > 0) {
+              saveQuestion({ ...existing, ...supportPatch }, true);
+            }
+          }
           if (existing && (!existing.teacherComment || existing.communityCorrectPct === void 0)) {
             const commentTxt = !existing.teacherComment ? extractTeacherCommentFromCard(card) : "";
             if (commentTxt) {

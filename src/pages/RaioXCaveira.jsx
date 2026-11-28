@@ -645,7 +645,7 @@ export default function RaioXCaveira() {
       }
 
       if (query) {
-        const hay = `${q.id} ${q.canonicalSubject} ${q.subject} ${q.topic} ${q.content} ${q.userNote || ''} ${q.teacherComment || ''}`.toLowerCase();
+        const hay = `${q.id} ${q.canonicalSubject} ${q.subject} ${q.topic} ${q.content} ${q.supportingContent || ''} ${q.userNote || ''} ${q.teacherComment || ''}`.toLowerCase();
         if (!hay.includes(query)) return false;
       }
 

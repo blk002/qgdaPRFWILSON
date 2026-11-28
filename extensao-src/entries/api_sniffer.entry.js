@@ -171,16 +171,148 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
     }
   });
 
+  function decodeHtmlEntities(raw) {
+    if (!raw || typeof raw !== 'string') return '';
+    const named = {
+      nbsp: ' ',
+      amp: '&',
+      lt: '<',
+      gt: '>',
+      quot: '"',
+      apos: "'",
+      '#39': "'",
+      ndash: '–',
+      mdash: '—',
+      deg: '°',
+      sup2: '²',
+      sup3: '³',
+      times: '×',
+      divide: '÷',
+      plusmn: '±',
+      Delta: 'Δ',
+      alpha: 'α',
+      beta: 'β',
+      mu: 'μ',
+      pi: 'π',
+      Omega: 'Ω',
+    };
+    return raw.replace(/&([a-zA-Z0-9]+|#\d+|#x[0-9a-fA-F]+);/g, (full, ent) => {
+      if (Object.prototype.hasOwnProperty.call(named, ent)) return named[ent];
+      if (ent.startsWith('#x') || ent.startsWith('#X')) {
+        const cp = parseInt(ent.slice(2), 16);
+        return Number.isFinite(cp) && cp > 0 ? String.fromCodePoint(cp) : full;
+      }
+      if (ent.startsWith('#')) {
+        const cp = parseInt(ent.slice(1), 10);
+        return Number.isFinite(cp) && cp > 0 ? String.fromCodePoint(cp) : full;
+      }
+      return full;
+    });
+  }
+
   function stripHtml(raw) {
     if (!raw || typeof raw !== 'string') return '';
-    return raw
+    const withBreaks = raw
       .replace(/<br\s*\/?>/gi, '\n')
-      .replace(/<\/p>/gi, '\n')
-      .replace(/<[^>]+>/g, ' ')
-      .replace(/&nbsp;/gi, ' ')
+      .replace(/<\/(?:p|div|li|tr)>/gi, '\n')
+      .replace(/<[^>]+>/g, ' ');
+    return decodeHtmlEntities(withBreaks)
       .replace(/[ \t]{2,}/g, ' ')
+      .replace(/ *\n */g, '\n')
       .replace(/\n{3,}/g, '\n\n')
       .trim();
+  }
+
+  function normalizeSafeImageUrl(rawUrl) {
+    if (typeof rawUrl !== 'string') return '';
+    const trimmed = decodeHtmlEntities(rawUrl).trim();
+    if (!trimmed || /^data:/i.test(trimmed) || /^javascript:/i.test(trimmed)) return '';
+    try {
+      const origin = (typeof window !== 'undefined' && window.location?.origin) ? window.location.origin : 'https://app.projetocaveira.com.br';
+      const parsed = new URL(trimmed, origin);
+      if (parsed.protocol === 'http:' || parsed.protocol === 'https:') {
+        return parsed.href;
+      }
+      return '';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  function extractRawHtml(val, depth = 0) {
+    if (!val || depth > 4) return '';
+    if (typeof val === 'string') return val;
+    if (Array.isArray(val)) {
+      return val.map((v) => extractRawHtml(v, depth + 1)).filter(Boolean).join('\n');
+    }
+    if (typeof val === 'object') {
+      const parts = [
+        val.title,
+        val.content || val.text || val.html || val.body || val.description,
+      ]
+        .map((v) => extractRawHtml(v, depth + 1))
+        .filter(Boolean);
+      return parts.join('\n');
+    }
+    return '';
+  }
+
+  function extractImageUrlsFromHtml(rawHtml, max = 8) {
+    if (!rawHtml || typeof rawHtml !== 'string') return [];
+    const out = [];
+    const seen = new Set();
+    const imgTagRx = /<img\b[^>]*>/gi;
+    let m;
+    while ((m = imgTagRx.exec(rawHtml)) !== null) {
+      const tag = m[0];
+      const srcMatch =
+        tag.match(/\b(?:data-src|src)\s*=\s*"([^"]+)"/i) ||
+        tag.match(/\b(?:data-src|src)\s*=\s*'([^']+)'/i);
+      if (!srcMatch) continue;
+      const safe = normalizeSafeImageUrl(srcMatch[1]);
+      if (safe && !seen.has(safe)) {
+        seen.add(safe);
+        out.push(safe);
+        if (out.length >= max) break;
+      }
+    }
+    return out;
+  }
+
+  function extractImageUrlsFromValue(val, max = 8, depth = 0) {
+    if (!val || depth > 4) return [];
+    const out = [];
+    const seen = new Set();
+    const pushUrl = (u) => {
+      const safe = normalizeSafeImageUrl(u);
+      if (safe && !seen.has(safe) && out.length < max) {
+        seen.add(safe);
+        out.push(safe);
+      }
+    };
+    if (typeof val === 'string') {
+      extractImageUrlsFromHtml(val, max).forEach(pushUrl);
+      if (/^(?:https?:\/\/|\/)/i.test(val.trim()) && !/\s/.test(val.trim())) {
+        pushUrl(val.trim());
+      }
+      return out;
+    }
+    if (Array.isArray(val)) {
+      for (const entry of val) {
+        extractImageUrlsFromValue(entry, max, depth + 1).forEach(pushUrl);
+        if (out.length >= max) break;
+      }
+      return out;
+    }
+    if (typeof val === 'object') {
+      ['image', 'image_url', 'imageUrl', 'url', 'src', 'path'].forEach((k) => {
+        if (typeof val[k] === 'string') pushUrl(val[k]);
+      });
+      ['images', 'attachments', 'media', 'content', 'text', 'html', 'body'].forEach((k) => {
+        if (val[k]) extractImageUrlsFromValue(val[k], max, depth + 1).forEach(pushUrl);
+      });
+    }
+    return out;
   }
 
   function normalizeQuestionNode(item) {
@@ -193,8 +325,59 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       ? (rawExplicitCode.toUpperCase().startsWith('Q') ? rawExplicitCode.toUpperCase() : `Q${rawExplicitCode}`)
       : null;
 
-    const contentText = stripHtml(item.content || item.enunciado || item.statement || item.question || '').slice(0, 2500);
-    const supportingText = stripHtml(item.supporting_content || item.supportingContent || '').slice(0, 1500);
+    const rawContentVal = item.content || item.enunciado || item.statement || item.question || '';
+    const rawContentHtml = extractRawHtml(rawContentVal);
+    const contentText = stripHtml(rawContentHtml).slice(0, 3500);
+
+    const rawSupportSources = [
+      item.supporting_content,
+      item.supportingContent,
+      item.supporting_text,
+      item.supportingText,
+      item.support_content,
+      item.supportContent,
+      item.support_text,
+      item.supportText,
+      item.associated_text,
+      item.associatedText,
+      item.text_associated,
+      item.textAssociated,
+      item.texto_apoio,
+      item.textoApoio,
+      item.texto_associado,
+      item.textoAssociado,
+      item.context,
+      item.preamble,
+      item.question_text_support,
+    ].filter(Boolean);
+    const rawSupportHtml = rawSupportSources.map((s) => extractRawHtml(s)).filter(Boolean).join('\n\n');
+    let supportingText = stripHtml(rawSupportHtml).slice(0, 5000);
+    if (supportingText && supportingText === contentText) {
+      supportingText = '';
+    }
+
+    const dedupeUrls = (arr, max = 8) => {
+      const out = [];
+      const seen = new Set();
+      for (const u of arr) {
+        if (u && !seen.has(u)) {
+          seen.add(u);
+          out.push(u);
+          if (out.length >= max) break;
+        }
+      }
+      return out;
+    };
+
+    const supportingImages = dedupeUrls([
+      ...extractImageUrlsFromHtml(rawSupportHtml, 8),
+      ...rawSupportSources.flatMap((s) => extractImageUrlsFromValue(s, 8)),
+    ], 8);
+    const supportingImgSet = new Set(supportingImages);
+    const contentImages = dedupeUrls([
+      ...extractImageUrlsFromHtml(rawContentHtml, 8),
+      ...extractImageUrlsFromValue(item.images || item.attachments || item.media, 8),
+    ], 8).filter((u) => !supportingImgSet.has(u));
 
     const subjectStr = String(
       item.subject?.name || item.subject?.title || (typeof item.subject === 'string' ? item.subject : '') ||
@@ -290,6 +473,8 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       ...(explicitCode ? { code: explicitCode, id: explicitCode } : {}),
       ...(contentText ? { content: contentText } : {}),
       ...(supportingText ? { supportingContent: supportingText } : {}),
+      ...(supportingImages.length > 0 ? { supportingImages } : {}),
+      ...(contentImages.length > 0 ? { contentImages } : {}),
       ...(subjectStr ? { subject: subjectStr } : {}),
       ...(subtopicStr ? { subtopic: subtopicStr } : {}),
       ...(subtopicPathStr ? { subtopicPath: subtopicPathStr } : {}),

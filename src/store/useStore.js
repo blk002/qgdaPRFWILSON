@@ -131,9 +131,33 @@ const mergeAttempts = (prev = null, incoming = {}) => {
   return list.sort((a, b) => new Date(a.timestamp || 0) - new Date(b.timestamp || 0));
 };
 
+const pickRicherText = (prevText, incText) => {
+  const p = String(prevText || '');
+  const i = String(incText || '');
+  if (!i) return p;
+  if (!p) return i;
+  return p.length > i.length + 25 ? p : i;
+};
+
+const mergeImageUrlArrays = (a, b, max = 8) => {
+  const out = [];
+  const seen = new Set();
+  [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])].forEach((u) => {
+    if (typeof u !== 'string') return;
+    const trimmed = u.trim();
+    if (!/^https?:\/\//i.test(trimmed) || seen.has(trimmed) || out.length >= max) return;
+    seen.add(trimmed);
+    out.push(trimmed);
+  });
+  return out;
+};
+
 const enrichCaveiraQuestionPayload = (prev = null, incoming = {}) => {
   const merged = prev ? { ...prev, ...incoming } : { ...incoming };
   const attempts = mergeAttempts(prev, incoming);
+  const supportingContent = pickRicherText(prev?.supportingContent, incoming.supportingContent);
+  const supportingImages = mergeImageUrlArrays(prev?.supportingImages, incoming.supportingImages);
+  const contentImages = mergeImageUrlArrays(prev?.contentImages, incoming.contentImages);
   const communityCorrectPct = incoming.communityCorrectPct !== undefined && incoming.communityCorrectPct !== null
     ? Number(incoming.communityCorrectPct)
     : (prev?.communityCorrectPct !== undefined && prev?.communityCorrectPct !== null ? Number(prev.communityCorrectPct) : null);
@@ -143,6 +167,9 @@ const enrichCaveiraQuestionPayload = (prev = null, incoming = {}) => {
   const hitVal = Boolean(merged.hit);
   return {
     ...merged,
+    ...(supportingContent ? { supportingContent } : {}),
+    ...(supportingImages.length > 0 ? { supportingImages } : {}),
+    ...(contentImages.length > 0 ? { contentImages } : {}),
     attempts,
     ...(communityCorrectPct !== null && Number.isFinite(communityCorrectPct) ? { communityCorrectPct } : {}),
     ...(communityErrorPct !== null && Number.isFinite(communityErrorPct) ? { communityErrorPct } : {}),
@@ -2107,6 +2134,9 @@ export const useStore = create(
                   priorityReview: prev.priorityReview,
                   userNote: (prev.userNote !== undefined && prev.userNote !== '') ? prev.userNote : (q.userNote || ''),
                   teacherComment: prev.teacherComment || q.teacherComment || '',
+                  supportingContent: pickRicherText(prev.supportingContent, q.supportingContent),
+                  supportingImages: mergeImageUrlArrays(prev.supportingImages, q.supportingImages),
+                  contentImages: mergeImageUrlArrays(prev.contentImages, q.contentImages),
                   mirrorProven: Boolean(prev.mirrorProven || q.mirrorProven),
                   mirrorQuestionId: prev.mirrorQuestionId || q.mirrorQuestionId || '',
                   mirrorProvenAt: prev.mirrorProvenAt || q.mirrorProvenAt || null,
@@ -2122,6 +2152,9 @@ export const useStore = create(
                   mirrorQuestionId: q.mirrorQuestionId || prev.mirrorQuestionId || '',
                   mirrorProvenAt: q.mirrorProvenAt || prev.mirrorProvenAt || null,
                   teacherComment: q.teacherComment || prev.teacherComment || '',
+                  supportingContent: pickRicherText(prev.supportingContent, q.supportingContent),
+                  supportingImages: mergeImageUrlArrays(prev.supportingImages, q.supportingImages),
+                  contentImages: mergeImageUrlArrays(prev.contentImages, q.contentImages),
                   userNote: (q.userNote !== undefined && q.userNote !== '') ? q.userNote : (prev.userNote || ''),
                   alternatives: (Array.isArray(q.alternatives) && q.alternatives.length >= (Array.isArray(prev.alternatives) ? prev.alternatives.length : 0))
                     ? q.alternatives
@@ -2137,6 +2170,9 @@ export const useStore = create(
               Boolean(prev.mirrorProven) !== Boolean(mergedItem.mirrorProven) ||
               (prev.userNote || '') !== (mergedItem.userNote || '') ||
               (prev.teacherComment || '') !== (mergedItem.teacherComment || '') ||
+              (prev.supportingContent || '') !== (mergedItem.supportingContent || '') ||
+              JSON.stringify(prev.supportingImages || []) !== JSON.stringify(mergedItem.supportingImages || []) ||
+              JSON.stringify(prev.contentImages || []) !== JSON.stringify(mergedItem.contentImages || []) ||
               (prev.commentSource || '') !== (mergedItem.commentSource || '') ||
               prev.communityCorrectPct !== mergedItem.communityCorrectPct ||
               (Array.isArray(prev.attempts) ? prev.attempts.length : 0) !== (Array.isArray(mergedItem.attempts) ? mergedItem.attempts.length : 0) ||
@@ -2280,6 +2316,9 @@ export const useStore = create(
         const qDataPayload = {
           id: question.id,
           content: question.content || '',
+          supportingContent: question.supportingContent || '',
+          supportingImages: Array.isArray(question.supportingImages) ? question.supportingImages : [],
+          contentImages: Array.isArray(question.contentImages) ? question.contentImages : [],
           alternatives: sanitizedAlternatives,
           userChoice: question.userChoice,
           correctChoice: question.correctChoice,
@@ -2457,6 +2496,13 @@ export const useStore = create(
           const mergedQuestionData = {
             id: qId,
             content: matchedQ?.content || rev.questionData?.content || parsedContent || rawTitleClean,
+            supportingContent: matchedQ ? (matchedQ.supportingContent ?? '') : (rev.questionData?.supportingContent || ''),
+            supportingImages: matchedQ && Array.isArray(matchedQ.supportingImages)
+              ? matchedQ.supportingImages
+              : (Array.isArray(rev.questionData?.supportingImages) ? rev.questionData.supportingImages : []),
+            contentImages: matchedQ && Array.isArray(matchedQ.contentImages)
+              ? matchedQ.contentImages
+              : (Array.isArray(rev.questionData?.contentImages) ? rev.questionData.contentImages : []),
             alternatives: sanitizedAlts,
             userChoice: matchedQ?.userChoice || rev.questionData?.userChoice || parsedUser,
             correctChoice: matchedQ?.correctChoice || rev.questionData?.correctChoice || parsedCorrect,
@@ -2511,6 +2557,9 @@ export const useStore = create(
             rev.createdAt !== resolvedTimestamp ||
             !rev.questionData ||
             rev.questionData.content !== mergedQuestionData.content ||
+            (rev.questionData.supportingContent || '') !== (mergedQuestionData.supportingContent || '') ||
+            JSON.stringify(rev.questionData.supportingImages || []) !== JSON.stringify(mergedQuestionData.supportingImages || []) ||
+            JSON.stringify(rev.questionData.contentImages || []) !== JSON.stringify(mergedQuestionData.contentImages || []) ||
             rev.questionData.confidence !== mergedQuestionData.confidence ||
             rev.questionData.errorReason !== mergedQuestionData.errorReason ||
             Boolean(rev.questionData.mirrorProven) !== Boolean(mergedQuestionData.mirrorProven) ||
@@ -2586,6 +2635,9 @@ export const useStore = create(
               questionData: {
                 id: q.id,
                 content: q.content || '',
+                supportingContent: q.supportingContent || '',
+                supportingImages: Array.isArray(q.supportingImages) ? q.supportingImages : [],
+                contentImages: Array.isArray(q.contentImages) ? q.contentImages : [],
                 alternatives: sanitizedQAlts || null,
                 userChoice: q.userChoice,
                 correctChoice: q.correctChoice,

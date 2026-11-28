@@ -127,7 +127,7 @@ async function getBaselineTreeDateFallback() {
 }
 
 document.addEventListener('DOMContentLoaded', () => {
-  const manifestVer = chrome.runtime?.getManifest?.().version || '3.6.4';
+  const manifestVer = chrome.runtime?.getManifest?.().version || '3.6.5';
   const verEl = document.getElementById('ext-version');
   if (verEl) verEl.textContent = `v${manifestVer}`;
 

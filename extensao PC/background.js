@@ -8115,13 +8115,13 @@
   }
   function createMiniIndex() {
     return new MiniSearch({
-      fields: ["id", "subject", "canonicalSubject", "topic", "content", "userNote", "teacherComment"],
+      fields: ["id", "subject", "canonicalSubject", "topic", "content", "supportingContent", "userNote", "teacherComment"],
       storeFields: ["id", "subject", "canonicalSubject", "topic", "hit", "userChoice", "correctChoice", "userNote", "content", "timestamp"],
       processTerm: (term) => normalizeSearchText(term),
       searchOptions: {
         prefix: true,
         fuzzy: 0.2,
-        boost: { id: 4, userNote: 3, topic: 2.5, canonicalSubject: 2, content: 1.5 }
+        boost: { id: 4, userNote: 3, topic: 2.5, canonicalSubject: 2, content: 1.5, supportingContent: 1.2 }
       }
     });
   }
@@ -8132,6 +8132,7 @@
       canonicalSubject: String(q.canonicalSubject || ""),
       topic: String(q.topic || ""),
       content: String(q.content || ""),
+      supportingContent: String(q.supportingContent || ""),
       userNote: String(q.userNote || ""),
       teacherComment: String(q.teacherComment || ""),
       hit: Boolean(q.hit),
@@ -8198,6 +8199,20 @@
       return p.length > i.length + 25 ? p : i;
     };
     const content = pickRicherText(prev?.content, incoming.content);
+    const supportingContent = pickRicherText(prev?.supportingContent, incoming.supportingContent);
+    const mergeImgUrls = (a, b, max = 8) => {
+      const out = [];
+      const seen = /* @__PURE__ */ new Set();
+      [...Array.isArray(a) ? a : [], ...Array.isArray(b) ? b : []].forEach((u) => {
+        if (typeof u === "string" && /^https?:\/\//i.test(u.trim()) && !seen.has(u.trim()) && out.length < max) {
+          seen.add(u.trim());
+          out.push(u.trim());
+        }
+      });
+      return out;
+    };
+    const supportingImages = mergeImgUrls(prev?.supportingImages, incoming.supportingImages);
+    const contentImages = mergeImgUrls(prev?.contentImages, incoming.contentImages);
     const teacherComment = pickRicherText(prev?.teacherComment, incoming.teacherComment);
     const userNote = incoming.userNote !== void 0 && incoming.userNote !== "" ? incoming.userNote : prev?.userNote || "";
     const alternatives = Array.isArray(incoming.alternatives) && incoming.alternatives.length > 0 && (!Array.isArray(prev?.alternatives) || incoming.alternatives.length >= prev.alternatives.length) ? incoming.alternatives : prev?.alternatives || null;
@@ -8217,6 +8232,9 @@
       ...base.data || prev?.data ? { data: incoming.data || prev?.data || base.data } : {},
       acertou: incoming.acertou !== void 0 ? Boolean(incoming.acertou) : incoming.hit !== void 0 ? Boolean(incoming.hit) : prev?.acertou !== void 0 ? Boolean(prev.acertou) : hitVal,
       ...content ? { content } : {},
+      ...supportingContent ? { supportingContent } : {},
+      ...supportingImages.length > 0 ? { supportingImages } : {},
+      ...contentImages.length > 0 ? { contentImages } : {},
       attempts,
       teacherComment,
       commentSource: incoming.commentSource || prev?.commentSource || (teacherComment ? "professor" : ""),
@@ -8382,7 +8400,7 @@
     }
     const list = await getAllQuestionsFull(userId);
     return list.filter((q) => {
-      const hay = normalizeSearchText(`${q.id} ${q.subject} ${q.canonicalSubject} ${q.topic} ${q.content} ${q.userNote} ${q.teacherComment}`);
+      const hay = normalizeSearchText(`${q.id} ${q.subject} ${q.canonicalSubject} ${q.topic} ${q.content} ${q.supportingContent || ""} ${q.userNote} ${q.teacherComment}`);
       return hay.includes(clean);
     }).slice(0, limit).map((q) => ({ ...toIndexDoc(q), score: 1 }));
   }

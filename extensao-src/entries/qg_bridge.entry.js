@@ -142,8 +142,11 @@ import {
     return questions.slice(0, maxItems).map((q, idx) => {
       if (!q || idx < 150) return q;
       const compacted = { ...q };
-      if (typeof compacted.content === 'string' && compacted.content.length > 400) {
-        compacted.content = compacted.content.slice(0, 400);
+      if (typeof compacted.content === 'string' && compacted.content.length > 600) {
+        compacted.content = compacted.content.slice(0, 600);
+      }
+      if (typeof compacted.supportingContent === 'string' && compacted.supportingContent.length > 1500) {
+        compacted.supportingContent = compacted.supportingContent.slice(0, 1500);
       }
       if (typeof compacted.teacherComment === 'string' && compacted.teacherComment.length > 500) {
         compacted.teacherComment = compacted.teacherComment.slice(0, 500);

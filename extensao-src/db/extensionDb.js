@@ -61,13 +61,13 @@ export function normalizeSearchText(str) {
 
 function createMiniIndex() {
   return new MiniSearch({
-    fields: ['id', 'subject', 'canonicalSubject', 'topic', 'content', 'userNote', 'teacherComment'],
+    fields: ['id', 'subject', 'canonicalSubject', 'topic', 'content', 'supportingContent', 'userNote', 'teacherComment'],
     storeFields: ['id', 'subject', 'canonicalSubject', 'topic', 'hit', 'userChoice', 'correctChoice', 'userNote', 'content', 'timestamp'],
     processTerm: (term) => normalizeSearchText(term),
     searchOptions: {
       prefix: true,
       fuzzy: 0.2,
-      boost: { id: 4, userNote: 3, topic: 2.5, canonicalSubject: 2, content: 1.5 },
+      boost: { id: 4, userNote: 3, topic: 2.5, canonicalSubject: 2, content: 1.5, supportingContent: 1.2 },
     },
   });
 }
@@ -79,6 +79,7 @@ function toIndexDoc(q) {
     canonicalSubject: String(q.canonicalSubject || ''),
     topic: String(q.topic || ''),
     content: String(q.content || ''),
+    supportingContent: String(q.supportingContent || ''),
     userNote: String(q.userNote || ''),
     teacherComment: String(q.teacherComment || ''),
     hit: Boolean(q.hit),
@@ -152,6 +153,20 @@ export function mergeQuestionRecords(prev = null, incoming = {}) {
   };
 
   const content = pickRicherText(prev?.content, incoming.content);
+  const supportingContent = pickRicherText(prev?.supportingContent, incoming.supportingContent);
+  const mergeImgUrls = (a, b, max = 8) => {
+    const out = [];
+    const seen = new Set();
+    [...(Array.isArray(a) ? a : []), ...(Array.isArray(b) ? b : [])].forEach((u) => {
+      if (typeof u === 'string' && /^https?:\/\//i.test(u.trim()) && !seen.has(u.trim()) && out.length < max) {
+        seen.add(u.trim());
+        out.push(u.trim());
+      }
+    });
+    return out;
+  };
+  const supportingImages = mergeImgUrls(prev?.supportingImages, incoming.supportingImages);
+  const contentImages = mergeImgUrls(prev?.contentImages, incoming.contentImages);
   const teacherComment = pickRicherText(prev?.teacherComment, incoming.teacherComment);
   const userNote = (incoming.userNote !== undefined && incoming.userNote !== '')
     ? incoming.userNote
@@ -188,6 +203,9 @@ export function mergeQuestionRecords(prev = null, incoming = {}) {
     ...(base.data || prev?.data ? { data: incoming.data || prev?.data || base.data } : {}),
     acertou: incoming.acertou !== undefined ? Boolean(incoming.acertou) : (incoming.hit !== undefined ? Boolean(incoming.hit) : (prev?.acertou !== undefined ? Boolean(prev.acertou) : hitVal)),
     ...(content ? { content } : {}),
+    ...(supportingContent ? { supportingContent } : {}),
+    ...(supportingImages.length > 0 ? { supportingImages } : {}),
+    ...(contentImages.length > 0 ? { contentImages } : {}),
     attempts,
     teacherComment,
     commentSource: incoming.commentSource || prev?.commentSource || (teacherComment ? 'professor' : ''),
@@ -377,7 +395,7 @@ export async function searchQuestionsOffline(query, userId = null, limit = 25) {
   const list = await getAllQuestionsFull(userId);
   return list
     .filter((q) => {
-      const hay = normalizeSearchText(`${q.id} ${q.subject} ${q.canonicalSubject} ${q.topic} ${q.content} ${q.userNote} ${q.teacherComment}`);
+      const hay = normalizeSearchText(`${q.id} ${q.subject} ${q.canonicalSubject} ${q.topic} ${q.content} ${q.supportingContent || ''} ${q.userNote} ${q.teacherComment}`);
       return hay.includes(clean);
     })
     .slice(0, limit)

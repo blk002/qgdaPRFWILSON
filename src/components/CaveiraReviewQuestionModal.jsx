@@ -3,7 +3,7 @@ import { useStore, cleanAlternativeText } from '../store/useStore';
 import { findCourseVideoMatch } from '../utils/caveiraAnalytics';
 import { getSafeExternalUrl } from '../lib/safeUrl';
 import { getErrorCauseMeta } from '../lib/errorAutopsy';
-import { BrainCircuit, CheckCircle2, XCircle, ArrowRight, ArrowUpRight, Calendar, Save, Video } from 'lucide-react';
+import { BrainCircuit, CheckCircle2, XCircle, ArrowRight, ArrowUpRight, Calendar, Save, Video, FileText, ChevronDown, ChevronUp } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 
 const KNOWN_CAVEIRA_ALTERNATIVES = {
@@ -67,6 +67,15 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
     return {
       id: qId,
       content: storeMatch?.content || review.questionData?.content || parsedContent || rawTitleClean,
+      supportingContent: storeMatch
+        ? (storeMatch.supportingContent ?? '')
+        : (review.questionData?.supportingContent || ''),
+      supportingImages: storeMatch && Array.isArray(storeMatch.supportingImages)
+        ? storeMatch.supportingImages
+        : (Array.isArray(review.questionData?.supportingImages) ? review.questionData.supportingImages : []),
+      contentImages: storeMatch && Array.isArray(storeMatch.contentImages)
+        ? storeMatch.contentImages
+        : (Array.isArray(review.questionData?.contentImages) ? review.questionData.contentImages : []),
       alternatives: validAlts,
       userChoice: storeMatch?.userChoice || review.questionData?.userChoice || parsedUser,
       correctChoice: storeMatch?.correctChoice || review.questionData?.correctChoice || parsedCorrect,
@@ -105,6 +114,21 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
   const [bizuDraft, setBizuDraft] = useState('');
   const [isEditingTeacherComment, setIsEditingTeacherComment] = useState(false);
   const [teacherCommentDraft, setTeacherCommentDraft] = useState('');
+  const [isSupportOpen, setIsSupportOpen] = useState(true);
+  const [zoomedImageUrl, setZoomedImageUrl] = useState('');
+  const [isEditingSupport, setIsEditingSupport] = useState(false);
+  const [supportTextDraft, setSupportTextDraft] = useState('');
+  const [supportImageUrlDraft, setSupportImageUrlDraft] = useState('');
+
+  const safeSupportImages = useMemo(
+    () => (Array.isArray(qData.supportingImages) ? qData.supportingImages.map((u) => getSafeExternalUrl(u)).filter(Boolean) : []),
+    [qData.supportingImages]
+  );
+  const safeContentImages = useMemo(
+    () => (Array.isArray(qData.contentImages) ? qData.contentImages.map((u) => getSafeExternalUrl(u)).filter(Boolean) : []),
+    [qData.contentImages]
+  );
+  const hasSupport = Boolean(qData.supportingContent || safeSupportImages.length > 0);
 
   const correctChoice = (qData.correctChoice || 'C').toUpperCase();
   const userPrevChoice = (qData.userChoice || '').toUpperCase();
@@ -162,6 +186,13 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
   // Atalhos de teclado (A-E / C-E para selecionar, Enter para confirmar, 1/2/3/Enter para graduar FSRS)
   useEffect(() => {
     const handleKeyDown = (e) => {
+      if (zoomedImageUrl) {
+        if (e.key === 'Escape') {
+          e.preventDefault();
+          setZoomedImageUrl('');
+        }
+        return;
+      }
       if (e.ctrlKey || e.metaKey || e.altKey) return;
       if (inline && document.querySelector('[aria-modal="true"]')) return;
       if (e.target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(e.target.tagName)) return;
@@ -204,7 +235,23 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [hasSubmitted, isCebraspeStyle, selectedChoice, isHit, review.id, handleReviewSubmit, onCompleted, onClose, inline]);
+  }, [hasSubmitted, isCebraspeStyle, selectedChoice, isHit, review.id, handleReviewSubmit, onCompleted, onClose, inline, zoomedImageUrl]);
+
+  const handleSaveSupport = () => {
+    if (qData.id) {
+      const parsedImgs = supportImageUrlDraft
+        .split(/\r?\n/)
+        .map((line) => getSafeExternalUrl(line.trim()))
+        .filter(Boolean)
+        .slice(0, 8);
+      updateCaveiraQuestion(qData.id, {
+        supportingContent: supportTextDraft.trim(),
+        supportingImages: parsedImgs,
+      });
+    }
+    setIsEditingSupport(false);
+    setIsSupportOpen(true);
+  };
 
   const handleSaveBizu = () => {
     if (qData.id) {
@@ -342,13 +389,151 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
         </div>
 
         {/* Trilha do Assunto */}
-        <p className="text-xs font-normal normal-case text-slate-500 dark:text-slate-400 mb-3">
-          📂 {qData.subject} {qData.topic && qData.topic !== qData.subject ? `➔ ${qData.topic}` : ''}
-        </p>
+        <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+          <p className="text-xs font-normal normal-case text-slate-500 dark:text-slate-400">
+            📂 {qData.subject} {qData.topic && qData.topic !== qData.subject ? `➔ ${qData.topic}` : ''}
+          </p>
+          {!hasSupport && !isEditingSupport && (
+            <button
+              type="button"
+              onClick={() => {
+                setSupportTextDraft(qData.supportingContent || '');
+                setSupportImageUrlDraft(safeSupportImages.join('\n'));
+                setIsEditingSupport(true);
+              }}
+              className="text-[11px] font-semibold text-sky-600 dark:text-sky-400 hover:underline shrink-0 cursor-pointer"
+            >
+              + Adicionar texto/imagem de apoio
+            </button>
+          )}
+        </div>
+
+        {/* Texto / Conteúdo de Apoio */}
+        {isEditingSupport ? (
+          <div className="mb-4 p-3.5 rounded-2xl bg-slate-50 dark:bg-slate-850 border border-sky-500/40 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <span className="text-xs font-bold text-sky-600 dark:text-sky-300 flex items-center gap-1.5">
+                <FileText className="w-3.5 h-3.5" /> Texto / Conteúdo de Apoio
+              </span>
+            </div>
+            <textarea
+              rows={4}
+              autoFocus
+              value={supportTextDraft}
+              onChange={(e) => setSupportTextDraft(e.target.value)}
+              placeholder="Cole o texto de apoio da questão (ou abra a questão no Projeto Caveira com a extensão v3.6.5 para capturar automaticamente)..."
+              className="w-full bg-white dark:bg-black/40 border border-slate-200 dark:border-sky-500/30 rounded-xl p-2.5 text-xs text-slate-800 dark:text-white outline-none resize-y"
+            />
+            <textarea
+              rows={2}
+              value={supportImageUrlDraft}
+              onChange={(e) => setSupportImageUrlDraft(e.target.value)}
+              placeholder="URL(s) da imagem/gráfico de apoio (https://..., uma por linha, opcional)"
+              className="w-full bg-white dark:bg-black/40 border border-slate-200 dark:border-sky-500/30 rounded-xl p-2.5 text-xs font-mono text-slate-800 dark:text-white outline-none resize-y"
+            />
+            <div className="flex justify-end gap-2">
+              <button
+                type="button"
+                onClick={() => setIsEditingSupport(false)}
+                className="text-xs font-bold text-slate-400 hover:text-slate-700 dark:hover:text-white px-3 py-1.5 rounded-lg cursor-pointer"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleSaveSupport}
+                className="bg-sky-500 hover:bg-sky-400 text-slate-950 font-black text-xs uppercase px-3 py-1.5 rounded-lg flex items-center gap-1 cursor-pointer"
+              >
+                <Save className="w-3.5 h-3.5" /> Salvar Apoio
+              </button>
+            </div>
+          </div>
+        ) : hasSupport ? (
+          <div className="mb-4 rounded-2xl border border-sky-500/25 bg-sky-500/[0.04] dark:bg-slate-850/90 overflow-hidden">
+            <div className="px-4 py-2.5 flex items-center justify-between gap-2 border-b border-sky-500/15">
+              <button
+                type="button"
+                onClick={() => setIsSupportOpen((v) => !v)}
+                className="flex items-center gap-2 text-xs font-bold text-sky-700 dark:text-sky-300 cursor-pointer"
+              >
+                <FileText className="w-3.5 h-3.5 shrink-0" />
+                <span>Texto / Conteúdo de Apoio</span>
+                {safeSupportImages.length > 0 && (
+                  <span className="text-[11px] font-mono opacity-75">
+                    ({safeSupportImages.length} {safeSupportImages.length === 1 ? 'imagem' : 'imagens'})
+                  </span>
+                )}
+                {isSupportOpen ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSupportTextDraft(qData.supportingContent || '');
+                  setSupportImageUrlDraft(safeSupportImages.join('\n'));
+                  setIsEditingSupport(true);
+                }}
+                className="text-[11px] font-bold uppercase tracking-wider text-sky-600 dark:text-sky-300 hover:underline cursor-pointer"
+              >
+                Editar
+              </button>
+            </div>
+            {isSupportOpen && (
+              <div className="p-4 space-y-3">
+                {qData.supportingContent && (
+                  <div className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-line">
+                    {qData.supportingContent}
+                  </div>
+                )}
+                {safeSupportImages.length > 0 && (
+                  <div className="flex flex-wrap gap-3">
+                    {safeSupportImages.map((imgUrl, idx) => (
+                      <button
+                        key={`${imgUrl}-${idx}`}
+                        type="button"
+                        onClick={() => setZoomedImageUrl(imgUrl)}
+                        className="bg-white rounded-xl p-2.5 border border-slate-200 dark:border-slate-700 hover:border-sky-400 transition-colors cursor-zoom-in max-w-full"
+                        title="Clique para ampliar gráfico/imagem"
+                      >
+                        <img
+                          src={imgUrl}
+                          alt={`Conteúdo de apoio ${idx + 1}`}
+                          loading="lazy"
+                          className="max-h-80 max-w-full object-contain mx-auto rounded-lg"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        ) : null}
 
         {/* Enunciado da Questão */}
-        <div className="text-[15px] sm:text-[16px] font-medium text-slate-800 dark:text-slate-100 leading-[1.6] bg-slate-50 dark:bg-slate-850 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 mb-5">
-          {qData.content || 'Sem texto de enunciado cadastrado.'}
+        <div className="text-[15px] sm:text-[16px] font-medium text-slate-800 dark:text-slate-100 leading-[1.6] bg-slate-50 dark:bg-slate-850 p-4 sm:p-5 rounded-2xl border border-slate-200/80 dark:border-slate-800 mb-5 space-y-3">
+          <div className="whitespace-pre-line">
+            {qData.content || 'Sem texto de enunciado cadastrado.'}
+          </div>
+          {safeContentImages.length > 0 && (
+            <div className="flex flex-wrap gap-3 pt-1">
+              {safeContentImages.map((imgUrl, idx) => (
+                <button
+                  key={`${imgUrl}-${idx}`}
+                  type="button"
+                  onClick={() => setZoomedImageUrl(imgUrl)}
+                  className="bg-white rounded-xl p-2.5 border border-slate-200 dark:border-slate-700 hover:border-sky-400 transition-colors cursor-zoom-in max-w-full"
+                  title="Clique para ampliar imagem"
+                >
+                  <img
+                    src={imgUrl}
+                    alt={`Imagem da questão ${idx + 1}`}
+                    loading="lazy"
+                    className="max-h-80 max-w-full object-contain mx-auto rounded-lg"
+                  />
+                </button>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Alternativas Interativas */}
@@ -679,13 +864,45 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
     </motion.div>
   );
 
+  const lightboxOverlay = zoomedImageUrl ? (
+    <div
+      className="fixed inset-0 z-[150] bg-black/85 backdrop-blur-xs flex items-center justify-center p-4"
+      onClick={() => setZoomedImageUrl('')}
+    >
+      <div
+        className="relative max-w-5xl max-h-[90vh] bg-white rounded-2xl p-3 shadow-2xl"
+        onClick={(e) => e.stopPropagation()}
+      >
+        <button
+          type="button"
+          onClick={() => setZoomedImageUrl('')}
+          className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-slate-900 text-white border border-white/20 flex items-center justify-center text-sm font-bold shadow-lg hover:bg-slate-800 cursor-pointer"
+          aria-label="Fechar imagem ampliada"
+        >
+          ✕
+        </button>
+        <img
+          src={zoomedImageUrl}
+          alt="Imagem ampliada"
+          className="max-h-[84vh] max-w-full object-contain rounded-xl"
+        />
+      </div>
+    </div>
+  ) : null;
+
   if (inline) {
-    return cardInner;
+    return (
+      <>
+        {cardInner}
+        {lightboxOverlay}
+      </>
+    );
   }
 
   return (
     <div className="fixed inset-0 bg-slate-950/85 backdrop-blur-md flex items-center justify-center z-[130] p-3 sm:p-4 font-sans">
       {cardInner}
+      {lightboxOverlay}
     </div>
   );
 }

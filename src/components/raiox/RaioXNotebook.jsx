@@ -22,7 +22,8 @@ import {
   ChevronDown,
   ChevronUp,
   SlidersHorizontal,
-  ArrowUpRight
+  ArrowUpRight,
+  FileText
 } from 'lucide-react';
 import { toast } from 'sonner';
 import { getSafeExternalUrl } from '../../lib/safeUrl';
@@ -78,6 +79,8 @@ export default function RaioXNotebook({
 }) {
   const [visibleCount, setVisibleCount] = useState(30);
   const [compactMode, setCompactMode] = useState(false);
+  const [expandedSupports, setExpandedSupports] = useState({});
+  const [zoomedImageUrl, setZoomedImageUrl] = useState('');
 
   const activeSubjectObj = subjectGroups.find((s) => s.name === selectedSubject);
   const topicOptions = activeSubjectObj ? activeSubjectObj.topicsList : [];
@@ -345,6 +348,14 @@ export default function RaioXNotebook({
               q.isAvoidableError || (!q.hit && Number(q.communityCorrectPct) >= 65);
             const isPegadinha = q.isPegadinha || Number(q.communityErrorPct) >= 65;
             const diffInfo = classifyQuestionDifficulty(q);
+            const safeSupportImgs = Array.isArray(q.supportingImages)
+              ? q.supportingImages.map((u) => getSafeExternalUrl(u)).filter(Boolean)
+              : [];
+            const safeContentImgs = Array.isArray(q.contentImages)
+              ? q.contentImages.map((u) => getSafeExternalUrl(u)).filter(Boolean)
+              : [];
+            const hasSupport = Boolean(q.supportingContent || safeSupportImgs.length > 0);
+            const isSupportExpanded = expandedSupports[q.id] !== undefined ? Boolean(expandedSupports[q.id]) : !compactMode;
 
             return (
               <article
@@ -574,9 +585,66 @@ export default function RaioXNotebook({
                   </div>
                 </div>
 
+                {/* Texto / Conteúdo de Apoio */}
+                {hasSupport && (
+                  <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/50 overflow-hidden">
+                    <button
+                      type="button"
+                      onClick={() =>
+                        setExpandedSupports((prev) => ({ ...prev, [q.id]: !isSupportExpanded }))
+                      }
+                      className="w-full px-3.5 py-2 flex items-center justify-between gap-2 text-xs font-semibold text-slate-700 dark:text-slate-200 hover:bg-slate-100/70 dark:hover:bg-slate-800/40 transition-colors cursor-pointer"
+                    >
+                      <span className="inline-flex items-center gap-1.5">
+                        <FileText className="w-3.5 h-3.5 text-sky-500" />
+                        <span>Texto / Conteúdo de Apoio</span>
+                        {safeSupportImgs.length > 0 && (
+                          <span className="text-[11px] font-mono text-slate-400">
+                            ({safeSupportImgs.length} {safeSupportImgs.length === 1 ? 'imagem' : 'imagens'})
+                          </span>
+                        )}
+                      </span>
+                      {isSupportExpanded ? (
+                        <ChevronUp className="w-3.5 h-3.5 text-slate-400" />
+                      ) : (
+                        <ChevronDown className="w-3.5 h-3.5 text-slate-400" />
+                      )}
+                    </button>
+                    {isSupportExpanded && (
+                      <div className="px-3.5 pb-3 pt-1 space-y-2.5 border-t border-slate-200/70 dark:border-slate-800/70">
+                        {q.supportingContent && (
+                          <p className="text-xs sm:text-sm text-slate-700 dark:text-slate-200 leading-relaxed whitespace-pre-line">
+                            {q.supportingContent}
+                          </p>
+                        )}
+                        {safeSupportImgs.length > 0 && (
+                          <div className="flex flex-wrap gap-2.5">
+                            {safeSupportImgs.map((imgUrl, idx) => (
+                              <button
+                                key={`${imgUrl}-${idx}`}
+                                type="button"
+                                onClick={() => setZoomedImageUrl(imgUrl)}
+                                className="bg-white rounded-xl p-2 border border-slate-200 dark:border-slate-700 hover:border-sky-400 transition-colors cursor-zoom-in max-w-full"
+                                title="Clique para ampliar imagem"
+                              >
+                                <img
+                                  src={imgUrl}
+                                  alt={`Conteúdo de apoio ${idx + 1}`}
+                                  loading="lazy"
+                                  className="max-h-64 max-w-full object-contain rounded-lg mx-auto"
+                                />
+                              </button>
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </div>
+                )}
+
                 {/* Enunciado com leitura confortável + destaque de pegadinhas pessoais */}
                 <p
-                  className={`text-slate-800 dark:text-slate-100 leading-relaxed ${
+                  className={`text-slate-800 dark:text-slate-100 leading-relaxed whitespace-pre-line ${
                     compactMode ? 'text-xs sm:text-sm line-clamp-3' : 'text-sm sm:text-[15px]'
                   }`}
                 >
@@ -594,6 +662,27 @@ export default function RaioXNotebook({
                     )
                   )}
                 </p>
+
+                {safeContentImgs.length > 0 && (
+                  <div className="flex flex-wrap gap-2.5">
+                    {safeContentImgs.map((imgUrl, idx) => (
+                      <button
+                        key={`${imgUrl}-${idx}`}
+                        type="button"
+                        onClick={() => setZoomedImageUrl(imgUrl)}
+                        className="bg-white rounded-xl p-2 border border-slate-200 dark:border-slate-700 hover:border-sky-400 transition-colors cursor-zoom-in max-w-full"
+                        title="Clique para ampliar imagem"
+                      >
+                        <img
+                          src={imgUrl}
+                          alt={`Imagem do enunciado ${idx + 1}`}
+                          loading="lazy"
+                          className="max-h-64 max-w-full object-contain rounded-lg mx-auto"
+                        />
+                      </button>
+                    ))}
+                  </div>
+                )}
 
                 {/* Bizu Pessoal Salvo */}
                 {q.userNote && !isEditingThisNote && (
@@ -785,6 +874,32 @@ export default function RaioXNotebook({
             </div>
           )}
         </section>
+      )}
+
+      {zoomedImageUrl && (
+        <div
+          className="fixed inset-0 z-[120] bg-black/85 backdrop-blur-xs flex items-center justify-center p-4"
+          onClick={() => setZoomedImageUrl('')}
+        >
+          <div
+            className="relative max-w-5xl max-h-[90vh] bg-white rounded-2xl p-3 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <button
+              type="button"
+              onClick={() => setZoomedImageUrl('')}
+              className="absolute -top-3 -right-3 w-8 h-8 rounded-full bg-slate-900 text-white border border-white/20 flex items-center justify-center text-sm font-bold shadow-lg hover:bg-slate-800 cursor-pointer"
+              aria-label="Fechar imagem ampliada"
+            >
+              ✕
+            </button>
+            <img
+              src={zoomedImageUrl}
+              alt="Imagem ampliada"
+              className="max-h-[84vh] max-w-full object-contain rounded-xl"
+            />
+          </div>
+        </div>
       )}
     </div>
   );
