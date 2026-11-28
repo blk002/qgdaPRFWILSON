@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { useStore } from '../store/useStore';
 import { ERROR_CAUSES, normalizeErrorReason } from '../lib/errorAutopsy';
+import { buildTrapFingerprint } from '../lib/cebraspeTraps';
 import {
   Target, RefreshCw, Download, Upload, Trash2,
   BookOpen, Copy, Check, Skull, Scale, X,
@@ -174,6 +175,7 @@ export default function RaioXCaveira() {
   const {
     caveiraQuestions = [],
     caveiraCourseIndexMap = {},
+    subjects = {},
     caveiraQuestionPrefs = DEFAULT_CAVEIRA_QUESTION_PREFS,
     setCaveiraQuestionPrefs,
     importCaveiraQuestions,
@@ -202,6 +204,7 @@ export default function RaioXCaveira() {
   const [importJsonText, setImportJsonText] = useState('');
   const [copiedExtensionPath, setCopiedExtensionPath] = useState(false);
   const [selectedLegalDevice, setSelectedLegalDevice] = useState(null);
+  const [selectedTrapTerm, setSelectedTrapTerm] = useState(null);
   const [topicReportScope, setTopicReportScope] = useState('all'); // 'all' | 'bloco2' | 'fps'
   const [decorebaCategory, setDecorebaCategory] = useState('Todos');
   const [decorebaSearch, setDecorebaSearch] = useState('');
@@ -607,11 +610,17 @@ export default function RaioXCaveira() {
     });
   }, [decorebaRows, decorebaCategory, decorebaSearch]);
 
+  const trapFingerprint = useMemo(
+    () => buildTrapFingerprint(blockScopedQuestions),
+    [blockScopedQuestions]
+  );
+
   // Lista de Questões Filtrada para o Caderno Tático
   const filteredQuestions = useMemo(() => {
     const query = searchQuery.trim().toLowerCase();
     return blockScopedQuestions.filter(q => {
       if (selectedLegalDevice && !selectedLegalDevice.questionIds.includes(q.id)) return false;
+      if (selectedTrapTerm && !selectedTrapTerm.questionIds.includes(q.id)) return false;
       if (selectedSubject !== 'all' && q.canonicalSubject !== selectedSubject) return false;
       if (selectedTopic !== 'all') {
         const topicLabel = getQuestionTopicLabel(q);
@@ -642,7 +651,7 @@ export default function RaioXCaveira() {
 
       return true;
     });
-  }, [blockScopedQuestions, selectedLegalDevice, selectedSubject, selectedTopic, selectedDifficulty, filterType, searchQuery]);
+    }, [blockScopedQuestions, selectedLegalDevice, selectedTrapTerm, selectedSubject, selectedTopic, selectedDifficulty, filterType, searchQuery]);
 
   const handleRequestSync = () => {
     const activeUserId = useStore.getState().user?.id;
@@ -697,7 +706,7 @@ export default function RaioXCaveira() {
     setExpandedComments(prev => ({ ...prev, [qId]: !prev[qId] }));
   };
 
-  const hasActiveFilters = selectedBloco !== 'all' || selectedSubject !== 'all' || selectedTopic !== 'all' || selectedDifficulty !== 'all' || filterType !== 'all' || Boolean(searchQuery) || Boolean(selectedLegalDevice);
+  const hasActiveFilters = selectedBloco !== 'all' || selectedSubject !== 'all' || selectedTopic !== 'all' || selectedDifficulty !== 'all' || filterType !== 'all' || Boolean(searchQuery) || Boolean(selectedLegalDevice) || Boolean(selectedTrapTerm);
 
   const resetAllFilters = () => {
     setSelectedBloco('all');
@@ -707,6 +716,7 @@ export default function RaioXCaveira() {
     setFilterType('all');
     setSearchQuery('');
     setSelectedLegalDevice(null);
+    setSelectedTrapTerm(null);
   };
 
   const triggerCriticalTopicPractice = (subjectName = '', topicsList = [], questionStatus = 'not_resolved', difficultyIds = null) => {
@@ -777,14 +787,16 @@ export default function RaioXCaveira() {
     topic,
     filterType: nextFilterType,
     searchQuery: nextSearch,
-    legalDevice
+    legalDevice,
+    trapTerm
   } = {}) => {
     setSelectedSubject(subject !== undefined ? subject : 'all');
     setSelectedTopic(topic !== undefined ? topic : 'all');
     setSelectedLegalDevice(legalDevice !== undefined ? legalDevice : null);
+    setSelectedTrapTerm(trapTerm !== undefined ? trapTerm : null);
     if (nextFilterType !== undefined) setFilterType(nextFilterType);
     if (nextSearch !== undefined) setSearchQuery(nextSearch);
-    else if (legalDevice || topic || subject) setSearchQuery('');
+    else if (legalDevice || trapTerm || topic || subject) setSearchQuery('');
     setActiveTab('notebook');
   };
 
@@ -1108,6 +1120,7 @@ export default function RaioXCaveira() {
                 pegadinhaCount={pegadinhaCount}
                 forgettingCurveRows={forgettingCurveRows}
                 decorebaRows={decorebaRows}
+                trapFingerprint={trapFingerprint}
                 formatDurationHMS={formatDurationHMS}
                 onTriggerPractice={triggerCriticalTopicPractice}
                 onOpenNotebookWithFilter={handleOpenNotebookWithFilter}
@@ -1142,6 +1155,7 @@ export default function RaioXCaveira() {
                 setDecorebaCategory={setDecorebaCategory}
                 decorebaSearch={decorebaSearch}
                 setDecorebaSearch={setDecorebaSearch}
+                trapFingerprint={trapFingerprint}
                 onOpenNotebookWithFilter={handleOpenNotebookWithFilter}
               />
             )}
@@ -1156,6 +1170,7 @@ export default function RaioXCaveira() {
                 pegadinhaCount={pegadinhaCount}
                 blocoMetadata={BLOCO_METADATA}
                 caveiraCourseIndexMap={caveiraCourseIndexMap}
+                subjects={subjects}
                 findCourseVideoMatch={findCourseVideoMatch}
                 searchQuery={searchQuery}
                 setSearchQuery={setSearchQuery}
@@ -1169,6 +1184,10 @@ export default function RaioXCaveira() {
                 setSelectedDifficulty={setSelectedDifficulty}
                 selectedLegalDevice={selectedLegalDevice}
                 setSelectedLegalDevice={setSelectedLegalDevice}
+                selectedTrapTerm={selectedTrapTerm}
+                setSelectedTrapTerm={setSelectedTrapTerm}
+                trapFingerprint={trapFingerprint}
+                onTriggerPractice={triggerCriticalTopicPractice}
                 editingNoteId={editingNoteId}
                 setEditingNoteId={setEditingNoteId}
                 noteDraft={noteDraft}

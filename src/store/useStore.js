@@ -2105,6 +2105,9 @@ export const useStore = create(
                   priorityReview: prev.priorityReview,
                   userNote: (prev.userNote !== undefined && prev.userNote !== '') ? prev.userNote : (q.userNote || ''),
                   teacherComment: prev.teacherComment || q.teacherComment || '',
+                  mirrorProven: Boolean(prev.mirrorProven || q.mirrorProven),
+                  mirrorQuestionId: prev.mirrorQuestionId || q.mirrorQuestionId || '',
+                  mirrorProvenAt: prev.mirrorProvenAt || q.mirrorProvenAt || null,
                   alternatives: (Array.isArray(q.alternatives) && q.alternatives.length > (Array.isArray(prev.alternatives) ? prev.alternatives.length : 0))
                     ? q.alternatives
                     : (prev.alternatives || q.alternatives || null),
@@ -2113,6 +2116,9 @@ export const useStore = create(
               : {
                   ...prev,
                   ...q,
+                  mirrorProven: Boolean(prev.mirrorProven || q.mirrorProven),
+                  mirrorQuestionId: q.mirrorQuestionId || prev.mirrorQuestionId || '',
+                  mirrorProvenAt: q.mirrorProvenAt || prev.mirrorProvenAt || null,
                   teacherComment: q.teacherComment || prev.teacherComment || '',
                   userNote: (q.userNote !== undefined && q.userNote !== '') ? q.userNote : (prev.userNote || ''),
                   alternatives: (Array.isArray(q.alternatives) && q.alternatives.length >= (Array.isArray(prev.alternatives) ? prev.alternatives.length : 0))
@@ -2126,6 +2132,7 @@ export const useStore = create(
               prev.errorReason !== mergedItem.errorReason ||
               Boolean(prev.fsrsRequested) !== Boolean(mergedItem.fsrsRequested) ||
               Boolean(prev.priorityReview) !== Boolean(mergedItem.priorityReview) ||
+              Boolean(prev.mirrorProven) !== Boolean(mergedItem.mirrorProven) ||
               (prev.userNote || '') !== (mergedItem.userNote || '') ||
               (prev.teacherComment || '') !== (mergedItem.teacherComment || '') ||
               (prev.commentSource || '') !== (mergedItem.commentSource || '') ||
@@ -2284,7 +2291,10 @@ export const useStore = create(
           errorReason: normalizeErrorReason(question.errorReason),
           userNote: question.userNote || '',
           teacherComment: question.teacherComment || '',
-          timestamp: question.timestamp || null
+          timestamp: question.timestamp || null,
+          mirrorProven: Boolean(question.mirrorProven),
+          mirrorQuestionId: question.mirrorQuestionId || '',
+          mirrorProvenAt: question.mirrorProvenAt || null
         };
 
         const noteLine = question.userNote ? `\nBizu / Anotação Tática: ${question.userNote}` : '';
@@ -2327,6 +2337,9 @@ export const useStore = create(
           ? `Motivo da revisão: ${question.confidence === 'chute' ? 'Acertou no Chute 🎲' : question.confidence === 'duvida' ? 'Acertou com Dúvida 🤔' : 'Revisão Manual 📌'}`
           : `Autópsia do erro: ${getErrorCauseMeta(question.errorReason).label}`;
 
+        const isMirrorProven = Boolean(question.mirrorProven);
+        const initialNextDate = isMirrorProven ? addDaysToLocalDateStr(todayStr, 3) : todayStr;
+
         const newReview = {
           id: 'rev_caveira_' + question.id,
           caveiraQuestionId: question.id,
@@ -2337,10 +2350,11 @@ export const useStore = create(
           subjectId,
           topicName: `[Caveira ${question.id}] ${topicLabel}`,
           notes: `Enunciado: ${question.content || ''}\nGabarito: ${question.correctChoice} (Você marcou: ${question.userChoice})\n${reasonLine}${noteLine}`,
-          nextDateStr: todayStr,
-          interval: 0,
-          stability: 0,
+          nextDateStr: initialNextDate,
+          interval: isMirrorProven ? 3 : 0,
+          stability: isMirrorProven ? 3 : 0,
           difficulty: 0,
+          ...(isMirrorProven ? { mirrorDowngraded: true } : {}),
           lastReviewDate: null,
           lastPerformance: undefined
         };
@@ -2454,7 +2468,10 @@ export const useStore = create(
             errorReason: normalizeErrorReason(matchedQ?.errorReason || rev.questionData?.errorReason || 'base'),
             userNote: matchedQ?.userNote || rev.questionData?.userNote || '',
             teacherComment: matchedQ?.teacherComment || rev.questionData?.teacherComment || '',
-            timestamp: resolvedTimestamp
+            timestamp: resolvedTimestamp,
+            mirrorProven: Boolean(matchedQ?.mirrorProven || rev.questionData?.mirrorProven || rev.mirrorDowngraded),
+            mirrorQuestionId: matchedQ?.mirrorQuestionId || rev.questionData?.mirrorQuestionId || '',
+            mirrorProvenAt: matchedQ?.mirrorProvenAt || rev.questionData?.mirrorProvenAt || null
           };
 
           const topicLabel = mergedQuestionData.topic && mergedQuestionData.topic !== mergedQuestionData.subject
@@ -2462,8 +2479,22 @@ export const useStore = create(
             : (mergedQuestionData.topic || customSubjectName);
           const expectedTopicName = `[Caveira ${qId}] ${topicLabel}`;
 
-          // Se nunca foi revisado ainda (lastReviewDate === null) e estava agendado para amanhã, traz para hoje
-          const repairedNextDateStr = (!rev.lastReviewDate && rev.nextDateStr > todayStr) ? todayStr : rev.nextDateStr;
+          const isMirrorProven = Boolean(mergedQuestionData.mirrorProven);
+          const needsMirrorDowngrade = Boolean(isMirrorProven && !rev.lastReviewDate && !rev.mirrorDowngraded);
+
+          // Se nunca foi revisado ainda (lastReviewDate === null) e estava agendado para amanhã, traz para hoje (exceto se já superou questão-espelho!)
+          let repairedNextDateStr = rev.nextDateStr;
+          let repairedInterval = rev.interval;
+          let repairedStability = rev.stability;
+          let repairedMirrorDowngraded = Boolean(rev.mirrorDowngraded);
+          if (needsMirrorDowngrade) {
+            repairedNextDateStr = addDaysToLocalDateStr(todayStr, 3);
+            repairedInterval = Math.max(Number(rev.interval) || 0, 3);
+            repairedStability = Math.max(Number(rev.stability) || 0, 3);
+            repairedMirrorDowngraded = true;
+          } else if (!rev.lastReviewDate && !isMirrorProven && rev.nextDateStr > todayStr) {
+            repairedNextDateStr = todayStr;
+          }
 
           const altsMismatch = JSON.stringify(rev.questionData?.alternatives || null) !== JSON.stringify(sanitizedAlts);
 
@@ -2474,11 +2505,13 @@ export const useStore = create(
             rev.customSubjectName !== customSubjectName ||
             rev.topicName !== expectedTopicName ||
             rev.nextDateStr !== repairedNextDateStr ||
+            Boolean(rev.mirrorDowngraded) !== repairedMirrorDowngraded ||
             rev.createdAt !== resolvedTimestamp ||
             !rev.questionData ||
             rev.questionData.content !== mergedQuestionData.content ||
             rev.questionData.confidence !== mergedQuestionData.confidence ||
             rev.questionData.errorReason !== mergedQuestionData.errorReason ||
+            Boolean(rev.questionData.mirrorProven) !== Boolean(mergedQuestionData.mirrorProven) ||
             rev.questionData.userNote !== mergedQuestionData.userNote ||
             rev.questionData.teacherComment !== mergedQuestionData.teacherComment ||
             rev.questionData.timestamp !== resolvedTimestamp ||
@@ -2496,6 +2529,9 @@ export const useStore = create(
             createdAt: resolvedTimestamp,
             topicName: expectedTopicName,
             nextDateStr: repairedNextDateStr,
+            interval: repairedInterval,
+            stability: repairedStability,
+            ...(repairedMirrorDowngraded ? { mirrorDowngraded: true } : {}),
             questionData: mergedQuestionData
           });
         }
@@ -2534,6 +2570,9 @@ export const useStore = create(
               ? `Motivo da revisão: ${q.confidence === 'chute' ? 'Acertou no Chute 🎲' : 'Acertou com Dúvida 🤔'}`
               : `Motivo do erro: ${q.errorReason || 'Conteúdo'}`;
 
+            const isMirrorProven = Boolean(q.mirrorProven);
+            const initialNextDate = isMirrorProven ? addDaysToLocalDateStr(todayStr, 3) : todayStr;
+
             repairedReviews.push({
               id: 'rev_caveira_' + q.id,
               caveiraQuestionId: q.id,
@@ -2558,13 +2597,17 @@ export const useStore = create(
                 errorReason: q.errorReason || 'conteudo',
                 userNote: q.userNote || '',
                 teacherComment: q.teacherComment || '',
-                timestamp: q.timestamp || null
+                timestamp: q.timestamp || null,
+                mirrorProven: isMirrorProven,
+                mirrorQuestionId: q.mirrorQuestionId || '',
+                mirrorProvenAt: q.mirrorProvenAt || null
               },
               notes: `Enunciado: ${q.content || ''}\nGabarito: ${q.correctChoice} (Você marcou: ${q.userChoice})\n${reasonLine}${noteLine}`,
-              nextDateStr: todayStr,
-              interval: 0,
-              stability: 0,
+              nextDateStr: initialNextDate,
+              interval: isMirrorProven ? 3 : 0,
+              stability: isMirrorProven ? 3 : 0,
               difficulty: 0,
+              ...(isMirrorProven ? { mirrorDowngraded: true } : {}),
               lastReviewDate: null,
               lastPerformance: undefined
             });
@@ -4886,7 +4929,7 @@ export const useStore = create(
 
         const upsertEntry = (key, rawEntry) => {
           if (!key || !rawEntry || typeof rawEntry !== 'object') return;
-          const rawText = rawEntry.bizusRawText || rawEntry.rawIndexText || '';
+          const rawText = rawEntry.indiceRawText || rawEntry.rawIndexText || rawEntry.bizusRawText || '';
           const topics = Array.isArray(rawEntry.topics) && rawEntry.topics.length > 0
             ? rawEntry.topics
             : parseTimestampTopics(rawText);

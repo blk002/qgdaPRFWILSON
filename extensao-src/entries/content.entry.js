@@ -8,8 +8,22 @@ import {
 import {
   mountInlineAutopsyCard,
   updateInlineAutopsyBadge,
+  updateInlineAutopsyExtras,
+  mountMirrorChallengeBanner,
+  showMirrorProvenToastOnCard,
   destroyAllInlineAutopsyCards,
 } from '../ui/inlineAutopsyCard.js';
+import {
+  applyTrapRadarToCards,
+  destroyTrapRadarOverlays,
+} from '../ui/trapRadarOverlay.js';
+import {
+  findCourseVideoMatchForExtension,
+  parseTimestampTopicsFromText,
+} from '../content/courseVideoMatcher.js';
+import {
+  pickBestMirrorCandidate,
+} from '../content/mirrorHelper.js';
 import { mergeBaselineAndDynamicTree } from '../tree/dynamicTreeManager.js';
 import {
   QG_WEB_URL,
@@ -43,6 +57,8 @@ import {
   SNIFFER_RECENT_EVENTS_KEY,
   TREE_META_KEY,
   PERFORMANCE_SNAPSHOT_KEY,
+  COURSE_VIDEO_INDEX_SYNC_KEY,
+  PENDING_MIRROR_PROOF_KEY,
   escapeHtml,
   normalizeFilterText,
   normalizeCourseIndexKey,
@@ -82,7 +98,7 @@ import {
 
 (function() {
   if (isExcludedCaveiraHost(window.location.hostname)) return;
-  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.5.2';
+  const runtimeExtVersion = (typeof chrome !== 'undefined' && chrome.runtime?.getManifest?.()?.version) || '3.6.0';
   console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
 
   // Encerra eventual instância anterior do content script (quando a extensão é recarregada)
@@ -90,6 +106,7 @@ import {
     window.dispatchEvent(new CustomEvent('qg-caveira-teardown'));
     destroyShadowHud();
     destroyAllInlineAutopsyCards();
+    destroyTrapRadarOverlays();
   } catch (_) {}
 
   const SCHEMA_VERSION_KEY = 'qg_caveira_schema_version';
@@ -139,6 +156,95 @@ import {
   const apiSimuladoEnjoymentByExamId = new Map();
   const apiSimuladoDatesByExamId = new Map();
   const apiSimuladoDatesByTitle = new Map();
+  let cachedLocalCourseIndexByLesson = {};
+  let cachedSyncedVideoIndexMap = {};
+  let cachedPendingMirrorProof = null;
+  const pendingMirrorRequests = new Map();
+  const requestedMirrorForQIds = new Set();
+
+  function getMergedCourseVideoIndex() {
+    return {
+      ...(cachedSyncedVideoIndexMap || {}),
+      ...(cachedLocalCourseIndexByLesson || {}),
+    };
+  }
+
+  function requestMirrorQuestionFromApi(missedQuestionData) {
+    return new Promise((resolve) => {
+      if (!missedQuestionData || !missedQuestionData.id) {
+        resolve(null);
+        return;
+      }
+      const answeredSet = new Set(
+        (questionsCache || []).map((q) => String(q?.id || '').toUpperCase()).filter(Boolean)
+      );
+      answeredSet.add(String(missedQuestionData.id).toUpperCase());
+
+      // 1. Tenta primeiro nas questões já carregadas na página (zero latência)
+      const localPool = Array.from(apiQuestionByApiId.values());
+      const localPick = pickBestMirrorCandidate(missedQuestionData, localPool, answeredSet);
+      if (localPick && localPick.score >= 16) {
+        resolve(localPick);
+        return;
+      }
+
+      const apiMeta =
+        apiQuestionByCode.get(missedQuestionData.id) ||
+        apiQuestionCache.get(missedQuestionData.id) ||
+        null;
+      const numericApiId =
+        Number(apiMeta?.apiId) ||
+        Number(String(missedQuestionData.id || '').replace(/^Q/i, '').replace(/\D+/g, '')) ||
+        null;
+
+      const resolvedIds = cachedCaveiraTree
+        ? resolveTreeIdsForQuestion(cachedCaveiraTree, {
+            subject: missedQuestionData.subject || '',
+            subtopic: missedQuestionData.topic || '',
+            subtopicPath: apiMeta?.subtopicPath || missedQuestionData.topic || '',
+          })
+        : { subjectId: null, subtopicId: null };
+
+      const subjectId = apiMeta?.subjectId || resolvedIds?.subjectId || null;
+      const subtopicId = apiMeta?.subtopicId || resolvedIds?.subtopicId || null;
+      if (!subjectId && !subtopicId) {
+        resolve(localPick || null);
+        return;
+      }
+
+      const urlParams = new URLSearchParams(window.location.search || '');
+      const urlBoards = (urlParams.get('examining_board_ids') || '')
+        .split(',')
+        .map(Number)
+        .filter((n) => Number.isInteger(n) && n > 0);
+      const urlAlts = (urlParams.get('number_alternatives') || '')
+        .split(',')
+        .map(Number)
+        .filter((n) => Number.isInteger(n) && n > 0);
+
+      const reqId = `mir_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+      const timer = setTimeout(() => {
+        pendingMirrorRequests.delete(reqId);
+        resolve(localPick || null);
+      }, 4500);
+
+      pendingMirrorRequests.set(reqId, (candidates) => {
+        clearTimeout(timer);
+        const combinedPool = [...(Array.isArray(candidates) ? candidates : []), ...localPool];
+        const picked = pickBestMirrorCandidate(missedQuestionData, combinedPool, answeredSet);
+        resolve(picked || localPick || null);
+      });
+
+      postToSniffer('FETCH_MIRROR_QUESTION', {
+        requestId: reqId,
+        excludeApiId: numericApiId,
+        subjectIds: subjectId ? [Number(subjectId)] : [],
+        subtopicIds: subtopicId ? [Number(subtopicId)] : [],
+        numberAlternatives: urlAlts.length > 0 ? urlAlts : [2],
+        examBoardIds: urlBoards.length > 0 ? urlBoards : [2, 5, 12],
+      });
+    });
+  }
 
   function postToSniffer(type, payload) {
     try {
@@ -424,6 +530,8 @@ import {
       try { chrome.storage.onChanged.removeListener(handleStorageChangedRef); } catch (_) {}
     }
     destroyShadowHud();
+    destroyAllInlineAutopsyCards();
+    destroyTrapRadarOverlays();
   }
 
   window.addEventListener('qg-caveira-teardown', teardownInstance, { once: true });
@@ -436,7 +544,8 @@ import {
           STORAGE_KEY, SESSION_KEY, SCHEMA_KEY, SCHEMA_VERSION_KEY, GOAL_KEY,
           ACTIVE_USER_KEY, ACTIVE_USER_LABEL_KEY, PENDING_FILTER_KEY, LAST_FILTER_DIAG_KEY,
           TODAY_MISSION_KEY, SUBJECT_SPEEDS_KEY, MODULE_SPEEDS_KEY, FILTER_ID_MEMORY_KEY, FILTER_MEMORY_CLOUD_KEY,
-          DIAGNOSTIC_MODE_KEY, PENDING_SIMULADOS_QUEUE_KEY, ACTIVE_MISSION_KEY
+          DIAGNOSTIC_MODE_KEY, PENDING_SIMULADOS_QUEUE_KEY, ACTIVE_MISSION_KEY,
+          COURSE_INDEX_CACHE_KEY, COURSE_VIDEO_INDEX_SYNC_KEY, PENDING_MIRROR_PROOF_KEY
         ],
         (res) => {
           if (chrome.runtime.lastError || isDestroyed) return;
@@ -459,6 +568,16 @@ import {
           }
           if (res?.[MODULE_SPEEDS_KEY] && typeof res[MODULE_SPEEDS_KEY] === 'object') {
             cachedModuleSpeeds = res[MODULE_SPEEDS_KEY];
+          }
+          if (res?.[COURSE_INDEX_CACHE_KEY]?.byLesson && typeof res[COURSE_INDEX_CACHE_KEY].byLesson === 'object') {
+            cachedLocalCourseIndexByLesson = res[COURSE_INDEX_CACHE_KEY].byLesson;
+          }
+          if (res?.[COURSE_VIDEO_INDEX_SYNC_KEY] && typeof res[COURSE_VIDEO_INDEX_SYNC_KEY] === 'object') {
+            cachedSyncedVideoIndexMap = res[COURSE_VIDEO_INDEX_SYNC_KEY];
+          }
+          const rawProof = res?.[PENDING_MIRROR_PROOF_KEY];
+          if (rawProof && rawProof.mirrorQId && rawProof.sourceQId && (Date.now() - (Number(rawProof.at) || 0)) < 1800000) {
+            cachedPendingMirrorProof = rawProof;
           }
           // #56: Mescla memória de filtros vinda da nuvem sem perder seleções locais mais novas
           const cloudMem = res?.[FILTER_MEMORY_CLOUD_KEY];
@@ -754,6 +873,16 @@ import {
               (!nextM.ownerUserId || nextM.ownerUserId === cachedActiveUserId)
             ) ? nextM : null;
             updateHudMission();
+          }
+          if (changes[COURSE_INDEX_CACHE_KEY]) {
+            cachedLocalCourseIndexByLesson = changes[COURSE_INDEX_CACHE_KEY].newValue?.byLesson || {};
+          }
+          if (changes[COURSE_VIDEO_INDEX_SYNC_KEY]) {
+            cachedSyncedVideoIndexMap = changes[COURSE_VIDEO_INDEX_SYNC_KEY].newValue || {};
+          }
+          if (changes[PENDING_MIRROR_PROOF_KEY]) {
+            const np = changes[PENDING_MIRROR_PROOF_KEY].newValue || null;
+            cachedPendingMirrorProof = (np && np.mirrorQId && np.sourceQId && (Date.now() - (Number(np.at) || 0)) < 1800000) ? np : null;
           }
         }
       };
@@ -1277,6 +1406,15 @@ import {
             ...enjoyObj,
           });
         }
+      }
+      return;
+    }
+
+    if (msg.type === 'FETCH_MIRROR_QUESTION_RESULT' && msg.payload?.requestId) {
+      const cb = pendingMirrorRequests.get(msg.payload.requestId);
+      if (cb) {
+        pendingMirrorRequests.delete(msg.payload.requestId);
+        cb(msg.payload.candidates || []);
       }
       return;
     }
@@ -9044,8 +9182,11 @@ import {
     const lessonTitle = extractCourseLessonTitle();
     const peekKey = `${window.location.href}|${lessonTitle}`;
 
-    let captureSource = 'bizus';
-    let rawIndexText = extractCourseBizusRawTextFromDom();
+    const rawBizusText = extractCourseBizusRawTextFromDom();
+    const rawIndiceText = extractCourseIndexRawTextFromDom();
+
+    let captureSource = rawBizusText ? 'bizus' : (rawIndiceText ? 'indice' : 'bizus');
+    let rawIndexText = rawBizusText || rawIndiceText;
 
     if (!rawIndexText) {
       const bizusTab = findCourseTabElement('bizus');
@@ -9057,21 +9198,17 @@ import {
         return;
       }
 
-      const indexText = extractCourseIndexRawTextFromDom();
-      if (indexText) {
-        rawIndexText = indexText;
-        captureSource = 'indice';
-      } else {
-        const indexTab = findCourseTabElement('indice');
-        const indicePeekKey = `${peekKey}|indice`;
-        if (indexTab && !isCourseTabActive(indexTab) && !peekedCourseUrls.has(indicePeekKey)) {
-          peekedCourseUrls.add(indicePeekKey);
-          clickElementRealistically(indexTab);
-          setTimeout(scanCourseVideoIndex, 450);
-        }
-        return;
+      const indexTab = findCourseTabElement('indice');
+      const indicePeekKey = `${peekKey}|indice`;
+      if (indexTab && !isCourseTabActive(indexTab) && !peekedCourseUrls.has(indicePeekKey)) {
+        peekedCourseUrls.add(indicePeekKey);
+        clickElementRealistically(indexTab);
+        setTimeout(scanCourseVideoIndex, 450);
       }
+      return;
     }
+
+    const parsedTopics = rawIndiceText ? parseTimestampTopicsFromText(rawIndiceText) : [];
 
     const subtopics = parseCourseIndexSubtopics(rawIndexText, lessonTitle ? [lessonTitle] : []);
     if (subtopics.length === 0) return;
@@ -9118,6 +9255,8 @@ import {
       lessonTitle,
       source: captureSource,
       rawIndexText,
+      ...(rawIndiceText ? { indiceRawText: rawIndiceText } : {}),
+      ...(parsedTopics.length > 0 ? { topics: parsedTopics } : {}),
       ...(captureSource === 'bizus' ? { bizusRawText: rawIndexText, bizusSubtopics: subtopics } : {}),
       subtopics,
       capturedAt: Date.now()
@@ -9134,12 +9273,28 @@ import {
         const lessonKey = (courseId && rawLessonKey) ? `${courseId}::${rawLessonKey}` : rawLessonKey;
         if (lessonKey) {
           const existing = nextByLesson[lessonKey];
+          const mergedTopics = parsedTopics.length > 0 ? parsedTopics : (existing?.topics || []);
+          const mergedIndiceRaw = rawIndiceText || existing?.indiceRawText || '';
           if (captureSource === 'bizus') {
-            nextByLesson[lessonKey] = entry;
+            nextByLesson[lessonKey] = {
+              ...(existing || {}),
+              ...entry,
+              ...(mergedIndiceRaw ? { indiceRawText: mergedIndiceRaw } : {}),
+              ...(mergedTopics.length > 0 ? { topics: mergedTopics } : {}),
+            };
           } else if (existing && existing.source === 'bizus') {
-            // Mantém os títulos dos Bizus como fonte prioritária da aula
+            nextByLesson[lessonKey] = {
+              ...existing,
+              ...(mergedIndiceRaw ? { indiceRawText: mergedIndiceRaw } : {}),
+              ...(mergedTopics.length > 0 ? { topics: mergedTopics } : {}),
+            };
           } else {
-            nextByLesson[lessonKey] = entry;
+            nextByLesson[lessonKey] = {
+              ...(existing || {}),
+              ...entry,
+              ...(mergedIndiceRaw ? { indiceRawText: mergedIndiceRaw } : {}),
+              ...(mergedTopics.length > 0 ? { topics: mergedTopics } : {}),
+            };
           }
         }
         // Mantém no máximo 120 aulas mais recentes em cache
@@ -9147,6 +9302,7 @@ import {
           .sort((a, b) => (b[1]?.capturedAt || 0) - (a[1]?.capturedAt || 0))
           .slice(0, 120);
         const compactedByLesson = Object.fromEntries(ordered);
+        cachedLocalCourseIndexByLesson = compactedByLesson;
         const latestEntry =
           (prev.latest && prev.latest.source === 'bizus' && captureSource === 'indice' && rawLessonKey && normalizeCourseIndexKey(prev.latest.lessonTitle || '') === rawLessonKey)
             ? prev.latest
@@ -9425,9 +9581,16 @@ import {
       return;
     }
 
+    // #2: Radar Cebraspe ao vivo nos enunciados visíveis
+    applyTrapRadarToCards(cards, questionsCache, extractQuestionId);
+
     cards.forEach(card => {
       const qId = extractQuestionId(card);
       if (!qId) return;
+
+      if (cachedPendingMirrorProof && String(cachedPendingMirrorProof.mirrorQId) === String(qId)) {
+        mountMirrorChallengeBanner(card, cachedPendingMirrorProof);
+      }
 
       // Se a questão já estava salva antes da v1.1.4 sem o texto das alternativas, enriquece automaticamente!
       if (savedQuestionsMissingAlts.has(qId)) {
@@ -9496,28 +9659,125 @@ import {
             saveQuestion(questionData, false);
             renderQuestionHistory(qId, true);
 
-            const mountedInline = mountInlineAutopsyCard(card, questionData, {
-              onSelectErrorReason: (targetId, reasonId) => {
-                const latest = questionsCache.find((q) => q && q.id === targetId) || questionData;
-                const updated = { ...latest, errorReason: reasonId };
-                if (activeQuestionData && activeQuestionData.id === targetId) {
-                  activeQuestionData = updated;
-                }
-                saveQuestion(updated, true);
+            const videoMatch = !questionData.hit
+              ? findCourseVideoMatchForExtension(questionData, getMergedCourseVideoIndex())
+              : null;
+
+            const mountedInline = mountInlineAutopsyCard(
+              card,
+              {
+                ...questionData,
+                videoMatch,
+                mirrorState: !questionData.hit ? { status: 'loading' } : null,
               },
-              onSelectConfidence: (targetId, confId) => {
-                const latest = questionsCache.find((q) => q && q.id === targetId) || questionData;
-                const updated = {
-                  ...latest,
-                  confidence: confId,
-                  fsrsRequested: (confId === 'chute' || confId === 'duvida'),
-                };
-                if (activeQuestionData && activeQuestionData.id === targetId) {
-                  activeQuestionData = updated;
+              {
+                onSelectErrorReason: (targetId, reasonId) => {
+                  const latest = questionsCache.find((q) => q && q.id === targetId) || questionData;
+                  const updated = { ...latest, errorReason: reasonId };
+                  if (activeQuestionData && activeQuestionData.id === targetId) {
+                    activeQuestionData = updated;
+                  }
+                  saveQuestion(updated, true);
+                },
+                onSelectConfidence: (targetId, confId) => {
+                  const latest = questionsCache.find((q) => q && q.id === targetId) || questionData;
+                  const updated = {
+                    ...latest,
+                    confidence: confId,
+                    fsrsRequested: (confId === 'chute' || confId === 'duvida'),
+                  };
+                  if (activeQuestionData && activeQuestionData.id === targetId) {
+                    activeQuestionData = updated;
+                  }
+                  saveQuestion(updated, true);
+                },
+                onOpenVideoTimestamp: (vm) => {
+                  if (!vm || !vm.url) return;
+                  try {
+                    if (vm.seconds > 0 && isExtensionContextValid() && chrome?.storage?.local) {
+                      const nowTs = Date.now();
+                      chrome.storage.local.set({
+                        [PLAYER_SEEK_KEY]: {
+                          seconds: vm.seconds,
+                          courseId: vm.courseId || '',
+                          updatedAt: nowTs,
+                          savedAt: nowTs,
+                        },
+                      });
+                    }
+                  } catch (_) {}
+                  window.open(vm.url, '_blank', 'noopener');
+                },
+                onStartMirror: (cand, sourceQId) => {
+                  if (!cand || !cand.id) return;
+                  const proof = { sourceQId, mirrorQId: cand.id, at: Date.now() };
+                  cachedPendingMirrorProof = proof;
+                  try {
+                    if (isExtensionContextValid() && chrome?.storage?.local) {
+                      chrome.storage.local.set({ [PENDING_MIRROR_PROOF_KEY]: proof });
+                    }
+                  } catch (_) {}
+
+                  const inDomCard = getQuestionCards().find((c) => extractQuestionId(c) === cand.id);
+                  if (inDomCard) {
+                    mountMirrorChallengeBanner(inDomCard, proof);
+                    inDomCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    return;
+                  }
+                  const targetUrl = cand.apiId
+                    ? `https://app.caveira.com/questions?question_id=${cand.apiId}`
+                    : `https://app.caveira.com/questions?raw_text=${encodeURIComponent(cand.id)}`;
+                  window.open(targetUrl, '_blank', 'noopener');
+                },
+              }
+            );
+
+            // #8: Busca questão-espelho em segundo plano ao errar
+            if (!questionData.hit && mountedInline && !requestedMirrorForQIds.has(qId)) {
+              requestedMirrorForQIds.add(qId);
+              requestMirrorQuestionFromApi(questionData).then((mirrorResult) => {
+                if (isDestroyed) return;
+                if (mirrorResult && mirrorResult.candidate) {
+                  updateInlineAutopsyExtras(qId, {
+                    mirrorState: {
+                      status: 'ready',
+                      candidate: mirrorResult.candidate,
+                      sharedTraps: mirrorResult.sharedTraps || [],
+                      sameSubtopic: Boolean(mirrorResult.sameSubtopic),
+                    },
+                  });
+                } else {
+                  updateInlineAutopsyExtras(qId, { mirrorState: { status: 'empty' } });
                 }
-                saveQuestion(updated, true);
-              },
-            });
+              });
+            }
+
+            // #8: Se acertou uma questão-espelho ativa, rebaixa o erro original no FSRS
+            if (questionData.hit && cachedPendingMirrorProof && String(cachedPendingMirrorProof.mirrorQId) === String(qId)) {
+              const sourceQId = cachedPendingMirrorProof.sourceQId;
+              const sourceQ = questionsCache.find((q) => q && q.id === sourceQId);
+              if (sourceQ) {
+                saveQuestion(
+                  {
+                    ...sourceQ,
+                    mirrorProven: true,
+                    mirrorQuestionId: qId,
+                    mirrorProvenAt: new Date().toISOString(),
+                  },
+                  true
+                );
+              }
+              cachedPendingMirrorProof = null;
+              try {
+                if (isExtensionContextValid() && chrome?.storage?.local) {
+                  chrome.storage.local.remove([PENDING_MIRROR_PROOF_KEY]).catch(() => {});
+                }
+              } catch (_) {}
+              showMirrorProvenToastOnCard(card, sourceQId);
+              updateInlineAutopsyExtras(sourceQId, {
+                mirrorState: { status: 'proven', mirrorQId: qId },
+              });
+            }
 
             if (!mountedInline) {
               showPrompt(questionData);

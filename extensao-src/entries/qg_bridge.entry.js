@@ -10,6 +10,8 @@ import {
   DEFAULT_PREFS_KEY,
   ACTIVE_MISSION_KEY,
   LAST_FILTER_DIAG_KEY,
+  COURSE_VIDEO_INDEX_SYNC_KEY,
+  PENDING_MIRROR_PROOF_KEY,
 } from '../content/utils.js';
 
 // Bridge entre a Extensão e a aplicação Web QG da PRF (v3.1.0 Strict)
@@ -54,6 +56,8 @@ import {
     FILTER_MEMORY_CLOUD_KEY,
     REMINDER_STATE_KEY,
     DISMISSED_MISSIONS_KEY,
+    COURSE_VIDEO_INDEX_SYNC_KEY,
+    PENDING_MIRROR_PROOF_KEY,
     'qg_pending_course_completion',
   ];
   const MAX_BUCKET_QUESTIONS = 1500;
@@ -872,6 +876,16 @@ import {
               [SUBJECT_SPEEDS_KEY]: speedsPayload,
               [MODULE_SPEEDS_KEY]: moduleSpeedsPayload,
             });
+          } catch (_) {}
+        });
+      }
+
+      if (event.data.type === 'QG_PRF_SYNC_COURSE_VIDEO_INDEX' && event.data.payload?.index) {
+        const videoIndexPayload = event.data.payload.index;
+        bucketSwitchPromise.then(() => {
+          if (isBridgeDestroyed || !cachedActiveUserId) return;
+          try {
+            chrome.storage.local.set({ [COURSE_VIDEO_INDEX_SYNC_KEY]: videoIndexPayload });
           } catch (_) {}
         });
       }

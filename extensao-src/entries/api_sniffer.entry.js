@@ -1292,4 +1292,92 @@ import { extractTreeNodesFromApiJson } from '../tree/dynamicTreeManager.js';
       dateField,
     });
   });
+
+  // Busca ativa sob demanda de Questão-Espelho (#8) — somente leitura
+  window.addEventListener('message', async (ev) => {
+    if (
+      ev.source !== window ||
+      ev.origin !== window.location.origin ||
+      ev.data?.source !== 'QG_CAVEIRA_CONTENT' ||
+      !channelNonce ||
+      ev.data?.nonce !== channelNonce ||
+      ev.data?.type !== 'FETCH_MIRROR_QUESTION'
+    ) {
+      return;
+    }
+    const {
+      requestId,
+      excludeApiId,
+      subjectIds = [],
+      subtopicIds = [],
+      numberAlternatives = [2],
+      examBoardIds = [],
+    } = ev.data.payload || {};
+    if (!requestId) return;
+
+    const authHeader = readFallbackAuthHeader();
+    const headers = {
+      Accept: 'application/json, text/plain, */*',
+      environment: 'web',
+      ...(authHeader ? { Authorization: authHeader } : {}),
+    };
+    const fetchFn = typeof origFetch === 'function' ? origFetch.bind(window) : window.fetch.bind(window);
+
+    const buildMirrorUrl = (sIds, subIds, boards) => {
+      const filters = {
+        ids: [],
+        raw_text: '',
+        career_id: 'all',
+        number_alternatives: Array.isArray(numberAlternatives) && numberAlternatives.length > 0 ? numberAlternatives : [2],
+        subtopic_id: '',
+        status: 'not_resolved',
+        question_id: '',
+        book_ids: [],
+        examining_board_ids: Array.isArray(boards) ? boards : [],
+        years: [],
+        education_level_ids: [],
+        subject_ids: Array.isArray(sIds) ? sIds : [],
+        subtopic_ids: Array.isArray(subIds) ? subIds : [],
+        situation: [],
+        difficulty_ids: [],
+        institution_ids: [],
+        occupation_ids: [],
+        has_comment: '',
+        has_video: '',
+        category_ids: [],
+      };
+      return `https://api.caveira.com/api/v1/skull/question-database?filters=${encodeURIComponent(JSON.stringify(filters))}&descending=false&page=1&rowsPerPage=8&rowsNumber=0`;
+    };
+
+    const queryCandidates = async (sIds, subIds, boards) => {
+      try {
+        const res = await fetchFn(buildMirrorUrl(sIds, subIds, boards), {
+          method: 'GET',
+          headers,
+          credentials: 'include',
+        });
+        if (!res || !res.ok) return [];
+        const json = await res.json();
+        const rawList = Array.isArray(json?.data) ? json.data : (Array.isArray(json) ? json : []);
+        return rawList
+          .map(normalizeQuestionNode)
+          .filter((q) => q && (!excludeApiId || Number(q.apiId) !== Number(excludeApiId)));
+      } catch (_) {
+        return [];
+      }
+    };
+
+    let candidates = await queryCandidates(subjectIds, subtopicIds, examBoardIds);
+    if (candidates.length === 0 && Array.isArray(subtopicIds) && subtopicIds.length > 0) {
+      candidates = await queryCandidates(subjectIds, [], examBoardIds);
+    }
+    if (candidates.length === 0 && Array.isArray(examBoardIds) && examBoardIds.length > 0) {
+      candidates = await queryCandidates(subjectIds, [], []);
+    }
+
+    postVerifiedMessage('FETCH_MIRROR_QUESTION_RESULT', {
+      requestId,
+      candidates,
+    });
+  });
 })();

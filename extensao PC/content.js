@@ -716,6 +716,101 @@ ${EXTRA_SHADOW_CSS}`;
   background: #283145;
   color: #dbeafe;
 }
+.qg-extras-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.qg-extra-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+.qg-extra-row.is-video {
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: #e0f2fe;
+}
+.qg-extra-row.is-mirror {
+  background: rgba(34, 211, 238, 0.09);
+  border: 1px solid rgba(34, 211, 238, 0.24);
+  color: #cffafe;
+}
+.qg-extra-row.is-proven {
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #d1fae5;
+}
+.qg-extra-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.qg-extra-title {
+  font-weight: 700;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.qg-extra-sub {
+  font-size: 10.5px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.qg-extra-btn {
+  appearance: none;
+  font-family: ${SANS_STACK};
+  background: #0284c7;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition: background 0.14s ease, transform 0.1s ease;
+}
+.qg-extra-btn:hover {
+  background: #0ea5e9;
+}
+.qg-extra-btn.is-mirror-btn {
+  background: #0891b2;
+}
+.qg-extra-btn.is-mirror-btn:hover {
+  background: #06b6d4;
+}
+.qg-mirror-banner {
+  font-family: ${SANS_STACK};
+  background: #0f1c24;
+  border: 1px solid rgba(34, 211, 238, 0.38);
+  color: #cffafe;
+  border-radius: 9px;
+  padding: 8px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.qg-mirror-banner.is-proven {
+  background: #0f241c;
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #d1fae5;
+}
 `;
   function canPlaceCardOnRight(altsEl) {
     if (!altsEl) return false;
@@ -753,6 +848,94 @@ ${EXTRA_SHADOW_CSS}`;
       return AUTOPSY_ERROR_CAUSES.find((c) => c.id === state.errorReason) || null;
     }
     return CONFIDENCE_OPTIONS.find((c) => c.id === state.confidence) || null;
+  }
+  function buildExtrasSection(state, callbacks) {
+    if (state.hit) return null;
+    const vm = state.videoMatch;
+    const ms = state.mirrorState;
+    const hasMirror = ms && ms.status && ms.status !== "idle";
+    if (!vm && !hasMirror) return null;
+    const stack = document.createElement("div");
+    stack.className = "qg-extras-stack";
+    if (vm && vm.url) {
+      const row = document.createElement("div");
+      row.className = "qg-extra-row is-video";
+      const txt = document.createElement("div");
+      txt.className = "qg-extra-text";
+      const title = document.createElement("span");
+      title.className = "qg-extra-title";
+      const shortLesson = String(vm.lessonTitle || "Aula do Caveira").slice(0, 34);
+      title.textContent = vm.seconds > 0 ? `🎬 ${shortLesson} · aos ${vm.mmss}` : `🎬 ${shortLesson}`;
+      txt.appendChild(title);
+      if (vm.topicLabel && vm.topicLabel !== vm.lessonTitle) {
+        const sub = document.createElement("span");
+        sub.className = "qg-extra-sub";
+        sub.textContent = vm.topicLabel;
+        txt.appendChild(sub);
+      }
+      const btn = document.createElement("button");
+      btn.type = "button";
+      btn.className = "qg-extra-btn";
+      btn.textContent = vm.seconds > 0 ? "Abrir no ponto ↗" : "Rever aula ↗";
+      btn.addEventListener("click", (e) => {
+        e.stopPropagation();
+        callbacks?.onOpenVideoTimestamp?.(vm);
+      });
+      row.appendChild(txt);
+      row.appendChild(btn);
+      stack.appendChild(row);
+    }
+    if (hasMirror) {
+      const row = document.createElement("div");
+      if (ms.status === "proven") {
+        row.className = "qg-extra-row is-proven";
+        const txt = document.createElement("div");
+        txt.className = "qg-extra-text";
+        const title = document.createElement("span");
+        title.className = "qg-extra-title";
+        title.textContent = `✅ Espelho ${ms.mirrorQId || ""} superado · FSRS rebaixado`;
+        txt.appendChild(title);
+        row.appendChild(txt);
+        stack.appendChild(row);
+      } else if (ms.status === "loading") {
+        row.className = "qg-extra-row is-mirror";
+        const txt = document.createElement("div");
+        txt.className = "qg-extra-text";
+        const title = document.createElement("span");
+        title.className = "qg-extra-title";
+        title.textContent = "🪞 Buscando questão-espelho...";
+        txt.appendChild(title);
+        row.appendChild(txt);
+        stack.appendChild(row);
+      } else if (ms.status === "ready" && ms.candidate) {
+        row.className = "qg-extra-row is-mirror";
+        const txt = document.createElement("div");
+        txt.className = "qg-extra-text";
+        const title = document.createElement("span");
+        title.className = "qg-extra-title";
+        const trapHint = Array.isArray(ms.sharedTraps) && ms.sharedTraps.length > 0 ? `mesma pegadinha "${ms.sharedTraps[0]}"` : ms.sameSubtopic ? "mesmo subtópico" : "mesma disciplina";
+        title.textContent = `🪞 Espelho ${ms.candidate.id} · ${trapHint}`;
+        txt.appendChild(title);
+        if (ms.candidate.content) {
+          const sub = document.createElement("span");
+          sub.className = "qg-extra-sub";
+          sub.textContent = ms.candidate.content.slice(0, 72);
+          txt.appendChild(sub);
+        }
+        const btn = document.createElement("button");
+        btn.type = "button";
+        btn.className = "qg-extra-btn is-mirror-btn";
+        btn.textContent = "Prove que entendeu →";
+        btn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          callbacks?.onStartMirror?.(ms.candidate, state.qId);
+        });
+        row.appendChild(txt);
+        row.appendChild(btn);
+        stack.appendChild(row);
+      }
+    }
+    return stack.childElementCount > 0 ? stack : null;
   }
   function renderShadowContent(shadowRoot, state, callbacks, host) {
     const isError = !state.hit;
@@ -799,6 +982,30 @@ ${EXTRA_SHADOW_CSS}`;
         e.stopPropagation();
         host.remove();
       });
+      if (!isError && state.videoMatch?.url) {
+        const vidQuickBtn = document.createElement("button");
+        vidQuickBtn.type = "button";
+        vidQuickBtn.className = "qg-link-btn";
+        vidQuickBtn.textContent = state.videoMatch.seconds > 0 ? `🎬 ${state.videoMatch.mmss}` : "🎬 Aula";
+        vidQuickBtn.title = `Abrir ${state.videoMatch.lessonTitle || "aula"} no ponto`;
+        vidQuickBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          callbacks?.onOpenVideoTimestamp?.(state.videoMatch);
+        });
+        actionsEl.appendChild(vidQuickBtn);
+      }
+      if (!isError && state.mirrorState?.status === "ready" && state.mirrorState?.candidate) {
+        const mirrorQuickBtn = document.createElement("button");
+        mirrorQuickBtn.type = "button";
+        mirrorQuickBtn.className = "qg-link-btn";
+        mirrorQuickBtn.textContent = "🪞 Espelho →";
+        mirrorQuickBtn.title = `Resolver questão-espelho ${state.mirrorState.candidate.id}`;
+        mirrorQuickBtn.addEventListener("click", (e) => {
+          e.stopPropagation();
+          callbacks?.onStartMirror?.(state.mirrorState.candidate, state.qId);
+        });
+        actionsEl.appendChild(mirrorQuickBtn);
+      }
       actionsEl.appendChild(editBtn);
       actionsEl.appendChild(closeBtn);
       cardEl.appendChild(summaryEl);
@@ -860,6 +1067,10 @@ ${EXTRA_SHADOW_CSS}`;
       });
       cardEl.appendChild(headEl);
       cardEl.appendChild(pillsEl);
+      const extrasEl = buildExtrasSection(state, callbacks);
+      if (extrasEl) {
+        cardEl.appendChild(extrasEl);
+      }
     }
     shadowRoot.appendChild(styleEl);
     shadowRoot.appendChild(cardEl);
@@ -907,6 +1118,8 @@ ${EXTRA_SHADOW_CSS}`;
       hit: Boolean(questionData.hit),
       errorReason: questionData.errorReason || "",
       confidence: questionData.hit ? questionData.confidence || "" : "",
+      videoMatch: questionData.videoMatch || null,
+      mirrorState: questionData.mirrorState || null,
       collapsed: false
     };
     host.__qgState = state;
@@ -927,80 +1140,517 @@ ${EXTRA_SHADOW_CSS}`;
     renderShadowContent(host.shadowRoot, state, host.__qgCallbacks || {}, host);
     return true;
   }
+  function updateInlineAutopsyExtras(qId, extras = {}) {
+    if (!qId) return false;
+    const host = document.querySelector(`.${INLINE_AUTOPSY_CLASS}[data-qg-qid="${String(qId)}"]`);
+    if (!host || !host.shadowRoot || !host.__qgState) return false;
+    const state = host.__qgState;
+    if (extras.videoMatch !== void 0) state.videoMatch = extras.videoMatch;
+    if (extras.mirrorState !== void 0) state.mirrorState = extras.mirrorState;
+    renderShadowContent(host.shadowRoot, state, host.__qgCallbacks || {}, host);
+    return true;
+  }
+  function mountMirrorChallengeBanner(card, proofMeta) {
+    if (!card || !proofMeta?.sourceQId) return false;
+    const mirrorQId = String(proofMeta.mirrorQId || "");
+    if (card.querySelector(`.qg-mirror-banner-host[data-qg-source="${proofMeta.sourceQId}"]`)) return true;
+    const contentEl = card.querySelector(".content") || card.querySelector(".question-alternatives");
+    if (!contentEl) return false;
+    const host = document.createElement("div");
+    host.className = "qg-mirror-banner-host";
+    host.setAttribute("data-qg-source", proofMeta.sourceQId);
+    host.setAttribute("data-qg-mirror", mirrorQId);
+    host.setAttribute("style", "all: initial; display: block; margin-bottom: 10px;");
+    const shadow = host.attachShadow({ mode: "open" });
+    const styleEl = document.createElement("style");
+    styleEl.textContent = INLINE_CARD_CSS;
+    const banner = document.createElement("div");
+    banner.className = "qg-mirror-banner";
+    banner.textContent = `🪞 Desafio Espelho da ${proofMeta.sourceQId}: acerte esta questão para rebaixar a revisão no FSRS`;
+    shadow.appendChild(styleEl);
+    shadow.appendChild(banner);
+    contentEl.insertAdjacentElement("beforebegin", host);
+    return true;
+  }
+  function showMirrorProvenToastOnCard(card, sourceQId) {
+    if (!card) return false;
+    const host = card.querySelector(`.qg-mirror-banner-host[data-qg-source="${sourceQId}"]`);
+    if (!host || !host.shadowRoot) return false;
+    const banner = host.shadowRoot.querySelector(".qg-mirror-banner");
+    if (banner) {
+      banner.className = "qg-mirror-banner is-proven";
+      banner.textContent = `✅ Espelho superado! Erro da ${sourceQId} rebaixado no FSRS (+3 dias).`;
+    }
+    return true;
+  }
   function destroyAllInlineAutopsyCards() {
     try {
       document.querySelectorAll(`.${INLINE_AUTOPSY_CLASS}`).forEach((el) => el.remove());
+      document.querySelectorAll(".qg-mirror-banner-host").forEach((el) => el.remove());
     } catch (_) {
     }
   }
 
-  // extensao-src/tree/dynamicTreeManager.js
-  function mergeBaselineAndDynamicTree(baselineJson, dynamicRows = []) {
-    if (!baselineJson || !Array.isArray(baselineJson.subjects)) {
-      return { mergedJson: baselineJson, dynamicAddedCount: 0 };
-    }
-    const subjectsCopy = baselineJson.subjects.map((s) => ({
-      ...s,
-      nodes: Array.isArray(s.nodes) ? s.nodes.map((n) => ({ ...n })) : []
-    }));
-    if (!Array.isArray(dynamicRows) || dynamicRows.length === 0) {
-      return { mergedJson: { ...baselineJson, subjects: subjectsCopy }, dynamicAddedCount: 0 };
-    }
-    const bySubjectId = /* @__PURE__ */ new Map();
-    subjectsCopy.forEach((s) => {
-      const nodeMap = /* @__PURE__ */ new Map();
-      s.nodes.forEach((n) => nodeMap.set(Number(n.id), n));
-      bySubjectId.set(Number(s.id), { subj: s, nodeMap });
-    });
-    let dynamicAddedCount = 0;
-    dynamicRows.forEach((row) => {
-      if (!row || !row.subjectId || !row.nodeId || !row.name) return;
-      const sId = Number(row.subjectId);
-      const nId = Number(row.nodeId);
-      let bucket = bySubjectId.get(sId);
-      if (!bucket) {
-        const newSubj = {
-          id: sId,
-          name: row.subjectName || `Disciplina ${sId}`,
-          count: 0,
-          nodes: []
-        };
-        subjectsCopy.push(newSubj);
-        bucket = { subj: newSubj, nodeMap: /* @__PURE__ */ new Map() };
-        bySubjectId.set(sId, bucket);
-      } else if (row.subjectName && row.subjectName.length > 2 && !bucket.subj.name) {
-        bucket.subj.name = row.subjectName;
+  // extensao-src/content/cebraspeTraps.js
+  var CEBRASPE_TRAP_PATTERNS = [
+    { id: "exclusivamente", label: "exclusivamente", category: "Restrição", regex: /\bexclusivamente\b/gi },
+    { id: "somente", label: "somente", category: "Restrição", regex: /\bsomente\b/gi },
+    { id: "apenas", label: "apenas", category: "Restrição", regex: /\bapenas\b/gi },
+    { id: "unicamente", label: "unicamente", category: "Restrição", regex: /\bunicamente\b/gi },
+    { id: "isoladamente", label: "isoladamente", category: "Restrição", regex: /\bisoladamente\b/gi },
+    { id: "salvo", label: "salvo", category: "Exceção", regex: /\bsalvo\b/gi },
+    { id: "exceto", label: "exceto", category: "Exceção", regex: /\bexceto\b/gi },
+    { id: "ressalvado", label: "ressalvado(a)", category: "Exceção", regex: /\bressalvad[oa]s?\b/gi },
+    { id: "em_regra", label: "em regra", category: "Exceção", regex: /\bem\s+regra\b/gi },
+    { id: "ainda_que", label: "ainda que", category: "Exceção", regex: /\bainda\s+que\b/gi },
+    { id: "mesmo_que", label: "mesmo que", category: "Exceção", regex: /\bmesmo\s+que\b/gi },
+    { id: "vedado", label: "vedado(a)", category: "Vedação / Dever", regex: /\bvedad[oa]s?\b/gi },
+    { id: "proibido", label: "proibido(a)", category: "Vedação / Dever", regex: /\bproibid[oa]s?\b/gi },
+    { id: "obrigatorio", label: "obrigatório(a)", category: "Vedação / Dever", regex: /\bobrigat[óo]ri[oa]s?\b/gi },
+    { id: "obrigatoriamente", label: "obrigatoriamente", category: "Vedação / Dever", regex: /\bobrigatoriamente\b/gi },
+    { id: "facultativo", label: "facultativo(a)", category: "Vedação / Dever", regex: /\bfacultativ[oa]s?\b/gi },
+    { id: "nao_admite", label: "não admite/cabe", category: "Vedação / Dever", regex: /\bn[ãa]o\s+(?:admite|comporta|permite|cabe)\b/gi },
+    { id: "sob_pena_de", label: "sob pena de", category: "Vedação / Dever", regex: /\bsob\s+pena\s+de\b/gi },
+    { id: "prescindivel", label: "prescindível", category: "Dispensa / Condição", regex: /\bprescind[íi]ve(?:l|is)\b/gi },
+    { id: "imprescindivel", label: "imprescindível", category: "Dispensa / Condição", regex: /\bimprescind[íi]ve(?:l|is)\b/gi },
+    { id: "independe", label: "independe", category: "Dispensa / Condição", regex: /\bindepende(?:m|r|ndo)?\b/gi },
+    { id: "independentemente", label: "independentemente", category: "Dispensa / Condição", regex: /\bindependentemente\b/gi },
+    { id: "dispensa", label: "dispensa", category: "Dispensa / Condição", regex: /\bdispensa(?:m|da|do|ndo|r)?\b/gi },
+    { id: "suficiente", label: "suficiente / bastando", category: "Dispensa / Condição", regex: /\b(?:suficiente|bastando)\b/gi },
+    { id: "automaticamente", label: "automaticamente", category: "Dispensa / Condição", regex: /\bautomaticamente\b/gi },
+    { id: "sempre", label: "sempre", category: "Universalidade / Rol", regex: /\bsempre\b/gi },
+    { id: "nunca", label: "nunca", category: "Universalidade / Rol", regex: /\bnunca\b/gi },
+    { id: "jamais", label: "jamais", category: "Universalidade / Rol", regex: /\bjamais\b/gi },
+    { id: "qualquer_hipotese", label: "em qualquer hipótese", category: "Universalidade / Rol", regex: /\bem\s+qualquer\s+hip[óo]tese\b/gi },
+    { id: "nenhuma_hipotese", label: "em nenhuma hipótese", category: "Universalidade / Rol", regex: /\bem\s+nenhuma\s+hip[óo]tese\b/gi },
+    { id: "todos_os_casos", label: "em todos os casos", category: "Universalidade / Rol", regex: /\bem\s+todos\s+os\s+casos\b/gi },
+    { id: "taxativo", label: "taxativo(a)", category: "Universalidade / Rol", regex: /\btaxativ[oa]s?\b/gi },
+    { id: "exemplificativo", label: "exemplificativo(a)", category: "Universalidade / Rol", regex: /\bexemplificativ[oa]s?\b/gi }
+  ];
+  function detectTrapTermsInText(rawText) {
+    const text = typeof rawText === "string" ? rawText : String(rawText || "");
+    if (!text) return [];
+    const found = [];
+    for (const pat of CEBRASPE_TRAP_PATTERNS) {
+      const rx = new RegExp(pat.regex.source, pat.regex.flags);
+      const matches = [];
+      let m;
+      while ((m = rx.exec(text)) !== null) {
+        if (!m[0]) break;
+        matches.push({
+          start: m.index,
+          end: m.index + m[0].length,
+          text: m[0]
+        });
+        if (matches.length >= 12) break;
       }
-      const existing = bucket.nodeMap.get(nId);
-      if (existing) {
-        if (row.name && existing.name !== row.name) {
-          existing.name = row.name;
+      if (matches.length > 0) {
+        found.push({
+          id: pat.id,
+          label: pat.label,
+          category: pat.category,
+          matches
+        });
+      }
+    }
+    return found;
+  }
+  function classifyRiskLevel(errors, total, errorRate) {
+    if (errors === 0) return "dominado";
+    if (errors >= 2 && errorRate >= 65) return "critico";
+    if (errorRate >= 50) return "alerta";
+    return "monitorando";
+  }
+  function buildTrapFingerprint(questions = []) {
+    const list = Array.isArray(questions) ? questions : [];
+    const termMap = /* @__PURE__ */ new Map();
+    let totalQuestionsAnalyzed = 0;
+    let totalTrapQuestions = 0;
+    let trapErrors = 0;
+    let nonTrapQuestions = 0;
+    let nonTrapErrors = 0;
+    for (const q of list) {
+      if (!q || !q.content) continue;
+      totalQuestionsAnalyzed += 1;
+      const isError = !q.hit;
+      const detected = detectTrapTermsInText(q.content);
+      if (detected.length > 0) {
+        totalTrapQuestions += 1;
+        if (isError) trapErrors += 1;
+      } else {
+        nonTrapQuestions += 1;
+        if (isError) nonTrapErrors += 1;
+      }
+      const subjName = q.canonicalSubject || q.subject || "Geral";
+      for (const term of detected) {
+        let stat = termMap.get(term.id);
+        if (!stat) {
+          stat = {
+            id: term.id,
+            label: term.label,
+            category: term.category,
+            total: 0,
+            errors: 0,
+            hits: 0,
+            subjectsSet: /* @__PURE__ */ new Set(),
+            questionIds: [],
+            errorQuestionIds: []
+          };
+          termMap.set(term.id, stat);
         }
+        stat.total += 1;
+        if (isError) {
+          stat.errors += 1;
+          if (q.id) stat.errorQuestionIds.push(q.id);
+        } else {
+          stat.hits += 1;
+        }
+        stat.subjectsSet.add(subjName);
+        if (q.id) stat.questionIds.push(q.id);
+      }
+    }
+    const terms = Array.from(termMap.values()).map((stat) => {
+      const errorRate = stat.total > 0 ? Math.round(stat.errors / stat.total * 100) : 0;
+      return {
+        id: stat.id,
+        label: stat.label,
+        category: stat.category,
+        total: stat.total,
+        errors: stat.errors,
+        hits: stat.hits,
+        errorRate,
+        riskLevel: classifyRiskLevel(stat.errors, stat.total, errorRate),
+        subjects: Array.from(stat.subjectsSet),
+        questionIds: stat.questionIds,
+        errorQuestionIds: stat.errorQuestionIds
+      };
+    }).sort((a, b) => {
+      const aHasErr = a.errors > 0 ? 0 : 1;
+      const bHasErr = b.errors > 0 ? 0 : 1;
+      if (aHasErr !== bHasErr) return aHasErr - bHasErr;
+      if (b.errorRate !== a.errorRate) return b.errorRate - a.errorRate;
+      if (b.errors !== a.errors) return b.errors - a.errors;
+      return b.total - a.total;
+    });
+    const overallTrapErrorRate = totalTrapQuestions > 0 ? Math.round(trapErrors / totalTrapQuestions * 100) : 0;
+    const overallNonTrapErrorRate = nonTrapQuestions > 0 ? Math.round(nonTrapErrors / nonTrapQuestions * 100) : 0;
+    const trapPenaltyDelta = totalTrapQuestions > 0 && nonTrapQuestions > 0 ? overallTrapErrorRate - overallNonTrapErrorRate : 0;
+    return {
+      terms,
+      totalQuestionsAnalyzed,
+      totalTrapQuestions,
+      overallTrapErrorRate,
+      overallNonTrapErrorRate,
+      trapPenaltyDelta
+    };
+  }
+  function matchTextTrapsAgainstFingerprint(rawText, fingerprint) {
+    const terms = Array.isArray(fingerprint?.terms) ? fingerprint.terms : [];
+    if (!rawText || terms.length === 0) return [];
+    const statById = new Map(terms.map((t) => [t.id, t]));
+    const detected = detectTrapTermsInText(rawText);
+    const dangerHits = [];
+    for (const d of detected) {
+      const stat = statById.get(d.id);
+      if (!stat || stat.errors < 1 || stat.errorRate < 50) continue;
+      dangerHits.push({
+        id: stat.id,
+        label: stat.label,
+        category: stat.category,
+        total: stat.total,
+        errors: stat.errors,
+        errorRate: stat.errorRate,
+        riskLevel: stat.riskLevel,
+        matches: d.matches
+      });
+    }
+    return dangerHits.sort((a, b) => b.errorRate - a.errorRate || b.errors - a.errors);
+  }
+
+  // extensao-src/ui/trapRadarOverlay.js
+  var TRAP_RADAR_CLASS = "qg-trap-radar-host";
+  var HIGHLIGHT_NAME = "qg-cebraspe-trap";
+  var STYLE_ID = "qg-trap-highlight-style";
+  var SANS_STACK2 = 'system-ui, -apple-system, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif';
+  var cachedFpSig = "";
+  var cachedFp = null;
+  var dismissedTrapCards = /* @__PURE__ */ new Set();
+  var TRAP_PILL_CSS = `
+:host {
+  all: initial;
+  display: block;
+  margin-bottom: 10px;
+  font-family: ${SANS_STACK2};
+  box-sizing: border-box;
+}
+*, *::before, *::after {
+  box-sizing: border-box;
+  font-family: ${SANS_STACK2};
+}
+.qg-trap-pill {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 7px 11px;
+  border-radius: 9px;
+  background: #1a1611;
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fef3c7;
+  font-size: 12px;
+  line-height: 1.35;
+  box-shadow: 0 6px 18px -10px rgba(0, 0, 0, 0.65);
+}
+.qg-trap-left {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 7px;
+  min-width: 0;
+}
+.qg-trap-badge {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+  padding: 2px 7px;
+  border-radius: 6px;
+  background: rgba(245, 158, 11, 0.18);
+  border: 1px solid rgba(245, 158, 11, 0.35);
+  color: #fcd34d;
+  font-size: 10.5px;
+  font-weight: 800;
+  letter-spacing: 0.03em;
+  text-transform: uppercase;
+  flex-shrink: 0;
+}
+.qg-trap-msg {
+  color: #fde68a;
+  font-weight: 600;
+}
+.qg-trap-msg strong {
+  color: #ffffff;
+}
+.qg-trap-chip {
+  display: inline-flex;
+  align-items: center;
+  padding: 1px 7px;
+  border-radius: 6px;
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(245, 158, 11, 0.22);
+  color: #fcd34d;
+  font-size: 11px;
+  font-weight: 600;
+}
+.qg-trap-close {
+  appearance: none;
+  background: transparent;
+  border: none;
+  color: #a8a29e;
+  width: 22px;
+  height: 22px;
+  border-radius: 6px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  flex-shrink: 0;
+  font-size: 14px;
+  line-height: 1;
+}
+.qg-trap-close:hover {
+  background: rgba(255, 255, 255, 0.09);
+  color: #ffffff;
+}
+`;
+  function ensureHighlightStyle() {
+    if (typeof document === "undefined" || !document.head) return;
+    if (document.getElementById(STYLE_ID)) return;
+    const styleEl = document.createElement("style");
+    styleEl.id = STYLE_ID;
+    styleEl.textContent = `::highlight(${HIGHLIGHT_NAME}) { background-color: rgba(245, 158, 11, 0.24); color: inherit; text-decoration: underline wavy #f59e0b; text-underline-offset: 3px; }`;
+    document.head.appendChild(styleEl);
+  }
+  function getFingerprintMemoized(questionsCache = []) {
+    const arr = Array.isArray(questionsCache) ? questionsCache : [];
+    const first = arr[0];
+    const sig = `${arr.length}|${first?.id || ""}|${first?.updatedAt || first?.timestamp || ""}`;
+    if (!cachedFp || sig !== cachedFpSig) {
+      cachedFpSig = sig;
+      cachedFp = buildTrapFingerprint(arr);
+    }
+    return cachedFp;
+  }
+  function collectTextNodes(rootEl) {
+    const segments = [];
+    let fullText = "";
+    try {
+      const walker = document.createTreeWalker(rootEl, NodeFilter.SHOW_TEXT, null);
+      let node;
+      while (node = walker.nextNode()) {
+        const val = node.nodeValue || "";
+        if (!val) continue;
+        if (node.parentElement && node.parentElement.closest(`.${TRAP_RADAR_CLASS}`)) continue;
+        const start = fullText.length;
+        fullText += val;
+        segments.push({ node, start, end: fullText.length });
+      }
+    } catch (_) {
+      return { fullText: "", segments: [] };
+    }
+    return { fullText, segments };
+  }
+  function buildRangeForOffsets(segments, startOffset, endOffset) {
+    let startNode = null;
+    let startPos = 0;
+    let endNode = null;
+    let endPos = 0;
+    for (const seg of segments) {
+      if (!startNode && startOffset >= seg.start && startOffset < seg.end) {
+        startNode = seg.node;
+        startPos = startOffset - seg.start;
+      }
+      if (endOffset > seg.start && endOffset <= seg.end) {
+        endNode = seg.node;
+        endPos = endOffset - seg.start;
+        break;
+      }
+    }
+    if (!startNode || !endNode) return null;
+    try {
+      const r = document.createRange();
+      r.setStart(startNode, startPos);
+      r.setEnd(endNode, endPos);
+      return r;
+    } catch (_) {
+      return null;
+    }
+  }
+  function renderTrapPill(host, qId, hits) {
+    const shadow = host.shadowRoot || host.attachShadow({ mode: "open" });
+    shadow.innerHTML = "";
+    const styleEl = document.createElement("style");
+    styleEl.textContent = TRAP_PILL_CSS;
+    const pill = document.createElement("div");
+    pill.className = "qg-trap-pill";
+    const left = document.createElement("div");
+    left.className = "qg-trap-left";
+    const badge = document.createElement("span");
+    badge.className = "qg-trap-badge";
+    badge.textContent = "⚠ Radar Cebraspe";
+    const top = hits[0];
+    const msg = document.createElement("span");
+    msg.className = "qg-trap-msg";
+    const strongTerm = document.createElement("strong");
+    strongTerm.textContent = `"${top.label}"`;
+    msg.appendChild(document.createTextNode("Atenção em "));
+    msg.appendChild(strongTerm);
+    msg.appendChild(
+      document.createTextNode(` — você erra ${top.errorRate}% (${top.errors}/${top.total})`)
+    );
+    left.appendChild(badge);
+    left.appendChild(msg);
+    hits.slice(1, 3).forEach((extra) => {
+      const chip = document.createElement("span");
+      chip.className = "qg-trap-chip";
+      chip.textContent = `${extra.label} · ${extra.errorRate}%`;
+      left.appendChild(chip);
+    });
+    const closeBtn = document.createElement("button");
+    closeBtn.type = "button";
+    closeBtn.className = "qg-trap-close";
+    closeBtn.textContent = "×";
+    closeBtn.title = "Ocultar alerta nesta questão";
+    closeBtn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      dismissedTrapCards.add(qId);
+      host.remove();
+    });
+    pill.appendChild(left);
+    pill.appendChild(closeBtn);
+    shadow.appendChild(styleEl);
+    shadow.appendChild(pill);
+  }
+  function applyTrapRadarToCards(cards = [], questionsCache = [], extractQuestionIdFn = null) {
+    if (!Array.isArray(cards) || cards.length === 0) return;
+    const fp = getFingerprintMemoized(questionsCache);
+    const hasDangerTerms = Boolean(fp?.terms?.some((t) => t.errors >= 1 && t.errorRate >= 50));
+    const supportsCssHighlight = typeof CSS !== "undefined" && Boolean(CSS.highlights) && typeof Highlight !== "undefined";
+    if (!hasDangerTerms) {
+      document.querySelectorAll(`.${TRAP_RADAR_CLASS}`).forEach((el) => el.remove());
+      if (supportsCssHighlight) {
+        try {
+          CSS.highlights.delete(HIGHLIGHT_NAME);
+        } catch (_) {
+        }
+      }
+      return;
+    }
+    if (supportsCssHighlight) {
+      ensureHighlightStyle();
+    }
+    const allRanges = [];
+    cards.forEach((card) => {
+      if (!card) return;
+      const qId = typeof extractQuestionIdFn === "function" ? extractQuestionIdFn(card) : "";
+      const contentEl = card.querySelector(".content");
+      if (!qId || !contentEl) return;
+      const existingHost = card.querySelector(`.${TRAP_RADAR_CLASS}[data-qg-qid="${qId}"]`);
+      if (dismissedTrapCards.has(qId)) {
+        if (existingHost) existingHost.remove();
         return;
       }
-      const parentId = Number(row.parentId || sId);
-      const parentNode = bucket.nodeMap.get(parentId);
-      const computedDepth = parentNode ? (Number(parentNode.depth) || 1) + 1 : Number(row.depth) || 1;
-      const computedPath = Array.isArray(row.path) && row.path.length > 0 ? row.path.map(Number) : parentNode && Array.isArray(parentNode.path) ? [...parentNode.path, nId] : [sId, nId];
-      const newNode = {
-        id: nId,
-        parentId,
-        depth: computedDepth,
-        name: String(row.name).trim(),
-        path: computedPath
-      };
-      bucket.subj.nodes.push(newNode);
-      bucket.subj.count = bucket.subj.nodes.length;
-      bucket.nodeMap.set(nId, newNode);
-      dynamicAddedCount += 1;
+      const { fullText, segments } = collectTextNodes(contentEl);
+      if (!fullText) {
+        if (existingHost) existingHost.remove();
+        return;
+      }
+      const hits = matchTextTrapsAgainstFingerprint(fullText, fp);
+      if (hits.length === 0) {
+        if (existingHost) existingHost.remove();
+        return;
+      }
+      const sig = hits.map((h) => `${h.id}:${h.errors}/${h.total}`).join("|");
+      if (!existingHost) {
+        const host = document.createElement("div");
+        host.className = TRAP_RADAR_CLASS;
+        host.setAttribute("data-qg-qid", qId);
+        host.setAttribute("data-qg-trap-sig", sig);
+        contentEl.insertAdjacentElement("beforebegin", host);
+        renderTrapPill(host, qId, hits);
+      } else if (existingHost.getAttribute("data-qg-trap-sig") !== sig) {
+        existingHost.setAttribute("data-qg-trap-sig", sig);
+        renderTrapPill(existingHost, qId, hits);
+      }
+      if (supportsCssHighlight) {
+        for (const hit of hits) {
+          for (const m of hit.matches || []) {
+            const range = buildRangeForOffsets(segments, m.start, m.end);
+            if (range) allRanges.push(range);
+          }
+        }
+      }
     });
-    return {
-      mergedJson: {
-        ...baselineJson,
-        subjects: subjectsCopy
-      },
-      dynamicAddedCount
-    };
+    if (supportsCssHighlight) {
+      try {
+        if (allRanges.length > 0) {
+          CSS.highlights.set(HIGHLIGHT_NAME, new Highlight(...allRanges));
+        } else {
+          CSS.highlights.delete(HIGHLIGHT_NAME);
+        }
+      } catch (_) {
+      }
+    }
+  }
+  function destroyTrapRadarOverlays() {
+    try {
+      document.querySelectorAll(`.${TRAP_RADAR_CLASS}`).forEach((el) => el.remove());
+      if (typeof CSS !== "undefined" && CSS.highlights) {
+        CSS.highlights.delete(HIGHLIGHT_NAME);
+      }
+      const styleEl = document.getElementById(STYLE_ID);
+      if (styleEl) styleEl.remove();
+    } catch (_) {
+    }
   }
 
   // extensao-src/content/utils.js
@@ -1035,6 +1685,8 @@ ${EXTRA_SHADOW_CSS}`;
   var SNIFFER_RECENT_EVENTS_KEY = "qg_sniffer_recent_events";
   var TREE_META_KEY = "qg_tree_meta";
   var PERFORMANCE_SNAPSHOT_KEY = "qg_caveira_performance_snapshot";
+  var COURSE_VIDEO_INDEX_SYNC_KEY = "qg_course_video_index_sync";
+  var PENDING_MIRROR_PROOF_KEY = "qg_pending_mirror_proof";
   var SIMULADO_QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
   var SIMULADO_QUEUE_MAX_ATTEMPTS = 10;
   function escapeHtml(text) {
@@ -1115,6 +1767,485 @@ ${EXTRA_SHADOW_CSS}`;
       return out;
     }
     return String(input).slice(0, 120);
+  }
+
+  // extensao-src/content/courseVideoMatcher.js
+  var STOP_WORDS = /* @__PURE__ */ new Set([
+    "de",
+    "da",
+    "do",
+    "das",
+    "dos",
+    "para",
+    "com",
+    "sem",
+    "sobre",
+    "entre",
+    "que",
+    "uma",
+    "umo",
+    "uns",
+    "umas",
+    "nao",
+    "por",
+    "pela",
+    "pelo",
+    "pelas",
+    "pelos",
+    "nos",
+    "nas",
+    "aos",
+    "como",
+    "mais",
+    "menos",
+    "direito",
+    "nocoes",
+    "legislacao",
+    "parte",
+    "aula",
+    "bloco",
+    "questao",
+    "geral",
+    "codigo",
+    "transito",
+    "brasileiro",
+    "ctb",
+    "lei",
+    "art",
+    "artigo",
+    "artigos",
+    "capitulo",
+    "secao",
+    "titulo",
+    "disposicoes",
+    "conceito",
+    "conceitos",
+    "introducao",
+    "saudacao",
+    "saudacoes",
+    "apresentacao",
+    "boas",
+    "vindas",
+    "encerramento",
+    "consideracoes",
+    "finais",
+    "conclusao",
+    "inicio",
+    "revisao",
+    "resumo",
+    "exercicios",
+    "questoes",
+    "modulo",
+    "tema",
+    "topico",
+    "normas",
+    "gerais",
+    "regras"
+  ]);
+  var GENERIC_TIMESTAMP_LABEL_RX = /^(?:saudac(?:ao|oes)(?:\s+iniciais?)?|introducao(?:\s+(?:geral|inicial|(?:a|ao|da|do)\s+(?:aula|tema|modulo|disciplina|curso|ctb)))?|apresentacao(?:\s+(?:inicial|geral|da\s+aula|do\s+tema|do\s+curso))?|boas[\s-]+vindas|abertura|inicio(?:\s+da\s+aula)?|encerramento|consideracoes\s+finais|conclusao|finalizacao|despedida|avisos?(?:\s+gerais|\s+importantes)?)$/i;
+  var DOMAIN_WEAK_TOKENS = /* @__PURE__ */ new Set([
+    "veiculo",
+    "veiculos",
+    "condutor",
+    "condutores",
+    "via",
+    "vias",
+    "pista",
+    "circulacao",
+    "crime",
+    "crimes",
+    "pena",
+    "penas",
+    "processo",
+    "acao",
+    "estado",
+    "publico",
+    "publica",
+    "servidor",
+    "servidores",
+    "administracao",
+    "federal",
+    "nacional",
+    "sistema",
+    "seguranca",
+    "texto",
+    "frase",
+    "palavra",
+    "palavras",
+    "oracao",
+    "oracoes"
+  ]);
+  var tokenize = (str) => normalizeCourseIndexKey(str).replace(/[^\p{L}\p{N}\s]/gu, " ").split(/\s+/).filter((w) => w.length >= 3 && !STOP_WORDS.has(w));
+  function inferSubjectFamily(rawStr = "") {
+    const s = normalizeCourseIndexKey(rawStr);
+    if (!s) return "";
+    if (/\b(?:transito|ctb|contran|9503)\b/.test(s)) return "transito";
+    if (/\b(?:processo penal|processual penal|cpp|inquerito policial|prisao)\b/.test(s)) return "processual_penal";
+    if (/\b(?:direito penal|codigo penal|teoria do crime|crimes contra)\b/.test(s)) return "penal";
+    if (/\b(?:constitucional|constituicao federal)\b/.test(s)) return "constitucional";
+    if (/\b(?:administrativo|administracao publica|improbidade|licitac|poderes administrativos|atos administrativos)\b/.test(s)) return "administrativo";
+    if (/\b(?:direitos humanos|pacto de san jose|dudh)\b/.test(s)) return "direitos_humanos";
+    if (/\b(?:legislacao especial|legislacao extravagante|leis especiais|eca|desarmamento|drogas|abuso de autoridade|maria da penha|tortura)\b/.test(s)) return "legislacao_especial";
+    if (/\b(?:portugues|lingua portuguesa|gramatica|sintaxe|morfologia|interpretacao de texto|redacao oficial|crase|regencia|concordancia)\b/.test(s)) return "portugues";
+    if (/\b(?:informatica|computador|redes|seguranca da informacao|linux|windows|malware|nuvem|internet)\b/.test(s)) return "informatica";
+    if (/\b(?:raciocinio logico|rlm|matematica|logica|probabilidade|combinatoria)\b/.test(s)) return "rlm";
+    if (/\b(?:fisica|cinematica|dinamica|energia mecanica|colisoes)\b/.test(s)) return "fisica";
+    if (/\b(?:etica|1171|cidadania)\b/.test(s)) return "etica";
+    if (/\b(?:geopolitica|geografia)\b/.test(s)) return "geopolitica";
+    if (/\b(?:ingles|english)\b/.test(s)) return "ingles";
+    if (/\b(?:espanhol|spanish)\b/.test(s)) return "espanhol";
+    return "";
+  }
+  function tokenMatchesTarget(tok, targetSet) {
+    if (!tok || !targetSet || targetSet.size === 0) return false;
+    if (targetSet.has(tok)) return true;
+    if (tok.length >= 6) {
+      const stem = tok.slice(0, 6);
+      for (const candidate of targetSet) {
+        if (candidate.length >= 6 && candidate.startsWith(stem)) return true;
+      }
+    }
+    return false;
+  }
+  function collectTokenMatches(tokens, targetSet) {
+    let hits = 0;
+    let maxLen = 0;
+    for (const tok of tokens) {
+      if (tokenMatchesTarget(tok, targetSet)) {
+        hits += 1;
+        if (tok.length > maxLen) maxLen = tok.length;
+      }
+    }
+    return { hits, maxLen };
+  }
+  function formatSecondsAsClock(totalSec) {
+    const safe = Math.max(0, Math.round(Number(totalSec) || 0));
+    const h = Math.floor(safe / 3600);
+    const m = Math.floor(safe % 3600 / 60);
+    const s = safe % 60;
+    return h > 0 ? `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}` : `${String(m).padStart(2, "0")}:${String(s).padStart(2, "0")}`;
+  }
+  function appendTimestampToUrl(rawUrl, seconds) {
+    if (!rawUrl) return "";
+    const sec = Math.max(0, Math.round(Number(seconds) || 0));
+    if (sec <= 0) return rawUrl;
+    try {
+      const u = new URL(rawUrl);
+      u.searchParams.set("t", String(sec));
+      return u.toString();
+    } catch (_) {
+      const sep = rawUrl.includes("?") ? "&" : "?";
+      return `${rawUrl}${sep}t=${sec}`;
+    }
+  }
+  function parseTimestampTopicsFromText(rawText = "") {
+    const lines = String(rawText || "").split(/\r?\n/);
+    const parsed = [];
+    for (const raw of lines) {
+      const m = raw.match(/[[( ]?(\d{1,2}):(\d{2})(?::(\d{2}))?[\])]?\s*[-–—:|]*\s*(.+)/);
+      if (!m) continue;
+      const hasHours = m[3] !== void 0;
+      const h = hasHours ? Number(m[1]) : 0;
+      const min = hasHours ? Number(m[2]) : Number(m[1]);
+      const sec = hasHours ? Number(m[3]) : Number(m[2]);
+      const seconds = h * 3600 + min * 60 + sec;
+      const mmss = hasHours ? `${String(h).padStart(2, "0")}:${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}` : `${String(min).padStart(2, "0")}:${String(sec).padStart(2, "0")}`;
+      const label = String(m[4] || "").trim();
+      if (label && seconds >= 0) {
+        parsed.push({ label, mmss, seconds });
+      }
+    }
+    return parsed;
+  }
+  function findCourseVideoMatchForExtension(question, courseIndexMap = {}) {
+    if (!question) return null;
+    const entries = Object.values(courseIndexMap || {}).filter((e) => e && e.url);
+    if (entries.length === 0) return null;
+    const qSubjectRaw = `${question.canonicalSubject || ""} ${question.subject || ""}`;
+    const qSubNorm = normalizeCourseIndexKey(qSubjectRaw);
+    const qFamily = inferSubjectFamily(`${qSubjectRaw} ${question.topic || ""} ${question.subtopicPath || ""}`);
+    const rawSegments = String(question.subtopicPath || question.topic || "").split(/->|➔|›|>/).map((s) => s.trim()).filter(Boolean);
+    const specificSegments = rawSegments.filter((seg, idx) => {
+      const segNorm = normalizeCourseIndexKey(seg);
+      if (!segNorm) return false;
+      if (idx === 0 && rawSegments.length > 1) {
+        if (qSubNorm && (qSubNorm.includes(segNorm) || segNorm.includes(qSubNorm))) return false;
+        if (/\b(?:codigo de transito|constituicao federal|codigo penal|codigo de processo)\b/.test(segNorm)) return false;
+      }
+      return true;
+    });
+    const leafRaw = specificSegments.length > 0 ? specificSegments[specificSegments.length - 1] : question.topic || "";
+    const specificRaw = specificSegments.length > 0 ? specificSegments.join(" ") : question.topic || "";
+    const leafNorm = normalizeCourseIndexKey(leafRaw).replace(/^(?:capitulo|secao|titulo|modulo)\s+[ivxlcdm\d]+\s*/i, "").trim();
+    const specificPhrases = Array.from(new Set([
+      normalizeCourseIndexKey(leafRaw),
+      leafNorm
+    ].filter((p) => p && p.length >= 6)));
+    const qSubTokens = new Set(tokenize(qSubjectRaw));
+    const specificTopicTokens = Array.from(new Set(tokenize(specificRaw))).filter((tok) => !qSubTokens.has(tok) || tokenize(leafRaw).includes(tok));
+    if (specificTopicTokens.length === 0) return null;
+    const strongTopicTokens = specificTopicTokens.filter((tok) => !DOMAIN_WEAK_TOKENS.has(tok));
+    const contentTokens = Array.from(new Set(tokenize((question.content || "").slice(0, 220)))).filter((tok) => !specificTopicTokens.includes(tok));
+    let bestEntry = null;
+    let bestTopic = null;
+    let bestScore = 0;
+    entries.forEach((entry) => {
+      const entryTitle = entry.title || entry.lessonTitle || "";
+      const eHeaderRaw = `${entry.subject || ""} ${entry.moduleName || ""} ${entryTitle}`;
+      const eSubNorm = normalizeCourseIndexKey(eHeaderRaw);
+      const entryFamily = inferSubjectFamily(eHeaderRaw);
+      if (qFamily && entryFamily && qFamily !== entryFamily) return;
+      const sameDiscipline = Boolean(
+        qFamily && entryFamily && qFamily === entryFamily || qSubNorm && eSubNorm && (eSubNorm.includes(qSubNorm) || qSubNorm.includes(eSubNorm))
+      );
+      const entryTitleNorm = normalizeCourseIndexKey(entryTitle);
+      const titlePhraseMatch = specificPhrases.some((p) => entryTitleNorm.includes(p) || entryTitleNorm.length >= 8 && p.includes(entryTitleNorm));
+      const entryTitleTokenSet = new Set(tokenize(`${entryTitle} ${entry.moduleName || ""}`));
+      const entryTitleMatch = collectTokenMatches(specificTopicTokens, entryTitleTokenSet);
+      const entryTitleStrongMatch = collectTokenMatches(strongTopicTokens, entryTitleTokenSet);
+      const topicsList = Array.isArray(entry.topics) && entry.topics.length > 0 ? entry.topics : parseTimestampTopicsFromText(entry.indiceRawText || entry.rawIndexText || "");
+      let matchedInsideTopics = false;
+      if (topicsList.length > 0) {
+        topicsList.forEach((tp) => {
+          if (!tp || !tp.label) return;
+          const tLabelNorm = normalizeCourseIndexKey(tp.label);
+          if (!tLabelNorm || GENERIC_TIMESTAMP_LABEL_RX.test(tLabelNorm)) return;
+          const tLabelTokenSet = new Set(tokenize(tp.label));
+          if (tLabelTokenSet.size === 0) return;
+          const labelPhraseMatch = specificPhrases.some((p) => tLabelNorm.includes(p) || tLabelNorm.length >= 8 && p.includes(tLabelNorm));
+          const labelMatch = collectTokenMatches(specificTopicTokens, tLabelTokenSet);
+          const labelStrongMatch = collectTokenMatches(strongTopicTokens, tLabelTokenSet);
+          const contentMatchOnLabel = collectTokenMatches(contentTokens, tLabelTokenSet);
+          let qualified = false;
+          if (strongTopicTokens.length > 0) {
+            qualified = Boolean(
+              labelPhraseMatch || titlePhraseMatch && labelStrongMatch.hits >= 1 || labelStrongMatch.hits >= 2 || labelStrongMatch.hits === 1 && (labelMatch.hits >= 2 || entryTitleMatch.hits >= 1 || contentMatchOnLabel.hits >= 1)
+            );
+          } else {
+            const weakCoverage = specificTopicTokens.length > 0 ? labelMatch.hits / specificTopicTokens.length : 0;
+            qualified = Boolean(
+              labelPhraseMatch || titlePhraseMatch && labelMatch.hits >= 1 || labelMatch.hits >= 2 && weakCoverage >= 0.6
+            );
+          }
+          if (!qualified) return;
+          matchedInsideTopics = true;
+          const score = (labelPhraseMatch ? 14 : 0) + (titlePhraseMatch ? 6 : 0) + labelStrongMatch.hits * 6 + entryTitleStrongMatch.hits * 3 + labelMatch.hits * 2 + entryTitleMatch.hits * 1.5 + Math.min(contentMatchOnLabel.hits, 3) * 1.5 + (sameDiscipline ? 1 : 0);
+          if (score > bestScore) {
+            bestScore = score;
+            bestEntry = entry;
+            bestTopic = tp;
+          }
+        });
+      }
+      if (!matchedInsideTopics) {
+        const contentMatchOnTitle = collectTokenMatches(contentTokens, entryTitleTokenSet);
+        let qualifiedLessonOnly = false;
+        if (strongTopicTokens.length > 0) {
+          qualifiedLessonOnly = Boolean(
+            titlePhraseMatch || entryTitleStrongMatch.hits >= 1 && entryTitleMatch.hits >= 2 || entryTitleStrongMatch.hits >= 1 && entryTitleStrongMatch.maxLen >= 7 && sameDiscipline && (contentMatchOnTitle.hits >= 1 || entryTitleStrongMatch.maxLen >= 8)
+          );
+        } else {
+          const weakTitleCoverage = specificTopicTokens.length > 0 ? entryTitleMatch.hits / specificTopicTokens.length : 0;
+          qualifiedLessonOnly = Boolean(
+            titlePhraseMatch || entryTitleMatch.hits >= 2 && weakTitleCoverage >= 0.6
+          );
+        }
+        if (qualifiedLessonOnly) {
+          const lessonScore = (titlePhraseMatch ? 12 : 0) + entryTitleStrongMatch.hits * 5 + entryTitleMatch.hits * 2 + Math.min(contentMatchOnTitle.hits, 2) * 1.5 + (sameDiscipline ? 1 : 0) - (entry.isFallbackSubjectLesson ? 0.5 : 0);
+          if (lessonScore > bestScore) {
+            bestScore = lessonScore;
+            bestEntry = entry;
+            bestTopic = null;
+          }
+        }
+      }
+    });
+    if (!bestEntry || !bestEntry.url) return null;
+    const seconds = Math.max(0, Number(bestTopic?.seconds) || 0);
+    const lessonTitle = bestEntry.title || bestEntry.lessonTitle || "Aula do Caveira";
+    let targetUrl = appendTimestampToUrl(bestEntry.url, seconds);
+    if (lessonTitle && !String(targetUrl).includes("#qg_lesson=")) {
+      const cleanUrl = String(targetUrl).split("#")[0];
+      const subjectHint = question.canonicalSubject || question.subject || bestEntry.subject || "";
+      targetUrl = `${cleanUrl}#qg_lesson=${encodeURIComponent(lessonTitle)}${subjectHint ? `&qg_subject=${encodeURIComponent(subjectHint)}` : ""}`;
+    }
+    const courseIdMatch = String(bestEntry.url || "").match(/\/courses\/(\d+)/i);
+    const courseId = String(bestEntry.courseId || courseIdMatch?.[1] || "");
+    return {
+      url: targetUrl,
+      mmss: bestTopic?.mmss || formatSecondsAsClock(seconds),
+      seconds,
+      lessonTitle,
+      topicLabel: bestTopic?.label || lessonTitle,
+      courseId
+    };
+  }
+
+  // extensao-src/content/mirrorHelper.js
+  var MIRROR_STOP_WORDS = /* @__PURE__ */ new Set([
+    "para",
+    "como",
+    "sobre",
+    "entre",
+    "apos",
+    "antes",
+    "contra",
+    "desde",
+    "durante",
+    "mediante",
+    "perante",
+    "segundo",
+    "conforme",
+    "acerca",
+    "quanto",
+    "mesmo",
+    "mesma",
+    "ainda",
+    "outro",
+    "outra",
+    "outros",
+    "outras",
+    "todos",
+    "todas",
+    "qualquer",
+    "nenhum",
+    "nenhuma",
+    "julgue",
+    "item",
+    "proximo",
+    "seguinte",
+    "subsequente",
+    "relativo",
+    "respeito",
+    "acordo",
+    "termos",
+    "situacao",
+    "correto",
+    "errado",
+    "certo"
+  ]);
+  function extractLeafSubtopic(q) {
+    const path = String(q?.subtopicPath || q?.topic || "");
+    const parts = path.split(/->|➔|›|>/).map((s) => s.trim()).filter(Boolean);
+    return normalizeFilterText(q?.subtopic || parts[parts.length - 1] || "");
+  }
+  function extractSigTokens(text) {
+    return new Set(
+      normalizeFilterText(text).split(/\s+/).filter((w) => w.length >= 5 && !MIRROR_STOP_WORDS.has(w))
+    );
+  }
+  function pickBestMirrorCandidate(missedQuestion, candidates = [], answeredIdSet = /* @__PURE__ */ new Set()) {
+    if (!missedQuestion || !Array.isArray(candidates) || candidates.length === 0) return null;
+    const missedCode = String(missedQuestion.id || "").toUpperCase();
+    const missedApiId = Number(missedQuestion.apiId || String(missedQuestion.id || "").replace(/^Q/i, "")) || 0;
+    const missedLeaf = extractLeafSubtopic(missedQuestion);
+    const missedBanca = normalizeFilterText(missedQuestion.banca || "");
+    const missedTraps = new Set(detectTrapTermsInText(missedQuestion.content || "").map((t) => t.id));
+    const missedTokens = extractSigTokens(missedQuestion.content || "");
+    let best = null;
+    for (const cand of candidates) {
+      if (!cand) continue;
+      const candApiId = Number(cand.apiId || cand.id) || 0;
+      const candCode = String(cand.code || (candApiId ? `Q${candApiId}` : "")).toUpperCase();
+      if (!candCode && !candApiId) continue;
+      if (missedCode && candCode === missedCode) continue;
+      if (missedApiId && candApiId === missedApiId) continue;
+      if (answeredIdSet && (answeredIdSet.has(candCode) || candApiId && answeredIdSet.has(`Q${candApiId}`))) continue;
+      const candLeaf = extractLeafSubtopic(cand);
+      const sameSubtopic = Boolean(missedLeaf && candLeaf && (candLeaf === missedLeaf || candLeaf.includes(missedLeaf) || missedLeaf.includes(candLeaf)));
+      const candTrapList = detectTrapTermsInText(cand.content || "");
+      const sharedTraps = candTrapList.filter((t) => missedTraps.has(t.id)).map((t) => t.label);
+      const candTokens = extractSigTokens(cand.content || "");
+      let sharedTokenCount = 0;
+      for (const tok of missedTokens) {
+        if (candTokens.has(tok)) sharedTokenCount += 1;
+      }
+      const candBanca = normalizeFilterText(cand.banca || "");
+      const sameBanca = Boolean(missedBanca && candBanca && candBanca === missedBanca);
+      const score = (sameSubtopic ? 14 : 0) + sharedTraps.length * 10 + Math.min(sharedTokenCount, 5) * 3 + (sameBanca ? 2 : 0) + (cand.content ? 1 : 0);
+      if (!best || score > best.score) {
+        best = {
+          candidate: {
+            ...cand,
+            id: candCode || `Q${candApiId}`,
+            apiId: candApiId || Number(String(candCode).replace(/^Q/i, "")) || null
+          },
+          sharedTraps,
+          sameSubtopic,
+          score
+        };
+      }
+    }
+    return best;
+  }
+
+  // extensao-src/tree/dynamicTreeManager.js
+  function mergeBaselineAndDynamicTree(baselineJson, dynamicRows = []) {
+    if (!baselineJson || !Array.isArray(baselineJson.subjects)) {
+      return { mergedJson: baselineJson, dynamicAddedCount: 0 };
+    }
+    const subjectsCopy = baselineJson.subjects.map((s) => ({
+      ...s,
+      nodes: Array.isArray(s.nodes) ? s.nodes.map((n) => ({ ...n })) : []
+    }));
+    if (!Array.isArray(dynamicRows) || dynamicRows.length === 0) {
+      return { mergedJson: { ...baselineJson, subjects: subjectsCopy }, dynamicAddedCount: 0 };
+    }
+    const bySubjectId = /* @__PURE__ */ new Map();
+    subjectsCopy.forEach((s) => {
+      const nodeMap = /* @__PURE__ */ new Map();
+      s.nodes.forEach((n) => nodeMap.set(Number(n.id), n));
+      bySubjectId.set(Number(s.id), { subj: s, nodeMap });
+    });
+    let dynamicAddedCount = 0;
+    dynamicRows.forEach((row) => {
+      if (!row || !row.subjectId || !row.nodeId || !row.name) return;
+      const sId = Number(row.subjectId);
+      const nId = Number(row.nodeId);
+      let bucket = bySubjectId.get(sId);
+      if (!bucket) {
+        const newSubj = {
+          id: sId,
+          name: row.subjectName || `Disciplina ${sId}`,
+          count: 0,
+          nodes: []
+        };
+        subjectsCopy.push(newSubj);
+        bucket = { subj: newSubj, nodeMap: /* @__PURE__ */ new Map() };
+        bySubjectId.set(sId, bucket);
+      } else if (row.subjectName && row.subjectName.length > 2 && !bucket.subj.name) {
+        bucket.subj.name = row.subjectName;
+      }
+      const existing = bucket.nodeMap.get(nId);
+      if (existing) {
+        if (row.name && existing.name !== row.name) {
+          existing.name = row.name;
+        }
+        return;
+      }
+      const parentId = Number(row.parentId || sId);
+      const parentNode = bucket.nodeMap.get(parentId);
+      const computedDepth = parentNode ? (Number(parentNode.depth) || 1) + 1 : Number(row.depth) || 1;
+      const computedPath = Array.isArray(row.path) && row.path.length > 0 ? row.path.map(Number) : parentNode && Array.isArray(parentNode.path) ? [...parentNode.path, nId] : [sId, nId];
+      const newNode = {
+        id: nId,
+        parentId,
+        depth: computedDepth,
+        name: String(row.name).trim(),
+        path: computedPath
+      };
+      bucket.subj.nodes.push(newNode);
+      bucket.subj.count = bucket.subj.nodes.length;
+      bucket.nodeMap.set(nId, newNode);
+      dynamicAddedCount += 1;
+    });
+    return {
+      mergedJson: {
+        ...baselineJson,
+        subjects: subjectsCopy
+      },
+      dynamicAddedCount
+    };
   }
 
   // extensao-src/content/simuladosHelper.js
@@ -1695,12 +2826,13 @@ ${EXTRA_SHADOW_CSS}`;
   // extensao-src/entries/content.entry.js
   (function() {
     if (isExcludedCaveiraHost(window.location.hostname)) return;
-    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.5.2";
+    const runtimeExtVersion = typeof chrome !== "undefined" && chrome.runtime?.getManifest?.()?.version || "3.6.0";
     console.log(`💀 [QG da PRF] Rastreador Caveira v${runtimeExtVersion} ativo em:`, window.location.href);
     try {
       window.dispatchEvent(new CustomEvent("qg-caveira-teardown"));
       destroyShadowHud();
       destroyAllInlineAutopsyCards();
+      destroyTrapRadarOverlays();
     } catch (_) {
     }
     const SCHEMA_VERSION_KEY = "qg_caveira_schema_version";
@@ -1750,6 +2882,70 @@ ${EXTRA_SHADOW_CSS}`;
     const apiSimuladoEnjoymentByExamId = /* @__PURE__ */ new Map();
     const apiSimuladoDatesByExamId = /* @__PURE__ */ new Map();
     const apiSimuladoDatesByTitle = /* @__PURE__ */ new Map();
+    let cachedLocalCourseIndexByLesson = {};
+    let cachedSyncedVideoIndexMap = {};
+    let cachedPendingMirrorProof = null;
+    const pendingMirrorRequests = /* @__PURE__ */ new Map();
+    const requestedMirrorForQIds = /* @__PURE__ */ new Set();
+    function getMergedCourseVideoIndex() {
+      return {
+        ...cachedSyncedVideoIndexMap || {},
+        ...cachedLocalCourseIndexByLesson || {}
+      };
+    }
+    function requestMirrorQuestionFromApi(missedQuestionData) {
+      return new Promise((resolve) => {
+        if (!missedQuestionData || !missedQuestionData.id) {
+          resolve(null);
+          return;
+        }
+        const answeredSet = new Set(
+          (questionsCache || []).map((q) => String(q?.id || "").toUpperCase()).filter(Boolean)
+        );
+        answeredSet.add(String(missedQuestionData.id).toUpperCase());
+        const localPool = Array.from(apiQuestionByApiId.values());
+        const localPick = pickBestMirrorCandidate(missedQuestionData, localPool, answeredSet);
+        if (localPick && localPick.score >= 16) {
+          resolve(localPick);
+          return;
+        }
+        const apiMeta = apiQuestionByCode.get(missedQuestionData.id) || apiQuestionCache.get(missedQuestionData.id) || null;
+        const numericApiId = Number(apiMeta?.apiId) || Number(String(missedQuestionData.id || "").replace(/^Q/i, "").replace(/\D+/g, "")) || null;
+        const resolvedIds = cachedCaveiraTree ? resolveTreeIdsForQuestion(cachedCaveiraTree, {
+          subject: missedQuestionData.subject || "",
+          subtopic: missedQuestionData.topic || "",
+          subtopicPath: apiMeta?.subtopicPath || missedQuestionData.topic || ""
+        }) : { subjectId: null, subtopicId: null };
+        const subjectId = apiMeta?.subjectId || resolvedIds?.subjectId || null;
+        const subtopicId = apiMeta?.subtopicId || resolvedIds?.subtopicId || null;
+        if (!subjectId && !subtopicId) {
+          resolve(localPick || null);
+          return;
+        }
+        const urlParams = new URLSearchParams(window.location.search || "");
+        const urlBoards = (urlParams.get("examining_board_ids") || "").split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0);
+        const urlAlts = (urlParams.get("number_alternatives") || "").split(",").map(Number).filter((n) => Number.isInteger(n) && n > 0);
+        const reqId = `mir_${Date.now()}_${Math.random().toString(36).slice(2, 7)}`;
+        const timer = setTimeout(() => {
+          pendingMirrorRequests.delete(reqId);
+          resolve(localPick || null);
+        }, 4500);
+        pendingMirrorRequests.set(reqId, (candidates) => {
+          clearTimeout(timer);
+          const combinedPool = [...Array.isArray(candidates) ? candidates : [], ...localPool];
+          const picked = pickBestMirrorCandidate(missedQuestionData, combinedPool, answeredSet);
+          resolve(picked || localPick || null);
+        });
+        postToSniffer("FETCH_MIRROR_QUESTION", {
+          requestId: reqId,
+          excludeApiId: numericApiId,
+          subjectIds: subjectId ? [Number(subjectId)] : [],
+          subtopicIds: subtopicId ? [Number(subtopicId)] : [],
+          numberAlternatives: urlAlts.length > 0 ? urlAlts : [2],
+          examBoardIds: urlBoards.length > 0 ? urlBoards : [2, 5, 12]
+        });
+      });
+    }
     function postToSniffer(type, payload) {
       try {
         window.postMessage(
@@ -2010,6 +3206,8 @@ ${EXTRA_SHADOW_CSS}`;
         }
       }
       destroyShadowHud();
+      destroyAllInlineAutopsyCards();
+      destroyTrapRadarOverlays();
     }
     window.addEventListener("qg-caveira-teardown", teardownInstance, { once: true });
     function loadInitialState() {
@@ -2033,7 +3231,10 @@ ${EXTRA_SHADOW_CSS}`;
             FILTER_MEMORY_CLOUD_KEY,
             DIAGNOSTIC_MODE_KEY,
             PENDING_SIMULADOS_QUEUE_KEY,
-            ACTIVE_MISSION_KEY
+            ACTIVE_MISSION_KEY,
+            COURSE_INDEX_CACHE_KEY,
+            COURSE_VIDEO_INDEX_SYNC_KEY,
+            PENDING_MIRROR_PROOF_KEY
           ],
           (res) => {
             if (chrome.runtime.lastError || isDestroyed) return;
@@ -2052,6 +3253,16 @@ ${EXTRA_SHADOW_CSS}`;
             }
             if (res?.[MODULE_SPEEDS_KEY] && typeof res[MODULE_SPEEDS_KEY] === "object") {
               cachedModuleSpeeds = res[MODULE_SPEEDS_KEY];
+            }
+            if (res?.[COURSE_INDEX_CACHE_KEY]?.byLesson && typeof res[COURSE_INDEX_CACHE_KEY].byLesson === "object") {
+              cachedLocalCourseIndexByLesson = res[COURSE_INDEX_CACHE_KEY].byLesson;
+            }
+            if (res?.[COURSE_VIDEO_INDEX_SYNC_KEY] && typeof res[COURSE_VIDEO_INDEX_SYNC_KEY] === "object") {
+              cachedSyncedVideoIndexMap = res[COURSE_VIDEO_INDEX_SYNC_KEY];
+            }
+            const rawProof = res?.[PENDING_MIRROR_PROOF_KEY];
+            if (rawProof && rawProof.mirrorQId && rawProof.sourceQId && Date.now() - (Number(rawProof.at) || 0) < 18e5) {
+              cachedPendingMirrorProof = rawProof;
             }
             const cloudMem = res?.[FILTER_MEMORY_CLOUD_KEY];
             if (cloudMem && typeof cloudMem === "object" && Object.keys(cloudMem).length > 0) {
@@ -2317,6 +3528,16 @@ ${EXTRA_SHADOW_CSS}`;
               const nextM = changes[ACTIVE_MISSION_KEY].newValue || null;
               activePracticeMission = cachedActiveUserId && nextM && (!nextM.ownerUserId || nextM.ownerUserId === cachedActiveUserId) ? nextM : null;
               updateHudMission();
+            }
+            if (changes[COURSE_INDEX_CACHE_KEY]) {
+              cachedLocalCourseIndexByLesson = changes[COURSE_INDEX_CACHE_KEY].newValue?.byLesson || {};
+            }
+            if (changes[COURSE_VIDEO_INDEX_SYNC_KEY]) {
+              cachedSyncedVideoIndexMap = changes[COURSE_VIDEO_INDEX_SYNC_KEY].newValue || {};
+            }
+            if (changes[PENDING_MIRROR_PROOF_KEY]) {
+              const np = changes[PENDING_MIRROR_PROOF_KEY].newValue || null;
+              cachedPendingMirrorProof = np && np.mirrorQId && np.sourceQId && Date.now() - (Number(np.at) || 0) < 18e5 ? np : null;
             }
           }
         };
@@ -2834,6 +4055,14 @@ ${EXTRA_SHADOW_CSS}`;
               ...enjoyObj
             });
           }
+        }
+        return;
+      }
+      if (msg.type === "FETCH_MIRROR_QUESTION_RESULT" && msg.payload?.requestId) {
+        const cb = pendingMirrorRequests.get(msg.payload.requestId);
+        if (cb) {
+          pendingMirrorRequests.delete(msg.payload.requestId);
+          cb(msg.payload.candidates || []);
         }
         return;
       }
@@ -9499,8 +10728,10 @@ ${EXTRA_SHADOW_CSS}`;
       if (isDestroyed || !isCoursePage()) return;
       const lessonTitle = extractCourseLessonTitle();
       const peekKey = `${window.location.href}|${lessonTitle}`;
-      let captureSource = "bizus";
-      let rawIndexText = extractCourseBizusRawTextFromDom();
+      const rawBizusText = extractCourseBizusRawTextFromDom();
+      const rawIndiceText = extractCourseIndexRawTextFromDom();
+      let captureSource = rawBizusText ? "bizus" : rawIndiceText ? "indice" : "bizus";
+      let rawIndexText = rawBizusText || rawIndiceText;
       if (!rawIndexText) {
         const bizusTab = findCourseTabElement("bizus");
         if (bizusTab && !isCourseTabActive(bizusTab) && !peekedCourseUrls.has(peekKey)) {
@@ -9510,21 +10741,16 @@ ${EXTRA_SHADOW_CSS}`;
           setTimeout(scanCourseVideoIndex, 950);
           return;
         }
-        const indexText = extractCourseIndexRawTextFromDom();
-        if (indexText) {
-          rawIndexText = indexText;
-          captureSource = "indice";
-        } else {
-          const indexTab = findCourseTabElement("indice");
-          const indicePeekKey = `${peekKey}|indice`;
-          if (indexTab && !isCourseTabActive(indexTab) && !peekedCourseUrls.has(indicePeekKey)) {
-            peekedCourseUrls.add(indicePeekKey);
-            clickElementRealistically(indexTab);
-            setTimeout(scanCourseVideoIndex, 450);
-          }
-          return;
+        const indexTab = findCourseTabElement("indice");
+        const indicePeekKey = `${peekKey}|indice`;
+        if (indexTab && !isCourseTabActive(indexTab) && !peekedCourseUrls.has(indicePeekKey)) {
+          peekedCourseUrls.add(indicePeekKey);
+          clickElementRealistically(indexTab);
+          setTimeout(scanCourseVideoIndex, 450);
         }
+        return;
       }
+      const parsedTopics = rawIndiceText ? parseTimestampTopicsFromText(rawIndiceText) : [];
       const subtopics = parseCourseIndexSubtopics(rawIndexText, lessonTitle ? [lessonTitle] : []);
       if (subtopics.length === 0) return;
       currentCourseIndexStatus = {
@@ -9565,6 +10791,8 @@ ${EXTRA_SHADOW_CSS}`;
         lessonTitle,
         source: captureSource,
         rawIndexText,
+        ...rawIndiceText ? { indiceRawText: rawIndiceText } : {},
+        ...parsedTopics.length > 0 ? { topics: parsedTopics } : {},
         ...captureSource === "bizus" ? { bizusRawText: rawIndexText, bizusSubtopics: subtopics } : {},
         subtopics,
         capturedAt: Date.now()
@@ -9578,15 +10806,33 @@ ${EXTRA_SHADOW_CSS}`;
           const lessonKey = courseId && rawLessonKey ? `${courseId}::${rawLessonKey}` : rawLessonKey;
           if (lessonKey) {
             const existing = nextByLesson[lessonKey];
+            const mergedTopics = parsedTopics.length > 0 ? parsedTopics : existing?.topics || [];
+            const mergedIndiceRaw = rawIndiceText || existing?.indiceRawText || "";
             if (captureSource === "bizus") {
-              nextByLesson[lessonKey] = entry;
+              nextByLesson[lessonKey] = {
+                ...existing || {},
+                ...entry,
+                ...mergedIndiceRaw ? { indiceRawText: mergedIndiceRaw } : {},
+                ...mergedTopics.length > 0 ? { topics: mergedTopics } : {}
+              };
             } else if (existing && existing.source === "bizus") {
+              nextByLesson[lessonKey] = {
+                ...existing,
+                ...mergedIndiceRaw ? { indiceRawText: mergedIndiceRaw } : {},
+                ...mergedTopics.length > 0 ? { topics: mergedTopics } : {}
+              };
             } else {
-              nextByLesson[lessonKey] = entry;
+              nextByLesson[lessonKey] = {
+                ...existing || {},
+                ...entry,
+                ...mergedIndiceRaw ? { indiceRawText: mergedIndiceRaw } : {},
+                ...mergedTopics.length > 0 ? { topics: mergedTopics } : {}
+              };
             }
           }
           const ordered = Object.entries(nextByLesson).sort((a, b) => (b[1]?.capturedAt || 0) - (a[1]?.capturedAt || 0)).slice(0, 120);
           const compactedByLesson = Object.fromEntries(ordered);
+          cachedLocalCourseIndexByLesson = compactedByLesson;
           const latestEntry = prev.latest && prev.latest.source === "bizus" && captureSource === "indice" && rawLessonKey && normalizeCourseIndexKey(prev.latest.lessonTitle || "") === rawLessonKey ? prev.latest : lessonKey && compactedByLesson[lessonKey] || entry;
           chrome.storage.local.set({
             [COURSE_INDEX_CACHE_KEY]: {
@@ -9816,9 +11062,13 @@ ${EXTRA_SHADOW_CSS}`;
         clearActiveQuestionState();
         return;
       }
+      applyTrapRadarToCards(cards, questionsCache, extractQuestionId);
       cards.forEach((card) => {
         const qId = extractQuestionId(card);
         if (!qId) return;
+        if (cachedPendingMirrorProof && String(cachedPendingMirrorProof.mirrorQId) === String(qId)) {
+          mountMirrorChallengeBanner(card, cachedPendingMirrorProof);
+        }
         if (savedQuestionsMissingAlts.has(qId)) {
           const enriched = extractQuestionData(card, qId);
           if (enriched && Array.isArray(enriched.alternatives) && enriched.alternatives.length > 0) {
@@ -9875,28 +11125,119 @@ ${EXTRA_SHADOW_CSS}`;
               activeQuestionData = questionData;
               saveQuestion(questionData, false);
               renderQuestionHistory(qId, true);
-              const mountedInline = mountInlineAutopsyCard(card, questionData, {
-                onSelectErrorReason: (targetId, reasonId) => {
-                  const latest = questionsCache.find((q) => q && q.id === targetId) || questionData;
-                  const updated = { ...latest, errorReason: reasonId };
-                  if (activeQuestionData && activeQuestionData.id === targetId) {
-                    activeQuestionData = updated;
-                  }
-                  saveQuestion(updated, true);
+              const videoMatch = !questionData.hit ? findCourseVideoMatchForExtension(questionData, getMergedCourseVideoIndex()) : null;
+              const mountedInline = mountInlineAutopsyCard(
+                card,
+                {
+                  ...questionData,
+                  videoMatch,
+                  mirrorState: !questionData.hit ? { status: "loading" } : null
                 },
-                onSelectConfidence: (targetId, confId) => {
-                  const latest = questionsCache.find((q) => q && q.id === targetId) || questionData;
-                  const updated = {
-                    ...latest,
-                    confidence: confId,
-                    fsrsRequested: confId === "chute" || confId === "duvida"
-                  };
-                  if (activeQuestionData && activeQuestionData.id === targetId) {
-                    activeQuestionData = updated;
+                {
+                  onSelectErrorReason: (targetId, reasonId) => {
+                    const latest = questionsCache.find((q) => q && q.id === targetId) || questionData;
+                    const updated = { ...latest, errorReason: reasonId };
+                    if (activeQuestionData && activeQuestionData.id === targetId) {
+                      activeQuestionData = updated;
+                    }
+                    saveQuestion(updated, true);
+                  },
+                  onSelectConfidence: (targetId, confId) => {
+                    const latest = questionsCache.find((q) => q && q.id === targetId) || questionData;
+                    const updated = {
+                      ...latest,
+                      confidence: confId,
+                      fsrsRequested: confId === "chute" || confId === "duvida"
+                    };
+                    if (activeQuestionData && activeQuestionData.id === targetId) {
+                      activeQuestionData = updated;
+                    }
+                    saveQuestion(updated, true);
+                  },
+                  onOpenVideoTimestamp: (vm) => {
+                    if (!vm || !vm.url) return;
+                    try {
+                      if (vm.seconds > 0 && isExtensionContextValid() && chrome?.storage?.local) {
+                        const nowTs = Date.now();
+                        chrome.storage.local.set({
+                          [PLAYER_SEEK_KEY]: {
+                            seconds: vm.seconds,
+                            courseId: vm.courseId || "",
+                            updatedAt: nowTs,
+                            savedAt: nowTs
+                          }
+                        });
+                      }
+                    } catch (_) {
+                    }
+                    window.open(vm.url, "_blank", "noopener");
+                  },
+                  onStartMirror: (cand, sourceQId) => {
+                    if (!cand || !cand.id) return;
+                    const proof = { sourceQId, mirrorQId: cand.id, at: Date.now() };
+                    cachedPendingMirrorProof = proof;
+                    try {
+                      if (isExtensionContextValid() && chrome?.storage?.local) {
+                        chrome.storage.local.set({ [PENDING_MIRROR_PROOF_KEY]: proof });
+                      }
+                    } catch (_) {
+                    }
+                    const inDomCard = getQuestionCards().find((c) => extractQuestionId(c) === cand.id);
+                    if (inDomCard) {
+                      mountMirrorChallengeBanner(inDomCard, proof);
+                      inDomCard.scrollIntoView({ behavior: "smooth", block: "center" });
+                      return;
+                    }
+                    const targetUrl = cand.apiId ? `https://app.caveira.com/questions?question_id=${cand.apiId}` : `https://app.caveira.com/questions?raw_text=${encodeURIComponent(cand.id)}`;
+                    window.open(targetUrl, "_blank", "noopener");
                   }
-                  saveQuestion(updated, true);
                 }
-              });
+              );
+              if (!questionData.hit && mountedInline && !requestedMirrorForQIds.has(qId)) {
+                requestedMirrorForQIds.add(qId);
+                requestMirrorQuestionFromApi(questionData).then((mirrorResult) => {
+                  if (isDestroyed) return;
+                  if (mirrorResult && mirrorResult.candidate) {
+                    updateInlineAutopsyExtras(qId, {
+                      mirrorState: {
+                        status: "ready",
+                        candidate: mirrorResult.candidate,
+                        sharedTraps: mirrorResult.sharedTraps || [],
+                        sameSubtopic: Boolean(mirrorResult.sameSubtopic)
+                      }
+                    });
+                  } else {
+                    updateInlineAutopsyExtras(qId, { mirrorState: { status: "empty" } });
+                  }
+                });
+              }
+              if (questionData.hit && cachedPendingMirrorProof && String(cachedPendingMirrorProof.mirrorQId) === String(qId)) {
+                const sourceQId = cachedPendingMirrorProof.sourceQId;
+                const sourceQ = questionsCache.find((q) => q && q.id === sourceQId);
+                if (sourceQ) {
+                  saveQuestion(
+                    {
+                      ...sourceQ,
+                      mirrorProven: true,
+                      mirrorQuestionId: qId,
+                      mirrorProvenAt: (/* @__PURE__ */ new Date()).toISOString()
+                    },
+                    true
+                  );
+                }
+                cachedPendingMirrorProof = null;
+                try {
+                  if (isExtensionContextValid() && chrome?.storage?.local) {
+                    chrome.storage.local.remove([PENDING_MIRROR_PROOF_KEY]).catch(() => {
+                    });
+                  }
+                } catch (_) {
+                }
+                showMirrorProvenToastOnCard(card, sourceQId);
+                updateInlineAutopsyExtras(sourceQId, {
+                  mirrorState: { status: "proven", mirrorQId: qId }
+                });
+              }
               if (!mountedInline) {
                 showPrompt(questionData);
               }

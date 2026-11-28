@@ -74,6 +74,7 @@ export default function RaioXOverview({
   pegadinhaCount,
   forgettingCurveRows,
   decorebaRows,
+  trapFingerprint,
   formatDurationHMS,
   onTriggerPractice,
   onOpenNotebookWithFilter,
@@ -112,6 +113,7 @@ export default function RaioXOverview({
   const decayingDisciplines = forgettingCurveRows.filter(
     (r) => r.decayDelta !== null && r.decayDelta < -5
   ).length;
+  const topTrap = trapFingerprint?.terms?.find((t) => t.errors >= 1 && t.errorRate >= 50) || null;
 
   return (
     <div className="space-y-5">
@@ -567,32 +569,61 @@ export default function RaioXOverview({
           </div>
 
           {/* Atalho limpo para Retenção e Decoreba */}
-          <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between gap-2 text-xs">
-            <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400">
-              <span className="inline-flex items-center gap-1">
-                <Clock className="w-3.5 h-3.5 text-sky-500" />
-                {decayingDisciplines > 0 ? (
-                  <strong className="text-red-600 dark:text-red-400 font-semibold">
-                    {decayingDisciplines} em queda
-                  </strong>
-                ) : (
-                  <span>Retenção estável</span>
-                )}
-              </span>
-              <span>·</span>
-              <span className="inline-flex items-center gap-1">
-                <Flame className="w-3.5 h-3.5 text-amber-500" />
-                <span>{decorebaRows.length} prazos/penas</span>
-              </span>
+          <div className="pt-3.5 border-t border-slate-100 dark:border-slate-800 space-y-2.5 text-xs">
+            {topTrap && (
+              <div className="flex flex-wrap items-center justify-between gap-2 px-3 py-2 rounded-xl bg-amber-50/80 dark:bg-amber-950/30 border border-amber-200/80 dark:border-amber-800/50">
+                <span className="text-amber-900 dark:text-amber-200 font-medium">
+                  ⚠️ Pegadinha mais letal:{' '}
+                  <strong className="font-bold">&ldquo;{topTrap.label}&rdquo;</strong>{' '}
+                  <span className="font-mono text-[11px]">
+                    ({topTrap.errorRate}% erro · {topTrap.errors}/{topTrap.total})
+                  </span>
+                </span>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => onOpenNotebookWithFilter({ trapTerm: topTrap, filterType: 'errors' })}
+                    className="font-semibold text-amber-700 dark:text-amber-300 hover:underline cursor-pointer"
+                  >
+                    Revisar erros
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => onNavigateTab('intelligence')}
+                    className="font-semibold text-sky-600 dark:text-sky-400 hover:underline cursor-pointer"
+                  >
+                    Mapa →
+                  </button>
+                </div>
+              </div>
+            )}
+            <div className="flex items-center justify-between gap-2">
+              <div className="flex items-center gap-3 text-slate-500 dark:text-slate-400">
+                <span className="inline-flex items-center gap-1">
+                  <Clock className="w-3.5 h-3.5 text-sky-500" />
+                  {decayingDisciplines > 0 ? (
+                    <strong className="text-red-600 dark:text-red-400 font-semibold">
+                      {decayingDisciplines} em queda
+                    </strong>
+                  ) : (
+                    <span>Retenção estável</span>
+                  )}
+                </span>
+                <span>·</span>
+                <span className="inline-flex items-center gap-1">
+                  <Flame className="w-3.5 h-3.5 text-amber-500" />
+                  <span>{decorebaRows.length} prazos/penas</span>
+                </span>
+              </div>
+              <button
+                type="button"
+                onClick={() => onNavigateTab('intelligence')}
+                className="font-semibold text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center gap-1 cursor-pointer shrink-0"
+              >
+                <span>Abrir Lei Seca</span>
+                <ArrowRight className="w-3.5 h-3.5" />
+              </button>
             </div>
-            <button
-              type="button"
-              onClick={() => onNavigateTab('intelligence')}
-              className="font-semibold text-sky-600 dark:text-sky-400 hover:underline inline-flex items-center gap-1 cursor-pointer shrink-0"
-            >
-              <span>Abrir Lei Seca</span>
-              <ArrowRight className="w-3.5 h-3.5" />
-            </button>
           </div>
         </section>
 

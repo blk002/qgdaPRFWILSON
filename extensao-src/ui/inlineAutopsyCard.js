@@ -285,6 +285,101 @@ const INLINE_CARD_CSS = `
   background: #283145;
   color: #dbeafe;
 }
+.qg-extras-stack {
+  display: flex;
+  flex-direction: column;
+  gap: 7px;
+  padding-top: 8px;
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+}
+.qg-extra-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 7px 9px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  line-height: 1.3;
+}
+.qg-extra-row.is-video {
+  background: rgba(56, 189, 248, 0.1);
+  border: 1px solid rgba(56, 189, 248, 0.25);
+  color: #e0f2fe;
+}
+.qg-extra-row.is-mirror {
+  background: rgba(34, 211, 238, 0.09);
+  border: 1px solid rgba(34, 211, 238, 0.24);
+  color: #cffafe;
+}
+.qg-extra-row.is-proven {
+  background: rgba(16, 185, 129, 0.14);
+  border: 1px solid rgba(16, 185, 129, 0.3);
+  color: #d1fae5;
+}
+.qg-extra-text {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.qg-extra-title {
+  font-weight: 700;
+  color: #f8fafc;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.qg-extra-sub {
+  font-size: 10.5px;
+  color: #94a3b8;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.qg-extra-btn {
+  appearance: none;
+  font-family: ${SANS_STACK};
+  background: #0284c7;
+  border: 1px solid rgba(255, 255, 255, 0.16);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  padding: 5px 9px;
+  border-radius: 6px;
+  cursor: pointer;
+  flex-shrink: 0;
+  white-space: nowrap;
+  transition: background 0.14s ease, transform 0.1s ease;
+}
+.qg-extra-btn:hover {
+  background: #0ea5e9;
+}
+.qg-extra-btn.is-mirror-btn {
+  background: #0891b2;
+}
+.qg-extra-btn.is-mirror-btn:hover {
+  background: #06b6d4;
+}
+.qg-mirror-banner {
+  font-family: ${SANS_STACK};
+  background: #0f1c24;
+  border: 1px solid rgba(34, 211, 238, 0.38);
+  color: #cffafe;
+  border-radius: 9px;
+  padding: 8px 11px;
+  font-size: 12px;
+  font-weight: 600;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+.qg-mirror-banner.is-proven {
+  background: #0f241c;
+  border-color: rgba(16, 185, 129, 0.45);
+  color: #d1fae5;
+}
 `;
 
 function canPlaceCardOnRight(altsEl) {
@@ -326,6 +421,110 @@ function getSelectedItem(state) {
     return AUTOPSY_ERROR_CAUSES.find((c) => c.id === state.errorReason) || null;
   }
   return CONFIDENCE_OPTIONS.find((c) => c.id === state.confidence) || null;
+}
+
+function buildExtrasSection(state, callbacks) {
+  if (state.hit) return null;
+  const vm = state.videoMatch;
+  const ms = state.mirrorState;
+  const hasMirror = ms && ms.status && ms.status !== 'idle';
+  if (!vm && !hasMirror) return null;
+
+  const stack = document.createElement('div');
+  stack.className = 'qg-extras-stack';
+
+  if (vm && vm.url) {
+    const row = document.createElement('div');
+    row.className = 'qg-extra-row is-video';
+
+    const txt = document.createElement('div');
+    txt.className = 'qg-extra-text';
+    const title = document.createElement('span');
+    title.className = 'qg-extra-title';
+    const shortLesson = String(vm.lessonTitle || 'Aula do Caveira').slice(0, 34);
+    title.textContent = vm.seconds > 0
+      ? `🎬 ${shortLesson} · aos ${vm.mmss}`
+      : `🎬 ${shortLesson}`;
+    txt.appendChild(title);
+
+    if (vm.topicLabel && vm.topicLabel !== vm.lessonTitle) {
+      const sub = document.createElement('span');
+      sub.className = 'qg-extra-sub';
+      sub.textContent = vm.topicLabel;
+      txt.appendChild(sub);
+    }
+
+    const btn = document.createElement('button');
+    btn.type = 'button';
+    btn.className = 'qg-extra-btn';
+    btn.textContent = vm.seconds > 0 ? 'Abrir no ponto ↗' : 'Rever aula ↗';
+    btn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      callbacks?.onOpenVideoTimestamp?.(vm);
+    });
+
+    row.appendChild(txt);
+    row.appendChild(btn);
+    stack.appendChild(row);
+  }
+
+  if (hasMirror) {
+    const row = document.createElement('div');
+    if (ms.status === 'proven') {
+      row.className = 'qg-extra-row is-proven';
+      const txt = document.createElement('div');
+      txt.className = 'qg-extra-text';
+      const title = document.createElement('span');
+      title.className = 'qg-extra-title';
+      title.textContent = `✅ Espelho ${ms.mirrorQId || ''} superado · FSRS rebaixado`;
+      txt.appendChild(title);
+      row.appendChild(txt);
+      stack.appendChild(row);
+    } else if (ms.status === 'loading') {
+      row.className = 'qg-extra-row is-mirror';
+      const txt = document.createElement('div');
+      txt.className = 'qg-extra-text';
+      const title = document.createElement('span');
+      title.className = 'qg-extra-title';
+      title.textContent = '🪞 Buscando questão-espelho...';
+      txt.appendChild(title);
+      row.appendChild(txt);
+      stack.appendChild(row);
+    } else if (ms.status === 'ready' && ms.candidate) {
+      row.className = 'qg-extra-row is-mirror';
+      const txt = document.createElement('div');
+      txt.className = 'qg-extra-text';
+      const title = document.createElement('span');
+      title.className = 'qg-extra-title';
+      const trapHint = Array.isArray(ms.sharedTraps) && ms.sharedTraps.length > 0
+        ? `mesma pegadinha "${ms.sharedTraps[0]}"`
+        : (ms.sameSubtopic ? 'mesmo subtópico' : 'mesma disciplina');
+      title.textContent = `🪞 Espelho ${ms.candidate.id} · ${trapHint}`;
+      txt.appendChild(title);
+
+      if (ms.candidate.content) {
+        const sub = document.createElement('span');
+        sub.className = 'qg-extra-sub';
+        sub.textContent = ms.candidate.content.slice(0, 72);
+        txt.appendChild(sub);
+      }
+
+      const btn = document.createElement('button');
+      btn.type = 'button';
+      btn.className = 'qg-extra-btn is-mirror-btn';
+      btn.textContent = 'Prove que entendeu →';
+      btn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        callbacks?.onStartMirror?.(ms.candidate, state.qId);
+      });
+
+      row.appendChild(txt);
+      row.appendChild(btn);
+      stack.appendChild(row);
+    }
+  }
+
+  return stack.childElementCount > 0 ? stack : null;
 }
 
 function renderShadowContent(shadowRoot, state, callbacks, host) {
@@ -385,6 +584,31 @@ function renderShadowContent(shadowRoot, state, callbacks, host) {
       e.stopPropagation();
       host.remove();
     });
+
+    if (!isError && state.videoMatch?.url) {
+      const vidQuickBtn = document.createElement('button');
+      vidQuickBtn.type = 'button';
+      vidQuickBtn.className = 'qg-link-btn';
+      vidQuickBtn.textContent = state.videoMatch.seconds > 0 ? `🎬 ${state.videoMatch.mmss}` : '🎬 Aula';
+      vidQuickBtn.title = `Abrir ${state.videoMatch.lessonTitle || 'aula'} no ponto`;
+      vidQuickBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        callbacks?.onOpenVideoTimestamp?.(state.videoMatch);
+      });
+      actionsEl.appendChild(vidQuickBtn);
+    }
+    if (!isError && state.mirrorState?.status === 'ready' && state.mirrorState?.candidate) {
+      const mirrorQuickBtn = document.createElement('button');
+      mirrorQuickBtn.type = 'button';
+      mirrorQuickBtn.className = 'qg-link-btn';
+      mirrorQuickBtn.textContent = '🪞 Espelho →';
+      mirrorQuickBtn.title = `Resolver questão-espelho ${state.mirrorState.candidate.id}`;
+      mirrorQuickBtn.addEventListener('click', (e) => {
+        e.stopPropagation();
+        callbacks?.onStartMirror?.(state.mirrorState.candidate, state.qId);
+      });
+      actionsEl.appendChild(mirrorQuickBtn);
+    }
 
     actionsEl.appendChild(editBtn);
     actionsEl.appendChild(closeBtn);
@@ -461,6 +685,10 @@ function renderShadowContent(shadowRoot, state, callbacks, host) {
 
     cardEl.appendChild(headEl);
     cardEl.appendChild(pillsEl);
+    const extrasEl = buildExtrasSection(state, callbacks);
+    if (extrasEl) {
+      cardEl.appendChild(extrasEl);
+    }
   }
 
   shadowRoot.appendChild(styleEl);
@@ -513,6 +741,8 @@ export function mountInlineAutopsyCard(card, questionData, callbacks = {}) {
     hit: Boolean(questionData.hit),
     errorReason: questionData.errorReason || '',
     confidence: questionData.hit ? (questionData.confidence || '') : '',
+    videoMatch: questionData.videoMatch || null,
+    mirrorState: questionData.mirrorState || null,
     collapsed: false,
   };
   host.__qgState = state;
@@ -537,8 +767,59 @@ export function updateInlineAutopsyBadge(qId, patch = {}) {
   return true;
 }
 
+export function updateInlineAutopsyExtras(qId, extras = {}) {
+  if (!qId) return false;
+  const host = document.querySelector(`.${INLINE_AUTOPSY_CLASS}[data-qg-qid="${String(qId)}"]`);
+  if (!host || !host.shadowRoot || !host.__qgState) return false;
+
+  const state = host.__qgState;
+  if (extras.videoMatch !== undefined) state.videoMatch = extras.videoMatch;
+  if (extras.mirrorState !== undefined) state.mirrorState = extras.mirrorState;
+  renderShadowContent(host.shadowRoot, state, host.__qgCallbacks || {}, host);
+  return true;
+}
+
+export function mountMirrorChallengeBanner(card, proofMeta) {
+  if (!card || !proofMeta?.sourceQId) return false;
+  const mirrorQId = String(proofMeta.mirrorQId || '');
+  if (card.querySelector(`.qg-mirror-banner-host[data-qg-source="${proofMeta.sourceQId}"]`)) return true;
+  const contentEl = card.querySelector('.content') || card.querySelector('.question-alternatives');
+  if (!contentEl) return false;
+
+  const host = document.createElement('div');
+  host.className = 'qg-mirror-banner-host';
+  host.setAttribute('data-qg-source', proofMeta.sourceQId);
+  host.setAttribute('data-qg-mirror', mirrorQId);
+  host.setAttribute('style', 'all: initial; display: block; margin-bottom: 10px;');
+
+  const shadow = host.attachShadow({ mode: 'open' });
+  const styleEl = document.createElement('style');
+  styleEl.textContent = INLINE_CARD_CSS;
+  const banner = document.createElement('div');
+  banner.className = 'qg-mirror-banner';
+  banner.textContent = `🪞 Desafio Espelho da ${proofMeta.sourceQId}: acerte esta questão para rebaixar a revisão no FSRS`;
+
+  shadow.appendChild(styleEl);
+  shadow.appendChild(banner);
+  contentEl.insertAdjacentElement('beforebegin', host);
+  return true;
+}
+
+export function showMirrorProvenToastOnCard(card, sourceQId) {
+  if (!card) return false;
+  const host = card.querySelector(`.qg-mirror-banner-host[data-qg-source="${sourceQId}"]`);
+  if (!host || !host.shadowRoot) return false;
+  const banner = host.shadowRoot.querySelector('.qg-mirror-banner');
+  if (banner) {
+    banner.className = 'qg-mirror-banner is-proven';
+    banner.textContent = `✅ Espelho superado! Erro da ${sourceQId} rebaixado no FSRS (+3 dias).`;
+  }
+  return true;
+}
+
 export function destroyAllInlineAutopsyCards() {
   try {
     document.querySelectorAll(`.${INLINE_AUTOPSY_CLASS}`).forEach((el) => el.remove());
+    document.querySelectorAll('.qg-mirror-banner-host').forEach((el) => el.remove());
   } catch (_) {}
 }

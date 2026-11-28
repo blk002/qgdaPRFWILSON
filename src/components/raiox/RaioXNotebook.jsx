@@ -27,6 +27,7 @@ import {
 import { toast } from 'sonner';
 import { getSafeExternalUrl } from '../../lib/safeUrl';
 import { CAVEIRA_DIFFICULTY_LEVELS, classifyQuestionDifficulty } from '../../lib/caveiraDifficulty';
+import { matchTextTrapsAgainstFingerprint, splitTextByTrapMatches } from '../../lib/cebraspeTraps';
 
 const NOTEBOOK_DIFF_BADGE = {
   emerald: 'text-emerald-600 dark:text-emerald-400',
@@ -45,6 +46,7 @@ export default function RaioXNotebook({
   pegadinhaCount,
   blocoMetadata,
   caveiraCourseIndexMap,
+  subjects = {},
   findCourseVideoMatch,
   searchQuery,
   setSearchQuery,
@@ -58,6 +60,10 @@ export default function RaioXNotebook({
   setSelectedDifficulty,
   selectedLegalDevice,
   setSelectedLegalDevice,
+  selectedTrapTerm,
+  setSelectedTrapTerm,
+  trapFingerprint,
+  onTriggerPractice,
   editingNoteId,
   setEditingNoteId,
   noteDraft,
@@ -235,7 +241,7 @@ export default function RaioXNotebook({
         </div>
 
         {/* Recorte específico ativo */}
-        {(selectedSubject !== 'all' || selectedTopic !== 'all' || selectedDifficulty !== 'all' || selectedLegalDevice) && (
+        {(selectedSubject !== 'all' || selectedTopic !== 'all' || selectedDifficulty !== 'all' || selectedLegalDevice || selectedTrapTerm) && (
           <div className="flex flex-wrap items-center justify-between gap-2 bg-slate-50 dark:bg-slate-950/60 px-3 py-2 rounded-xl border border-slate-200/80 dark:border-slate-800 text-xs">
             <div className="flex flex-wrap items-center gap-2">
               <span className="text-slate-500 dark:text-slate-400">Filtro ativo:</span>
@@ -286,6 +292,16 @@ export default function RaioXNotebook({
                   <X className="w-3 h-3" />
                 </button>
               )}
+              {selectedTrapTerm && typeof setSelectedTrapTerm === 'function' && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedTrapTerm(null)}
+                  className="inline-flex items-center gap-1 font-semibold text-amber-700 dark:text-amber-400 hover:underline cursor-pointer"
+                >
+                  <span>· Pegadinha &ldquo;{selectedTrapTerm.label}&rdquo;</span>
+                  <X className="w-3 h-3" />
+                </button>
+              )}
             </div>
             <button
               type="button"
@@ -321,8 +337,10 @@ export default function RaioXNotebook({
             const isCommentOpen = Boolean(expandedComments[q.id]);
             const cleanTopic =
               q.topic && q.topic !== q.subject && q.topic !== q.canonicalSubject ? q.topic : null;
-            const videoMatch = findCourseVideoMatch(q, caveiraCourseIndexMap);
+            const videoMatch = findCourseVideoMatch(q, caveiraCourseIndexMap, subjects);
             const safeVideoUrl = videoMatch ? getSafeExternalUrl(videoMatch.url) : '';
+            const trapHits = matchTextTrapsAgainstFingerprint(q.content, trapFingerprint);
+            const contentSegments = splitTextByTrapMatches(q.content, trapHits);
             const isAvoidable =
               q.isAvoidableError || (!q.hit && Number(q.communityCorrectPct) >= 65);
             const isPegadinha = q.isPegadinha || Number(q.communityErrorPct) >= 65;
@@ -453,16 +471,42 @@ export default function RaioXNotebook({
                           toast.info(`Abrindo aula em ${videoMatch.mmss}`);
                         }}
                         className="group h-7 pl-1.5 pr-2 rounded-lg border border-sky-500/25 dark:border-sky-400/25 bg-sky-500/[0.06] dark:bg-sky-400/[0.07] hover:bg-sky-500/[0.14] dark:hover:bg-sky-400/[0.16] hover:border-sky-500/45 dark:hover:border-sky-400/45 hover:shadow-xs active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-sky-500/50 text-sky-700 dark:text-sky-300 text-xs font-semibold inline-flex items-center gap-1.5 transition-all duration-200 cursor-pointer"
-                        title={`Rever em ${videoMatch.lessonTitle} (${videoMatch.topicLabel || videoMatch.mmss})`}
+                        title={`Explicado em ${videoMatch.lessonTitle}${videoMatch.seconds > 0 ? ` aos ${videoMatch.mmss}` : ''} (${videoMatch.topicLabel || ''})`}
                       >
                         <span className="w-5 h-5 rounded-full bg-sky-500/15 dark:bg-sky-400/15 text-sky-600 dark:text-sky-400 group-hover:bg-sky-600 dark:group-hover:bg-sky-400 group-hover:text-white dark:group-hover:text-slate-950 group-hover:scale-110 flex items-center justify-center shrink-0 transition-all duration-200">
                           <Video className="w-3 h-3" />
                         </span>
                         <span className="font-mono group-hover:translate-x-0.5 transition-transform duration-200">
-                          {videoMatch.mmss}
+                          {videoMatch.seconds > 0 ? `Aula · ${videoMatch.mmss}` : 'Rever aula'}
                         </span>
                         <ArrowUpRight className="w-3.5 h-3.5 opacity-60 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />
                       </a>
+                    )}
+
+                    {q.mirrorProven && (
+                      <span
+                        className="h-7 px-2 rounded-md border border-emerald-500/30 bg-emerald-500/10 text-emerald-700 dark:text-emerald-300 text-[11px] font-semibold inline-flex items-center gap-1"
+                        title={q.mirrorQuestionId ? `Questão-espelho ${q.mirrorQuestionId} acertada` : 'Questão-espelho superada'}
+                      >
+                        🪞 Espelho {q.mirrorQuestionId || '✓'}
+                      </span>
+                    )}
+
+                    {!q.hit && !q.mirrorProven && typeof onTriggerPractice === 'function' && (
+                      <button
+                        type="button"
+                        onClick={() =>
+                          onTriggerPractice(
+                            q.canonicalSubject || q.subject || '',
+                            [q.topic || q.canonicalSubject || q.subject].filter(Boolean),
+                            'not_resolved'
+                          )
+                        }
+                        className="h-7 px-2 rounded-md border border-cyan-500/30 bg-cyan-500/10 hover:bg-cyan-500/20 text-cyan-700 dark:text-cyan-300 text-xs font-semibold inline-flex items-center gap-1 transition-colors cursor-pointer"
+                        title="Abrir questão-espelho do mesmo assunto no Projeto Caveira"
+                      >
+                        <span>🪞 Espelho</span>
+                      </button>
                     )}
 
                     <button
@@ -508,13 +552,25 @@ export default function RaioXNotebook({
                   </div>
                 </div>
 
-                {/* Enunciado com leitura confortável */}
+                {/* Enunciado com leitura confortável + destaque de pegadinhas pessoais */}
                 <p
                   className={`text-slate-800 dark:text-slate-100 leading-relaxed ${
                     compactMode ? 'text-xs sm:text-sm line-clamp-3' : 'text-sm sm:text-[15px]'
                   }`}
                 >
-                  {q.content}
+                  {contentSegments.map((seg, segIdx) =>
+                    seg.trap ? (
+                      <mark
+                        key={segIdx}
+                        title={`Pegadinha "${seg.trap.label}": ${seg.trap.errorRate}% de erro (${seg.trap.errors}/${seg.trap.total})`}
+                        className="bg-amber-500/20 dark:bg-amber-400/20 text-amber-900 dark:text-amber-200 px-0.5 rounded-xs underline decoration-amber-500/70 decoration-wavy underline-offset-2"
+                      >
+                        {seg.text}
+                      </mark>
+                    ) : (
+                      <React.Fragment key={segIdx}>{seg.text}</React.Fragment>
+                    )
+                  )}
                 </p>
 
                 {/* Bizu Pessoal Salvo */}

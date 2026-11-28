@@ -6,7 +6,8 @@ import {
   ArrowRight,
   Dices,
   BookOpen,
-  AlertTriangle
+  AlertTriangle,
+  Fingerprint
 } from 'lucide-react';
 
 export default function RaioXIntelligence({
@@ -19,6 +20,7 @@ export default function RaioXIntelligence({
   setDecorebaCategory,
   decorebaSearch,
   setDecorebaSearch,
+  trapFingerprint,
   onOpenNotebookWithFilter
 }) {
   const [legalSearch, setLegalSearch] = useState('');
@@ -58,8 +60,117 @@ export default function RaioXIntelligence({
     );
   };
 
+  const trapTerms = Array.isArray(trapFingerprint?.terms) ? trapFingerprint.terms : [];
+
   return (
     <div className="space-y-5">
+      {/* 0. IMPRESSÃO DIGITAL DA PEGADINHA CEBRASPE (#2) */}
+      <section className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-2xl overflow-hidden">
+        <div className="p-4 sm:p-5 border-b border-slate-200 dark:border-slate-800 flex flex-col lg:flex-row lg:items-center justify-between gap-3">
+          <div>
+            <h2 className="text-sm font-bold text-slate-900 dark:text-white flex items-center gap-2">
+              <Fingerprint className="w-4 h-4 text-amber-500 shrink-0" />
+              <span>Impressão Digital da Pegadinha Cebraspe ({trapTerms.length})</span>
+            </h2>
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+              Termos restritivos, exceções e absolutos que mais derrubam seu desempenho. Termos com ≥50% de erro ativam o Radar ao vivo no Caveira.
+            </p>
+          </div>
+
+          {trapFingerprint?.totalTrapQuestions > 0 && (
+            <div className="flex flex-wrap items-center gap-2 text-xs font-mono tabular-nums shrink-0">
+              <span className="px-2.5 py-1 rounded-lg bg-amber-500/12 text-amber-700 dark:text-amber-300 border border-amber-500/25 font-semibold">
+                Com pegadinha: {trapFingerprint.overallTrapErrorRate}% erro
+              </span>
+              <span className="px-2.5 py-1 rounded-lg bg-slate-100 dark:bg-slate-800 text-slate-600 dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+                Sem pegadinha: {trapFingerprint.overallNonTrapErrorRate}% erro
+              </span>
+              {trapFingerprint.trapPenaltyDelta > 0 && (
+                <span className="px-2.5 py-1 rounded-lg bg-red-500/12 text-red-700 dark:text-red-300 border border-red-500/25 font-bold">
+                  +{trapFingerprint.trapPenaltyDelta}% impacto
+                </span>
+              )}
+            </div>
+          )}
+        </div>
+
+        {trapTerms.length === 0 ? (
+          <div className="py-10 px-6 text-center text-xs text-slate-500 dark:text-slate-400 space-y-1.5">
+            <Fingerprint className="w-8 h-8 mx-auto text-slate-400 opacity-60" />
+            <p className="font-semibold text-slate-700 dark:text-slate-200">
+              Nenhum termo-gatilho mapeado ainda
+            </p>
+            <p>
+              Resolva questões com palavras como &ldquo;exclusivamente&rdquo;, &ldquo;salvo&rdquo;, &ldquo;vedado&rdquo; ou &ldquo;prescindível&rdquo; para montar sua assinatura de erro.
+            </p>
+          </div>
+        ) : (
+          <div className="p-4 sm:p-5 grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-3">
+            {trapTerms.slice(0, 12).map((term) => {
+              const riskMeta =
+                term.riskLevel === 'critico'
+                  ? { label: 'Crítico', cls: 'bg-red-500/15 text-red-700 dark:text-red-300 border-red-500/30', bar: 'bg-red-500' }
+                  : term.riskLevel === 'alerta'
+                    ? { label: 'Alerta', cls: 'bg-amber-500/15 text-amber-700 dark:text-amber-300 border-amber-500/30', bar: 'bg-amber-500' }
+                    : term.riskLevel === 'monitorando'
+                      ? { label: 'Monitorando', cls: 'bg-slate-500/12 text-slate-600 dark:text-slate-300 border-slate-500/25', bar: 'bg-sky-500' }
+                      : { label: 'Dominado', cls: 'bg-emerald-500/12 text-emerald-700 dark:text-emerald-300 border-emerald-500/25', bar: 'bg-emerald-500' };
+
+              return (
+                <button
+                  key={term.id}
+                  type="button"
+                  onClick={() =>
+                    onOpenNotebookWithFilter({
+                      trapTerm: term,
+                      filterType: term.errors > 0 ? 'errors' : 'all'
+                    })
+                  }
+                  className="text-left p-3.5 rounded-xl border border-slate-200/80 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-950/40 hover:border-amber-400/60 hover:bg-amber-50/30 dark:hover:bg-slate-800/50 transition-colors cursor-pointer space-y-2.5"
+                >
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0">
+                      <span className="text-sm font-bold text-slate-900 dark:text-white block truncate">
+                        &ldquo;{term.label}&rdquo;
+                      </span>
+                      <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                        {term.category}
+                      </span>
+                    </div>
+                    <span className={`px-2 py-0.5 rounded-md border text-[10px] font-bold uppercase shrink-0 ${riskMeta.cls}`}>
+                      {riskMeta.label}
+                    </span>
+                  </div>
+
+                  <div className="space-y-1">
+                    <div className="flex items-center justify-between text-xs font-mono tabular-nums">
+                      <span className="font-bold text-slate-800 dark:text-slate-100">
+                        {term.errorRate}% erro
+                      </span>
+                      <span className="text-slate-500 dark:text-slate-400">
+                        {term.errors}E / {term.total}q
+                      </span>
+                    </div>
+                    <div className="w-full h-1.5 rounded-full bg-slate-200 dark:bg-slate-800 overflow-hidden">
+                      <div
+                        className={`h-full rounded-full ${riskMeta.bar}`}
+                        style={{ width: `${Math.max(term.errors > 0 ? 12 : 100, term.errorRate)}%` }}
+                      />
+                    </div>
+                  </div>
+
+                  {term.subjects.length > 0 && (
+                    <p className="text-[11px] text-slate-500 dark:text-slate-400 truncate">
+                      {term.subjects.slice(0, 2).join(' · ')}
+                    </p>
+                  )}
+                </button>
+              );
+            })}
+          </div>
+        )}
+      </section>
+
       {/* 1. SPLIT PRINCIPAL: RADAR DE LEI SECA + TABELA DECOREBA PRF */}
       <div className="grid grid-cols-1 xl:grid-cols-2 gap-5 items-stretch">
         {/* Esquerda: Radar de Lei Seca */}

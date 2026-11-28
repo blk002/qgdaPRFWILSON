@@ -5,6 +5,8 @@
   var ACTIVE_MISSION_KEY = "qg_active_practice_mission";
   var DEFAULT_PREFS_KEY = "qg_caveira_default_prefs";
   var PERFORMANCE_SNAPSHOT_KEY = "qg_caveira_performance_snapshot";
+  var COURSE_VIDEO_INDEX_SYNC_KEY = "qg_course_video_index_sync";
+  var PENDING_MIRROR_PROOF_KEY = "qg_pending_mirror_proof";
   var SIMULADO_QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1e3;
   var SIMULADO_QUEUE_MAX_ATTEMPTS = 10;
   function normalizeFilterText(str) {
@@ -125,6 +127,8 @@
       FILTER_MEMORY_CLOUD_KEY,
       REMINDER_STATE_KEY,
       DISMISSED_MISSIONS_KEY,
+      COURSE_VIDEO_INDEX_SYNC_KEY,
+      PENDING_MIRROR_PROOF_KEY,
       "qg_pending_course_completion"
     ];
     const MAX_BUCKET_QUESTIONS = 1500;
@@ -885,6 +889,16 @@
                 [SUBJECT_SPEEDS_KEY]: speedsPayload,
                 [MODULE_SPEEDS_KEY]: moduleSpeedsPayload
               });
+            } catch (_) {
+            }
+          });
+        }
+        if (event.data.type === "QG_PRF_SYNC_COURSE_VIDEO_INDEX" && event.data.payload?.index) {
+          const videoIndexPayload = event.data.payload.index;
+          bucketSwitchPromise.then(() => {
+            if (isBridgeDestroyed || !cachedActiveUserId) return;
+            try {
+              chrome.storage.local.set({ [COURSE_VIDEO_INDEX_SYNC_KEY]: videoIndexPayload });
             } catch (_) {
             }
           });

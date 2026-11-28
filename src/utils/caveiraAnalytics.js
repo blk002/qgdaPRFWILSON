@@ -100,7 +100,7 @@ export function appendTimestampToUrl(rawUrl, seconds) {
   }
 }
 
-export function findCourseVideoMatch(question, caveiraCourseIndexMap = {}) {
+export function findCourseVideoMatch(question, caveiraCourseIndexMap = {}, subjects = null) {
   if (!question) return null;
 
   if (question.courseVideoUrl) {
@@ -114,7 +114,42 @@ export function findCourseVideoMatch(question, caveiraCourseIndexMap = {}) {
     };
   }
 
-  const entries = Object.values(caveiraCourseIndexMap || {}).filter((e) => e && e.url);
+  const baseEntries = Object.values(caveiraCourseIndexMap || {}).filter((e) => e && e.url);
+  const fallbackEntries = [];
+  if (subjects && typeof subjects === 'object') {
+    Object.values(subjects).forEach((sub) => {
+      if (!sub || !Array.isArray(sub.topics)) return;
+      sub.topics.forEach((t) => {
+        if (!t) return;
+        const tLessons = Array.isArray(t.lessons) ? t.lessons : [];
+        tLessons.forEach((l) => {
+          const url = l?.caveiraUrl || l?.url || t?.caveiraModuleUrl || sub?.caveiraModuleUrl || '';
+          if (url && /^https?:\/\//i.test(String(url))) {
+            fallbackEntries.push({
+              url,
+              title: l?.name || t?.name || sub.name,
+              subject: sub.name,
+              moduleName: t?.name || '',
+              topics: [],
+              isFallbackSubjectLesson: true
+            });
+          }
+        });
+        if (tLessons.length === 0 && (t.caveiraModuleUrl || sub.caveiraModuleUrl)) {
+          fallbackEntries.push({
+            url: t.caveiraModuleUrl || sub.caveiraModuleUrl,
+            title: t.name || sub.name,
+            subject: sub.name,
+            moduleName: t.name || '',
+            topics: [],
+            isFallbackSubjectLesson: true
+          });
+        }
+      });
+    });
+  }
+
+  const entries = [...baseEntries, ...fallbackEntries];
   if (entries.length === 0) return null;
 
   const qSubjectRaw = `${question.canonicalSubject || ''} ${question.subject || ''}`;
@@ -257,7 +292,8 @@ export function findCourseVideoMatch(question, caveiraCourseIndexMap = {}) {
           entryTitleStrongMatch.hits * 5 +
           entryTitleMatch.hits * 2 +
           Math.min(contentMatchOnTitle.hits, 2) * 1.5 +
-          (sameDiscipline ? 1 : 0);
+          (sameDiscipline ? 1 : 0) -
+          (entry.isFallbackSubjectLesson ? 0.5 : 0);
         if (lessonScore > bestScore) {
           bestScore = lessonScore;
           bestEntry = entry;

@@ -31,6 +31,8 @@ export const DIAGNOSTIC_EVENTS_KEY = 'qg_diagnostic_events';
 export const SNIFFER_RECENT_EVENTS_KEY = 'qg_sniffer_recent_events';
 export const TREE_META_KEY = 'qg_tree_meta';
 export const PERFORMANCE_SNAPSHOT_KEY = 'qg_caveira_performance_snapshot';
+export const COURSE_VIDEO_INDEX_SYNC_KEY = 'qg_course_video_index_sync';
+export const PENDING_MIRROR_PROOF_KEY = 'qg_pending_mirror_proof';
 export const SIMULADO_QUEUE_TTL_MS = 7 * 24 * 60 * 60 * 1000;
 export const SIMULADO_QUEUE_MAX_ATTEMPTS = 10;
 

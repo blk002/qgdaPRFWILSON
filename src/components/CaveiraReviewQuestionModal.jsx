@@ -24,7 +24,7 @@ const KNOWN_CAVEIRA_ALTERNATIVES = {
 };
 
 export default function CaveiraReviewQuestionModal({ review, onClose, inline = false, onCompleted }) {
-  const { handleReviewSubmit, caveiraQuestions = [], caveiraCourseIndexMap = {}, updateCaveiraQuestion, updateFsrsCard, getLocalDateStr, getTodayDate } = useStore();
+  const { handleReviewSubmit, caveiraQuestions = [], caveiraCourseIndexMap = {}, subjects = {}, updateCaveiraQuestion, updateFsrsCard, getLocalDateStr, getTodayDate } = useStore();
 
   // Resolve dados completos da questão mesmo se o cartão for antigo (pré-migração)
   const qData = useMemo(() => {
@@ -87,13 +87,15 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
       isAvoidableError: Boolean(storeMatch?.isAvoidableError ?? review.questionData?.isAvoidableError),
       attempts: Array.isArray(storeMatch?.attempts) ? storeMatch.attempts : (review.questionData?.attempts || []),
       courseVideoUrl: storeMatch?.courseVideoUrl || review.questionData?.courseVideoUrl || '',
-      courseTimestampSec: storeMatch?.courseTimestampSec ?? review.questionData?.courseTimestampSec
+      courseTimestampSec: storeMatch?.courseTimestampSec ?? review.questionData?.courseTimestampSec,
+      mirrorProven: Boolean(storeMatch?.mirrorProven ?? review.questionData?.mirrorProven ?? review.mirrorDowngraded),
+      mirrorQuestionId: storeMatch?.mirrorQuestionId || review.questionData?.mirrorQuestionId || ''
     };
   }, [review, caveiraQuestions]);
 
   const videoMatch = useMemo(
-    () => findCourseVideoMatch(qData, caveiraCourseIndexMap),
-    [qData, caveiraCourseIndexMap]
+    () => findCourseVideoMatch(qData, caveiraCourseIndexMap, subjects),
+    [qData, caveiraCourseIndexMap, subjects]
   );
   
   // Opção marcada nesta rodada de revisão
@@ -296,10 +298,18 @@ export default function CaveiraReviewQuestionModal({ review, onClose, inline = f
                   <Video className="w-2.5 h-2.5" />
                 </span>
                 <span className="group-hover:translate-x-0.5 transition-transform duration-200">
-                  Rever na Aula ({videoMatch.mmss})
+                  {videoMatch.seconds > 0 ? `Aula · ${videoMatch.mmss}` : 'Rever na Aula'}
                 </span>
                 <ArrowUpRight className="w-3 h-3 opacity-70 group-hover:opacity-100 group-hover:translate-x-0.5 group-hover:-translate-y-0.5 transition-all duration-200" />
               </a>
+            )}
+            {qData.mirrorProven && (
+              <span
+                className="text-[10px] font-black uppercase bg-emerald-500/15 text-emerald-300 border border-emerald-500/30 px-2 py-1 rounded-lg"
+                title={qData.mirrorQuestionId ? `Questão-espelho ${qData.mirrorQuestionId} superada` : 'Questão-espelho superada'}
+              >
+                🪞 Espelho {qData.mirrorQuestionId || '✓'}
+              </span>
             )}
           </div>
 

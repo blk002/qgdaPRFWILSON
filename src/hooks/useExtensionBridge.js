@@ -115,6 +115,7 @@ export function useExtensionBridge() {
   const cycleCarryoverOffset = useStore((s) => s.cycleCarryoverOffset);
   const caveiraFilterMemory = useStore((s) => s.caveiraFilterMemory);
   const caveiraQuestionPrefs = useStore((s) => s.caveiraQuestionPrefs);
+  const caveiraCourseIndexMap = useStore((s) => s.caveiraCourseIndexMap);
   const progressiveReviews = useStore((s) => s.progressiveReviews);
   const activePracticeMission = useStore((s) => s.activePracticeMission);
   const reviews = useStore((s) => s.reviews);
@@ -125,6 +126,7 @@ export function useExtensionBridge() {
 
   const [courseIndexCache, setCourseIndexCache] = useState({ latest: null, byLesson: {} });
   const lastSyncedMissionSigRef = useRef('');
+  const lastSyncedVideoIndexSigRef = useRef('');
   const [manualLessonIndexMap, setManualLessonIndexMap] = useState(() => {
     try {
       const saved = localStorage.getItem('qg_lesson_index_map_v1');
@@ -570,6 +572,54 @@ export function useExtensionBridge() {
         window.location.origin
       );
 
+      // Sincroniza índice de aulas + timestamps + aulas vinculadas para "Professor no Timestamp" (#9)
+      const videoIndexOut = {};
+      Object.entries(caveiraCourseIndexMap || {}).slice(0, 200).forEach(([k, v]) => {
+        if (!v || !v.url) return;
+        videoIndexOut[k] = {
+          url: v.url,
+          courseId: v.courseId || '',
+          title: v.title || v.lessonTitle || '',
+          subject: v.subject || '',
+          moduleName: v.moduleName || '',
+          topics: Array.isArray(v.topics) ? v.topics.slice(0, 60) : [],
+        };
+      });
+      Object.values(subjects || {}).forEach((sub) => {
+        if (!sub || !Array.isArray(sub.topics)) return;
+        sub.topics.forEach((t, tIdx) => {
+          if (!t) return;
+          const tLessons = Array.isArray(t.lessons) ? t.lessons : [];
+          tLessons.forEach((l, lIdx) => {
+            const url = l?.caveiraUrl || l?.url || t?.caveiraModuleUrl || sub?.caveiraModuleUrl || '';
+            if (url && /^https?:\/\//i.test(String(url))) {
+              const key = `sub_${sub.id}_${tIdx}_${lIdx}`;
+              videoIndexOut[key] = {
+                url,
+                title: l?.name || t?.name || sub.name,
+                subject: sub.name,
+                moduleName: t?.name || '',
+                topics: [],
+                isFallbackSubjectLesson: true,
+              };
+            }
+          });
+        });
+      });
+      const videoIndexKeys = Object.keys(videoIndexOut);
+      const videoIndexSig = `${videoIndexKeys.length}|${videoIndexKeys.slice(0, 8).join(',')}`;
+      if (videoIndexKeys.length > 0 && videoIndexSig !== lastSyncedVideoIndexSigRef.current) {
+        lastSyncedVideoIndexSigRef.current = videoIndexSig;
+        window.postMessage(
+          {
+            source: 'QG_WEB_APP',
+            type: 'QG_PRF_SYNC_COURSE_VIDEO_INDEX',
+            payload: { index: videoIndexOut },
+          },
+          window.location.origin
+        );
+      }
+
       if (caveiraFilterMemory && Object.keys(caveiraFilterMemory).length > 0) {
         window.postMessage(
           {
@@ -686,6 +736,7 @@ export function useExtensionBridge() {
     cycleCarryoverOffset,
     caveiraFilterMemory,
     caveiraQuestionPrefs,
+    caveiraCourseIndexMap,
     progressiveReviews,
     activePracticeMission,
     courseIndexCache,
